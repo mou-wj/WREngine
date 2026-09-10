@@ -8,40 +8,6 @@
 
 namespace RHIOpenGL
 {
-    static GLenum GetOpenGLTextureFormat(RHI::ERHIFormat format)
-    {
-        switch (format)
-        {
-        case RHI::ERHIFormat::R8_UNorm:
-        case RHI::ERHIFormat::R32_Float:
-            return GL_RED;
-        case RHI::ERHIFormat::R16G16_Float:
-        case RHI::ERHIFormat::R32G32_Float:
-            return GL_RG;
-        case RHI::ERHIFormat::B8G8R8A8_UNorm:
-            return GL_BGRA;
-        default:
-            return GL_RGBA;
-        }
-    }
-
-    static GLenum GetOpenGLTextureType(RHI::ERHIFormat format)
-    {
-        switch (format)
-        {
-        case RHI::ERHIFormat::R8_UNorm:
-        case RHI::ERHIFormat::R8G8B8A8_UNorm:
-        case RHI::ERHIFormat::B8G8R8A8_UNorm:
-            return GL_UNSIGNED_BYTE;
-        case RHI::ERHIFormat::R16G16_Float:
-        case RHI::ERHIFormat::R16G16B16A16_Float:
-            return GL_HALF_FLOAT;
-        default:
-            return GL_FLOAT;
-        }
-    }
-
-
     OpenGLRHIApi::~OpenGLRHIApi() {
         Shutdown();
     }
@@ -51,18 +17,22 @@ namespace RHIOpenGL
         RHI::GShaderPlatform = RHI::ERHIShaderPlatform::OpenGL;
         PlatformInfo.DepthRange = RHI::EDepthRange::ZeroToOne;
         PlatformInfo.EnableRayTracing = false;
+        RHI::GShaderPlatform = RHI::ERHIShaderPlatform::OpenGL;
 
         // 3. ����ƫ���� (���� Header ֮��ĵ�ַ)
         RHI::G_RHITransition_PrivateDataOffset = 1;
 
         // 4. �����ܷ����С
         RHI::G_RHITransition_TotalSize = 2;
+        bool initPlatform = InitializePlatformSurport();
+        OpenGLQueueManager::GetInstance().StartWorker();
 
-        return InitializePlatformSurport();
+        return initPlatform;
     }
 
     void OpenGLRHIApi::Shutdown()
     {
+        OpenGLQueueManager::GetInstance().StopWorker();
         ShutdownPlatformSurport();
     }
 
@@ -371,8 +341,7 @@ namespace RHIOpenGL
 
     RHI::RHIPresentExecutor* OpenGLRHIApi::GetPresentExecutor()
     {
-        static OpenGLPresentExecutor executor(dynamic_cast<OpenGLQueue*>(GetQueue(RHI::EQueueType::Graphics)));
-        return &executor;
+        return &OpenGLQueueManager::GetInstance();
     }
 
     void OpenGLRHIApi::RHICreateTransition(RHI::RHITransition* Transition, const RHI::RHITransitionCreateInfo& CreateInfo)

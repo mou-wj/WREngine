@@ -422,7 +422,13 @@ struct SPIRVPackSource {
     ERHIShaderFrequency frequency;
     std::string entryPoint;
 };
-
+struct GLSLPackSource
+{
+    std::string GLSLCode;
+    spirv_cross::CompilerGLSL* compiler = nullptr;
+    RHI::ERHIShaderFrequency frequency = RHI::ERHIShaderFrequency::Unknown;
+    std::string entryPoint;
+};
 std::string ShaderCompiler::ShaderSourceDirectory = "";
 
 ShaderCompiler::ShaderCompiler()
@@ -451,6 +457,12 @@ ShaderCompilationOutput ShaderCompiler::Compile(const ShaderCompileInput& input)
             output.PreprocessedSource = source;
 #endif
             CompileToSPIRV(source, input, output);
+            break;
+        case ERHIShaderPlatform::OpenGL:
+#if defined(SHADER_DEBUG)
+            output.PreprocessedSource = source;
+#endif
+            CompileToOpenGL(source, input, output);
             break;
         default:
 #if defined(SHADER_DEBUG)
@@ -699,15 +711,15 @@ void ShaderCompiler::CompileToSPIRV(const std::string& preprocessedSource, const
         return;
     }
 
-
+    spirv_cross::Compiler compiler(spirv);
     // 6. ʹ�� SPIRV-Cross ������Դ
-    ReflectParameterMapFromSPIRV(spirv, out.ParameterMap);
+    ReflectParameterMapFromSPIRV(&compiler, out.ParameterMap);
 
 
     // 6. ������
     out.PackedBinaryData.resize(spirv.size() * sizeof(uint32_t));
     memcpy(out.PackedBinaryData.data(), spirv.data(), spirv.size() * sizeof(uint32_t));
-    spirv_cross::Compiler compiler(spirv);
+
     SPIRVPackSource packSource;
     packSource.compiler = &compiler;
     packSource.spirvCode = &spirv;
@@ -737,14 +749,107 @@ void ShaderCompiler::CompileToMetal(const std::string& preprocessedSource, const
 
 void ShaderCompiler::CompileToOpenGL(const std::string& preprocessedSource, const ShaderCompileInput& input, ShaderCompilationOutput& out)
 {
+    out.Platform = ERHIShaderPlatform::OpenGL;
+    out.Success = false;
+    out.PackedBinaryData.clear();
 
+    int setId = 0;
+    int shaderStageMaxBinding = 500;
+    switch (input.Frequency)
+    {
+    case ERHIShaderFrequency::Compute:         setId = 0;  break;
+    case ERHIShaderFrequency::Vertex:          setId = 0; break;
+    case ERHIShaderFrequency::Fragment:        setId = 1; break;
+    case ERHIShaderFrequency::Geometry:        setId = 2; break;
+    case ERHIShaderFrequency::TessControl:     setId = 3; break;
+    case ERHIShaderFrequency::TessEvaluation:  setId = 4; break;
+    case ERHIShaderFrequency::Task:            setId = 0; break;
+    case ERHIShaderFrequency::Mesh:            setId = 1; break;
+    case ERHIShaderFrequency::RayGen:           setId = 0; break;
+    case ERHIShaderFrequency::ClosestHit:       setId = 1; break;
+    case ERHIShaderFrequency::Miss:             setId = 2; break;
+    case ERHIShaderFrequency::AnyHit:           setId = 1; break;
+    case ERHIShaderFrequency::Intersection:     setId = 3; break;
+    case ERHIShaderFrequency::Callable:         setId = 4; break;
+    default:
+        out.ErrorMessage = "Unsupported shader stage";
+        return;
+    }
+    int shaderBindingOffset = setId * shaderStageMaxBinding;
+    auto HasFlag = [&](EShaderCompileFlags flag)
+        {
+            return (static_cast<uint32_t>(input.Flags) & static_cast<uint32_t>(flag)) != 0;
+        };
+
+    Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler;
+    if (FAILED(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler))))
+    {
+        out.ErrorMessage = "Failed to initialize DXC compiler.";
+        return;
+    }
+
+    std::vector<std::wstring> argStorage;
+    argStorage.reserve(64);
+    std::vector<LPCWSTR> dxcArgs;
+    auto AddArg = [&](const std::wstring& arg)
+        {
+            argStorage.push_back(arg);
+            dxcArgs.push_back(argStorage.back().c_str());
+        };
+
+    AddArg(L"-spirv");
+    AddArg(L"-fspv-target-env=vulkan1.3");
+    AddArg(L"-fvk-use-dx-layout");
+    AddArg(L"-fvk-auto-shift-bindings");
+    AddArg(L"-fvk-bind-globals"); AddArg(ToWide(std::to_string(shaderBindingOffset + 10))); AddArg(ToWide("0"));
+    AddArg(L"-fvk-b-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 100))); AddArg(ToWide("0"));
+    AddArg(L"-fvk-t-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 200))); AddArg(ToWide("0"));
+    AddArg(L"-fvk-s-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 300))); AddArg(ToWide("0"));
+    AddArg(L"-fvk-u-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 400))); AddArg(ToWide("0"));
+
+    std::vector<uint32_t> spirv;
+    CompileHLSLToSPIRV(preprocessedSource, input, argStorage, out, spirv);
+    if (spirv.empty()) {
+        return;
+    }
+    spirv_cross::CompilerGLSL Compiler(spirv);
+    // 6. ʹ�� SPIRV-Cross ������Դ
+    ReflectParameterMapFromSPIRV(&Compiler, out.ParameterMap);
+
+    
+    spirv_cross::CompilerGLSL::Options Options;
+    Options.version = 430;
+    Options.es = false;
+
+    Compiler.set_common_options(Options);
+    Compiler.build_combined_image_samplers();
+    std::string GLSL = Compiler.compile();
+    
+
+    // 6. ������
+    out.PackedBinaryData.resize(GLSL.size() * sizeof(char));
+    memcpy(out.PackedBinaryData.data(), GLSL.data(), GLSL.size() * sizeof(char));
+    GLSLPackSource packSource;
+    packSource.compiler = &Compiler;
+    packSource.GLSLCode = GLSL;
+    packSource.frequency = input.Frequency;
+    packSource.entryPoint = input.EntryPoint;
+
+    GLSLCompiledBinaryResultPacker packer;
+    std::vector<char> packedData;
+
+    if (packer.Pack(&packSource, packedData))
+    {
+        out.PackedBinaryData = std::move(packedData);
+        out.Success = true;
+    }
 }
 
 
-void ShaderCompiler::ReflectParameterMapFromSPIRV(const std::vector<uint32_t>& inputCode, ShaderParameterAllocationMap& out)
+void ShaderCompiler::ReflectParameterMapFromSPIRV(spirv_cross::Compiler* compilerIn, ShaderParameterAllocationMap& out)
 {
     // 6. ʹ�� SPIRV-Cross ������Դ
-    spirv_cross::Compiler compiler(inputCode);
+    spirv_cross::Compiler &compiler = *compilerIn;
     spirv_cross::ShaderResources resourcesSC = compiler.get_shader_resources();
 
     // ---------- Uniform Buffers ----------
@@ -1474,13 +1579,7 @@ bool SPIRVCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& 
     }
     return true;
 }
-struct GLSLPackSource
-{
-    std::string GLSLCode;
-    spirv_cross::Compiler* compiler = nullptr;
-    RHI::ERHIShaderFrequency frequency = RHI::ERHIShaderFrequency::Unknown;
-    std::string entryPoint;
-};
+
 void GLSLCompiledBinaryResultPacker::Depack(const std::vector<char>& packedResult)
 {
     size_t offset = 0;
@@ -1532,6 +1631,17 @@ void GLSLCompiledBinaryResultPacker::Depack(const std::vector<char>& packedResul
             return;
         }
     }
+	uint32_t combinedBindingCount = 0;
+    if (!read(&combinedBindingCount, sizeof(uint32_t))) return;
+    DepackedData.HeaderData.CombinedBindings.resize(combinedBindingCount);
+    for (uint32_t i = 0; i < combinedBindingCount; ++i)
+	{
+		if (!read(&DepackedData.HeaderData.CombinedBindings[i], sizeof(CombinedBindingInfo)))
+		{
+			DepackedData.HeaderData.CombinedBindings.clear();
+			return;
+		}
+	}
 
     if (!read(&DepackedData.HeaderData.HasPushConstant, sizeof(bool))) return;
 
@@ -1622,6 +1732,17 @@ bool GLSLCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& p
     for (const auto& buffer : resources.storage_buffers)
         addResource(buffer, EGLSLShaderResourceType::StorageTexelBuffer);
 
+    auto combined_image_samplers = compiler->get_combined_image_samplers();
+    for (const auto& combined : combined_image_samplers) {
+        CombinedBindingInfo info{};
+        info.TextureBinding = compiler->get_decoration(combined.image_id, spv::DecorationBinding); 
+        info.SamplerBinding = compiler->get_decoration(combined.sampler_id, spv::DecorationBinding);
+        info.CombinedBinding = compiler->get_decoration(combined.combined_id, spv::DecorationBinding);
+        DepackedData.HeaderData.CombinedBindings.push_back(info);
+        
+    }
+
+
     if (!resources.push_constant_buffers.empty())
     {
         auto& pcb = resources.push_constant_buffers[0];
@@ -1656,6 +1777,11 @@ bool GLSLCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& p
     write(&uniformBufferCount, sizeof(uint32_t));
     for (const auto& buffer : DepackedData.HeaderData.UniformBuffers)
         write(&buffer, sizeof(UniformBufferBindingInfo));
+
+    uint32_t combinedBindingCount = static_cast<uint32_t>(DepackedData.HeaderData.CombinedBindings.size());
+	write(&combinedBindingCount, sizeof(uint32_t));
+    for (const auto& binding : DepackedData.HeaderData.CombinedBindings)
+		write(&binding, sizeof(CombinedBindingInfo));
 
     write(&DepackedData.HeaderData.HasPushConstant, sizeof(bool));
     if (DepackedData.HeaderData.HasPushConstant)

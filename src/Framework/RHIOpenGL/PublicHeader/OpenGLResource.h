@@ -6,6 +6,8 @@
 #include <memory>
 #include <vector>
 
+#include "OpenGLUtils.h"
+
 namespace RHIOpenGL
 {
     class OpenGLTexture : public RHI::RHITexture

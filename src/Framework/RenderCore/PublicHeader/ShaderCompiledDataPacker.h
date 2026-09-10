@@ -115,6 +115,12 @@ namespace RenderCore {
             char Name[64] = {};
         };
 
+        struct CombinedBindingInfo {
+            uint32_t SamplerBinding = 0;//
+			uint32_t TextureBinding = 0;
+            uint32_t CombinedBinding = 0;
+        };
+
         // ============================================================
         // Uniform Buffer
         // ============================================================
@@ -160,6 +166,9 @@ namespace RenderCore {
 
             // UBO
             std::vector<UniformBufferBindingInfo> UniformBuffers;
+
+            //CombinedBinding
+            std::vector<CombinedBindingInfo> CombinedBindings;
 
             // Push Constant ”≥…‰
             bool HasPushConstant = false;

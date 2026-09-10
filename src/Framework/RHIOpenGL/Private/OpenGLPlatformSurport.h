@@ -58,6 +58,10 @@ namespace RHIOpenGL
 
     bool InitializePlatformSurport();
 	void ShutdownPlatformSurport();
+	bool InitializeBackPlatformSurport();
+    void MakeBackCurrent(bool enable);
+    bool HasCurrentContext();
+
 
 #if defined(_WIN32)
     class OpenGLPlatformContextWin32 : public OpenGLPlatformContext {

@@ -13,6 +13,9 @@
 #include "ShaderCore.h"
 #include "HashHelper.hpp"
 
+namespace spirv_cross {
+    class Compiler;
+}
 
 namespace RenderCore{
 
@@ -220,7 +223,7 @@ namespace RenderCore
             std::vector<uint32_t>& spirvOut);
 
         static void ReflectParameterMapFromSPIRV(
-            const std::vector<uint32_t>& inputCode,
+            spirv_cross::Compiler* compiler,
             ShaderParameterAllocationMap& out);
 
         static std::string ShaderSourceDirectory;

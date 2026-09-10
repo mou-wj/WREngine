@@ -92,8 +92,9 @@ namespace RHIOpenGL {
 
     void* BootstrapWindow = nullptr;
     void* BootstrapDeviceContext = nullptr;
+    void* BootstrapDefaultContext = nullptr;
     void* BootstrapGLContext = nullptr;
-
+    void* BootstrapGLBackContext = nullptr;
     OpenGLPlatformContextWin32::OpenGLPlatformContextWin32(void* windowHandle,RHI::ERHIFormat pixelFormat) : OpenGLPlatformContext(windowHandle, pixelFormat), mWindow(static_cast<HWND>(windowHandle)) {}
 
     OpenGLPlatformContextWin32::~OpenGLPlatformContextWin32() { Shutdown(); }
@@ -163,7 +164,7 @@ namespace RHIOpenGL {
         mContext = TryCreateOpenGL43Context(mDeviceContext, (HGLRC)BootstrapGLContext);
         if (!mContext) { ReleaseDC(mWindow, mDeviceContext); mDeviceContext = nullptr; return false; }
 
-        if (!MakeCurrent()) { wglDeleteContext(mContext); mContext = nullptr; ReleaseDC(mWindow, mDeviceContext); mDeviceContext = nullptr; return false; }
+        
 
         RECT rect{};
         if (GetClientRect(mWindow, &rect)) { mWidth = static_cast<uint32_t>(rect.right - rect.left); mHeight = static_cast<uint32_t>(rect.bottom - rect.top); }
@@ -193,7 +194,11 @@ namespace RHIOpenGL {
 
     void OpenGLPlatformContextWin32::SwapBuffers()
     {
-        if (mDeviceContext) ::SwapBuffers(mDeviceContext);
+        if (mDeviceContext)
+        {
+            ::SwapBuffers(mDeviceContext);
+        }
+            
     }
 
     void OpenGLPlatformContextWin32::Resize(uint32_t width, uint32_t height)
@@ -212,9 +217,6 @@ namespace RHIOpenGL {
     }
 
     
-
-
-
 
     bool InitializePlatformSurport()
     {
@@ -265,7 +267,7 @@ namespace RHIOpenGL {
             std::cerr << "[OpenGLRHI] Failed to create bootstrap WGL context" << std::endl;
             return false;
         }
-        
+        BootstrapDefaultContext = legacyContext;
         const int bootstrapVersion = gladLoadGL(LoadOpenGLProcAddress);
         if (bootstrapVersion == 0)
         {
@@ -281,7 +283,7 @@ namespace RHIOpenGL {
         if (modernContext)
         {
             wglMakeCurrent(nullptr, nullptr);
-            wglDeleteContext(legacyContext);
+            
             if (!wglMakeCurrent(deviceContext, modernContext))
             {
                 wglDeleteContext(modernContext);
@@ -290,7 +292,6 @@ namespace RHIOpenGL {
                 std::cerr << "[OpenGLRHI] Failed to activate OpenGL 4.3 context" << std::endl;
                 return false;
             }
-            legacyContext = modernContext;
         }
 
         const int version = gladLoadGL(LoadOpenGLProcAddress);
@@ -303,16 +304,31 @@ namespace RHIOpenGL {
             std::cerr << "[OpenGLRHI] gladLoadGL failed" << std::endl;
             return false;
         }
+        
         std::cout << "[OpenGLRHI] OpenGL environment initialized. GL version: "
             << GLAD_VERSION_MAJOR(version) << "." << GLAD_VERSION_MINOR(version)
             << std::endl;
-        BootstrapGLContext = legacyContext;
+        BootstrapGLContext = modernContext;
        
+        //初始化子线程的上下文
+        modernContext = TryCreateOpenGL43Context(deviceContext, (HGLRC)BootstrapGLContext);
+        if (modernContext)
+        {
+            BootstrapGLBackContext = modernContext;
+        }
+        
+
 		return true;
     }
 
     void ShutdownPlatformSurport()
     {
+        if (BootstrapDefaultContext) 
+        {
+            wglDeleteContext(static_cast<HGLRC>(BootstrapDefaultContext));
+            BootstrapDefaultContext = nullptr;
+        }
+
         if (BootstrapGLContext)
 		{
 			wglMakeCurrent(nullptr, nullptr);
@@ -330,6 +346,50 @@ namespace RHIOpenGL {
 			BootstrapWindow = nullptr;
 		}
     }
+    bool InitializeBackPlatformSurport()
+    {
+        auto bootstrapWindow = static_cast<HWND>(BootstrapWindow);
+        HDC deviceContext = GetDC(bootstrapWindow);
+        if (!deviceContext)
+        {
+            return false;
+        }
+        HGLRC legacyContext = static_cast<HGLRC>(BootstrapGLBackContext);
+        if (!legacyContext || !wglMakeCurrent(deviceContext, legacyContext))
+        {
+            return false;
+        }
+
+        const int bootstrapVersion = gladLoadGL(LoadOpenGLProcAddress);
+        if (bootstrapVersion == 0)
+        {
+            return false;
+        }
+
+
+        return true;
+        //
+        
+    }
+
+    void MakeBackCurrent(bool enable)
+    {
+        auto deviceContext = static_cast<HDC>(BootstrapDeviceContext);  
+        if (enable)
+        {
+            wglMakeCurrent(deviceContext, static_cast<HGLRC>(BootstrapGLBackContext));
+        }
+        else
+        {
+			wglMakeCurrent(nullptr,nullptr);
+        }
+    }
+
+    bool HasCurrentContext()
+    {
+        return wglGetCurrentContext() != nullptr;
+    }
+    
 #endif
 
 }
