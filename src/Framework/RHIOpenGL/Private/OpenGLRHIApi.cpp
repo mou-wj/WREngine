@@ -174,22 +174,22 @@ namespace RHIOpenGL
 
     RHI::RHIShaderResourceViewSP OpenGLRHIApi::CreateTextureShaderResourceView(RHI::RHITexture* Texture, const RHI::RHITexSRVCreateInfo& Desc)
     {
-        return std::make_shared<OpenGLShaderResourceView>(Texture);
+        return std::make_shared<OpenGLShaderResourceView>(Texture,Desc);
     }
 
     RHI::RHIUnorderedAccessViewSP OpenGLRHIApi::CreateTextureUnorderedAccessView(RHI::RHITexture* Texture, const RHI::RHITexUAVCreateInfo& Desc)
     {
-        return std::make_shared<OpenGLUnorderedAccessView>(Texture);
+        return std::make_shared<OpenGLUnorderedAccessView>(Texture, Desc);
     }
 
     RHI::RHIShaderResourceViewSP OpenGLRHIApi::CreateBufferShaderResourceView(RHI::RHIBuffer* Buffer, const RHI::RHIBufferSRVCreateInfo& Desc)
     {
-        return std::make_shared<OpenGLShaderResourceView>(Buffer);
+        return std::make_shared<OpenGLShaderResourceView>(Buffer,Desc);
     }
 
     RHI::RHIUnorderedAccessViewSP OpenGLRHIApi::CreateBufferUnorderedAccessView(RHI::RHIBuffer* Buffer, const RHI::RHIBufferUAVCreateInfo& Desc)
     {
-        return std::make_shared<OpenGLUnorderedAccessView>(Buffer);
+        return std::make_shared<OpenGLUnorderedAccessView>(Buffer,Desc);
     }
 
     RHI::RHIRayTracingGeometrySP OpenGLRHIApi::CreateRayTracingGeometry(const RHI::RHIRayTracingGeometryDesc& desc)

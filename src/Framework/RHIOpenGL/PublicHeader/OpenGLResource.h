@@ -41,13 +41,20 @@ namespace RHIOpenGL
     class OpenGLShaderResourceView : public RHI::RHIShaderResourceView
     {
     public:
-        explicit OpenGLShaderResourceView(RHI::RHIViewableResource* Resource);
+        explicit OpenGLShaderResourceView(RHI::RHIViewableResource* Resource, const RHI::RHITexSRVCreateInfo& Desc);
+        explicit OpenGLShaderResourceView(RHI::RHIViewableResource* Resource, const RHI::RHIBufferSRVCreateInfo& Desc);
         ~OpenGLShaderResourceView() override = default;
-
+        bool IsTexture();
+        bool IsBuffer();
         GLuint GetHandle() const { return Handle; }
         void SetHandle(GLuint handle) { Handle = handle; }
+        const RHI::RHITexSRVCreateInfo& GetTexSRVDesc() const { return TexSRVDesc; }
+        const RHI::RHIBufferSRVCreateInfo& GetBufferSRVDesc() const { return BufferSRVDesc; }
 
     private:
+        RHI::RHITexSRVCreateInfo TexSRVDesc;
+        RHI::RHIBufferSRVCreateInfo BufferSRVDesc;
+        bool IsTextureView = false;
         GLuint Handle = 0;
     };
     using OpenGLShaderResourceViewSP = std::shared_ptr<OpenGLShaderResourceView>;
@@ -55,22 +62,48 @@ namespace RHIOpenGL
     class OpenGLUnorderedAccessView : public RHI::RHIUnorderedAccessView
     {
     public:
-        explicit OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource);
+        explicit OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource,const RHI::RHITexUAVCreateInfo& Desc);
+        explicit OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource,const RHI::RHIBufferUAVCreateInfo& Desc);
         ~OpenGLUnorderedAccessView() override = default;
-
+        bool IsTexture();
+        bool IsBuffer();
         GLuint GetHandle() const { return Handle; }
         void SetHandle(GLuint handle) { Handle = handle; }
-
+        const RHI::RHITexUAVCreateInfo& GetTexUAVDesc() const { return TexUAVDesc; }
+        const RHI::RHIBufferUAVCreateInfo& GetBufferUAVDesc() const { return BufferUAVDesc; }
     private:
+        RHI::RHITexUAVCreateInfo TexUAVDesc;
+        RHI::RHIBufferUAVCreateInfo BufferUAVDesc;
+        bool IsTextureView = false;
         GLuint Handle = 0;
     };
     using OpenGLUnorderedAccessViewSP = std::shared_ptr<OpenGLUnorderedAccessView>;
+    using EGLSLShaderResourceType = RenderCore::GLSLCompiledBinaryResultPacker::EGLSLShaderResourceType;
+    struct OpenGLShaderResourceBindingInfo{
+        EGLSLShaderResourceType Type = EGLSLShaderResourceType::Texture;
+        uint32_t Count= 1;
+    };
+    struct OpenGLShaderResourceLayout {
+        std::unordered_map<uint32_t, OpenGLShaderResourceBindingInfo> Bindings;
+        bool IsValid(uint32_t binding, EGLSLShaderResourceType Type,uint32_t innerIndex){
+            if(Bindings.find(binding) == Bindings.end()){
+                return false;
+            }
+            if(Bindings[binding].Type != Type ||innerIndex>= Bindings[binding].Count){
+                return false;
+            }
+            return true;
+        }
+    };
 
     class OpenGLShaderBase{
     public:
         RenderCore::GLSLCompiledBinaryResultPacker::Header GetShaderReflection() const { return Reflection; }
         bool CompileOpenGLShader(GLuint shaderHandle, const std::vector<char>& source, const char* shaderName);
+        const OpenGLShaderResourceLayout& GetShaderResourceLayout() const { return ShaderResourceLayout; }
     protected:
+        void FillOpenGLShaderResourceLayout();
+        OpenGLShaderResourceLayout ShaderResourceLayout;
         RenderCore::GLSLCompiledBinaryResultPacker::Header Reflection;
     };
 

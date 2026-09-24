@@ -2,10 +2,258 @@
 #include "OpenGLPipelineState.h"
 #include "OpenGLResource.h"
 #include "OpenGLRenderTarget.h"
+#include "RHIUtils.h"
 #include "glad/gl.h"
 
 namespace RHIOpenGL
 {
+    namespace
+    {
+        struct VertexAttribFormatInfo
+        {
+            GLint ComponentCount = 0;
+            GLenum ComponentType = GL_FLOAT;
+            GLboolean Normalized = GL_FALSE;
+            bool IntegerAttribute = false;
+            bool IsValid = false;
+        };
+
+        VertexAttribFormatInfo GetVertexAttribFormatInfo(RHI::ERHIFormat format)
+        {
+            switch (format)
+            {
+            case RHI::ERHIFormat::R8_UNorm:
+                return { 1, GL_UNSIGNED_BYTE, GL_TRUE, false, true };
+            case RHI::ERHIFormat::R8G8B8A8_UNorm:
+            case RHI::ERHIFormat::B8G8R8A8_UNorm:
+                return { 4, GL_UNSIGNED_BYTE, GL_TRUE, false, true };
+            case RHI::ERHIFormat::R16G16_Float:
+                return { 2, GL_HALF_FLOAT, GL_FALSE, false, true };
+            case RHI::ERHIFormat::R16G16B16A16_Float:
+                return { 4, GL_HALF_FLOAT, GL_FALSE, false, true };
+            case RHI::ERHIFormat::R16_UInt:
+                return { 1, GL_UNSIGNED_SHORT, GL_FALSE, true, true };
+            case RHI::ERHIFormat::R32_UInt:
+                return { 1, GL_UNSIGNED_INT, GL_FALSE, true, true };
+            case RHI::ERHIFormat::R32_Float:
+                return { 1, GL_FLOAT, GL_FALSE, false, true };
+            case RHI::ERHIFormat::R32G32_Float:
+                return { 2, GL_FLOAT, GL_FALSE, false, true };
+            case RHI::ERHIFormat::R32G32B32_Float:
+                return { 3, GL_FLOAT, GL_FALSE, false, true };
+            case RHI::ERHIFormat::R32G32B32A32_Float:
+                return { 4, GL_FLOAT, GL_FALSE, false, true };
+            default:
+                return {};
+            }
+        }
+
+        RHI::ERenderTargetLoadOp GetLoadOp(RHI::ERenderTargetActions actions)
+        {
+            const uint8_t load = static_cast<uint8_t>(actions) >> static_cast<uint8_t>(RHI::ERenderTargetActions::LoadOpShift);
+            switch (load)
+            {
+            case static_cast<uint8_t>(RHI::ERenderTargetLoadOp::DontCare):
+                return RHI::ERenderTargetLoadOp::DontCare;
+            case static_cast<uint8_t>(RHI::ERenderTargetLoadOp::Load):
+                return RHI::ERenderTargetLoadOp::Load;
+            case static_cast<uint8_t>(RHI::ERenderTargetLoadOp::Clear):
+                return RHI::ERenderTargetLoadOp::Clear;
+            default:
+                return RHI::ERenderTargetLoadOp::DontCare;
+            }
+        }
+    }
+
+    void OpenGLGraphicContext::ApplyVertexDescState(const RHI::RHIGraphicsPipelineStateDesc& desc)
+    {
+        GLint maxAttribCount = 0;
+        glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &maxAttribCount);
+
+        for (GLint attribIndex = 0; attribIndex < maxAttribCount; ++attribIndex)
+        {
+            glDisableVertexAttribArray(static_cast<GLuint>(attribIndex));
+            glVertexAttribDivisor(static_cast<GLuint>(attribIndex), 0);
+        }
+
+        if (!desc.vertexDescState)
+        {
+            bVertexLayoutDirty = false;
+            return;
+        }
+
+        const auto& vertexDesc = desc.vertexDescState->GetDesc();
+        std::unordered_map<uint32_t, RHI::RHIVertexBindingDesc> bindingDescs;
+        for (const auto& binding : vertexDesc.bindings)
+        {
+            bindingDescs[binding.binding] = binding;
+        }
+
+        for (const auto& attribute : vertexDesc.attributes)
+        {
+            if (attribute.binding >= 8 || static_cast<GLint>(attribute.location) >= maxAttribCount)
+            {
+                continue;
+            }
+
+            const auto formatInfo = GetVertexAttribFormatInfo(attribute.format);
+            if (!formatInfo.IsValid)
+            {
+                continue;
+            }
+
+            auto* vertexBuffer = dynamic_cast<OpenGLBuffer*>(BoundVertexBuffers[attribute.binding]);
+            if (!vertexBuffer)
+            {
+                continue;
+            }
+
+            uint32_t stride = 0;
+            auto bindingIt = bindingDescs.find(attribute.binding);
+            if (bindingIt != bindingDescs.end())
+            {
+                stride = bindingIt->second.stride;
+            }
+
+            if (stride == 0)
+            {
+                stride = static_cast<uint32_t>(RHI::GetFormatSize(attribute.format));
+            }
+
+            glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer->GetHandle());
+            glEnableVertexAttribArray(attribute.location);
+
+            const uintptr_t byteOffset = static_cast<uintptr_t>(BoundVertexBufferOffsets[attribute.binding]) +
+                static_cast<uintptr_t>(attribute.offset);
+
+            if (formatInfo.IntegerAttribute)
+            {
+                glVertexAttribIPointer(
+                    attribute.location,
+                    formatInfo.ComponentCount,
+                    formatInfo.ComponentType,
+                    static_cast<GLsizei>(stride),
+                    reinterpret_cast<void*>(byteOffset));
+            }
+            else
+            {
+                glVertexAttribPointer(
+                    attribute.location,
+                    formatInfo.ComponentCount,
+                    formatInfo.ComponentType,
+                    formatInfo.Normalized,
+                    static_cast<GLsizei>(stride),
+                    reinterpret_cast<void*>(byteOffset));
+            }
+
+            const GLuint divisor =
+                (bindingIt != bindingDescs.end() && bindingIt->second.inputRate == RHI::ERHIInputRate::PerInstance)
+                ? 1u
+                : 0u;
+            glVertexAttribDivisor(attribute.location, divisor);
+        }
+
+        bVertexLayoutDirty = false;
+    }
+
+    void OpenGLGraphicContext::ApplyPrimitiveTopologyState(const RHI::RHIGraphicsPipelineStateDesc& desc)
+    {
+        switch (desc.primitiveTopology)
+        {
+        case RHI::EPrimitiveTopology::PointList:
+            CurrentPrimitiveTopology = GL_POINTS;
+            break;
+        case RHI::EPrimitiveTopology::LineList:
+            CurrentPrimitiveTopology = GL_LINES;
+            break;
+        case RHI::EPrimitiveTopology::LineStrip:
+            CurrentPrimitiveTopology = GL_LINE_STRIP;
+            break;
+        case RHI::EPrimitiveTopology::TriangleStrip:
+            CurrentPrimitiveTopology = GL_TRIANGLE_STRIP;
+            break;
+        default:
+            CurrentPrimitiveTopology = GL_TRIANGLES;
+            break;
+        }
+    }
+
+    void OpenGLGraphicContext::ApplyRasterizerState(const RHI::RHIGraphicsPipelineStateDesc& desc)
+    {
+        if (!desc.rasterizerState)
+        {
+            glDisable(GL_CULL_FACE);
+            return;
+        }
+
+        const auto& rasterizer = desc.rasterizerState->GetDesc();
+        if (rasterizer.cullMode == RHI::ERHICullMode::Back)
+        {
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_BACK);
+        }
+        else if (rasterizer.cullMode == RHI::ERHICullMode::Front)
+        {
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_FRONT);
+        }
+        else
+        {
+            glDisable(GL_CULL_FACE);
+        }
+
+        if (rasterizer.frontFace == RHI::ERHIFrontFace::Clockwise)
+        {
+            glFrontFace(GL_CW);
+        }
+        else
+        {
+            glFrontFace(GL_CCW);
+        }
+    }
+
+    void OpenGLGraphicContext::ApplyDepthStencilState(const RHI::RHIGraphicsPipelineStateDesc& desc)
+    {
+        if (!desc.depthStencilState)
+        {
+            glDisable(GL_DEPTH_TEST);
+            return;
+        }
+
+        const auto& depthStencil = desc.depthStencilState->GetDesc();
+        if (depthStencil.depthTestEnable)
+        {
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LESS);
+        }
+        else
+        {
+            glDisable(GL_DEPTH_TEST);
+        }
+
+        if (depthStencil.depthWriteEnable)
+        {
+            glDepthMask(GL_TRUE);
+        }
+        else
+        {
+            glDepthMask(GL_FALSE);
+        }
+    }
+
+    void OpenGLGraphicContext::ApplyColorBlendState(const RHI::RHIGraphicsPipelineStateDesc& desc)
+    {
+        if (desc.colorBlendState && !desc.colorBlendState->GetDesc().attachments.empty())
+        {
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        }
+        else
+        {
+            glDisable(GL_BLEND);
+        }
+    }
+
     void OpenGLCommandContext::UploadUniformBufferData(const RHI::RHIBatchedShaderParameters& parameter)
     {
         OpenGLCommandContext& context = *this;
@@ -245,13 +493,34 @@ namespace RHIOpenGL
                 switch (resourceParam.Type)
                 {
                 case RHI::RHIShaderResourceParameter::EType::Texture:
-                case RHI::RHIShaderResourceParameter::EType::SRV:
                 {
                     auto* texture = dynamic_cast<OpenGLTexture*>(resourceParam.GetResourceAs<RHI::RHITexture>());
                     if (texture)
                     {
                         glBindTextureUnit(resourceParam.Index, texture->GetHandle());
-                        glBindSampler(resourceParam.Index, 0);
+                    }
+                    break;
+                }
+                case RHI::RHIShaderResourceParameter::EType::SRV:
+                {
+                    auto srv = dynamic_cast<OpenGLShaderResourceView*>(resourceParam.GetResourceAs<RHI::RHIShaderResourceView>());
+                    if (srv) {
+                        if (srv->IsTexture()) {
+                            auto srvInfo = srv->GetTexSRVDesc();
+                            for (auto i = 0; i < srvInfo.MipCount; i++) {
+                                for (auto j = 0; j < srvInfo.ArraySize; j++) {
+                                    
+                                }
+
+                            }
+
+                        }
+                        else {
+                            auto srvInfo = srv->GetBufferSRVDesc();
+
+                        }
+
+
                     }
                     break;
                 }
@@ -273,6 +542,29 @@ namespace RHIOpenGL
                     }
                     break;
                 }
+                case RHI::RHIShaderResourceParameter::EType::UAV:
+                {
+                    auto uav = dynamic_cast<OpenGLUnorderedAccessView*>(resourceParam.GetResourceAs<RHI::RHIUnorderedAccessView>());
+                    if (uav) {
+                        if (uav->IsTexture()) {
+                            auto uavInfo = uav->GetTexUAVDesc();
+                            for (auto i = 0; i < uavInfo.MipCount;i++) {
+                                for (auto j = 0; j < uavInfo.ArraySize; j++) {
+                                    glBindImageTexture(resourceParam.Index, uav->GetHandle(), uavInfo.FirstMipSlice + i, GL_TRUE, uavInfo.FirstArraySlice + j, GL_WRITE_ONLY, ConvertRHIFormatToGLFormat(uavInfo.Format));
+                                }
+                                
+                            }
+                            
+                        }
+                        else {
+                            auto uavInfo = uav->GetBufferUAVDesc();
+                            
+                        }
+
+
+                    }
+                    break;
+                }
                 default:
                     break;
                 }
@@ -290,23 +582,8 @@ namespace RHIOpenGL
             }
 
             BoundVertexBuffers[streamIndex] = vertexBuffer;
-            if (CurrentVertexArray == 0)
-            {
-                glGenVertexArrays(1, &CurrentVertexArray);
-            }
-
-            glBindVertexArray(CurrentVertexArray);
-
-            if (vertexBuffer)
-            {
-                auto* glBuffer = dynamic_cast<OpenGLBuffer*>(vertexBuffer);
-                if (glBuffer)
-                {
-                    glBindBuffer(GL_ARRAY_BUFFER, glBuffer->GetHandle());
-                    glEnableVertexAttribArray(streamIndex);
-                    glVertexAttribPointer(streamIndex, 3, GL_FLOAT, GL_FALSE, 0, reinterpret_cast<void*>(static_cast<uintptr_t>(offset)));
-                }
-            }
+            BoundVertexBufferOffsets[streamIndex] = offset;
+            bVertexLayoutDirty = true;
         });
     }
 
@@ -330,93 +607,11 @@ namespace RHIOpenGL
             glUseProgram(glPipeline->GetProgramHandle());
 
             const auto& desc = pipelineState->GetDesc();
-            switch (desc.primitiveTopology)
-            {
-            case RHI::EPrimitiveTopology::PointList:
-                CurrentPrimitiveTopology = GL_POINTS;
-                break;
-            case RHI::EPrimitiveTopology::LineList:
-                CurrentPrimitiveTopology = GL_LINES;
-                break;
-            case RHI::EPrimitiveTopology::LineStrip:
-                CurrentPrimitiveTopology = GL_LINE_STRIP;
-                break;
-            case RHI::EPrimitiveTopology::TriangleStrip:
-                CurrentPrimitiveTopology = GL_TRIANGLE_STRIP;
-                break;
-            default:
-                CurrentPrimitiveTopology = GL_TRIANGLES;
-                break;
-            }
-
-            if (desc.rasterizerState)
-            {
-                const auto& rasterizer = desc.rasterizerState->GetDesc();
-                if (rasterizer.cullMode == RHI::ERHICullMode::Back)
-                {
-                    glEnable(GL_CULL_FACE);
-                    glCullFace(GL_BACK);
-                }
-                else if (rasterizer.cullMode == RHI::ERHICullMode::Front)
-                {
-                    glEnable(GL_CULL_FACE);
-                    glCullFace(GL_FRONT);
-                }
-                else
-                {
-                    glDisable(GL_CULL_FACE);
-                }
-
-                if (rasterizer.frontFace == RHI::ERHIFrontFace::Clockwise)
-                {
-                    glFrontFace(GL_CW);
-                }
-                else
-                {
-                    glFrontFace(GL_CCW);
-                }
-            }
-            else
-            {
-                glDisable(GL_CULL_FACE);
-            }
-
-            if (desc.depthStencilState)
-            {
-                const auto& depthStencil = desc.depthStencilState->GetDesc();
-                if (depthStencil.depthTestEnable)
-                {
-                    glEnable(GL_DEPTH_TEST);
-                    glDepthFunc(GL_LESS);
-                }
-                else
-                {
-                    glDisable(GL_DEPTH_TEST);
-                }
-
-                if (depthStencil.depthWriteEnable)
-                {
-                    glDepthMask(GL_TRUE);
-                }
-                else
-                {
-                    glDepthMask(GL_FALSE);
-                }
-            }
-            else
-            {
-                glDisable(GL_DEPTH_TEST);
-            }
-
-            if (desc.colorBlendState && !desc.colorBlendState->GetDesc().attachments.empty())
-            {
-                glEnable(GL_BLEND);
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            }
-            else
-            {
-                glDisable(GL_BLEND);
-            }
+            ApplyVertexDescState(desc);
+            ApplyPrimitiveTopologyState(desc);
+            ApplyRasterizerState(desc);
+            ApplyDepthStencilState(desc);
+            ApplyColorBlendState(desc);
         });
     }
 
@@ -446,6 +641,11 @@ namespace RHIOpenGL
                 glBindVertexArray(CurrentVertexArray);
             }
 
+            if (bVertexLayoutDirty && CurrentPipelineState)
+            {
+                ApplyVertexDescState(CurrentPipelineState->GetDesc());
+            }
+
             glDrawArrays(CurrentPrimitiveTopology, static_cast<GLint>(firstVertex), static_cast<GLsizei>(vertexCount * instanceCount));
             (void)firstInstance;
         });
@@ -458,6 +658,11 @@ namespace RHIOpenGL
             if (CurrentVertexArray != 0)
             {
                 glBindVertexArray(CurrentVertexArray);
+            }
+
+            if (bVertexLayoutDirty && CurrentPipelineState)
+            {
+                ApplyVertexDescState(CurrentPipelineState->GetDesc());
             }
 
             auto* glIndexBuffer = dynamic_cast<OpenGLBuffer*>(indexBuffer);
@@ -533,15 +738,50 @@ namespace RHIOpenGL
             glEnable(GL_SCISSOR_TEST);
             glScissor(0, 0, renderPassInfo.RenderTargets.Dimensions.x, renderPassInfo.RenderTargets.Dimensions.y);
 
-            if (targets.NumColorAttachments > 0)
+            bool hasColorClear = false;
+            float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+            for (uint8_t i = 0; i < targets.NumColorAttachments; ++i)
             {
-                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                const auto& colorTarget = targets.ColorAttachments[i];
+                if (!colorTarget.Texture)
+                {
+                    continue;
+                }
+
+                if (GetLoadOp(colorTarget.Actions) != RHI::ERenderTargetLoadOp::Clear)
+                {
+                    continue;
+                }
+
+                hasColorClear = true;
+                if (colorTarget.ClearBinding.Binding == RHI::RHIClearValueBinding::ClearValueBinding::Color)
+                {
+                    clearColor[0] = colorTarget.ClearBinding.Color[0];
+                    clearColor[1] = colorTarget.ClearBinding.Color[1];
+                    clearColor[2] = colorTarget.ClearBinding.Color[2];
+                    clearColor[3] = colorTarget.ClearBinding.Color[3];
+                }
+                break;
+            }
+
+            if (hasColorClear)
+            {
+                glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
                 glClear(GL_COLOR_BUFFER_BIT);
             }
 
-            if (targets.DepthStencil.Texture)
+            if (targets.DepthStencil.Texture && GetLoadOp(targets.DepthStencil.Actions) == RHI::ERenderTargetLoadOp::Clear)
             {
-                glClearDepth(1.0f);
+                double clearDepthValue = 1.0;
+                int clearStencilValue = 0;
+                if (targets.DepthStencil.ClearBinding.Binding == RHI::RHIClearValueBinding::ClearValueBinding::DepthStencil)
+                {
+                    clearDepthValue = static_cast<double>(targets.DepthStencil.ClearBinding.Depth);
+                    clearStencilValue = static_cast<int>(targets.DepthStencil.ClearBinding.Stencil);
+                }
+
+                glClearDepth(clearDepthValue);
+                glClearStencil(clearStencilValue);
                 glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
             }
         });

@@ -54,14 +54,33 @@ namespace RHIOpenGL
         }
     }
 
-    OpenGLShaderResourceView::OpenGLShaderResourceView(RHI::RHIViewableResource* Resource)
-        : RHI::RHIShaderResourceView(Resource)
+    OpenGLShaderResourceView::OpenGLShaderResourceView(RHI::RHIViewableResource* Resource,const RHI::RHITexSRVCreateInfo& Desc)
+        : RHI::RHIShaderResourceView(Resource), IsTextureView(true), TexSRVDesc(Desc)
+    {
+        
+    }
+    OpenGLShaderResourceView::OpenGLShaderResourceView(RHI::RHIViewableResource* Resource,const RHI::RHIBufferSRVCreateInfo& Desc) : RHI::RHIShaderResourceView(Resource), IsTextureView(false), BufferSRVDesc(Desc)
     {
     }
-
-    OpenGLUnorderedAccessView::OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource)
-        : RHI::RHIUnorderedAccessView(Resource)
+    bool OpenGLShaderResourceView::IsTexture() {
+        return IsTextureView;
+    }
+    bool OpenGLShaderResourceView::IsBuffer() {
+        return !IsTextureView;
+    }
+    OpenGLUnorderedAccessView::OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource , const RHI::RHITexUAVCreateInfo& Desc)
+        : RHI::RHIUnorderedAccessView(Resource),IsTextureView(true),TexUAVDesc(Desc)
     {
+    }
+    OpenGLUnorderedAccessView::OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource , const RHI::RHIBufferUAVCreateInfo& Desc)
+        : RHI::RHIUnorderedAccessView(Resource),IsTextureView(false), BufferUAVDesc(Desc)
+    {
+    }
+    bool OpenGLUnorderedAccessView::IsTexture() {
+        return IsTextureView;
+    }
+    bool OpenGLUnorderedAccessView::IsBuffer() {
+        return !IsTextureView;
     }
 
     bool OpenGLShaderBase::CompileOpenGLShader(GLuint shaderHandle, const std::vector<char>& packedSource, const char* shaderName)
@@ -73,6 +92,7 @@ namespace RHIOpenGL
         RenderCore::GLSLCompiledBinaryResultPacker packer;
         packer.Depack(packedSource);
         Reflection = packer.DepackedData.HeaderData;
+        FillOpenGLShaderResourceLayout();
         auto& source = packer.DepackedData.GLSLCode;
         const char* sourceText = source.empty() ? "" : source.data();
         GLint sourceLength = static_cast<GLint>(source.size());
@@ -93,7 +113,12 @@ namespace RHIOpenGL
 
         return true;
     }
-
+    void OpenGLShaderBase::FillOpenGLShaderResourceLayout() {
+        for (auto binding : Reflection.Resources) {
+            ShaderResourceLayout.Bindings[binding.Binding].Count = binding.Count;
+            ShaderResourceLayout.Bindings[binding.Binding].Type = binding.Type;
+        }
+    }
     bool OpenGLVertexShader::Compile(const std::vector<char>& source)
     {
         SourceCode = source;

@@ -66,10 +66,17 @@ namespace RHIOpenGL
         void TraceRays(uint32_t width, uint32_t height, uint32_t depth = 1) override;
 
     private:
+        void ApplyVertexDescState(const RHI::RHIGraphicsPipelineStateDesc& desc);
+        void ApplyPrimitiveTopologyState(const RHI::RHIGraphicsPipelineStateDesc& desc);
+        void ApplyRasterizerState(const RHI::RHIGraphicsPipelineStateDesc& desc);
+        void ApplyDepthStencilState(const RHI::RHIGraphicsPipelineStateDesc& desc);
+        void ApplyColorBlendState(const RHI::RHIGraphicsPipelineStateDesc& desc);
         RHI::RHIGraphicsPipelineState* CurrentPipelineState = nullptr;
         RHI::RHIBuffer* BoundVertexBuffers[8] = {};
+        uint32_t BoundVertexBufferOffsets[8] = {};
         OpenGLFramebuffer* CurrentFramebuffer;
         GLuint CurrentVertexArray = 0;
         GLenum CurrentPrimitiveTopology = GL_TRIANGLES;
+        bool bVertexLayoutDirty = true;
     };
 }

@@ -822,6 +822,7 @@ void ShaderCompiler::CompileToOpenGL(const std::string& preprocessedSource, cons
     Options.es = false;
 
     Compiler.set_common_options(Options);
+    Compiler.build_dummy_sampler_for_combined_images();
     Compiler.build_combined_image_samplers();
     std::string GLSL = Compiler.compile();
     
@@ -1726,11 +1727,6 @@ bool GLSLCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& p
     for (const auto& img : resources.storage_images)
         addResource(img, EGLSLShaderResourceType::StorageImage);
 
-    for (const auto& buffer : resources.uniform_buffers)
-        addResource(buffer, EGLSLShaderResourceType::UniformTexelBuffer);
-
-    for (const auto& buffer : resources.storage_buffers)
-        addResource(buffer, EGLSLShaderResourceType::StorageTexelBuffer);
 
     auto combined_image_samplers = compiler->get_combined_image_samplers();
     for (const auto& combined : combined_image_samplers) {

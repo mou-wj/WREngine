@@ -126,7 +126,7 @@ public:
         }
 
 
-        constexpr int kMaxFrames = 1000000;
+        constexpr int kMaxFrames = 100;
         for (int frameIndex = 0; frameIndex < kMaxFrames; ++frameIndex) {
             // 设置为即时执行模式
             auto* cmdContext = queue->AcquireCommandContext();

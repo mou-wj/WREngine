@@ -12,7 +12,7 @@ int main(int argc, char** argv)
     //_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
     //_CrtSetBreakAlloc(17506);
     //RHI::RHICaptureHelper::GetInstance();
-    std::string testName = "RHIRenderTriangleTest"; // 默认
+    std::string testName = "RHIShaderParameterTest"; // 默认
     if (argc > 1)
         testName = argv[1];
 
