@@ -113,6 +113,25 @@ namespace RHIOpenGL
             return GL_FLOAT;
         }
     }
+    GLenum ConvertRHITextureTypeToGLTextureType(RHI::ERHITextureType type) {
+		switch (type)
+		{
+		case RHI::ERHITextureType::Texture1D:
+			return GL_TEXTURE_1D;
+		case RHI::ERHITextureType::Texture2D:
+			return GL_TEXTURE_2D;
+		case RHI::ERHITextureType::Texture3D:
+			return GL_TEXTURE_3D;
+		case RHI::ERHITextureType::TextureCube:
+			return GL_TEXTURE_CUBE_MAP;
+		case RHI::ERHITextureType::Texture2DArray:
+			return GL_TEXTURE_2D_ARRAY;
+		case RHI::ERHITextureType::TextureCubeArray:
+			return GL_TEXTURE_CUBE_MAP_ARRAY;
+		default:
+			return GL_TEXTURE_2D;
+		}
+    }
     void CheckError() {
 
         while (true)

@@ -256,45 +256,139 @@ namespace RHIOpenGL
 
     void OpenGLCommandContext::UploadUniformBufferData(const RHI::RHIBatchedShaderParameters& parameter)
     {
-        OpenGLCommandContext& context = *this;
         if (parameter.UniformParameters.empty() || parameter.Data.empty())
         {
             return;
         }
 
-        std::unordered_map<uint32_t, size_t> maxSizes;
+        // 1) 按 BufferIndex (= GL UBO binding) 统计 cbuffer 大小 = max(BaseIndex + Size)
+        std::unordered_map<uint32_t, uint32_t> cbufferSizes;
         for (const auto& uniformParam : parameter.UniformParameters)
         {
-            if (uniformParam.Offset + uniformParam.Size > parameter.Data.size())
+            if (uniformParam.Offset > parameter.Data.size() ||
+                uniformParam.Size > parameter.Data.size() - uniformParam.Offset)
             {
                 continue;
             }
-
-            const size_t requiredSize = static_cast<size_t>(uniformParam.Offset) + static_cast<size_t>(uniformParam.Size);
-            auto it = maxSizes.find(uniformParam.BufferIndex);
-            if (it == maxSizes.end() || requiredSize > it->second)
+            if (uniformParam.BaseIndex + uniformParam.Size < uniformParam.BaseIndex)
             {
-                maxSizes[uniformParam.BufferIndex] = requiredSize;
+                continue; // uint32 overflow
+            }
+            const uint32_t end = uniformParam.BaseIndex + uniformParam.Size;
+            auto it = cbufferSizes.find(uniformParam.BufferIndex);
+            if (it == cbufferSizes.end() || end > it->second)
+            {
+                cbufferSizes[uniformParam.BufferIndex] = end;
             }
         }
-
-        for (const auto& [bufferIndex, totalSize] : maxSizes)
+        if (cbufferSizes.empty())
         {
-            GLuint bufferHandle = 0;
-            auto found = context.UniformBufferCache.find(bufferIndex);
-            if (found == context.UniformBufferCache.end())
-            {
-                glGenBuffers(1, &bufferHandle);
-                context.UniformBufferCache[bufferIndex] = bufferHandle;
-            }
-            else
-            {
-                bufferHandle = found->second;
-            }
+            return;
+        }
 
-            glBindBuffer(GL_UNIFORM_BUFFER, bufferHandle);
-            glBufferData(GL_UNIFORM_BUFFER, static_cast<GLsizeiptr>(totalSize), parameter.Data.data(), GL_DYNAMIC_DRAW);
-            glBindBufferRange(GL_UNIFORM_BUFFER, bufferIndex, bufferHandle, 0, static_cast<GLintptr>(totalSize));
+        // 2) 对每个 binding 让 ring buffer cache 准备一段
+        for (const auto& kv : cbufferSizes)
+        {
+            UBOCache.EnsureRange(kv.first, kv.second);
+        }
+
+        // 3) 按 BaseIndex 写入各 member
+        for (const auto& uniformParam : parameter.UniformParameters)
+        {
+            if (uniformParam.Offset > parameter.Data.size() ||
+                uniformParam.Size > parameter.Data.size() - uniformParam.Offset)
+            {
+                continue;
+            }
+            UBOCache.WriteSlice(uniformParam.BufferIndex,
+                uniformParam.BaseIndex,
+                parameter.Data.data() + uniformParam.Offset,
+                uniformParam.Size);
+        }
+
+        // 4) 把段绑到 GL（ring buffer 优势：单 GL buffer 跨多个 binding range 表达）
+        for (const auto& kv : cbufferSizes)
+        {
+            UBOCache.Bind(kv.first);
+        }
+    }
+
+    void OpenGLCommandContext::ApplyShaderParameters(const RHI::RHIBatchedShaderParameters& parameter)
+    {
+        UploadUniformBufferData(parameter);
+
+        for (const auto& resourceParam : parameter.ResourceParameters)
+        {
+            
+            const uint32_t slot = resourceParam.Index + resourceParam.ArrayIndex;
+            switch (resourceParam.Type)
+            {
+            case RHI::RHIShaderResourceParameter::EType::Texture:
+            {
+                auto* texture = dynamic_cast<OpenGLTexture*>(resourceParam.GetResourceAs<RHI::RHITexture>());
+                glBindTextureUnit(slot, texture ? texture->GetHandle() : 0u);
+                glBindSampler(slot, 0u); // 清掉早前残留的 sampler
+                break;
+            }
+            case RHI::RHIShaderResourceParameter::EType::SRV:
+            {
+                auto* srv = dynamic_cast<OpenGLShaderResourceView*>(resourceParam.GetResourceAs<RHI::RHIShaderResourceView>());
+                if (srv == nullptr) break;
+                if (srv->IsTexture())
+                {
+                    // mip/array 切片已由 glTextureView 在 view 创建时确定；
+                    // 这里只决定是否再清掉配对的 sampler。
+                    auto* view = srv->GetTextureView();
+                    glBindTextureUnit(slot, view ? view->GetHandle() : 0u);
+                    glBindSampler(slot, 0u);
+                }
+                // buffer SRV — 描述符层信息，GL 无需显式绑定
+                break;
+            }
+            case RHI::RHIShaderResourceParameter::EType::Sampler:
+            {
+                auto* sampler = dynamic_cast<OpenGLSampler*>(resourceParam.GetResourceAs<RHI::RHISampler>());
+                glBindSampler(slot, sampler ? sampler->GetHandle() : 0u);
+                break;
+            }
+            case RHI::RHIShaderResourceParameter::EType::UniformBuffer:
+            {
+                auto* buffer = dynamic_cast<OpenGLBuffer*>(resourceParam.GetResourceAs<RHI::RHIBuffer>());
+                if (buffer == nullptr)
+                {
+                    break; // StructNested 路径：Resource 为空，跳过 bind
+                }
+                glBindBufferBase(GL_UNIFORM_BUFFER, slot, buffer->GetHandle());
+                break;
+            }
+            case RHI::RHIShaderResourceParameter::EType::UAV:
+            {
+                auto* uav = dynamic_cast<OpenGLUnorderedAccessView*>(resourceParam.GetResourceAs<RHI::RHIUnorderedAccessView>());
+                if (uav == nullptr) break;
+                if (uav->IsTexture())
+                {
+                    auto* view = uav->GetTextureView();
+                    if (view != nullptr)
+                    {
+                        const auto& info = uav->GetTexUAVDesc();
+                        GLuint handle = view->GetHandle();
+						glBindImageTextures(slot, 1, &handle);
+                        //glBindImageTexture(slot,
+                        //                  view->GetHandle(),
+                        //                  0,
+                        //                  GL_FALSE,
+                        //                  0,
+                        //                  GL_READ_WRITE,
+                        //                  ConvertRHIFormatToGLFormat(info.Format));
+                    }
+                }
+                // buffer UAV — 描述符层信息，GL 无需显式绑定
+                break;
+            }
+            case RHI::RHIShaderResourceParameter::EType::AccelerationStructure:
+            default:
+                break;
+            }
         }
     }
 
@@ -306,6 +400,7 @@ namespace RHIOpenGL
     void OpenGLCommandContext::Begin()
     {
         NativeCommands.clear();
+        UBOCache.Reset();
     }
 
     void OpenGLCommandContext::End()
@@ -407,6 +502,8 @@ namespace RHIOpenGL
     {
         NativeCommands.emplace_back([this, pipelineState]()
         {
+            UBOCache.Reset();
+
             auto* glPipeline = dynamic_cast<OpenGLComputePipelineState*>(pipelineState);
             if (!glPipeline)
             {
@@ -415,6 +512,16 @@ namespace RHIOpenGL
 
             CurrentPipelineState = pipelineState;
             glUseProgram(glPipeline->GetProgramHandle());
+
+            // 收集 CS 的 UBO 声明大小，作为后续 EnsureRange 的下界；只记 hint
+            // 不分配 GPU 资源。pipeline 切换时已经 Reset，所以这里覆盖干净。
+            if (auto* csBase = dynamic_cast<OpenGLShaderBase*>(glPipeline->GetDesc().computeShader))
+            {
+                for (const auto& kv : csBase->GetShaderResourceLayout().UniformBufferSizes)
+                {
+                    UBOCache.HintUniformBufferSize(kv.first, kv.second);
+                }
+            }
         });
     }
 
@@ -422,46 +529,9 @@ namespace RHIOpenGL
     {
         NativeCommands.emplace_back([this, shader, parameter]()
         {
-            (void)shader;
-            UploadUniformBufferData(parameter);
-
-            for (const auto& resourceParam : parameter.ResourceParameters)
-            {
-                switch (resourceParam.Type)
-                {
-                case RHI::RHIShaderResourceParameter::EType::Texture:
-                case RHI::RHIShaderResourceParameter::EType::SRV:
-                {
-                    auto* texture = dynamic_cast<OpenGLTexture*>(resourceParam.GetResourceAs<RHI::RHITexture>());
-                    if (texture)
-                    {
-                        glBindTextureUnit(resourceParam.Index, texture->GetHandle());
-                        glBindSampler(resourceParam.Index, 0);
-                    }
-                    break;
-                }
-                case RHI::RHIShaderResourceParameter::EType::Sampler:
-                {
-                    auto* sampler = dynamic_cast<OpenGLSampler*>(resourceParam.GetResourceAs<RHI::RHISampler>());
-                    if (sampler)
-                    {
-                        glBindSampler(resourceParam.Index, sampler->GetHandle());
-                    }
-                    break;
-                }
-                case RHI::RHIShaderResourceParameter::EType::UniformBuffer:
-                {
-                    auto* buffer = dynamic_cast<OpenGLBuffer*>(resourceParam.GetResourceAs<RHI::RHIBuffer>());
-                    if (buffer)
-                    {
-                        glBindBufferBase(GL_UNIFORM_BUFFER, resourceParam.Index, buffer->GetHandle());
-                    }
-                    break;
-                }
-                default:
-                    break;
-                }
-            }
+            RHI::RHIBatchedShaderParameters parameterCopy = parameter;
+            (void)shader; // shader 类型当前未被绑定逻辑使用
+            ApplyShaderParameters(parameterCopy);
         });
     }
 
@@ -485,90 +555,8 @@ namespace RHIOpenGL
     {
         NativeCommands.emplace_back([this, shader, parameter]()
         {
-            (void)shader;
-            UploadUniformBufferData(parameter);
-
-            for (const auto& resourceParam : parameter.ResourceParameters)
-            {
-                switch (resourceParam.Type)
-                {
-                case RHI::RHIShaderResourceParameter::EType::Texture:
-                {
-                    auto* texture = dynamic_cast<OpenGLTexture*>(resourceParam.GetResourceAs<RHI::RHITexture>());
-                    if (texture)
-                    {
-                        glBindTextureUnit(resourceParam.Index, texture->GetHandle());
-                    }
-                    break;
-                }
-                case RHI::RHIShaderResourceParameter::EType::SRV:
-                {
-                    auto srv = dynamic_cast<OpenGLShaderResourceView*>(resourceParam.GetResourceAs<RHI::RHIShaderResourceView>());
-                    if (srv) {
-                        if (srv->IsTexture()) {
-                            auto srvInfo = srv->GetTexSRVDesc();
-                            for (auto i = 0; i < srvInfo.MipCount; i++) {
-                                for (auto j = 0; j < srvInfo.ArraySize; j++) {
-                                    
-                                }
-
-                            }
-
-                        }
-                        else {
-                            auto srvInfo = srv->GetBufferSRVDesc();
-
-                        }
-
-
-                    }
-                    break;
-                }
-                case RHI::RHIShaderResourceParameter::EType::Sampler:
-                {
-                    auto* sampler = dynamic_cast<OpenGLSampler*>(resourceParam.GetResourceAs<RHI::RHISampler>());
-                    if (sampler)
-                    {
-                        glBindSampler(resourceParam.Index, sampler->GetHandle());
-                    }
-                    break;
-                }
-                case RHI::RHIShaderResourceParameter::EType::UniformBuffer:
-                {
-                    auto* buffer = dynamic_cast<OpenGLBuffer*>(resourceParam.GetResourceAs<RHI::RHIBuffer>());
-                    if (buffer)
-                    {
-                        glBindBufferBase(GL_UNIFORM_BUFFER, resourceParam.Index, buffer->GetHandle());
-                    }
-                    break;
-                }
-                case RHI::RHIShaderResourceParameter::EType::UAV:
-                {
-                    auto uav = dynamic_cast<OpenGLUnorderedAccessView*>(resourceParam.GetResourceAs<RHI::RHIUnorderedAccessView>());
-                    if (uav) {
-                        if (uav->IsTexture()) {
-                            auto uavInfo = uav->GetTexUAVDesc();
-                            for (auto i = 0; i < uavInfo.MipCount;i++) {
-                                for (auto j = 0; j < uavInfo.ArraySize; j++) {
-                                    glBindImageTexture(resourceParam.Index, uav->GetHandle(), uavInfo.FirstMipSlice + i, GL_TRUE, uavInfo.FirstArraySlice + j, GL_WRITE_ONLY, ConvertRHIFormatToGLFormat(uavInfo.Format));
-                                }
-                                
-                            }
-                            
-                        }
-                        else {
-                            auto uavInfo = uav->GetBufferUAVDesc();
-                            
-                        }
-
-
-                    }
-                    break;
-                }
-                default:
-                    break;
-                }
-            }
+            (void)shader; // shader 类型当前未被绑定逻辑使用
+            ApplyShaderParameters(parameter);
         });
     }
 
@@ -591,6 +579,8 @@ namespace RHIOpenGL
     {
         NativeCommands.emplace_back([this, pipelineState]()
         {
+            UBOCache.Reset();
+
             auto* glPipeline = dynamic_cast<OpenGLGraphicsPipelineState*>(pipelineState);
             if (!glPipeline)
             {
@@ -612,6 +602,26 @@ namespace RHIOpenGL
             ApplyRasterizerState(desc);
             ApplyDepthStencilState(desc);
             ApplyColorBlendState(desc);
+
+            // 收集 VS + FS 的 UBO 声明大小。HintUniformBufferSize 内部取 max，
+            // 所以同一 binding 在两 stage 各自反射出不同大小时以较大者为准——
+            // 这与 GL 一 program 共享 UBO 槽位的语义一致（同一 binding 两 stage
+            // 必须都看得见数据，段大小取大值才能覆盖两者期望）。
+            if (auto* vsBase = dynamic_cast<OpenGLShaderBase*>(desc.shaderStages.vertexShader))
+            {
+                for (const auto& kv : vsBase->GetShaderResourceLayout().UniformBufferSizes)
+                {
+                    UBOCache.HintUniformBufferSize(kv.first, kv.second);
+                }
+            }
+            if (auto* fsBase = dynamic_cast<OpenGLShaderBase*>(desc.shaderStages.fragmentShader))
+            {
+                for (const auto& kv : fsBase->GetShaderResourceLayout().UniformBufferSizes)
+                {
+                    UBOCache.HintUniformBufferSize(kv.first, kv.second);
+                }
+            }
+            
         });
     }
 

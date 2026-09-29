@@ -10,5 +10,6 @@ namespace RHIOpenGL
     GLenum ConvertRHIFormatToGLType(RHI::ERHIFormat format);
     GLenum GetOpenGLTextureFormat(RHI::ERHIFormat format);
     GLenum GetOpenGLTextureType(RHI::ERHIFormat format);
+    GLenum ConvertRHITextureTypeToGLTextureType(RHI::ERHITextureType type);
 	void CheckError();
 }

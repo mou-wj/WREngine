@@ -454,6 +454,15 @@ namespace Test {
 
         void Teardown() override {
             // 资源清理如有需要可补充
+            // 先等 worker 把两条队列所有已提交命令（含 Present）执行完，
+            // 再销毁任何 GPU 对象——命令 lambda 捕获的是裸指针，等不到
+            // 这一步就清理，worker 还在跑就会读到已析构的 shader/pipeline。
+            {
+                auto* graphicsQueue = RHI::GRHIApi->GetQueue(EQueueType::Graphics);
+                auto* computeQueue = RHI::GRHIApi->GetQueue(EQueueType::Compute);
+                if (graphicsQueue) graphicsQueue->WaitIdle();
+                if (computeQueue) computeQueue->WaitIdle();
+            }
             GMeshMaterialShaderMap.Clear();
             RHIPipelineStateCache::ClearAll();
             GRenderTargetPool.Clear();

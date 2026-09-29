@@ -594,7 +594,7 @@ class RHI_API RHIComputePipelineState : public RHIResource
 public:
     RHIComputePipelineState(const RHIComputePipelineStateDesc& desc) : RHIResource(ERHIResourceType::ComputePipelineState), desc(desc) {}
     ~RHIComputePipelineState() override = default;
-
+    const RHIComputePipelineStateDesc& GetDesc() const { return desc; }
     // 可扩展Compute管线特有参数
 protected:
     RHIComputePipelineStateDesc desc;

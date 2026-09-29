@@ -58,8 +58,10 @@ namespace RHIOpenGL
 
     bool InitializePlatformSurport();
 	void ShutdownPlatformSurport();
-	bool InitializeBackPlatformSurport();
-    void MakeBackCurrent(bool enable);
+    // worker 线程接管默认（bootstrap）上下文，作为其常驻 current context
+    bool InitializeWorkerPlatformContext();
+    // 把默认（bootstrap）上下文重新绑到调用线程（worker 在 Present 等临时切换后恢复用）
+    void MakeDefaultContextCurrent();
     bool HasCurrentContext();
 
 

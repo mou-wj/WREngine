@@ -32,6 +32,17 @@ namespace RHIOpenGL
 
     void OpenGLRHIApi::Shutdown()
     {
+        // 先等两条队列把已提交命令全部执行完再停 worker——
+        // StopWorker 只 join 线程，不消费队列里剩余的 entry，直接停会
+        // 把挂起的命令（含 Present/异步释放任务）整条丢弃。
+        if (auto* graphicsQueue = OpenGLQueueManager::GetInstance().GetQueue(RHI::EQueueType::Graphics))
+        {
+            graphicsQueue->WaitIdle();
+        }
+        if (auto* computeQueue = OpenGLQueueManager::GetInstance().GetQueue(RHI::EQueueType::Compute))
+        {
+            computeQueue->WaitIdle();
+        }
         OpenGLQueueManager::GetInstance().StopWorker();
         ShutdownPlatformSurport();
     }
@@ -70,17 +81,25 @@ namespace RHIOpenGL
             return;
         }
 
-        glBindTexture(GL_TEXTURE_2D, glTexture->GetHandle());
-        glTexSubImage2D(GL_TEXTURE_2D,
-            static_cast<GLint>(region.mipLevel),
-            static_cast<GLint>(region.xOffset),
-            static_cast<GLint>(region.yOffset),
-            static_cast<GLsizei>(region.width),
-            static_cast<GLsizei>(region.height),
-            GetOpenGLTextureFormat(desc.Format),
-            GetOpenGLTextureType(desc.Format),
-            data);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        // 转发到渲染线程并等待完成：data 指针属于调用方栈帧，异步版无法保证
+        // worker 消费时仍然存活。
+        const GLuint textureHandle = glTexture->GetHandle();
+        const GLenum glFormat = GetOpenGLTextureFormat(desc.Format);
+        const GLenum glType = GetOpenGLTextureType(desc.Format);
+        EnqueueTaskAndWait([textureHandle, &region, glFormat, glType, data]()
+        {
+            glBindTexture(GL_TEXTURE_2D, textureHandle);
+            glTexSubImage2D(GL_TEXTURE_2D,
+                static_cast<GLint>(region.mipLevel),
+                static_cast<GLint>(region.xOffset),
+                static_cast<GLint>(region.yOffset),
+                static_cast<GLsizei>(region.width),
+                static_cast<GLsizei>(region.height),
+                glFormat,
+                glType,
+                data);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        });
     }
 
     void OpenGLRHIApi::UpdateBuffer(RHI::RHICommandListBase& cmdList, RHI::RHIBuffer* buffer, const void* data, const RHI::RHIUpdateBufferRegion& region)
@@ -93,12 +112,17 @@ namespace RHIOpenGL
             return;
         }
 
-        glBindBuffer(GL_ARRAY_BUFFER, glBuffer->GetHandle());
-        glBufferSubData(GL_ARRAY_BUFFER,
-            static_cast<GLintptr>(region.offset),
-            static_cast<GLsizeiptr>(region.size),
-            data);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // 同 UpdateTexture：data 指针属于调用方，必须等待写入完成再返回。
+        const GLuint bufferHandle = glBuffer->GetHandle();
+        EnqueueTaskAndWait([bufferHandle, &region, data]()
+        {
+            glBindBuffer(GL_ARRAY_BUFFER, bufferHandle);
+            glBufferSubData(GL_ARRAY_BUFFER,
+                static_cast<GLintptr>(region.offset),
+                static_cast<GLsizeiptr>(region.size),
+                data);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+        });
     }
 
     void* OpenGLRHIApi::MapReadTexture(RHI::RHICommandListBase& cmdList, RHI::RHITexture* texture, const RHI::RHIReadTextureInfo& info)
@@ -131,10 +155,17 @@ namespace RHIOpenGL
             return nullptr;
         }
 
-        glBindTexture(GL_TEXTURE_2D, glTexture->GetHandle());
-        glGetTexImage(GL_TEXTURE_2D, static_cast<GLint>(info.MipLevel),
-            GetOpenGLTextureFormat(desc.Format), GetOpenGLTextureType(desc.Format), mappedData);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        // 读回必须在渲染线程执行并等待完成——返回的指针内容要在返回前填充好。
+        const GLuint textureHandle = glTexture->GetHandle();
+        const GLenum glFormat = GetOpenGLTextureFormat(desc.Format);
+        const GLenum glType = GetOpenGLTextureType(desc.Format);
+        EnqueueTaskAndWait([textureHandle, &info, glFormat, glType, mappedData]()
+        {
+            glBindTexture(GL_TEXTURE_2D, textureHandle);
+            glGetTexImage(GL_TEXTURE_2D, static_cast<GLint>(info.MipLevel),
+                glFormat, glType, mappedData);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        });
         return mappedData;
     }
 
@@ -160,10 +191,15 @@ namespace RHIOpenGL
             return nullptr;
         }
 
-        glBindBuffer(GL_ARRAY_BUFFER, glBuffer->GetHandle());
-        glGetBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(info.offset),
-            static_cast<GLsizeiptr>(readSize), mappedData);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // 同 MapReadTexture：等待读回完成后再返回指针。
+        const GLuint bufferHandle = glBuffer->GetHandle();
+        EnqueueTaskAndWait([bufferHandle, &info, readSize, mappedData]()
+        {
+            glBindBuffer(GL_ARRAY_BUFFER, bufferHandle);
+            glGetBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(info.offset),
+                static_cast<GLsizeiptr>(readSize), mappedData);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+        });
         return mappedData;
     }
 

@@ -24,6 +24,46 @@ namespace RHIOpenGL
     };
     using OpenGLTextureSP = std::shared_ptr<OpenGLTexture>;
 
+    // =========================================================================
+    // OpenGLTextureView
+    // -----------------------------------------------------------------------------
+    // 把一个 GL_TEXTURE_*_VIEW 创建出来的"视图纹理对象"包装成一个 RAII 句柄。
+    // 持有：
+    //   - ViewHandle         —— 调用 glGenTextures + glTextureView 得到的 GL 纹理名
+    //   - SourceTexture*     —— 所观察的源纹理（不持有所有权，由外层管理生命周期）
+    //   - ViewDesc           —— 视图中段（mip / array / format / target）信息
+    // 它同时支持 SRV 路径（glBindTextureUnit）和 UAV 路径（glBindImageTexture）：
+    // 调用方拿到 GetHandle() 后再按用途分别绑 texture/image unit。
+    // =========================================================================
+    class OpenGLTextureView
+    {
+    public:
+        struct Desc
+        {
+            GLenum Target = GL_TEXTURE_2D;
+            GLenum InternalFormat = GL_RGBA8;
+            uint32_t FirstMipSlice = 0;
+            uint32_t MipCount = 1;
+            uint32_t FirstArraySlice = 0;
+            uint32_t ArraySize = 1;
+        };
+
+        OpenGLTextureView(OpenGLTexture* source, const Desc& viewDesc);
+        ~OpenGLTextureView();
+
+        OpenGLTextureView(const OpenGLTextureView&) = delete;
+        OpenGLTextureView& operator=(const OpenGLTextureView&) = delete;
+
+        GLuint GetHandle() const { return ViewHandle; }
+        OpenGLTexture* GetSource() const { return SourceTexture; }
+        const Desc& GetDesc() const { return ViewInfo; }
+
+    private:
+        OpenGLTexture* SourceTexture = nullptr;
+        GLuint ViewHandle = 0;
+        Desc ViewInfo{};
+    };
+
     class OpenGLBuffer : public RHI::RHIBuffer
     {
     public:
@@ -46,36 +86,36 @@ namespace RHIOpenGL
         ~OpenGLShaderResourceView() override = default;
         bool IsTexture();
         bool IsBuffer();
-        GLuint GetHandle() const { return Handle; }
-        void SetHandle(GLuint handle) { Handle = handle; }
+        // 纹理视图情形下返回 OpenGLTextureView（持有 glTextureView 句柄）；
+        // buffer 视图情形下返回 nullptr。绑定阶段取 GL handle 用 GetTextureView()->GetHandle()。
+        OpenGLTextureView* GetTextureView() const { return TextureView.get(); }
         const RHI::RHITexSRVCreateInfo& GetTexSRVDesc() const { return TexSRVDesc; }
         const RHI::RHIBufferSRVCreateInfo& GetBufferSRVDesc() const { return BufferSRVDesc; }
 
     private:
+        std::unique_ptr<OpenGLTextureView> TextureView;
         RHI::RHITexSRVCreateInfo TexSRVDesc;
         RHI::RHIBufferSRVCreateInfo BufferSRVDesc;
         bool IsTextureView = false;
-        GLuint Handle = 0;
     };
     using OpenGLShaderResourceViewSP = std::shared_ptr<OpenGLShaderResourceView>;
 
     class OpenGLUnorderedAccessView : public RHI::RHIUnorderedAccessView
     {
     public:
-        explicit OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource,const RHI::RHITexUAVCreateInfo& Desc);
-        explicit OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource,const RHI::RHIBufferUAVCreateInfo& Desc);
+        explicit OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource, const RHI::RHITexUAVCreateInfo& Desc);
+        explicit OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource, const RHI::RHIBufferUAVCreateInfo& Desc);
         ~OpenGLUnorderedAccessView() override = default;
         bool IsTexture();
         bool IsBuffer();
-        GLuint GetHandle() const { return Handle; }
-        void SetHandle(GLuint handle) { Handle = handle; }
+        OpenGLTextureView* GetTextureView() const { return TextureView.get(); }
         const RHI::RHITexUAVCreateInfo& GetTexUAVDesc() const { return TexUAVDesc; }
         const RHI::RHIBufferUAVCreateInfo& GetBufferUAVDesc() const { return BufferUAVDesc; }
     private:
+        std::unique_ptr<OpenGLTextureView> TextureView;
         RHI::RHITexUAVCreateInfo TexUAVDesc;
         RHI::RHIBufferUAVCreateInfo BufferUAVDesc;
         bool IsTextureView = false;
-        GLuint Handle = 0;
     };
     using OpenGLUnorderedAccessViewSP = std::shared_ptr<OpenGLUnorderedAccessView>;
     using EGLSLShaderResourceType = RenderCore::GLSLCompiledBinaryResultPacker::EGLSLShaderResourceType;
@@ -84,7 +124,13 @@ namespace RHIOpenGL
         uint32_t Count= 1;
     };
     struct OpenGLShaderResourceLayout {
+        // Texture / Sampler / Image / SSBO 等描述符资源
         std::unordered_map<uint32_t, OpenGLShaderResourceBindingInfo> Bindings;
+        // 单独的 UBO 大小表（key = GL UBO binding），与 Bindings 分开，
+        // 因为 UBO 没有 Count/ArrayIndex，体积也是描述符以外的属性。
+        // 数据来源：GLSLCompiledBinaryResultPacker::Header::UniformBuffers[i].Size
+        // （SPIRV-Cross `get_declared_struct_size`，即 cbuffer 声明大小）。
+        std::unordered_map<uint32_t, uint32_t> UniformBufferSizes;
         bool IsValid(uint32_t binding, EGLSLShaderResourceType Type,uint32_t innerIndex){
             if(Bindings.find(binding) == Bindings.end()){
                 return false;
@@ -93,6 +139,12 @@ namespace RHIOpenGL
                 return false;
             }
             return true;
+        }
+        // 没记录时返回 0。
+        uint32_t GetUniformBufferSize(uint32_t binding) const
+        {
+            auto it = UniformBufferSizes.find(binding);
+            return (it == UniformBufferSizes.end()) ? 0u : it->second;
         }
     };
 

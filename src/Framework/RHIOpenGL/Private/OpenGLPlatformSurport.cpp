@@ -84,7 +84,6 @@ namespace RHIOpenGL {
         {
             return nullptr;
         }
-
         return wglCreateContext(deviceContext);
     }
 
@@ -94,7 +93,6 @@ namespace RHIOpenGL {
     void* BootstrapDeviceContext = nullptr;
     void* BootstrapDefaultContext = nullptr;
     void* BootstrapGLContext = nullptr;
-    void* BootstrapGLBackContext = nullptr;
     OpenGLPlatformContextWin32::OpenGLPlatformContextWin32(void* windowHandle,RHI::ERHIFormat pixelFormat) : OpenGLPlatformContext(windowHandle, pixelFormat), mWindow(static_cast<HWND>(windowHandle)) {}
 
     OpenGLPlatformContextWin32::~OpenGLPlatformContextWin32() { Shutdown(); }
@@ -160,7 +158,7 @@ namespace RHIOpenGL {
         if (pixelFormat == 0) { ReleaseDC(mWindow, mDeviceContext); mDeviceContext = nullptr; return false; }
 
         if (!SetPixelFormat(mDeviceContext, pixelFormat, &pfd)) { ReleaseDC(mWindow, mDeviceContext); mDeviceContext = nullptr; return false; }
-
+        
         mContext = TryCreateOpenGL43Context(mDeviceContext, (HGLRC)BootstrapGLContext);
         if (!mContext) { ReleaseDC(mWindow, mDeviceContext); mDeviceContext = nullptr; return false; }
 
@@ -255,6 +253,9 @@ namespace RHIOpenGL {
             return false;
         }
 		BootstrapDeviceContext = deviceContext;
+
+
+
         HGLRC legacyContext = CreateOpenGLBootstrapContext(deviceContext);
         if (!legacyContext || !wglMakeCurrent(deviceContext, legacyContext))
         {
@@ -309,16 +310,13 @@ namespace RHIOpenGL {
             << GLAD_VERSION_MAJOR(version) << "." << GLAD_VERSION_MINOR(version)
             << std::endl;
         BootstrapGLContext = modernContext;
-       
-        //��ʼ�����̵߳�������
-        modernContext = TryCreateOpenGL43Context(deviceContext, (HGLRC)BootstrapGLContext);
-        if (modernContext)
-        {
-            BootstrapGLBackContext = modernContext;
-        }
-        
 
-		return true;
+        // 主线程的初始化职责到此结束。BootstrapGLContext 后续由 worker 线程接管
+        // （InitializeWorkerPlatformContext），主线程不再持有任何 current context，
+        // 避免同 share group 跨线程持锁导致的 wglMakeCurrent 卡死。
+        wglMakeCurrent(nullptr, nullptr);
+
+        return true;
     }
 
     void ShutdownPlatformSurport()
@@ -346,42 +344,27 @@ namespace RHIOpenGL {
 			BootstrapWindow = nullptr;
 		}
     }
-    bool InitializeBackPlatformSurport()
+    bool InitializeWorkerPlatformContext()
     {
-        auto bootstrapWindow = static_cast<HWND>(BootstrapWindow);
-        HDC deviceContext = GetDC(bootstrapWindow);
-        if (!deviceContext)
+        // worker 线程接管默认（bootstrap）上下文作为常驻 current context。
+        // 前置条件：InitializePlatformSurport 末尾已把主线程的 current 释放，
+        // 否则同一个 HGLRC 不可能同时绑在两个线程上（wglMakeCurrent 会失败）。
+        auto deviceContext = static_cast<HDC>(BootstrapDeviceContext);
+        auto glContext = static_cast<HGLRC>(BootstrapGLContext);
+        if (!deviceContext || !glContext)
         {
             return false;
         }
-        HGLRC legacyContext = static_cast<HGLRC>(BootstrapGLBackContext);
-        if (!legacyContext || !wglMakeCurrent(deviceContext, legacyContext))
-        {
-            return false;
-        }
-
-        const int bootstrapVersion = gladLoadGL(LoadOpenGLProcAddress);
-        if (bootstrapVersion == 0)
-        {
-            return false;
-        }
-
-
-        return true;
-        //
-        
+        return wglMakeCurrent(deviceContext, glContext) == TRUE;
     }
 
-    void MakeBackCurrent(bool enable)
+    void MakeDefaultContextCurrent()
     {
-        auto deviceContext = static_cast<HDC>(BootstrapDeviceContext);  
-        if (enable)
-        {
-            wglMakeCurrent(deviceContext, static_cast<HGLRC>(BootstrapGLBackContext));
-        }
-        else
-        {
-			wglMakeCurrent(nullptr,nullptr);
+        // worker 在临时切走（如 Present 切到 swapchain 上下文并 DoneCurrent）之后，
+        // 用这个恢复自己的常驻默认上下文。
+        if (wglMakeCurrent(static_cast<HDC>(BootstrapDeviceContext),
+            static_cast<HGLRC>(BootstrapGLContext)) != TRUE) {
+            std::cerr << "[OpenGLRHI] Failed to make default context current" << std::endl;
         }
     }
 

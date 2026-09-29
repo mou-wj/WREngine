@@ -1,5 +1,6 @@
 #include "OpenGLPipelineState.h"
 #include "OpenGLResource.h"
+#include "OpenGLQueue.h"
 #include "glad/gl.h"
 #include <cstdio>
 
@@ -33,60 +34,77 @@ namespace RHIOpenGL
     {
         if (ProgramHandle != 0)
         {
-            glDeleteProgram(ProgramHandle);
+            const GLuint handle = ProgramHandle;
             ProgramHandle = 0;
+            EnqueueTask([handle]()
+            {
+                glDeleteProgram(handle);
+            });
         }
     }
 
     OpenGLGraphicsPipelineState::OpenGLGraphicsPipelineState(const RHI::RHIGraphicsPipelineStateDesc& desc)
         : RHI::RHIGraphicsPipelineState(desc)
     {
-        ProgramHandle = glCreateProgram();
-
-        if (desc.shaderStages.vertexShader)
+        // program 创建/attach/link 全部转发到渲染线程；Wait 版保证构造返回时
+        // ProgramHandle 已就绪，后续 GetProgramHandle() 可用。
+        EnqueueTaskAndWait([this, &desc]()
         {
-            auto* vertexShader = dynamic_cast<OpenGLVertexShader*>(desc.shaderStages.vertexShader);
-            if (vertexShader && vertexShader->GetHandle() != 0)
-            {
-                glAttachShader(ProgramHandle, vertexShader->GetHandle());
-            }
-        }
+            ProgramHandle = glCreateProgram();
 
-        if (desc.shaderStages.fragmentShader)
-        {
-            auto* fragmentShader = dynamic_cast<OpenGLFragmentShader*>(desc.shaderStages.fragmentShader);
-            if (fragmentShader && fragmentShader->GetHandle() != 0)
+            if (desc.shaderStages.vertexShader)
             {
-                glAttachShader(ProgramHandle, fragmentShader->GetHandle());
+                auto* vertexShader = dynamic_cast<OpenGLVertexShader*>(desc.shaderStages.vertexShader);
+                if (vertexShader && vertexShader->GetHandle() != 0)
+                {
+                    glAttachShader(ProgramHandle, vertexShader->GetHandle());
+                }
             }
-        }
 
-        LinkOpenGLProgram(ProgramHandle);
+            if (desc.shaderStages.fragmentShader)
+            {
+                auto* fragmentShader = dynamic_cast<OpenGLFragmentShader*>(desc.shaderStages.fragmentShader);
+                if (fragmentShader && fragmentShader->GetHandle() != 0)
+                {
+                    glAttachShader(ProgramHandle, fragmentShader->GetHandle());
+                }
+            }
+
+            LinkOpenGLProgram(ProgramHandle);
+        });
     }
 
     OpenGLComputePipelineState::~OpenGLComputePipelineState()
     {
         if (ProgramHandle != 0)
         {
-            glDeleteProgram(ProgramHandle);
+            const GLuint handle = ProgramHandle;
             ProgramHandle = 0;
+            EnqueueTask([handle]()
+            {
+                glDeleteProgram(handle);
+            });
         }
     }
 
     OpenGLComputePipelineState::OpenGLComputePipelineState(const RHI::RHIComputePipelineStateDesc& desc)
         : RHI::RHIComputePipelineState(desc)
     {
-        ProgramHandle = glCreateProgram();
-
-        if (desc.computeShader)
+        // 同 Graphics：转发到渲染线程并等待完成。
+        EnqueueTaskAndWait([this, &desc]()
         {
-            auto* computeShader = dynamic_cast<OpenGLComputeShader*>(desc.computeShader);
-            if (computeShader && computeShader->GetHandle() != 0)
-            {
-                glAttachShader(ProgramHandle, computeShader->GetHandle());
-            }
-        }
+            ProgramHandle = glCreateProgram();
 
-        LinkOpenGLProgram(ProgramHandle);
+            if (desc.computeShader)
+            {
+                auto* computeShader = dynamic_cast<OpenGLComputeShader*>(desc.computeShader);
+                if (computeShader && computeShader->GetHandle() != 0)
+                {
+                    glAttachShader(ProgramHandle, computeShader->GetHandle());
+                }
+            }
+
+            LinkOpenGLProgram(ProgramHandle);
+        });
     }
 }

@@ -1,4 +1,5 @@
 #include "OpenGLRenderTarget.h"
+#include "OpenGLQueue.h"
 
 namespace RHIOpenGL
 {
@@ -14,7 +15,12 @@ namespace RHIOpenGL
             return;
         }
 
-        glGenFramebuffers(1, &FramebufferHandle);
+        // 本函数可能在主线程（swapchain 构造）和 worker（BeginRenderPass 命令）被调用。
+        // 主线程走"转发并等待"；worker 内部调用会被任务接口自动内联执行，行为不变。
+        EnqueueTaskAndWait([this]()
+        {
+            glGenFramebuffers(1, &FramebufferHandle);
+        });
     }
 
     void OpenGLFramebuffer::Reset()
@@ -49,10 +55,16 @@ namespace RHIOpenGL
             return;
         }
 
-        glDeleteFramebuffers(1, &FramebufferHandle);
+        // 析构路径可能在主线程（swapchain 销毁）触发，转发到渲染线程删除；
+        // worker 已停止时任务接口自动内联执行（此时无 current，同原行为）。
+        const GLuint handle = FramebufferHandle;
         FramebufferHandle = 0;
         ColorAttachmentCount = 0;
         HasDepthAttachment = false;
+        EnqueueTask([handle]()
+        {
+            glDeleteFramebuffers(1, &handle);
+        });
     }
 
     void OpenGLFramebuffer::Bind() const

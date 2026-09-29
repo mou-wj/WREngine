@@ -801,11 +801,11 @@ void ShaderCompiler::CompileToOpenGL(const std::string& preprocessedSource, cons
     AddArg(L"-fspv-target-env=vulkan1.3");
     AddArg(L"-fvk-use-dx-layout");
     AddArg(L"-fvk-auto-shift-bindings");
-    AddArg(L"-fvk-bind-globals"); AddArg(ToWide(std::to_string(shaderBindingOffset + 10))); AddArg(ToWide("0"));
-    AddArg(L"-fvk-b-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 100))); AddArg(ToWide("0"));
-    AddArg(L"-fvk-t-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 200))); AddArg(ToWide("0"));
-    AddArg(L"-fvk-s-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 300))); AddArg(ToWide("0"));
-    AddArg(L"-fvk-u-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 400))); AddArg(ToWide("0"));
+    //AddArg(L"-fvk-bind-globals"); AddArg(ToWide(std::to_string(shaderBindingOffset + 10))); AddArg(ToWide("0"));
+    //AddArg(L"-fvk-b-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 100))); AddArg(ToWide("0"));
+    //AddArg(L"-fvk-t-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 200))); AddArg(ToWide("0"));
+    //AddArg(L"-fvk-s-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 300))); AddArg(ToWide("0"));
+    //AddArg(L"-fvk-u-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 400))); AddArg(ToWide("0"));
 
     std::vector<uint32_t> spirv;
     CompileHLSLToSPIRV(preprocessedSource, input, argStorage, out, spirv);
