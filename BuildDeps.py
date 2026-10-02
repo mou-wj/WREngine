@@ -86,9 +86,11 @@ def clone_remote_source(meta: Dict[str, Any], src_dir: Path) -> bool:
     if not src_info.get("git"):
         raise ValueError(f"Missing source.git for dependency: {meta['name']}")
 
+    ref = src_info.get("tag") or src_info.get("branch", "main")
+
     if run([
         "git", "clone", "--depth=1", "--single-branch",
-        "--branch", src_info.get("branch", "main"),
+        "--branch", ref,
         src_info["git"], str(src_dir)
     ]) != 0:
         return False

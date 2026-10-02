@@ -4,7 +4,7 @@
   "type": "remote_source_prebuild",
   "source": {
     "git": "https://github.com/syoyo/tinygltf.git",
-    "branch": "release"
+    "tag": "v3.0.0"
   },
   "compiler": {
     "windows": {
