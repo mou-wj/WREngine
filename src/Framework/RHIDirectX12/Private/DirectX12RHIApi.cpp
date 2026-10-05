@@ -30,6 +30,8 @@ static DXGI_FORMAT ToDxgiFormat(RHI::ERHIFormat format)
 }
 namespace RHIDirectX12
 {
+    DirectX12RHIApi::DirectX12RHIApi() = default;
+
     DirectX12RHIApi::~DirectX12RHIApi()
     {
         Shutdown();

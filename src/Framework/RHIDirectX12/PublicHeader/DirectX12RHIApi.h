@@ -16,6 +16,7 @@ namespace RHIDirectX12
     class RHIDIRECTX12_API DirectX12RHIApi : public RHI::RHIApi
     {
     public:
+        DirectX12RHIApi();
         ~DirectX12RHIApi() override;
 
         bool Init() override;

@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include <vector>
 
 namespace RenderCore {
@@ -10,6 +11,29 @@ namespace RenderCore {
         virtual bool Pack(void* packSource, std::vector<char>& packedResultOut) { return true; };
     };
 
+    class RENDERCORE_API HLSLCompiledBinaryResultPacker : public ShaderCompiledBinaryResultPacker
+    {
+    public:
+        struct Header
+        {
+            RHI::ERHIShaderFrequency Frequency = RHI::ERHIShaderFrequency::Unknown;
+            char EntryPoint[32] = "main";
+            uint64_t ShaderHash = 0;
+        };
+
+        struct PackedCode
+        {
+            std::vector<char> DXILCode;
+            Header HeaderData;
+        } DepackedData;
+
+        void Depack(const std::vector<char>& packedResult) override;
+
+    protected:
+        bool Pack(void* packSource, std::vector<char>& packedResultOut) override;
+        friend class ShaderCompiler;
+    };
+
     class RENDERCORE_API SPIRVCompiledBinaryResultPacker : public ShaderCompiledBinaryResultPacker {
     public:
         enum class ESPIRVShaderResourceType : uint8_t
@@ -19,15 +43,15 @@ namespace RenderCore {
             StorageImage = 2,
             UniformBuffer = 3,
             StorageBuffer = 4,
-            // ²¹³äÀàÐÍ
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
             UniformTexelBuffer = 5,    // tN: Buffer<T>
             StorageTexelBuffer = 6,    // uN: RWBuffer<T>
 
-            // ÌØÊâÌá½»·½Ê½
-            PushConstant = 7,          // ÕâÖÖ×ÊÔ´Ã»ÓÐ Binding£¬Ö»ÓÐ Offset
+            // ï¿½ï¿½ï¿½ï¿½ï¿½á½»ï¿½ï¿½Ê½
+            PushConstant = 7,          // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´Ã»ï¿½ï¿½ Bindingï¿½ï¿½Ö»ï¿½ï¿½ Offset
 
-            // ÏÖ´ú API ÌØÐÔ
-            AccelerationStructure = 8, // ¹â×·¼ÓËÙ½á¹¹
+            // ï¿½Ö´ï¿½ API ï¿½ï¿½ï¿½ï¿½
+            AccelerationStructure = 8, // ï¿½ï¿½×·ï¿½ï¿½ï¿½Ù½á¹¹
             Num = 9
 
         };
@@ -136,9 +160,9 @@ namespace RenderCore {
         // ============================================================
         // Push Constant
         //
-        // OpenGL Ã»ÓÐ Vulkan Push Constant¡£
-        // Èç¹ûÄãµÄ Shader Compiler ×îÖÕ°ÑËüÓ³Éä³É UBO£¬
-        // ¿ÉÒÔ¼ÇÂ¼¶ÔÓ¦µÄ UBO Binding¡£
+        // OpenGL Ã»ï¿½ï¿½ Vulkan Push Constantï¿½ï¿½
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Shader Compiler ï¿½ï¿½ï¿½Õ°ï¿½ï¿½ï¿½Ó³ï¿½ï¿½ï¿½ UBOï¿½ï¿½
+        // ï¿½ï¿½ï¿½Ô¼ï¿½Â¼ï¿½ï¿½Ó¦ï¿½ï¿½ UBO Bindingï¿½ï¿½
         // ============================================================
         struct PushConstantInfo
         {
@@ -170,7 +194,7 @@ namespace RenderCore {
             //CombinedBinding
             std::vector<CombinedBindingInfo> CombinedBindings;
 
-            // Push Constant Ó³Éä
+            // Push Constant Ó³ï¿½ï¿½
             bool HasPushConstant = false;
             PushConstantInfo PushConstant;
         };
@@ -180,12 +204,12 @@ namespace RenderCore {
         // ============================================================
         struct PackedCode
         {
-            // OpenGL 4.6 ¿ÉÒÔ¿¼ÂÇÖ±½ÓÊ¹ÓÃ SPIR-V£¬
-            // µ«Èç¹ûÄãµÄÂ·ÏßÊÇ£º
+            // OpenGL 4.6 ï¿½ï¿½ï¿½Ô¿ï¿½ï¿½ï¿½Ö±ï¿½ï¿½Ê¹ï¿½ï¿½ SPIR-Vï¿½ï¿½
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½ï¿½Ç£ï¿½
             //
             // HLSL -> SPIR-V -> SPIRV-Cross -> GLSL
             //
-            // ÄÇÃ´ÕâÀï±£´æ×îÖÕ GLSL¡£
+            // ï¿½ï¿½Ã´ï¿½ï¿½ï¿½ï±£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ GLSLï¿½ï¿½
             std::string GLSLCode;
 
             Header HeaderData;

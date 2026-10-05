@@ -293,7 +293,8 @@ namespace RHIDirectX12
         psoDesc.SampleDesc.Count = std::max(1u, desc.attachmentDesc.numSamples);
         psoDesc.SampleDesc.Quality = 0;
 
-        Device->GetNativeDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&PipelineState));
+        auto res = Device->GetNativeDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&PipelineState));
+        
 #endif
     }
 

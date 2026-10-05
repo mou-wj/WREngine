@@ -1,5 +1,6 @@
 #include "DirectX12Resource.h"
 #include "DirectX12Device.h"
+#include "ShaderCompiledDataPacker.h"
 #include <algorithm>
 #include <string>
 
@@ -9,6 +10,17 @@
 
 namespace
 {
+    static std::vector<char> UnpackDXIL(const std::vector<char>& packedCode)
+    {
+        RenderCore::HLSLCompiledBinaryResultPacker packer;
+        packer.Depack(packedCode);
+        if (!packer.DepackedData.DXILCode.empty())
+        {
+            return packer.DepackedData.DXILCode;
+        }
+        return packedCode;
+    }
+
 #if defined(_WIN32)
     static DXGI_FORMAT ToDxgiFormat(RHI::ERHIFormat format)
     {
@@ -639,42 +651,42 @@ namespace RHIDirectX12
     }
 
     DirectX12VertexShader::DirectX12VertexShader(const std::vector<char>& inByteCode)
-        : ByteCode(inByteCode)
+        : ByteCode(UnpackDXIL(inByteCode))
     {
     }
 
     DirectX12FragmentShader::DirectX12FragmentShader(const std::vector<char>& inByteCode)
-        : ByteCode(inByteCode)
+        : ByteCode(UnpackDXIL(inByteCode))
     {
     }
 
     DirectX12ComputeShader::DirectX12ComputeShader(const std::vector<char>& inByteCode)
-        : ByteCode(inByteCode)
+        : ByteCode(UnpackDXIL(inByteCode))
     {
     }
 
     DirectX12GeometryShader::DirectX12GeometryShader(const std::vector<char>& inByteCode)
-        : ByteCode(inByteCode)
+        : ByteCode(UnpackDXIL(inByteCode))
     {
     }
 
     DirectX12TessControlShader::DirectX12TessControlShader(const std::vector<char>& inByteCode)
-        : ByteCode(inByteCode)
+        : ByteCode(UnpackDXIL(inByteCode))
     {
     }
 
     DirectX12TessEvalShader::DirectX12TessEvalShader(const std::vector<char>& inByteCode)
-        : ByteCode(inByteCode)
+        : ByteCode(UnpackDXIL(inByteCode))
     {
     }
 
     DirectX12MeshShader::DirectX12MeshShader(const std::vector<char>& inByteCode)
-        : ByteCode(inByteCode)
+        : ByteCode(UnpackDXIL(inByteCode))
     {
     }
 
     DirectX12TaskShader::DirectX12TaskShader(const std::vector<char>& inByteCode)
-        : ByteCode(inByteCode)
+        : ByteCode(UnpackDXIL(inByteCode))
     {
     }
 

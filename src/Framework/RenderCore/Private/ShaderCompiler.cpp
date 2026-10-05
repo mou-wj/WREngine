@@ -9,6 +9,7 @@
 #include <wrl/client.h>
 #include <stack>
 #include <string>
+#include <d3d12shader.h>
 
 // Include platform-specific compilation libraries
 // For DXC (DirectX Shader Compiler)
@@ -73,6 +74,103 @@ namespace RenderCore {
             std::ostringstream ss;
             ss << file.rdbuf();
             outText = ss.str();
+            return true;
+        }
+
+        bool ReflectParameterMapFromDXIL(
+            ID3D12ShaderReflection* reflection,
+            ShaderParameterAllocationMap& out)
+        {
+            if (!reflection)
+            {
+                return false;
+            }
+
+            D3D12_SHADER_DESC shaderDesc{};
+            if (FAILED(reflection->GetDesc(&shaderDesc)))
+            {
+                return false;
+            }
+
+            for (UINT resourceIndex = 0; resourceIndex < shaderDesc.BoundResources; ++resourceIndex)
+            {
+                D3D12_SHADER_INPUT_BIND_DESC binding{};
+                if (FAILED(reflection->GetResourceBindingDesc(resourceIndex, &binding)))
+                {
+                    return false;
+                }
+
+                const auto bufferIndex = static_cast<uint16_t>(binding.Space);
+                const auto baseIndex = static_cast<uint16_t>(binding.BindPoint);
+                const auto bindingCount = static_cast<uint16_t>(binding.BindCount);
+
+                switch (binding.Type)
+                {
+                case D3D_SIT_CBUFFER:
+                {
+                    ID3D12ShaderReflectionConstantBuffer* constantBuffer =
+                        reflection->GetConstantBufferByName(binding.Name);
+                    D3D12_SHADER_BUFFER_DESC bufferDesc{};
+                    if (!constantBuffer || FAILED(constantBuffer->GetDesc(&bufferDesc)))
+                    {
+                        return false;
+                    }
+
+                    const std::string bufferName = binding.Name;
+                    const bool isLooseDataBlock = bufferName.find("$Global") != std::string::npos;
+                    out.AddParameterAllocation(
+                        bufferName,
+                        bufferIndex,
+                        baseIndex,
+                        static_cast<uint16_t>(bufferDesc.Size),
+                        EShaderParameterType::UniformBuffer);
+
+                    for (UINT variableIndex = 0; variableIndex < bufferDesc.Variables; ++variableIndex)
+                    {
+                        ID3D12ShaderReflectionVariable* variable =
+                            constantBuffer->GetVariableByIndex(variableIndex);
+                        D3D12_SHADER_VARIABLE_DESC variableDesc{};
+                        if (!variable || FAILED(variable->GetDesc(&variableDesc)))
+                        {
+                            return false;
+                        }
+
+                        out.AddParameterAllocation(
+                            variableDesc.Name,
+                            baseIndex,
+                            static_cast<uint16_t>(variableDesc.StartOffset),
+                            static_cast<uint16_t>(variableDesc.Size),
+                            isLooseDataBlock
+                                ? EShaderParameterType::LooseData
+                                : EShaderParameterType::UniformBuffer);
+                    }
+                    break;
+                }
+                case D3D_SIT_SAMPLER:
+                    out.AddParameterAllocation(binding.Name, bufferIndex, baseIndex, bindingCount, EShaderParameterType::Sampler);
+                    break;
+                case D3D_SIT_TEXTURE:
+                case D3D_SIT_TBUFFER:
+                case D3D_SIT_STRUCTURED:
+                case D3D_SIT_BYTEADDRESS:
+                    out.AddParameterAllocation(binding.Name, bufferIndex, baseIndex, bindingCount, EShaderParameterType::SRV);
+                    break;
+                case D3D_SIT_UAV_RWTYPED:
+                case D3D_SIT_UAV_RWSTRUCTURED:
+                case D3D_SIT_UAV_RWBYTEADDRESS:
+                case D3D_SIT_UAV_APPEND_STRUCTURED:
+                case D3D_SIT_UAV_CONSUME_STRUCTURED:
+                case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+                    out.AddParameterAllocation(binding.Name, bufferIndex, baseIndex, bindingCount, EShaderParameterType::UAV);
+                    break;
+                case D3D_SIT_RTACCELERATIONSTRUCTURE:
+                    out.AddParameterAllocation(binding.Name, bufferIndex, baseIndex, bindingCount, EShaderParameterType::AccelerationStructure);
+                    break;
+                default:
+                    break;
+                }
+            }
+
             return true;
         }
     }
@@ -429,6 +527,12 @@ struct GLSLPackSource
     RHI::ERHIShaderFrequency frequency = RHI::ERHIShaderFrequency::Unknown;
     std::string entryPoint;
 };
+struct HLSLPackSource
+{
+    std::vector<char> DXILCode;
+    RHI::ERHIShaderFrequency frequency = RHI::ERHIShaderFrequency::Unknown;
+    std::string entryPoint;
+};
 std::string ShaderCompiler::ShaderSourceDirectory = "";
 
 ShaderCompiler::ShaderCompiler()
@@ -452,22 +556,20 @@ ShaderCompilationOutput ShaderCompiler::Compile(const ShaderCompileInput& input)
     if (PreprocessSource(input, source, includedFiles)) {
         switch (input.Platform)
         {
-        case ERHIShaderPlatform::Vulkan:
 #if defined(SHADER_DEBUG)
             output.PreprocessedSource = source;
 #endif
+        case ERHIShaderPlatform::Vulkan:
+
             CompileToSPIRV(source, input, output);
             break;
         case ERHIShaderPlatform::OpenGL:
-#if defined(SHADER_DEBUG)
-            output.PreprocessedSource = source;
-#endif
             CompileToOpenGL(source, input, output);
             break;
+        case ERHIShaderPlatform::D3D12:
+            CompileToDirectX(source, input, output);
+            break;
         default:
-#if defined(SHADER_DEBUG)
-            output.PreprocessedSource = source;
-#endif
             output.IncludedFiles = includedFiles;
             output.ErrorMessage = "Platform not implemented!";
             break;
@@ -738,7 +840,152 @@ void ShaderCompiler::CompileToSPIRV(const std::string& preprocessedSource, const
 
 void ShaderCompiler::CompileToDirectX(const std::string& preprocessedSource, const ShaderCompileInput& input, ShaderCompilationOutput& out)
 {
+    out.Platform = ERHIShaderPlatform::D3D12;
+    out.Success = false;
+    out.PackedBinaryData.clear();
 
+    std::string targetProfile;
+    switch (input.Frequency)
+    {
+    case ERHIShaderFrequency::Compute:        targetProfile = "cs_6_5"; break;
+    case ERHIShaderFrequency::Vertex:         targetProfile = "vs_6_5"; break;
+    case ERHIShaderFrequency::Fragment:       targetProfile = "ps_6_5"; break;
+    case ERHIShaderFrequency::Geometry:       targetProfile = "gs_6_5"; break;
+    case ERHIShaderFrequency::TessControl:    targetProfile = "hs_6_5"; break;
+    case ERHIShaderFrequency::TessEvaluation: targetProfile = "ds_6_5"; break;
+    case ERHIShaderFrequency::Task:           targetProfile = "as_6_5"; break;
+    case ERHIShaderFrequency::Mesh:           targetProfile = "ms_6_5"; break;
+    case ERHIShaderFrequency::RayGen:
+    case ERHIShaderFrequency::ClosestHit:
+    case ERHIShaderFrequency::Miss:
+    case ERHIShaderFrequency::AnyHit:
+    case ERHIShaderFrequency::Intersection:
+    case ERHIShaderFrequency::Callable:       targetProfile = "lib_6_5"; break;
+    default:
+        out.ErrorMessage = "Unsupported shader stage";
+        return;
+    }
+    if (!input.TargetProfile.empty())
+    {
+        targetProfile = input.TargetProfile;
+    }
+
+    Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler;
+    if (FAILED(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler))))
+    {
+        out.ErrorMessage = "Failed to initialize DXC compiler.";
+        return;
+    }
+
+    std::vector<std::wstring> argStorage;
+    argStorage.reserve(64);
+    std::vector<LPCWSTR> dxcArgs;
+    auto AddArg = [&](const std::wstring& arg)
+        {
+            argStorage.push_back(arg);
+            dxcArgs.push_back(argStorage.back().c_str());
+        };
+
+    if (targetProfile.rfind("lib_", 0) != 0)
+    {
+        AddArg(L"-E");
+        AddArg(ToWide(input.EntryPoint));
+    }
+    AddArg(L"-T");
+    AddArg(ToWide(targetProfile));
+
+    auto HasFlag = [&](EShaderCompileFlags flag)
+        {
+            return (static_cast<uint32_t>(input.Flags) & static_cast<uint32_t>(flag)) != 0;
+        };
+    if (HasFlag(EShaderCompileFlags::DebugInfo))
+    {
+        AddArg(L"-Zi");
+        AddArg(L"-Qembed_debug");
+    }
+    AddArg(HasFlag(EShaderCompileFlags::DisableOptimize) ? L"-Od" : L"-O3");
+    if (HasFlag(EShaderCompileFlags::WarningsAsError))
+    {
+        AddArg(L"-WX");
+    }
+    for (const auto& define : input.Environment.Definitions)
+    {
+        AddArg(ToWide("-D" + define.first + "=" + define.second));
+    }
+
+    DxcBuffer sourceBuffer{};
+    sourceBuffer.Ptr = preprocessedSource.data();
+    sourceBuffer.Size = preprocessedSource.size();
+    sourceBuffer.Encoding = DXC_CP_UTF8;
+
+    Microsoft::WRL::ComPtr<IDxcResult> result;
+    HRESULT compileHr = dxcCompiler->Compile(
+        &sourceBuffer,
+        dxcArgs.data(),
+        static_cast<uint32_t>(dxcArgs.size()),
+        nullptr,
+        IID_PPV_ARGS(&result));
+    if (FAILED(compileHr) || result == nullptr)
+    {
+        out.ErrorMessage = "DXC compile invocation failed.";
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<IDxcBlobUtf8> errorBlob;
+    result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errorBlob), nullptr);
+    HRESULT compileStatus = S_OK;
+    result->GetStatus(&compileStatus);
+    if (FAILED(compileStatus))
+    {
+        out.ErrorMessage = errorBlob && errorBlob->GetStringLength() > 0
+            ? errorBlob->GetStringPointer()
+            : "DXC failed with no detailed error output.";
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<IDxcBlob> dxilBlob;
+    if (FAILED(result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&dxilBlob), nullptr)) || !dxilBlob)
+    {
+        out.ErrorMessage = "DXC did not return a DXIL object blob.";
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<IDxcContainerReflection> containerReflection;
+    if (FAILED(DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&containerReflection))) ||
+        FAILED(containerReflection->Load(dxilBlob.Get())))
+    {
+        out.ErrorMessage = "Failed to load DXIL container for shader reflection.";
+        return;
+    }
+
+    UINT32 dxilPartIndex = 0;
+    if (FAILED(containerReflection->FindFirstPartKind(DXC_PART_DXIL, &dxilPartIndex)))
+    {
+        out.ErrorMessage = "DXIL container does not contain a shader part for reflection.";
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12ShaderReflection> shaderReflection;
+    if (FAILED(containerReflection->GetPartReflection(
+        dxilPartIndex,
+        IID_PPV_ARGS(&shaderReflection))) ||
+        !ReflectParameterMapFromDXIL(shaderReflection.Get(), out.ParameterMap))
+    {
+        out.ErrorMessage = "Failed to reflect DXIL shader parameters.";
+        return;
+    }
+
+    HLSLPackSource packSource;
+    packSource.DXILCode.resize(dxilBlob->GetBufferSize());
+    memcpy(packSource.DXILCode.data(), dxilBlob->GetBufferPointer(), dxilBlob->GetBufferSize());
+    packSource.frequency = input.Frequency;
+    packSource.entryPoint = input.EntryPoint;
+
+    HLSLCompiledBinaryResultPacker packer;
+    if (packer.Pack(&packSource, out.PackedBinaryData))
+    {
+        out.Success = true;
+    }
 }
 
 
@@ -1282,6 +1529,61 @@ void ShaderCompiler::CompileHLSLToSPIRV(const std::string& preprocessedSource, c
 
 }
 
+
+void HLSLCompiledBinaryResultPacker::Depack(const std::vector<char>& packedResult)
+{
+    size_t offset = 0;
+    auto read = [&](void* dst, size_t size)
+        {
+            if (offset + size > packedResult.size()) return false;
+            memcpy(dst, packedResult.data() + offset, size);
+            offset += size;
+            return true;
+        };
+
+    uint32_t codeSize = 0;
+    if (!read(&codeSize, sizeof(codeSize)) || codeSize > packedResult.size() - offset)
+    {
+        DepackedData = {};
+        return;
+    }
+    DepackedData.DXILCode.resize(codeSize);
+    if ((codeSize > 0 && !read(DepackedData.DXILCode.data(), codeSize)) ||
+        !read(&DepackedData.HeaderData.Frequency, sizeof(DepackedData.HeaderData.Frequency)) ||
+        !read(DepackedData.HeaderData.EntryPoint, sizeof(DepackedData.HeaderData.EntryPoint)) ||
+        !read(&DepackedData.HeaderData.ShaderHash, sizeof(DepackedData.HeaderData.ShaderHash)))
+    {
+        DepackedData = {};
+    }
+}
+
+bool HLSLCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& packedResultOut)
+{
+    if (!packSource) return false;
+
+    const auto* src = reinterpret_cast<const HLSLPackSource*>(packSource);
+    if (src->DXILCode.empty()) return false;
+
+    DepackedData.DXILCode = src->DXILCode;
+    DepackedData.HeaderData.Frequency = src->frequency;
+    strncpy_s(DepackedData.HeaderData.EntryPoint, src->entryPoint.c_str(), sizeof(DepackedData.HeaderData.EntryPoint) - 1);
+    DepackedData.HeaderData.ShaderHash = std::hash<std::string>()(std::string(src->DXILCode.begin(), src->DXILCode.end()));
+
+    packedResultOut.clear();
+    auto write = [&](const void* data, size_t size)
+        {
+            const char* bytes = reinterpret_cast<const char*>(data);
+            packedResultOut.insert(packedResultOut.end(), bytes, bytes + size);
+        };
+
+    uint32_t codeSize = static_cast<uint32_t>(DepackedData.DXILCode.size());
+    write(&codeSize, sizeof(codeSize));
+    write(DepackedData.DXILCode.data(), codeSize);
+    write(&DepackedData.HeaderData.Frequency, sizeof(DepackedData.HeaderData.Frequency));
+    write(DepackedData.HeaderData.EntryPoint, sizeof(DepackedData.HeaderData.EntryPoint));
+    write(&DepackedData.HeaderData.ShaderHash, sizeof(DepackedData.HeaderData.ShaderHash));
+    return true;
+}
 
 void SPIRVCompiledBinaryResultPacker::Depack(const std::vector<char>& packedResult)
 {
