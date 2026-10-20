@@ -2,6 +2,7 @@
 #include "RHIApi.h"
 #include "VulkanRHIApi.h"
 #include "OpenGLRHIApi.h"
+#include "DirectX12RHIApi.h"
 #include "ShaderCompiler.h"
 #include "Window.h"
 #include "RHIPipelineStateCache.h"
@@ -106,7 +107,7 @@ public:
 
     void Setup() override
     {
-        RHI::GRHIApi = new RHIOpenGL::OpenGLRHIApi();
+        RHI::GRHIApi = new RHIDirectX12::DirectX12RHIApi();
         RHI::GRHIApi->Init();
         auto* api = RHI::GRHIApi;
         if (!api)

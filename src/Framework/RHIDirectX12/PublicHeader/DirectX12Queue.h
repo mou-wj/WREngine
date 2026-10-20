@@ -2,6 +2,8 @@
 
 #include "RHICommandContex.h"
 #include <atomic>
+#include <memory>
+#include <mutex>
 
 #if defined(_WIN32)
 #include <d3d12.h>
@@ -16,8 +18,13 @@ namespace RHIDirectX12
     class DirectX12SyncPoint final : public RHI::RHISyncPoint
     {
     public:
-        DirectX12SyncPoint(RHI::EQueueType inType, DirectX12Device* inDevice = nullptr, ID3D12CommandQueue* inQueue = nullptr);
-        ~DirectX12SyncPoint() override = default;
+        DirectX12SyncPoint(RHI::EQueueType inType, DirectX12Device* inDevice = nullptr,
+                           ID3D12CommandQueue* inQueue = nullptr);
+        ~DirectX12SyncPoint() override;
+        ID3D12Fence* GetNativeFence() const
+        {
+            return Fence.Get();
+        }
 
         uint64_t GetCurrentValue() override;
         void Wait(uint64_t value, uint64_t timeoutNS = UINT64_MAX) override;
@@ -25,45 +32,55 @@ namespace RHIDirectX12
 
     private:
         std::atomic<uint64_t> TimelineValue{0};
+        std::mutex WaitMutex;
         DirectX12Device* Device = nullptr;
 
-    #if defined(_WIN32)
+#if defined(_WIN32)
         ID3D12CommandQueue* Queue = nullptr;
         Microsoft::WRL::ComPtr<ID3D12Fence> Fence;
         HANDLE FenceEvent = nullptr;
-    #endif
+#endif
     };
 
     class DirectX12Queue : public RHI::RHIQueue
     {
     public:
         DirectX12Queue(RHI::EQueueType type, DirectX12Device* inDevice, ID3D12CommandQueue* inQueue);
-        ~DirectX12Queue() override = default;
+        ~DirectX12Queue() override;
 
         RHI::EQueueType GetType() const override;
         RHI::RHIContextBase* AcquireCommandContext() override;
         RHI::RHIContextBase* ReleaseCommandContext(RHI::RHIContextBase* context) override;
         uint64_t ExecuteContext(RHI::RHIContextBase* context) override;
-        uint64_t ExecuteContext(const std::vector<RHI::RHIContextBase*>& cmds, const std::vector<RHI::RHIWaitInfo>& waitInfos) override;
+        uint64_t ExecuteContext(const std::vector<RHI::RHIContextBase*>& cmds,
+                                const std::vector<RHI::RHIWaitInfo>& waitInfos) override;
         void WaitValue(uint64_t fenceValue) override;
         void WaitIdle() override;
         uint64_t GetCurrentTimelineValue() override;
         RHI::RHISyncPoint* GetSyncPoint() override;
 
-        DirectX12Device* GetDevice() const { return Device; }
-    #if defined(_WIN32)
-        ID3D12CommandQueue* GetNativeQueue() const { return NativeQueue; }
-    #endif
+        DirectX12Device* GetDevice() const
+        {
+            return Device;
+        }
+#if defined(_WIN32)
+        ID3D12CommandQueue* GetNativeQueue() const
+        {
+            return NativeQueue;
+        }
+#endif
 
     private:
         DirectX12Device* Device = nullptr;
 
-    #if defined(_WIN32)
+#if defined(_WIN32)
         ID3D12CommandQueue* NativeQueue = nullptr;
-    #endif
+#endif
 
         RHI::EQueueType QueueType = RHI::EQueueType::Graphics;
         DirectX12SyncPoint SyncPoint;
+        std::vector<std::unique_ptr<class DirectX12CommandContext>> Contexts;
+        std::mutex QueueMutex;
     };
 
     class DirectX12PresentExecutor : public RHI::RHIPresentExecutor
@@ -76,5 +93,6 @@ namespace RHIDirectX12
 
     private:
         DirectX12Queue* Queue = nullptr;
+        uint64_t PresentCount = 0;
     };
-}
+} // namespace RHIDirectX12

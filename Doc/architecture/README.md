@@ -14,6 +14,7 @@
 
 - [rhi/rhi.md](rhi/rhi.md) — RHI 抽象层概览
 - [rhi/rhivulkan.md](rhi/rhivulkan.md) — Vulkan 后端实现概览
+- [rhi/rhidirectx12.md](rhi/rhidirectx12.md) — DirectX12 后端实现、资源访问契约与能力边界
 
 ## 4. Render
 

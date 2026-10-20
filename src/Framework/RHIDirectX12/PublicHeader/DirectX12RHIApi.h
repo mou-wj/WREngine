@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RHIApi.h" 
+#include "RHIApi.h"
 
 #include <memory>
 #include <string>
@@ -25,32 +25,39 @@ namespace RHIDirectX12
 
         RHI::RHITextureSP CreateTexture(const RHI::RHITextureDesc& desc) override;
         RHI::RHIBufferSP CreateBuffer(const RHI::RHIBufferDesc& desc) override;
-        void UpdateTexture(RHI::RHICommandListBase& cmdList, RHI::RHITexture* texture, const void* data, const RHI::RHIUpdateTextureRegion& size) override;
-        void UpdateBuffer(RHI::RHICommandListBase& cmdList, RHI::RHIBuffer* buffer, const void* data, const RHI::RHIUpdateBufferRegion& region) override;
-        void* MapReadTexture(RHI::RHICommandListBase& cmdList, RHI::RHITexture* texture, const RHI::RHIReadTextureInfo& info) override;
-        void* MapReadBuffer(RHI::RHICommandListBase& cmdList, RHI::RHIBuffer* buffer, const RHI::RHIReadBufferInfo& info) override;
+        void UpdateTexture(RHI::RHICommandListBase& cmdList, RHI::RHITexture* texture, const void* data,
+                           const RHI::RHIUpdateTextureRegion& size) override;
+        void UpdateBuffer(RHI::RHICommandListBase& cmdList, RHI::RHIBuffer* buffer, const void* data,
+                          const RHI::RHIUpdateBufferRegion& region) override;
+        void* MapReadTexture(RHI::RHICommandListBase& cmdList, RHI::RHITexture* texture,
+                             const RHI::RHIReadTextureInfo& info) override;
+        void* MapReadBuffer(RHI::RHICommandListBase& cmdList, RHI::RHIBuffer* buffer,
+                            const RHI::RHIReadBufferInfo& info) override;
         void Unmap(void* mappedData) override;
 
-        RHI::RHIShaderResourceViewSP CreateTextureShaderResourceView(
-            RHI::RHITexture* Texture, const RHI::RHITexSRVCreateInfo& Desc) override;
+        RHI::RHIShaderResourceViewSP CreateTextureShaderResourceView(RHI::RHITexture* Texture,
+                                                                     const RHI::RHITexSRVCreateInfo& Desc) override;
 
-        RHI::RHIUnorderedAccessViewSP CreateTextureUnorderedAccessView(
-            RHI::RHITexture* Texture, const RHI::RHITexUAVCreateInfo& Desc) override;
+        RHI::RHIUnorderedAccessViewSP CreateTextureUnorderedAccessView(RHI::RHITexture* Texture,
+                                                                       const RHI::RHITexUAVCreateInfo& Desc) override;
 
-        RHI::RHIShaderResourceViewSP CreateBufferShaderResourceView(
-            RHI::RHIBuffer* Buffer, const RHI::RHIBufferSRVCreateInfo& Desc) override;
+        RHI::RHIShaderResourceViewSP CreateBufferShaderResourceView(RHI::RHIBuffer* Buffer,
+                                                                    const RHI::RHIBufferSRVCreateInfo& Desc) override;
 
-        RHI::RHIUnorderedAccessViewSP CreateBufferUnorderedAccessView(
-            RHI::RHIBuffer* Buffer, const RHI::RHIBufferUAVCreateInfo& Desc) override;
+        RHI::RHIUnorderedAccessViewSP CreateBufferUnorderedAccessView(RHI::RHIBuffer* Buffer,
+                                                                      const RHI::RHIBufferUAVCreateInfo& Desc) override;
 
         RHI::RHIRayTracingGeometrySP CreateRayTracingGeometry(const RHI::RHIRayTracingGeometryDesc& desc) override;
         RHI::RHIRayTracingInstanceSP CreateRayTracingInstance(const RHI::RHIRayTracingInstancesDesc& desc) override;
 
         RHI::RHIStagingBufferSP CreateStagingBuffer(uint32_t size) override;
 
-        RHI::RHIGraphicsPipelineStateSP CreateGraphicsPipelineState(const RHI::RHIGraphicsPipelineStateDesc& desc) override;
-        RHI::RHIComputePipelineStateSP CreateComputePipelineState(const RHI::RHIComputePipelineStateDesc& desc) override;
-        RHI::RHIRayTracingPipelineStateSP CreateRayTracingsPipelineState(const RHI::RHIRayTracingPipelineStateDesc& desc) override;
+        RHI::RHIGraphicsPipelineStateSP CreateGraphicsPipelineState(
+            const RHI::RHIGraphicsPipelineStateDesc& desc) override;
+        RHI::RHIComputePipelineStateSP CreateComputePipelineState(
+            const RHI::RHIComputePipelineStateDesc& desc) override;
+        RHI::RHIRayTracingPipelineStateSP CreateRayTracingsPipelineState(
+            const RHI::RHIRayTracingPipelineStateDesc& desc) override;
 
         RHI::RHIVertexDescStateSP CreateVertexDescState(const RHI::RHIVertexDescStateDesc& desc) override;
         RHI::RHIRasterizerStateSP CreateRasterizerState(const RHI::RHIRasterizerStateDesc& desc) override;
@@ -72,13 +79,15 @@ namespace RHIDirectX12
         RHI::RHIIntersectionShaderSP CreateIntersectionShader(const std::vector<char>& shaderSourceCode) override;
         RHI::RHICallableShaderSP CreateCallableShader(const std::vector<char>& shaderSourceCode) override;
 
-        RHI::RHISwapchainSP CreateSwapchain(void* inWindowHandle, uint32_t w, uint32_t h, RHI::ERHIFormat format) override;
+        RHI::RHISwapchainSP CreateSwapchain(void* inWindowHandle, uint32_t w, uint32_t h,
+                                            RHI::ERHIFormat format) override;
         RHI::RHISamplerSP CreateSampler(const RHI::RHISamplerDesc& desc) override;
 
         RHI::RHIQueue* GetQueue(RHI::EQueueType Type) override;
         RHI::RHIPresentExecutor* GetPresentExecutor() override;
 
-        void RHICreateTransition(RHI::RHITransition* Transition, const RHI::RHITransitionCreateInfo& CreateInfo) override;
+        void RHICreateTransition(RHI::RHITransition* Transition,
+                                 const RHI::RHITransitionCreateInfo& CreateInfo) override;
         void RHIReleaseTransition(RHI::RHITransition* Transition) override;
 
         RHI::RHITransientResourceManagerSP CreateTransientResourceManager() override;
@@ -91,6 +100,7 @@ namespace RHIDirectX12
         std::unique_ptr<DirectX12PresentExecutor> PresentExecutor;
         std::unique_ptr<DirectX12Device> Device;
         std::unordered_map<void*, std::shared_ptr<DirectX12StagingBuffer>> MappedStagingBuffers;
+        std::unordered_map<void*, std::shared_ptr<std::vector<uint8_t>>> PackedReadbacks;
     };
 
     class RHIDIRECTX12_API DirectX12RHIModule final : public RHI::RHIModule
@@ -109,4 +119,4 @@ namespace RHIDirectX12
         bool bLoaded = false;
         std::string ModuleName = "DirectX12RHI";
     };
-}
+} // namespace RHIDirectX12

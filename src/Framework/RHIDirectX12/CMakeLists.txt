@@ -1,16 +1,18 @@
 set(TARGET_NAME RHIDirectX12)
 
-file(GLOB_RECURSE PUBLIC_HEADERS
+# Reconfigure existing VS/Ninja and VS Code builds when module files are added
+# or removed, so newly introduced implementation files reach the linker.
+file(GLOB_RECURSE PUBLIC_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/PublicHeader/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/PublicHeader/*.hpp"
 )
 
-file(GLOB_RECURSE PRIVATE_HEADERS
+file(GLOB_RECURSE PRIVATE_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Private/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Private/*.hpp"
 )
 
-file(GLOB_RECURSE MODULE_SOURCES
+file(GLOB_RECURSE MODULE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Private/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
