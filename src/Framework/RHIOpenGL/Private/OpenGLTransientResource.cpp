@@ -1,44 +1,53 @@
 #include "OpenGLTransientResource.h"
+#include "OpenGLQueue.h"
+#include <stdexcept>
 
 namespace RHIOpenGL
 {
-    OpenGLTransientTexture::OpenGLTransientTexture(const std::shared_ptr<RHI::RHITexture>& inTexture)
-        : RHI::RHITransientTexture(inTexture)
+    namespace
+    {
+        void WaitForGPU()
+        {
+            auto& manager = OpenGLQueueManager::GetInstance();
+            if (!manager.IsWorkerThread())
+            {
+                manager.GetQueue(RHI::EQueueType::Graphics)->WaitIdle();
+                manager.GetQueue(RHI::EQueueType::Compute)->WaitIdle();
+            }
+            manager.EnqueueTaskAndWait([] { glFinish(); });
+        }
+    } // namespace
+    OpenGLTransientTexture::OpenGLTransientTexture(const RHI::RHITextureSP& texture) : RHITransientTexture(texture)
     {
     }
-
-    OpenGLTransientBuffer::OpenGLTransientBuffer(const std::shared_ptr<RHI::RHIBuffer>& inBuffer)
-        : RHI::RHITransientBuffer(inBuffer)
+    OpenGLTransientBuffer::OpenGLTransientBuffer(const RHI::RHIBufferSP& buffer) : RHITransientBuffer(buffer)
     {
     }
-
-    OpenGLTransientResourceManager::OpenGLTransientResourceManager() = default;
-
-    RHI::RHITransientTextureSP OpenGLTransientResourceManager::CreateTransientTexture(
-        const RHI::RHITextureDesc& desc,
-        uint32_t beginIndex,
-        uint32_t endIndex)
+    OpenGLTransientResourceManager::~OpenGLTransientResourceManager()
     {
-        auto texture = std::make_shared<OpenGLTexture>(desc);
-        return std::make_shared<OpenGLTransientTexture>(texture);
+        WaitForGPU();
+        ClearResources();
+        OpenGLQueueManager::GetInstance().EnqueueTaskAndWait([] {});
     }
-
-    RHI::RHITransientBufferSP OpenGLTransientResourceManager::CreateTransientBuffer(
-        const RHI::RHIBufferDesc& desc,
-        uint32_t beginIndex,
-        uint32_t endIndex)
+    RHI::RHITextureSP OpenGLTransientResourceManager::CreateTextureInternal(const RHI::RHITextureDesc& desc)
     {
-        auto buffer = std::make_shared<OpenGLBuffer>(desc);
-        return std::make_shared<OpenGLTransientBuffer>(buffer);
+        auto resource = std::make_shared<OpenGLTexture>(desc);
+        if (!resource->GetHandle())
+            throw std::runtime_error("Failed to create transient OpenGL texture");
+        return resource;
     }
-
-    void OpenGLTransientResourceManager::ReleaseTransientTexture(const RHI::RHITransientTexture* texture)
+    RHI::RHIBufferSP OpenGLTransientResourceManager::CreateBufferInternal(const RHI::RHIBufferDesc& desc)
     {
-        (void)texture;
+        auto resource = std::make_shared<OpenGLBuffer>(desc);
+        if (!resource->GetHandle())
+            throw std::runtime_error("Failed to create transient OpenGL buffer");
+        return resource;
     }
-
-    void OpenGLTransientResourceManager::ReleaseTransientBuffer(const RHI::RHITransientBuffer* buffer)
+    bool OpenGLTransientResourceManager::CanRecycle(RHI::RHIViewableResource&)
     {
-        (void)buffer;
+        if (OpenGLQueueManager::GetInstance().IsWorkerThread())
+            return false;
+        WaitForGPU();
+        return true;
     }
-}
+} // namespace RHIOpenGL
