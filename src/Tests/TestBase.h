@@ -5,8 +5,22 @@
 #include <functional>
 #include <memory>
 #include <unordered_map>
+#include <vector>
+#include <algorithm>
+
+namespace RHI { class RHIApi; }
 
 namespace Test{
+
+enum class TestRHIBackend
+{
+    Vulkan,
+    OpenGL,
+    DirectX12
+};
+
+// All tests default to Vulkan; command-line and environment overrides take precedence.
+RHI::RHIApi* CreateTestRHIApi();
 
 class TestBase
 {
@@ -39,6 +53,15 @@ public:
         if (it != GetMap().end())
             return it->second();
         return nullptr;
+    }
+
+    static std::vector<std::string> GetNames()
+    {
+        std::vector<std::string> names;
+        for (const auto& entry : GetMap())
+            names.push_back(entry.first);
+        std::sort(names.begin(), names.end());
+        return names;
     }
 
 private:

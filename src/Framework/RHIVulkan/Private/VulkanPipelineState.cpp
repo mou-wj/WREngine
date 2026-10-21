@@ -567,61 +567,73 @@ void VulkanRayTracingPipeline::CreatePipeline() {
     createInfo.pGroups = shaderGroups.data();
     createInfo.maxPipelineRayRecursionDepth = 1;
 
-    const VkDeviceSize shaderBindingTableEntrySize = 64;
-    const VkDeviceSize shaderBindingTableSize = shaderBindingTableEntrySize * 4;
+    if (desc.RayGenTable.size() != 1)
+        throw std::runtime_error("The RHI trace command requires exactly one ray-generation shader");
+    if (!VKFunc::CreateRayTracingPipelinesKHR(device->GetHandle(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &createInfo, &pipeline))
+        throw std::runtime_error("Failed to create the ray tracing pipeline");
 
-    if (shaderBindingTableSize > 0)
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtProperties{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
+    VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
+    properties.pNext = &rtProperties;
+    VKFunc::GetPhysicalDeviceProperties2(device->GetPhysicalDevice(), &properties);
+    const auto alignUp = [](VkDeviceSize value, VkDeviceSize alignment) {
+        return (value + alignment - 1) / alignment * alignment;
+    };
+    const VkDeviceSize stride = alignUp(rtProperties.shaderGroupHandleSize, rtProperties.shaderGroupHandleAlignment);
+    const VkDeviceSize alignment = rtProperties.shaderGroupBaseAlignment;
+    if (!stride || stride > rtProperties.maxShaderGroupStride)
+        throw std::runtime_error("Invalid ray tracing shader record stride");
+    const uint32_t counts[] = { 1, static_cast<uint32_t>(desc.MissTable.size()),
+        static_cast<uint32_t>(desc.HitGroupTable.size()), static_cast<uint32_t>(desc.CallableTable.size()) };
+    VkDeviceSize offsets[4]{};
+    VkDeviceSize tableSize = 0;
+    for (uint32_t i = 0; i < 4; ++i)
     {
-        VkBufferCreateInfo bufferInfo{};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = shaderBindingTableSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        if (!VKFunc::CreateBuffer(device->GetHandle(), &bufferInfo, &shaderBindingTableBuffer))
-        {
-            throw std::runtime_error("无法创建光线追踪 SBT buffer");
-        }
-
-        VkMemoryRequirements memoryRequirements{};
-        VKFunc::GetBufferMemoryRequirements(device->GetHandle(), shaderBindingTableBuffer, &memoryRequirements);
-        if (!device->GetMemoryManager()->Allocate(memoryRequirements, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, shaderBindingTableAllocation))
-        {
-            device->EnqueueBufferForDeletion(shaderBindingTableBuffer);
-            shaderBindingTableBuffer = VK_NULL_HANDLE;
-            throw std::runtime_error("无法分配光线追踪 SBT 内存");
-        }
-
-        VKFunc::BindBufferMemory(device->GetHandle(), shaderBindingTableBuffer, shaderBindingTableAllocation.GetMemory(), shaderBindingTableAllocation.GetOffset());
-
-        VkBufferDeviceAddressInfo bufferAddressInfo{};
-        bufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        bufferAddressInfo.buffer = shaderBindingTableBuffer;
-        shaderBindingTableDeviceAddress = VKFunc::GetBufferDeviceAddress(device->GetHandle(), &bufferAddressInfo);
+        tableSize = alignUp(tableSize, alignment);
+        offsets[i] = tableSize;
+        tableSize += counts[i] * stride;
     }
+    std::vector<uint8_t> handles(shaderGroups.size() * rtProperties.shaderGroupHandleSize);
+    if (!VKFunc::GetRayTracingShaderGroupHandlesKHR(device->GetHandle(), pipeline, 0,
+        static_cast<uint32_t>(shaderGroups.size()), handles.size(), handles.data()))
+        throw std::runtime_error("Failed to retrieve ray tracing shader group handles");
 
-    rayGenShaderBindingTableRegion = {};
-    rayGenShaderBindingTableRegion.deviceAddress = shaderBindingTableDeviceAddress;
-    rayGenShaderBindingTableRegion.size = shaderBindingTableEntrySize;
-    rayGenShaderBindingTableRegion.stride = shaderBindingTableEntrySize;
-
-    missShaderBindingTableRegion = {};
-    missShaderBindingTableRegion.deviceAddress = shaderBindingTableDeviceAddress + shaderBindingTableEntrySize;
-    missShaderBindingTableRegion.size = shaderBindingTableEntrySize;
-    missShaderBindingTableRegion.stride = shaderBindingTableEntrySize;
-
-    hitShaderBindingTableRegion = {};
-    hitShaderBindingTableRegion.deviceAddress = shaderBindingTableDeviceAddress + shaderBindingTableEntrySize * 2;
-    hitShaderBindingTableRegion.size = shaderBindingTableEntrySize;
-    hitShaderBindingTableRegion.stride = shaderBindingTableEntrySize;
-
-    callableShaderBindingTableRegion = {};
-    callableShaderBindingTableRegion.deviceAddress = shaderBindingTableDeviceAddress + shaderBindingTableEntrySize * 3;
-    callableShaderBindingTableRegion.size = shaderBindingTableEntrySize;
-    callableShaderBindingTableRegion.stride = shaderBindingTableEntrySize;
-
-    if (!VKFunc::CreateRayTracingPipelinesKHR(device->GetHandle(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &createInfo, &pipeline)) {
-        throw std::runtime_error("无法创建光线追踪管线!");
+    VkBufferCreateInfo bufferInfo{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+    bufferInfo.size = tableSize + alignment - 1;
+    bufferInfo.usage = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (!VKFunc::CreateBuffer(device->GetHandle(), &bufferInfo, &shaderBindingTableBuffer))
+        throw std::runtime_error("Failed to create the shader binding table buffer");
+    VkMemoryRequirements requirements{};
+    VKFunc::GetBufferMemoryRequirements(device->GetHandle(), shaderBindingTableBuffer, &requirements);
+    if (!device->GetMemoryManager()->Allocate(requirements,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, shaderBindingTableAllocation))
+        throw std::runtime_error("Failed to allocate the shader binding table");
+    VKFunc::BindBufferMemory(device->GetHandle(), shaderBindingTableBuffer,
+        shaderBindingTableAllocation.GetMemory(), shaderBindingTableAllocation.GetOffset());
+    VkBufferDeviceAddressInfo addressInfo{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO };
+    addressInfo.buffer = shaderBindingTableBuffer;
+    const VkDeviceAddress address = VKFunc::GetBufferDeviceAddress(device->GetHandle(), &addressInfo);
+    shaderBindingTableDeviceAddress = alignUp(address, alignment);
+    auto* mapped = static_cast<uint8_t*>(shaderBindingTableAllocation.GetMappedPointer());
+    if (!mapped || !address)
+        throw std::runtime_error("The shader binding table has no mapped memory or device address");
+    memset(mapped, 0, static_cast<size_t>(bufferInfo.size));
+    mapped += shaderBindingTableDeviceAddress - address;
+    VkStridedDeviceAddressRegionKHR* regions[] = { &rayGenShaderBindingTableRegion,
+        &missShaderBindingTableRegion, &hitShaderBindingTableRegion, &callableShaderBindingTableRegion };
+    uint32_t group = 0;
+    for (uint32_t table = 0; table < 4; ++table)
+    {
+        *regions[table] = {};
+        if (!counts[table]) continue;
+        regions[table]->deviceAddress = shaderBindingTableDeviceAddress + offsets[table];
+        regions[table]->stride = stride;
+        regions[table]->size = counts[table] * stride;
+        for (uint32_t record = 0; record < counts[table]; ++record, ++group)
+            memcpy(mapped + offsets[table] + record * stride,
+                handles.data() + group * rtProperties.shaderGroupHandleSize, rtProperties.shaderGroupHandleSize);
     }
 }
 

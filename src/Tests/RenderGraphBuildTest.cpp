@@ -104,7 +104,7 @@ public:
     int WindowHeight = 512;
     RHI::RHISamplerSP samplerSP;
     void Setup() override {
-        RHI::GRHIApi = new RHIVulkan::VulkanRHIApi();
+        RHI::GRHIApi = CreateTestRHIApi();
         RHI::GRHIApi->Init();
         auto* api = RHI::GRHIApi;
         if (!api)

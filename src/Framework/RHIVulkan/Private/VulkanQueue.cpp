@@ -238,7 +238,8 @@ uint64_t VulkanQueue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& Co
             waitHandles.push_back(vkSyncPoint->GetSemaphore()->GetHandle());
             waitValues.push_back(waitInfo.Value); // 关键：使用 WaitInfo 指定的 Value
         }
-        waitStages.push_back(ToVkPipelineStage(waitInfo.WaitStage));
+        // Acquired images may first be used by transfer, compute or ray tracing rather than raster output.
+        waitStages.push_back(isBinary ? VK_PIPELINE_STAGE_ALL_COMMANDS_BIT : ToVkPipelineStage(waitInfo.WaitStage));
     }
 
     // 2. 确定本次提交的 Signal Value (自增)

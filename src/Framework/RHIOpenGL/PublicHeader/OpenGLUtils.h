@@ -5,6 +5,7 @@
 
 namespace RHIOpenGL
 {
+    [[noreturn]] void ThrowRayTracingUnsupported();
     GLenum ConvertRHIFormatToGLInternalFormat(RHI::ERHIFormat format);
     GLenum ConvertRHIFormatToGLFormat(RHI::ERHIFormat format);
     GLenum ConvertRHIFormatToGLType(RHI::ERHIFormat format);

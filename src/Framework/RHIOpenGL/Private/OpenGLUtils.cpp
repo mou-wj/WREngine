@@ -1,7 +1,12 @@
 #include "OpenGLUtils.h"
+#include <stdexcept>
 
 namespace RHIOpenGL
 {
+    [[noreturn]] void ThrowRayTracingUnsupported()
+    {
+        throw std::runtime_error("OpenGLRHI does not support RHI ray tracing pipelines: OpenGL has no standard native ray tracing pipeline, and software BVH traversal/shader lowering is not implemented. Use Vulkan or DirectX12.");
+    }
     GLenum ConvertRHIFormatToGLInternalFormat(RHI::ERHIFormat format)
     {
         switch (format)

@@ -77,6 +77,7 @@ namespace RHIDirectX12
         std::vector<DirectX12RootBinding> ComputeBindings, GraphicsBindings;
         RHI::RHIGraphicsPipelineState* CurrentGraphicsPipeline = nullptr;
         RHI::RHIComputePipelineState* CurrentComputePipeline = nullptr;
+        DirectX12RayTracingPipelineState* CurrentRayTracingPipeline = nullptr;
         std::unordered_map<const DirectX12ShaderBase*, RHI::RHIBatchedShaderParameters> GraphicsParameterCache;
         using ReadOnlyStorageMap = std::unordered_map<const DirectX12ShaderBase*, std::vector<DirectX12Buffer*>>;
         ReadOnlyStorageMap ComputeReadOnlyStorage, GraphicsReadOnlyStorage;
@@ -92,6 +93,8 @@ namespace RHIDirectX12
         std::optional<D3D12_RECT> CurrentScissor;
         Microsoft::WRL::ComPtr<ID3D12RootSignature> BlitRoot;
         std::unordered_map<uint32_t, Microsoft::WRL::ComPtr<ID3D12PipelineState>> BlitPipelines;
+        void BuildRayTracing(RHI::RHIRayTracingAccelerationStructure* accelerationStructure, bool update);
+        void BlitTextureNative(DirectX12Texture* source, DirectX12Texture* destination, const RHI::RHIBlitTextureDesc& desc);
         void BindParameters(const DirectX12ShaderBase* shader, const RHI::RHIBatchedShaderParameters& parameters,
                             const std::vector<DirectX12RootBinding>& bindings, bool compute);
         D3D12_GPU_DESCRIPTOR_HANDLE CopyDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE source, bool sampler = false);

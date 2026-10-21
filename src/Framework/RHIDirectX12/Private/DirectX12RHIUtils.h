@@ -50,6 +50,10 @@ namespace RHIDirectX12
         return nullptr;
     }
 
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS ToRayTracingBuildFlags(bool update, bool compaction);
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateRayTracingBuffer(DirectX12Device* device, uint64_t size,
+        D3D12_RESOURCE_STATES state, bool upload = false);
+    RHI::ERHIFormat ToStorageImageFormat(RHI::ERHIFormat preferred);
     DXGI_FORMAT ToDxgiFormat(RHI::ERHIFormat format);
     D3D12_RESOURCE_DIMENSION ToResourceDimension(RHI::ERHITextureType type);
     D3D12_RESOURCE_FLAGS ToTextureFlags(RHI::ERHITextureCreateFlags flags);

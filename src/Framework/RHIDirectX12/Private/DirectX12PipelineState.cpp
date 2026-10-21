@@ -16,7 +16,7 @@ namespace
         ID3D12Device* device,
         const std::vector<std::pair<const RHIDirectX12::DirectX12ShaderBase*, D3D12_SHADER_VISIBILITY>>& shaders,
         bool allowIA, Microsoft::WRL::ComPtr<ID3D12RootSignature>& signature,
-        std::vector<RHIDirectX12::DirectX12RootBinding>& bindings)
+        std::vector<RHIDirectX12::DirectX12RootBinding>& bindings, bool merge = false)
     {
         std::vector<D3D12_ROOT_PARAMETER> roots;
         std::vector<D3D12_DESCRIPTOR_RANGE> ranges;
@@ -34,13 +34,34 @@ namespace
             for (const auto& binding : shader.first->GetBindings())
             {
                 const auto& desc = binding.Desc;
-                if (desc.Space != 0)
+                if (desc.Space != 0 && !merge)
                     throw std::runtime_error("RHI resource parameters cannot identify nonzero D3D12 register spaces");
+                if (merge)
+                {
+                    auto found = std::find_if(bindings.begin(), bindings.end(), [&](const auto& existing) {
+                        return existing.Binding.Desc.Type == desc.Type && existing.Binding.Desc.BindPoint == desc.BindPoint &&
+                            existing.Binding.Desc.Space == desc.Space;
+                    });
+                    if (found != bindings.end())
+                    {
+                        if (found->Binding.Desc.BindCount != desc.BindCount || found->Binding.Name != binding.Name)
+                            throw std::runtime_error("DXR global resource registers overlap between shaders");
+                        bindings.push_back({shader.first, binding, found->RootIndex});
+                        continue;
+                    }
+                }
                 D3D12_ROOT_PARAMETER root{};
                 root.ShaderVisibility = shader.second;
                 if (desc.Type == D3D_SIT_CBUFFER && desc.BindCount != 1)
                     throw std::runtime_error("DirectX12 constant-buffer arrays are unsupported");
-                if (desc.Type == D3D_SIT_CBUFFER)
+                if (desc.Type == D3D_SIT_RTACCELERATIONSTRUCTURE)
+                {
+                    if (desc.BindCount != 1) throw std::runtime_error("DXR acceleration structure arrays are unsupported");
+                    root.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+                    root.Descriptor.ShaderRegister = desc.BindPoint;
+                    root.Descriptor.RegisterSpace = desc.Space;
+                }
+                else if (desc.Type == D3D_SIT_CBUFFER)
                 {
                     root.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
                     root.Descriptor.ShaderRegister = desc.BindPoint;
@@ -87,6 +108,103 @@ namespace
 
 namespace RHIDirectX12
 {
+    DirectX12RayTracingPipelineState::DirectX12RayTracingPipelineState(DirectX12Device* device,
+        const RHI::RHIRayTracingPipelineStateDesc& desc) : RHI::RHIRayTracingPipelineState(desc)
+    {
+        if (!device->SupportsRayTracing()) throw std::runtime_error("D3D12 adapter does not support DXR");
+        if (desc.RayGenTable.size() != 1) throw std::runtime_error("DXR requires exactly one ray-generation shader");
+        Microsoft::WRL::ComPtr<ID3D12Device5> dxr;
+        CheckDX12(device->GetNativeDevice()->QueryInterface(IID_PPV_ARGS(&dxr)), "Query DXR device");
+        std::vector<const DirectX12ShaderBase*> shaders;
+        std::vector<std::pair<const DirectX12ShaderBase*, D3D12_SHADER_VISIBILITY>> reflected;
+        const auto add = [&](RHI::RHIRayTracingShader* shader) {
+            auto* native = dynamic_cast<DirectX12ShaderBase*>(shader);
+            if (!native) throw std::runtime_error("Invalid DXR shader");
+            if (std::find(shaders.begin(), shaders.end(), native) == shaders.end())
+            { shaders.push_back(native); reflected.push_back({native, D3D12_SHADER_VISIBILITY_ALL}); }
+            return native;
+        };
+        for (auto* shader : desc.RayGenTable) add(shader);
+        for (auto* shader : desc.MissTable) add(shader);
+        for (auto* shader : desc.HitGroupTable) if (shader) add(shader);
+        for (auto* shader : desc.IntersectTable) if (shader) add(shader);
+        for (auto* shader : desc.CallableTable) add(shader);
+        CreateReflectedRootSignature(device->GetNativeDevice(), reflected, false, RootSignature, Bindings, true);
+        std::vector<std::wstring> shaderNames;
+        shaderNames.reserve(shaders.size());
+        for (size_t i = 0; i < shaders.size(); ++i) shaderNames.push_back(L"RHIShader" + std::to_wstring(i));
+        const auto exportName = [&](RHI::RHIRayTracingShader* shader) -> const std::wstring& {
+            const auto* native = dynamic_cast<const DirectX12ShaderBase*>(shader);
+            const auto it = std::find(shaders.begin(), shaders.end(), native);
+            if (it == shaders.end()) throw std::runtime_error("DXR shader is not in the pipeline");
+            return shaderNames[static_cast<size_t>(it - shaders.begin())];
+        };
+        std::vector<D3D12_EXPORT_DESC> exports(shaders.size());
+        std::vector<D3D12_DXIL_LIBRARY_DESC> libraries(shaders.size());
+        std::vector<std::wstring> hitNames;
+        hitNames.reserve(desc.HitGroupTable.size());
+        std::vector<D3D12_HIT_GROUP_DESC> hits(desc.HitGroupTable.size());
+        std::vector<D3D12_STATE_SUBOBJECT> objects;
+        objects.reserve(libraries.size() + hits.size() + 3);
+        for (size_t i = 0; i < shaders.size(); ++i)
+        {
+            exports[i].Name = shaderNames[i].c_str();
+            exports[i].ExportToRename = shaders[i]->ExportName.c_str();
+            libraries[i].DXILLibrary = { shaders[i]->GetByteCode().data(), shaders[i]->GetByteCode().size() };
+            libraries[i].NumExports = 1;
+            libraries[i].pExports = &exports[i];
+            objects.push_back({ D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &libraries[i] });
+        }
+        for (size_t i = 0; i < hits.size(); ++i)
+        {
+            hitNames.push_back(L"RHIHitGroup" + std::to_wstring(i));
+            hits[i].HitGroupExport = hitNames.back().c_str();
+            hits[i].Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+            if (desc.HitGroupTable[i]) hits[i].ClosestHitShaderImport = exportName(desc.HitGroupTable[i]).c_str();
+            if (i < desc.IntersectTable.size() && desc.IntersectTable[i])
+            {
+                hits[i].Type = D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE;
+                hits[i].IntersectionShaderImport = exportName(desc.IntersectTable[i]).c_str();
+            }
+            objects.push_back({ D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hits[i] });
+        }
+        D3D12_GLOBAL_ROOT_SIGNATURE root{ RootSignature.Get() };
+        // RHI currently exposes no payload/attribute size fields; reserve backend limits explicitly.
+        D3D12_RAYTRACING_SHADER_CONFIG config{ 128, D3D12_RAYTRACING_MAX_ATTRIBUTE_SIZE_IN_BYTES };
+        D3D12_RAYTRACING_PIPELINE_CONFIG pipeline{ 1 };
+        objects.push_back({ D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &root });
+        objects.push_back({ D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &config });
+        objects.push_back({ D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &pipeline });
+        D3D12_STATE_OBJECT_DESC state{ D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,
+            static_cast<UINT>(objects.size()), objects.data() };
+        CheckDX12(dxr->CreateStateObject(&state, IID_PPV_ARGS(&StateObject)), "Create DXR state object");
+        Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> properties;
+        CheckDX12(StateObject.As(&properties), "Query DXR shader identifiers");
+        const UINT counts[] = { 1, static_cast<UINT>(desc.MissTable.size()), static_cast<UINT>(hits.size()), static_cast<UINT>(desc.CallableTable.size()) };
+        uint64_t offsets[4]{}, size = 0;
+        for (UINT i = 0; i < 4; ++i) { size = (size + 63) & ~uint64_t(63); offsets[i] = size; size += counts[i] * D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES; }
+        ShaderTable = CreateRayTracingBuffer(device, size, D3D12_RESOURCE_STATE_GENERIC_READ, true);
+        uint8_t* data = nullptr;
+        D3D12_RANGE empty{};
+        CheckDX12(ShaderTable->Map(0, &empty, reinterpret_cast<void**>(&data)), "Map DXR shader table");
+        memset(data, 0, static_cast<size_t>(size));
+        const auto record = [&](UINT table, UINT index, const std::wstring& name) {
+            const void* identifier = properties->GetShaderIdentifier(name.c_str());
+            if (!identifier) throw std::runtime_error("DXR shader identifier missing");
+            memcpy(data + offsets[table] + index * D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, identifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+        };
+        record(0, 0, exportName(desc.RayGenTable[0]));
+        for (UINT i = 0; i < counts[1]; ++i) record(1, i, exportName(desc.MissTable[i]));
+        for (UINT i = 0; i < counts[2]; ++i) record(2, i, hitNames[i]);
+        for (UINT i = 0; i < counts[3]; ++i) record(3, i, exportName(desc.CallableTable[i]));
+        ShaderTable->Unmap(0, nullptr);
+        const auto address = ShaderTable->GetGPUVirtualAddress();
+        Dispatch.RayGenerationShaderRecord = { address, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES };
+        D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE* tables[] = { &Dispatch.MissShaderTable, &Dispatch.HitGroupTable, &Dispatch.CallableShaderTable };
+        for (UINT i = 1; i < 4; ++i)
+            if (counts[i]) *tables[i-1] = { address + offsets[i], uint64_t(counts[i]) * D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES };
+    }
+
     DirectX12GraphicsPipelineState::DirectX12GraphicsPipelineState(DirectX12Device* inDevice,
                                                                    const RHI::RHIGraphicsPipelineStateDesc& desc)
         : RHI::RHIGraphicsPipelineState(desc), Device(inDevice)

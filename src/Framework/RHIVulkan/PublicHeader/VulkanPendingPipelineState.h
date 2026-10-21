@@ -1216,6 +1216,8 @@ namespace RHIVulkan {
         void Reset()
         {
             CurrentPipeline = nullptr;
+            CurrentState = nullptr;
+            RetiredScratchBuffers.clear();
             CurrentAccelerationStructure = nullptr;
             ScratchBuffer.reset();
             ScratchBufferSize = 0;
@@ -1423,6 +1425,7 @@ namespace RHIVulkan {
             else
             {
                 buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+                buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
                 buildInfo.dstAccelerationStructure = tlas->GetHandle();
                 buildInfo.srcAccelerationStructure = bUpdate ? tlas->GetHandle() : VK_NULL_HANDLE;
                 buildInfo.pGeometries = &tlas->GetGeometryInfo();
@@ -1435,7 +1438,15 @@ namespace RHIVulkan {
                 return;
             }
 
-            EnsureScratchBuffer(requiredScratchSize);
+            if (bUpdate && !(buildInfo.flags & VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR))
+                throw std::runtime_error("Acceleration structure was not created with AllowUpdate");
+            VkPhysicalDeviceAccelerationStructurePropertiesKHR asProperties{
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR };
+            VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
+            properties.pNext = &asProperties;
+            VKFunc::GetPhysicalDeviceProperties2(Device->GetPhysicalDevice(), &properties);
+            const VkDeviceSize alignment = asProperties.minAccelerationStructureScratchOffsetAlignment;
+            EnsureScratchBuffer(requiredScratchSize + alignment - 1);
             if (!ScratchBuffer)
             {
                 return;
@@ -1450,6 +1461,14 @@ namespace RHIVulkan {
                 return;
             }
 
+            buildInfo.scratchData.deviceAddress =
+                (buildInfo.scratchData.deviceAddress + alignment - 1) / alignment * alignment;
+            // Serial builds may reuse the same scratch range in this command buffer.
+            VkMemoryBarrier scratchBarrier{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+            scratchBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+            scratchBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+            VKFunc::CmdPipelineBarrier(cmd->GetHandle(), VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1, &scratchBarrier, 0, nullptr, 0, nullptr);
             const VkAccelerationStructureBuildRangeInfoKHR* buildRangeInfos[] = { pRangeInfo };
             VKFunc::CmdBuildAccelerationStructuresKHR(
                 cmd->GetHandle(),
@@ -1477,6 +1496,7 @@ namespace RHIVulkan {
             desc.bCPUAccessible = false;
             desc.InitialQueueType = EQueueType::Graphics;
 
+            if (ScratchBuffer) RetiredScratchBuffers.push_back(ScratchBuffer);
             ScratchBuffer = std::make_shared<VulkanBuffer>(Device, desc);
             ScratchBufferSize = requiredSize;
         }
@@ -1491,6 +1511,7 @@ namespace RHIVulkan {
         std::unordered_map<VulkanRayTracingPipeline*, std::unique_ptr<VulkanRayTracingPipelineDescriptorState>> States;
         std::shared_ptr < VulkanBuffer> ScratchBuffer;
         VkDeviceSize ScratchBufferSize = 0;
+        std::vector<std::shared_ptr<VulkanBuffer>> RetiredScratchBuffers;
     };
 
 }

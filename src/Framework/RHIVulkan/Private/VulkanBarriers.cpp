@@ -1,3 +1,4 @@
+#include "VulkanRHIUtils.h"
 #include "VulkanBarriers.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanFuncWrapper.h"
@@ -498,13 +499,21 @@ namespace RHIVulkan {
 		}
 	}
 
+    void VulkanPipelineBarrier::TransitionMemory(ERHIResourceAccess before, ERHIResourceAccess after)
+    {
+        VkMemoryBarrier barrier{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+        barrier.srcAccessMask = TransformResourceAccess(before);
+        barrier.dstAccessMask = TransformResourceAccess(after);
+        MemoryBarriers.push_back(barrier);
+    }
+
 	void VulkanPipelineBarrier::Execute(
 		VulkanCommandBuffer* cmd)
 	{
-		if (ImageBarriers.empty())
+		if (ImageBarriers.empty() && MemoryBarriers.empty())
 			return;
-		VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+		VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+		VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
 		for (int i = 0; i < ImageBarriers.size(); i++) 
 		{
@@ -524,11 +533,12 @@ namespace RHIVulkan {
 			srcStage,
 			dstStage,
 			0,
-			0, nullptr,
+			static_cast<uint32_t>(MemoryBarriers.size()), MemoryBarriers.data(),
 			0, nullptr,
 			static_cast<uint32_t>(ImageBarriers.size()),
 			ImageBarriers.data());
 		ImageBarriers.clear();
+        MemoryBarriers.clear();
 	}
 
 	VkImageSubresourceRange VulkanPipelineBarrier::MakeSubresourceRange(VkImageAspectFlags aspectMask, uint32_t baseMip, uint32_t mipCount, uint32_t baseLayer, uint32_t layerCount)

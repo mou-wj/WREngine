@@ -14,6 +14,7 @@
     V(vkEnumerateInstanceLayerProperties) \
     V(vkEnumeratePhysicalDevices) \
     V(vkGetPhysicalDeviceProperties) \
+    V(vkGetPhysicalDeviceProperties2) \
     V(vkGetPhysicalDeviceFeatures) \
     V(vkGetPhysicalDeviceFeatures2) \
     V(vkGetPhysicalDeviceMemoryProperties) \
@@ -282,6 +283,10 @@ namespace VKFunc {
         if (!physicalDevice || !pFeatures) return;
 #endif
         vkGetPhysicalDeviceFeatures(physicalDevice, pFeatures);
+    }
+
+    void GetPhysicalDeviceProperties2(VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties2* properties) {
+        vkGetPhysicalDeviceProperties2(physicalDevice, properties);
     }
 
     void GetPhysicalDeviceFeatures2(VkPhysicalDevice physicalDevice, VkPhysicalDeviceFeatures2* pFeatures) {

@@ -1,6 +1,10 @@
 #include "TestBase.h"
 #include "RHIApi.h"
 #include "VulkanRHIApi.h"
+#include "DirectX12RHIApi.h"
+#include "OpenGLRHIApi.h"
+#include <cstdlib>
+#include <string>
 #include "ShaderCompiler.h"
 #include "Window.h"
 
@@ -114,7 +118,7 @@ public:
 
     void Setup() override
     {
-        RHI::GRHIApi = new RHIVulkan::VulkanRHIApi();
+        RHI::GRHIApi = CreateTestRHIApi();
         RHI::GRHIApi->Init();
 
         auto* api = RHI::GRHIApi;
@@ -127,6 +131,8 @@ public:
         CreateGeometryBuffers(api);
         CreateAccelerationStructures(api);
         CreateRayTracingPipeline(api);
+        std::cout << "RHIRayTracingTest setup: BLAS=" << bool(BottomLevelAS) << " TLAS=" << bool(TopLevelAS)
+            << " pipeline=" << bool(RayTracingPipelineState) << std::endl;
     }
 
     void Run() override
@@ -183,6 +189,9 @@ public:
             {
                 TransitionViewableResource(api, cmdList, backTexture, RHI::ERHIResourceAccess::UAV);
                 CreateBackTextureUAV(backTexture);
+                if (frameIndex == 0)
+                    std::cout << "RHIRayTracingTest output extent: " << backTexture->GetDesc().Width << "x"
+                        << backTexture->GetDesc().Height << std::endl;
             }
 
             if (RayTracingPipelineState)
@@ -219,6 +228,8 @@ public:
             }
 
             cmdList.Clear();
+            if (frameIndex == 0 || frameIndex == kFrameCount - 1)
+                std::cout << "RHIRayTracingTest completed frame " << frameIndex + 1 << std::endl;
         }
 
         queue->WaitIdle();
@@ -314,6 +325,7 @@ private:
         auto frameSize = Window->GetFramebufferSize();
         FrameWidth = frameSize.x;
         FrameHeight = frameSize.y;
+        std::cout << "RHIRayTracingTest dispatch extent: " << FrameWidth << "x" << FrameHeight << std::endl;
     }
 
     void CreateGeometryBuffers(RHI::RHIApi* api)

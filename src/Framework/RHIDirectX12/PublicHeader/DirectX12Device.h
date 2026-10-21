@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 
 #if defined(_WIN32)
 #include <d3d12.h>
@@ -16,6 +17,7 @@ namespace RHIDirectX12
         DirectX12Device() = default;
         ~DirectX12Device();
 
+        std::weak_ptr<void> GetLifetimeToken() const { return LifetimeToken; }
         bool Init();
         void Shutdown();
 
@@ -29,6 +31,7 @@ namespace RHIDirectX12
         {
             return NativeDevice.Get();
         }
+        bool SupportsRayTracing() const { return RayTracingSupported; }
         IDXGIAdapter1* GetAdapter() const
         {
             return Adapter.Get();
@@ -85,7 +88,9 @@ namespace RHIDirectX12
 #endif
 
     private:
+        std::shared_ptr<void> LifetimeToken = std::make_shared<int>(0);
         bool bValid = false;
+        bool RayTracingSupported = false;
 
 #if defined(_WIN32)
         Microsoft::WRL::ComPtr<IDXGIFactory6> Factory;

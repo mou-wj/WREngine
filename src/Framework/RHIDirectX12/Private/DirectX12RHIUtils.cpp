@@ -1,7 +1,39 @@
+#include "DirectX12Device.h"
 #include "DirectX12RHIUtils.h"
 
 namespace RHIDirectX12
 {
+    RHI::ERHIFormat ToStorageImageFormat(RHI::ERHIFormat preferred)
+    {
+        // Internal UAV images use RGBA8; presentation keeps the requested BGRA8 format.
+        return preferred == RHI::ERHIFormat::B8G8R8A8_UNorm ? RHI::ERHIFormat::R8G8B8A8_UNorm : preferred;
+    }
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS ToRayTracingBuildFlags(bool update, bool compaction)
+    {
+        auto flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+        if (update) flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+        if (compaction) flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+        return flags;
+    }
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateRayTracingBuffer(DirectX12Device* device, uint64_t size,
+        D3D12_RESOURCE_STATES state, bool upload)
+    {
+        if (!size) throw std::runtime_error("Zero-sized ray tracing buffer");
+        D3D12_HEAP_PROPERTIES heap{};
+        heap.Type = upload ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Width = (size + 255) & ~uint64_t(255);
+        desc.Height = desc.DepthOrArraySize = desc.MipLevels = 1;
+        desc.SampleDesc.Count = 1;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        desc.Flags = upload ? D3D12_RESOURCE_FLAG_NONE : D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
+        CheckDX12(device->GetNativeDevice()->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+            upload ? D3D12_RESOURCE_STATE_GENERIC_READ : state, nullptr, IID_PPV_ARGS(&buffer)), "Create DXR buffer");
+        return buffer;
+    }
+
     D3D12_UNORDERED_ACCESS_VIEW_DESC ToReadOnlyStorageUAV(const RHI::RHIBufferSRVCreateInfo& view,
                                                           D3D_SHADER_INPUT_TYPE type, uint64_t bufferSize)
     {
@@ -65,8 +97,10 @@ namespace RHIDirectX12
             throw std::runtime_error("Texture access requested for a buffer");
         if (has(A::UAV))
         {
+            if (auto* dxTexture = dynamic_cast<DirectX12Texture*>(texture)) dxTexture->EnsureStorageTarget();
             if ((buffer && !EnumHasAnyFlags(buffer->GetDesc().Usage, RHI::ERHIBufferUsageFlag::UnorderedAccess)) ||
-                (texture && !EnumHasAnyFlags(texture->GetDesc().Usage, RHI::ERHITextureCreateFlag::UAV)))
+                (texture && !EnumHasAnyFlags(texture->GetDesc().Usage, RHI::ERHITextureCreateFlag::UAV) &&
+                 !EnumHasAnyFlags(texture->GetDesc().Usage, RHI::ERHITextureCreateFlag::Presentable)))
                 throw std::runtime_error("UAV access requires a resource created for unordered access");
             result |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         }

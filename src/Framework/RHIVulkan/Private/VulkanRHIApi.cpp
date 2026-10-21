@@ -157,6 +157,7 @@ bool VulkanRHIApi::Init()
 	// 4. 计算总分配大小
 	G_RHITransition_TotalSize = G_RHITransition_PrivateDataOffset + PrivateSize;
 
+	PlatformInfo.EnableRayTracing = true;
 	ValidFlag = true;
     return true;
     // 初始化其他Vulkan资源
@@ -168,6 +169,7 @@ void VulkanRHIApi::Shutdown()
 	if (!ValidFlag) {
 		return;
 	}
+	PlatformInfo.EnableRayTracing = false;
 	ValidFlag = false;
 	RHI::RHIPipelineStateCache::ClearAll();
 
@@ -190,8 +192,7 @@ void VulkanRHIApi::Shutdown()
 
 const RHIPlatformInfo& VulkanRHIApi::GetPlatformInfo() const
 {
-	static RHIPlatformInfo info{.DepthRange = RHI::EDepthRange::ZeroToOne};
-	return info;
+	return PlatformInfo;
 }
 
 
@@ -779,14 +780,16 @@ void VulkanRHIApi::RHICreateTransition(RHITransition* Transition, const RHITrans
 			else if (vulkanUAV->IsBuffer())
 			{
 				VulkanBuffer* vulkanBuffer = static_cast<VulkanBuffer*>(vulkanUAV->GetResource());
+                pipelineBarrier->TransitionMemory(transitionInfo.AccessBefore, transitionInfo.AccessAfter);
 
 				// Buffer 不需要 Layout，直接记录 Access 变化用于生成 VkBufferMemoryBarrier
 
 			}
 		}
-        else if (transitionInfo.Type == RHITransitionInfo::EType::Buffer)
+        else if (transitionInfo.Type == RHITransitionInfo::EType::Buffer ||
+                 transitionInfo.Type == RHITransitionInfo::EType::BVH)
         {
-            // VulkanPipelineBarrier 当前仅支持图像屏障；Buffer 屏障可在后续补全。
+            pipelineBarrier->TransitionMemory(transitionInfo.AccessBefore, transitionInfo.AccessAfter);
         }
     }
 
@@ -912,6 +915,7 @@ std::vector<const char*> VulkanRHIApi::GetWantedDeviceExtensions() {
 	wantExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME); // 交换链扩展
 	wantExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
     wantExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+    wantExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
     wantExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
 	wantExtensions.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
 	//dx编译器引入的，后续需要考虑移除

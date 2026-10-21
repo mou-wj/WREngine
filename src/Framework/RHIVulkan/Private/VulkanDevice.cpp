@@ -200,6 +200,15 @@ void VulkanDevice::CreateLogicalDevice(VkPhysicalDevice physicalDevice,
 	rayTracingPipelineFeatures.pNext = (void*)createInfo.pNext;
 	createInfo.pNext = &rayTracingPipelineFeatures;
 
+    VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
+    VkPhysicalDeviceFeatures2 rayQuerySupport{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    rayQuerySupport.pNext = &rayQueryFeatures;
+    VKFunc::GetPhysicalDeviceFeatures2(physicalDevice, &rayQuerySupport);
+    if (!rayQueryFeatures.rayQuery)
+        throw std::runtime_error("The selected Vulkan device does not support rayQuery");
+    rayQueryFeatures.pNext = const_cast<void*>(createInfo.pNext);
+    createInfo.pNext = &rayQueryFeatures;
+
     VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES };
     scalarBlockLayoutFeatures.scalarBlockLayout = VK_TRUE;
     scalarBlockLayoutFeatures.pNext = (void*)createInfo.pNext;

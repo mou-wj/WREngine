@@ -33,6 +33,33 @@ namespace RHIDirectX12
         bool UploadHeap = false;
     };
 
+    struct DirectX12AccelerationStructure
+    {
+        virtual ~DirectX12AccelerationStructure() = default;
+        DirectX12Device* Device = nullptr;
+        Microsoft::WRL::ComPtr<ID3D12Resource> Result, Scratch, InstanceUpload;
+        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> ReferencedResults;
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS Inputs{};
+        D3D12_RAYTRACING_GEOMETRY_DESC Geometry{};
+        RHI::ERHIResourceAccess Access = RHI::ERHIResourceAccess::Unknown;
+        bool Built = false;
+        bool ScratchReady = false;
+        void Allocate(RHI::RayTracingAccelerationStructureSizeInfo& size);
+    };
+
+    class DirectX12RayTracingGeometry : public RHI::RHIRayTracingGeometry, public DirectX12AccelerationStructure
+    {
+    public:
+        DirectX12RayTracingGeometry(DirectX12Device* device, const RHI::RHIRayTracingGeometryDesc& desc);
+        void SetGeometryDesc(const RHI::RHIRayTracingGeometryDesc& desc) override;
+    };
+    class DirectX12RayTracingInstance : public RHI::RHIRayTracingInstance, public DirectX12AccelerationStructure
+    {
+    public:
+        DirectX12RayTracingInstance(DirectX12Device* device, const RHI::RHIRayTracingInstancesDesc& desc);
+        void SetInstancesDesc(const RHI::RHIRayTracingInstancesDesc& desc) override;
+    };
+
     class DirectX12Texture : public RHI::RHITexture, public DirectX12ResourceState
     {
     public:
@@ -51,6 +78,9 @@ namespace RHIDirectX12
         {
             return Resource.Get();
         }
+        void EnsureStorageTarget();
+        std::shared_ptr<DirectX12Texture> StorageTarget;
+        bool StorageDirty = false;
         DXGI_FORMAT GetNativeFormat() const
         {
             return NativeFormat;
@@ -62,6 +92,7 @@ namespace RHIDirectX12
 
     private:
         DirectX12Device* Device = nullptr;
+        std::weak_ptr<void> DeviceLifetime;
 
 #if defined(_WIN32)
         Microsoft::WRL::ComPtr<ID3D12Resource> Resource;
@@ -127,6 +158,7 @@ namespace RHIDirectX12
         D3D12_CPU_DESCRIPTOR_HANDLE ReadOnlyStorageUAV{};
         D3D12_CPU_DESCRIPTOR_HANDLE ReadOnlyRawStorageUAV{};
         DirectX12Device* Device = nullptr;
+        std::weak_ptr<void> DeviceLifetime;
         bool bValid = false;
 #endif
     };
@@ -156,6 +188,7 @@ namespace RHIDirectX12
 #if defined(_WIN32)
         D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle{};
         DirectX12Device* Device = nullptr;
+        std::weak_ptr<void> DeviceLifetime;
         bool bValid = false;
 #endif
     };
@@ -203,7 +236,7 @@ namespace RHIDirectX12
     class DirectX12ShaderBase
     {
     public:
-        explicit DirectX12ShaderBase(const std::vector<char>& code);
+        explicit DirectX12ShaderBase(const std::vector<char>& code, bool library = false);
         virtual ~DirectX12ShaderBase() = default;
         const std::vector<char>& GetByteCode() const
         {
@@ -221,7 +254,17 @@ namespace RHIDirectX12
     protected:
         std::vector<char> ByteCode;
         std::vector<DirectX12ShaderBinding> Bindings;
+        Microsoft::WRL::ComPtr<ID3D12LibraryReflection> LibraryReflection;
+    public:
+        std::wstring ExportName;
+    protected:
         Microsoft::WRL::ComPtr<ID3D12ShaderReflection> Reflection;
+    };
+
+    template<class Base> class DirectX12RayTracingShader : public Base, public DirectX12ShaderBase
+    {
+    public:
+        explicit DirectX12RayTracingShader(const std::vector<char>& code) : DirectX12ShaderBase(code, true) {}
     };
 
     class DirectX12VertexShader : public RHI::RHIVertexShader, public DirectX12ShaderBase
@@ -376,6 +419,7 @@ namespace RHIDirectX12
 
     private:
         DirectX12Device* Device = nullptr;
+        std::weak_ptr<void> DeviceLifetime;
         D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle{};
     };
     using DirectX12SamplerSP = std::shared_ptr<DirectX12Sampler>;

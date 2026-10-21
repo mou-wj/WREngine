@@ -14,6 +14,7 @@
 
 - [rhi/rhi.md](rhi/rhi.md) — RHI 抽象层概览
 - [rhi/rhivulkan.md](rhi/rhivulkan.md) — Vulkan 后端实现概览
+- [rhi/rhiopengl.md](rhi/rhiopengl.md) — OpenGL 后端、上下文线程、命令队列与能力边界
 - [rhi/rhidirectx12.md](rhi/rhidirectx12.md) — DirectX12 后端实现、资源访问契约与能力边界
 
 ## 4. Render
@@ -35,7 +36,7 @@
 
 这些文档的目标不是泛泛介绍，而是尽量贴近项目源码中的真实模块边界、依赖关系和职责分层。阅读时建议按如下路径理解：
 
-- 底层图形接口：RHI / RHIVulkan
+- 底层图形接口：RHI / RHIVulkan / RHIOpenGL / RHIDirectX12
 - 渲染基础设施：RenderCore
 - 具体渲染实现：Renderer
 - 窗口与 UI 框架：SlateCore / ImGuiSlate

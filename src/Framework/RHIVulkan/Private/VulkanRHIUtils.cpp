@@ -283,6 +283,20 @@ namespace RHIVulkan {
         default:                                           return VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
         }
     }
+    VkAccessFlags TransformResourceAccess(ERHIResourceAccess access)
+    {
+        VkAccessFlags result = 0;
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::TransferDest | ERHIResourceAccess::ResolveDst)) result |= VK_ACCESS_TRANSFER_WRITE_BIT;
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::TransferSrc | ERHIResourceAccess::ResolveSrc)) result |= VK_ACCESS_TRANSFER_READ_BIT;
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::SRV)) result |= VK_ACCESS_SHADER_READ_BIT;
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::UAV)) result |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::BVHRead)) result |= VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::BVHWrite)) result |= VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::VertexOrIndexBuffer)) result |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_INDEX_READ_BIT;
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::IndirectArgs)) result |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+        return result;
+    }
+
     VkBufferUsageFlags TransformBufferUsageFlagsFrom(ERHIBufferUsageFlags Flags)
     {
         VkBufferUsageFlags usage = 0;
@@ -340,7 +354,7 @@ namespace RHIVulkan {
         }
         if (EnumHasAnyFlags(Flags,ERHIBufferUsageFlag::AccelerationStructureBuildInput))
         {
-            usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+            usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         }
         return usage;
     }

@@ -105,6 +105,7 @@ namespace RHIVulkan {
 			uint32_t dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED);
 
 
+		void TransitionMemory(RHI::ERHIResourceAccess before, RHI::ERHIResourceAccess after);
 		void Execute(VulkanCommandBuffer* cmd);
 
 		static VkImageSubresourceRange MakeSubresourceRange(VkImageAspectFlags aspectMask, uint32_t baseMip, uint32_t mipCount, uint32_t baseLayer, uint32_t layerCount);

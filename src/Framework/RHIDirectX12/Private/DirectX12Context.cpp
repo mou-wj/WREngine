@@ -40,6 +40,7 @@ namespace RHIDirectX12
         GraphicsBindings.clear();
         CurrentGraphicsPipeline = nullptr;
         CurrentComputePipeline = nullptr;
+        CurrentRayTracingPipeline = nullptr;
         GraphicsParameterCache.clear();
         ComputeReadOnlyStorage.clear();
         GraphicsReadOnlyStorage.clear();
@@ -105,6 +106,17 @@ namespace RHIDirectX12
     void DirectX12CommandContext::RequireAccess(RHI::RHIViewableResource* resource, RHI::ERHIResourceAccess access,
                                                 uint32_t subresource)
     {
+        if (auto* texture = dynamic_cast<DirectX12Texture*>(resource))
+        {
+            if (texture->StorageTarget && access == RHI::ERHIResourceAccess::UAV)
+            {
+                if (texture->DeclaredAccess.empty() || texture->DeclaredAccess[0] != access)
+                    throw std::runtime_error("Swapchain UAV access requires an explicit RHITransition");
+                TrackResource(resource);
+                RequireAccess(texture->StorageTarget.get(), access, subresource);
+                return;
+            }
+        }
         auto* state = GetResourceState(resource);
         if (!state)
             throw std::runtime_error("Invalid DirectX12 resource access");
@@ -127,6 +139,28 @@ namespace RHIDirectX12
     void DirectX12CommandContext::TransitionResource(RHI::RHIViewableResource* resource, D3D12_RESOURCE_STATES target,
                                                      uint32_t subresource)
     {
+        if (auto* texture = dynamic_cast<DirectX12Texture*>(resource))
+        {
+            if (texture->StorageTarget && target == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+            {
+                TrackResource(resource);
+                TransitionResource(texture->StorageTarget.get(), target, subresource);
+                texture->StorageTarget->DeclaredAccess = { RHI::ERHIResourceAccess::UAV };
+                texture->StorageDirty = true;
+                return;
+            }
+            if (texture->StorageDirty)
+            {
+                // Resolve before Present, raster rendering, copies or shader reads of the original image.
+                texture->StorageDirty = false;
+                RHI::RHIBlitTextureDesc blit{};
+                blit.SrcRegion.Width = blit.DstRegion.Width = texture->GetDesc().Width;
+                blit.SrcRegion.Height = blit.DstRegion.Height = texture->GetDesc().Height;
+                blit.SrcRegion.Depth = blit.DstRegion.Depth = 1;
+                blit.Filter = RHI::ERHIFilter::Nearest;
+                BlitTextureNative(texture->StorageTarget.get(), texture, blit);
+            }
+        }
         TrackResource(resource);
         auto* state = GetResourceState(resource);
         if (state->UploadHeap)
@@ -170,6 +204,22 @@ namespace RHIDirectX12
                 continue;
             for (const auto& info : transition->GetPrivateData<DirectX12TransitionData>()->Infos)
             {
+                if (info.Type == RHI::RHITransitionInfo::EType::BVH)
+                {
+                    auto* as = dynamic_cast<DirectX12AccelerationStructure*>(info.BVH);
+                    if (!as || !as->Result) throw std::runtime_error("Invalid DXR BVH transition");
+                    if (info.AccessBefore != RHI::ERHIResourceAccess::Unknown && as->Access != info.AccessBefore)
+                        throw std::runtime_error("DXR BVH transition source access mismatch");
+                    if (info.AccessAfter != RHI::ERHIResourceAccess::BVHRead && info.AccessAfter != RHI::ERHIResourceAccess::BVHWrite)
+                        throw std::runtime_error("Invalid DXR BVH access");
+                    D3D12_RESOURCE_BARRIER barrier{};
+                    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+                    barrier.UAV.pResource = as->Result.Get();
+                    CommandList->ResourceBarrier(1, &barrier);
+                    RetainResource(as->Result);
+                    as->Access = info.AccessAfter;
+                    continue;
+                }
                 auto* resource =
                     info.Type == RHI::RHITransitionInfo::EType::UAV ? info.UAV->GetResource() : info.ViewableResource;
                 if (!resource)
@@ -281,6 +331,13 @@ namespace RHIDirectX12
                       desc.SrcMipIndex + desc.SrcArraySlice * src->GetDesc().MipLevels);
         RequireAccess(dst, RHI::ERHIResourceAccess::TransferDest,
                       desc.DstMipIndex + desc.DstArraySlice * dst->GetDesc().MipLevels);
+        BlitTextureNative(source, dest, desc);
+    }
+    void DirectX12CommandContext::BlitTextureNative(DirectX12Texture* source, DirectX12Texture* dest,
+        const RHI::RHIBlitTextureDesc& desc)
+    {
+        auto* src = source;
+        auto* dst = dest;
         auto* device = Queue->GetDevice()->GetNativeDevice();
         if (!BlitRoot)
         {
@@ -419,6 +476,19 @@ namespace RHIDirectX12
                 else
                     CommandList->SetGraphicsRootConstantBufferView(root.RootIndex, address);
             };
+            if (desc.Type == D3D_SIT_RTACCELERATIONSTRUCTURE)
+            {
+                auto found = std::find_if(parameters.ResourceParameters.begin(), parameters.ResourceParameters.end(), [&](const auto& p) {
+                    return p.Type == RHI::RHIShaderResourceParameter::EType::AccelerationStructure && p.Index == desc.BindPoint && p.ArrayIndex == 0;
+                });
+                auto* as = found == parameters.ResourceParameters.end() ? nullptr : dynamic_cast<DirectX12RayTracingInstance*>(found->Resource);
+                if (!compute || !as || !as->Built || as->Access != RHI::ERHIResourceAccess::BVHRead)
+                    throw std::runtime_error("DXR shader requires a built TLAS with BVHRead access");
+                RetainResource(as->Result);
+                for (const auto& result : as->ReferencedResults) RetainResource(result);
+                CommandList->SetComputeRootShaderResourceView(root.RootIndex, as->Result->GetGPUVirtualAddress());
+                continue;
+            }
             if (desc.Type == D3D_SIT_CBUFFER)
             {
                 const auto found = std::find_if(
@@ -947,33 +1017,82 @@ namespace RHIDirectX12
     }
 
     void DirectX12GraphicContext::SetBatchedShaderParameters(RHI::RHIRayTracingShader* shader,
-                                                             const RHI::RHIBatchedShaderParameters& parameter)
+        const RHI::RHIBatchedShaderParameters& parameters)
     {
-        (void)shader;
-        (void)parameter;
+        auto* native = dynamic_cast<DirectX12ShaderBase*>(shader);
+        if (!CurrentRayTracingPipeline || !native) throw std::runtime_error("DXR pipeline must be bound before parameters");
+        BindParameters(native, parameters, CurrentRayTracingPipeline->Bindings, true);
     }
-
     void DirectX12GraphicContext::SetRayTracingPipelineState(RHI::RHIRayTracingPipelineState* pipelineState)
     {
-        (void)pipelineState;
+        CurrentRayTracingPipeline = dynamic_cast<DirectX12RayTracingPipelineState*>(pipelineState);
+        if (!CurrentRayTracingPipeline) throw std::runtime_error("Invalid DXR pipeline");
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> dxr;
+        CheckDX12(CommandList.As(&dxr), "Query DXR command list");
+        CommandList->SetComputeRootSignature(CurrentRayTracingPipeline->RootSignature.Get());
+        dxr->SetPipelineState1(CurrentRayTracingPipeline->StateObject.Get());
+        RetainResource(CurrentRayTracingPipeline->ShaderTable);
+        OnComplete([root = CurrentRayTracingPipeline->RootSignature, pipeline = CurrentRayTracingPipeline->StateObject] {});
     }
-
-    void DirectX12GraphicContext::BuildAccelerationStructure(
-        RHI::RHIRayTracingAccelerationStructure* accelerationStructure)
+    void DirectX12CommandContext::BuildRayTracing(RHI::RHIRayTracingAccelerationStructure* accelerationStructure, bool update)
     {
-        (void)accelerationStructure;
+        auto* as = dynamic_cast<DirectX12AccelerationStructure*>(accelerationStructure);
+        if (!as || as->Access != RHI::ERHIResourceAccess::BVHWrite) throw std::runtime_error("DXR build requires BVHWrite access");
+        if (update && (!as->Built || !(as->Inputs.Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)))
+            throw std::runtime_error("DXR update requires a previous build and AllowUpdate");
+        if (auto* geometry = dynamic_cast<DirectX12RayTracingGeometry*>(accelerationStructure))
+        {
+            RequireAccess(geometry->GetGeometryDesc().VertexBuffer, RHI::ERHIResourceAccess::SRV);
+            RequireAccess(geometry->GetGeometryDesc().IndexBuffer, RHI::ERHIResourceAccess::SRV);
+        }
+        if (auto* instances = dynamic_cast<DirectX12RayTracingInstance*>(accelerationStructure))
+            for (const auto& instance : instances->GetInstancesDesc().Instances)
+            {
+                auto* blas = dynamic_cast<DirectX12RayTracingGeometry*>(instance.Geometry);
+                if (!blas || !blas->Built || blas->Access != RHI::ERHIResourceAccess::BVHRead)
+                    throw std::runtime_error("DXR TLAS build requires built BLAS with BVHRead access");
+            }
+        D3D12_RESOURCE_BARRIER barrier{};
+        if (!as->ScratchReady)
+        {
+            barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barrier.Transition = { as->Scratch.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS };
+            as->ScratchReady = true;
+        }
+        else
+        {
+            barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+            barrier.UAV.pResource = as->Scratch.Get();
+        }
+        CommandList->ResourceBarrier(1, &barrier);
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build{};
+        build.Inputs = as->Inputs;
+        if (update) { build.Inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE; build.SourceAccelerationStructureData = as->Result->GetGPUVirtualAddress(); }
+        build.DestAccelerationStructureData = as->Result->GetGPUVirtualAddress();
+        build.ScratchAccelerationStructureData = as->Scratch->GetGPUVirtualAddress();
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> dxr;
+        CheckDX12(CommandList.As(&dxr), "Query DXR build command list");
+        dxr->BuildRaytracingAccelerationStructure(&build, 0, nullptr);
+        RetainResource(as->Result); RetainResource(as->Scratch);
+        if (as->InstanceUpload) RetainResource(as->InstanceUpload);
+        for (const auto& result : as->ReferencedResults) RetainResource(result);
+        as->Built = true;
     }
-
-    void DirectX12GraphicContext::UpdateAccelerationStructure(
-        RHI::RHIRayTracingAccelerationStructure* accelerationStructure)
-    {
-        (void)accelerationStructure;
-    }
-
+    void DirectX12GraphicContext::BuildAccelerationStructure(RHI::RHIRayTracingAccelerationStructure* structure)
+    { BuildRayTracing(structure, false); }
+    void DirectX12GraphicContext::UpdateAccelerationStructure(RHI::RHIRayTracingAccelerationStructure* structure)
+    { BuildRayTracing(structure, true); }
     void DirectX12GraphicContext::TraceRays(uint32_t width, uint32_t height, uint32_t depth)
     {
-        (void)width;
-        (void)height;
-        (void)depth;
+        if (!CurrentRayTracingPipeline || !width || !height || !depth || uint64_t(width)*height*depth > (1ull<<30))
+            throw std::runtime_error("Invalid DXR dispatch");
+        auto dispatch = CurrentRayTracingPipeline->Dispatch;
+        dispatch.Width = width; dispatch.Height = height; dispatch.Depth = depth;
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> dxr;
+        CheckDX12(CommandList.As(&dxr), "Query DXR trace command list");
+        const auto states = BeginReadOnlyStorageAccess(true);
+        dxr->DispatchRays(&dispatch);
+        EndReadOnlyStorageAccess(states);
     }
 } // namespace RHIDirectX12

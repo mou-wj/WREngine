@@ -1,3 +1,4 @@
+#include "OpenGLUtils.h"
 #include "OpenGLContext.h"
 #include "OpenGLPipelineState.h"
 #include "OpenGLResource.h"
@@ -815,21 +816,25 @@ namespace RHIOpenGL
     {
         (void)shader;
         (void)parameter;
+        ThrowRayTracingUnsupported();
     }
 
     void OpenGLGraphicContext::SetRayTracingPipelineState(RHI::RHIRayTracingPipelineState* pipelineState)
     {
         (void)pipelineState;
+        ThrowRayTracingUnsupported();
     }
 
     void OpenGLGraphicContext::BuildAccelerationStructure(RHI::RHIRayTracingAccelerationStructure* accelerationStructure)
     {
         (void)accelerationStructure;
+        ThrowRayTracingUnsupported();
     }
 
     void OpenGLGraphicContext::UpdateAccelerationStructure(RHI::RHIRayTracingAccelerationStructure* accelerationStructure)
     {
         (void)accelerationStructure;
+        ThrowRayTracingUnsupported();
     }
 
     void OpenGLGraphicContext::TraceRays(uint32_t width, uint32_t height, uint32_t depth)
@@ -837,5 +842,6 @@ namespace RHIOpenGL
         (void)width;
         (void)height;
         (void)depth;
+        ThrowRayTracingUnsupported();
     }
 }

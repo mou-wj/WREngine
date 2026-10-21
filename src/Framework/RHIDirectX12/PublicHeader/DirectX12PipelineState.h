@@ -19,6 +19,17 @@ namespace RHIDirectX12
         uint32_t RootIndex = 0;
     };
 
+    class DirectX12RayTracingPipelineState : public RHI::RHIRayTracingPipelineState
+    {
+    public:
+        DirectX12RayTracingPipelineState(DirectX12Device* device, const RHI::RHIRayTracingPipelineStateDesc& desc);
+        Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature;
+        Microsoft::WRL::ComPtr<ID3D12StateObject> StateObject;
+        Microsoft::WRL::ComPtr<ID3D12Resource> ShaderTable;
+        std::vector<DirectX12RootBinding> Bindings;
+        D3D12_DISPATCH_RAYS_DESC Dispatch{};
+    };
+
     class DirectX12GraphicsPipelineState : public RHI::RHIGraphicsPipelineState
     {
     public:

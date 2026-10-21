@@ -97,9 +97,9 @@ private:
     // 其他 Vulkan 资源管理结构
 	VulkanDevice* Device = nullptr;
 	VkPhysicalDevice PhysicalDevice = nullptr;
-#ifdef DEBUG_INFO
+    // Keep the exported class layout identical in DLL and client builds.
     VkDebugUtilsMessengerEXT DebugMessenger = VK_NULL_HANDLE;
-#endif
+    RHI::RHIPlatformInfo PlatformInfo{ .DepthRange = RHI::EDepthRange::ZeroToOne, .EnableRayTracing = false };
     bool ValidFlag = false;
 };
 

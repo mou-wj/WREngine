@@ -645,7 +645,8 @@ void VulkanRayTracingInstance::DestroyInstanceBuffer()
 void VulkanRayTracingInstance::SetInstancesDesc(const RHIRayTracingInstancesDesc& Desc)
 {
 
-    auto& Instances = Desc.Instances;
+    this->Instances = Desc;
+    const auto& Instances = Desc.Instances;
     DestroyAccelerationStructure();
 
     if (!Device || Instances.empty())
@@ -693,6 +694,10 @@ void VulkanRayTracingInstance::SetInstancesDesc(const RHIRayTracingInstancesDesc
 
     
 
+    if (!InstanceAllocation.GetMappedPointer())
+        throw std::runtime_error("The TLAS instance upload buffer is not mapped");
+    memcpy(InstanceAllocation.GetMappedPointer(), vkInstances.data(), static_cast<size_t>(instanceBufferSize));
+
     VkBufferDeviceAddressInfo instanceAddressInfo{};
     instanceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     instanceAddressInfo.buffer = InstanceBuffer;
@@ -715,7 +720,7 @@ void VulkanRayTracingInstance::SetInstancesDesc(const RHIRayTracingInstancesDesc
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
     buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-    buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     buildInfo.geometryCount = 1;
     buildInfo.pGeometries = &GeometryInfo;
@@ -1217,6 +1222,8 @@ void VulkanRHISwapchain::CreateSwapchain()
     swapchainDesc.height = Height;
     swapchainDesc.preferredFormat = Format;
     Swapchain = new VulkanSwapchain(Device, swapchainDesc, swapchainImages_);
+    Width = Swapchain->GetExtent().width;
+    Height = Swapchain->GetExtent().height;
 
     RHITextureDesc textureDesc;
     textureDesc.Width = Width;                  // 纹理宽度

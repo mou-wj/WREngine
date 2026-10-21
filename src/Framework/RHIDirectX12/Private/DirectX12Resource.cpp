@@ -54,9 +54,102 @@ namespace
 
 namespace RHIDirectX12
 {
+    void DirectX12AccelerationStructure::Allocate(RHI::RayTracingAccelerationStructureSizeInfo& size)
+    {
+        if (!Device || !Device->SupportsRayTracing()) throw std::runtime_error("D3D12 adapter does not support DXR");
+        Microsoft::WRL::ComPtr<ID3D12Device5> dxr;
+        CheckDX12(Device->GetNativeDevice()->QueryInterface(IID_PPV_ARGS(&dxr)), "Query DXR device");
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+        dxr->GetRaytracingAccelerationStructurePrebuildInfo(&Inputs, &info);
+        size.ResultSize = info.ResultDataMaxSizeInBytes;
+        size.BuildScratchSize = info.ScratchDataSizeInBytes;
+        size.UpdateScratchSize = info.UpdateScratchDataSizeInBytes;
+        Result = CreateRayTracingBuffer(Device, size.ResultSize, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE);
+        Scratch = CreateRayTracingBuffer(Device, std::max(size.BuildScratchSize, size.UpdateScratchSize), D3D12_RESOURCE_STATE_COMMON);
+        Built = false;
+        ScratchReady = false;
+        Access = RHI::ERHIResourceAccess::Unknown;
+    }
+    DirectX12RayTracingGeometry::DirectX12RayTracingGeometry(DirectX12Device* device, const RHI::RHIRayTracingGeometryDesc& desc)
+    { Device = device; SetGeometryDesc(desc); }
+    void DirectX12RayTracingGeometry::SetGeometryDesc(const RHI::RHIRayTracingGeometryDesc& desc)
+    {
+        auto* vertex = dynamic_cast<DirectX12Buffer*>(desc.VertexBuffer);
+        auto* index = dynamic_cast<DirectX12Buffer*>(desc.IndexBuffer);
+        if (!vertex || !index || !desc.VertexCount || !desc.IndexCount || desc.IndexCount % 3 || desc.VertexStride < 12 ||
+            (index->GetDesc().Stride != 2 && index->GetDesc().Stride != 4) ||
+            uint64_t(desc.VertexCount) * desc.VertexStride > vertex->GetDesc().Size ||
+            uint64_t(desc.IndexCount) * index->GetDesc().Stride > index->GetDesc().Size)
+            throw std::runtime_error("Invalid DXR indexed triangle geometry");
+        GeometryDesc = desc;
+        Geometry = {};
+        Geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+        Geometry.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+        Geometry.Triangles.VertexBuffer = { vertex->GetNativeResource()->GetGPUVirtualAddress(), desc.VertexStride };
+        Geometry.Triangles.VertexCount = desc.VertexCount;
+        Geometry.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+        Geometry.Triangles.IndexBuffer = index->GetNativeResource()->GetGPUVirtualAddress();
+        Geometry.Triangles.IndexCount = desc.IndexCount;
+        Geometry.Triangles.IndexFormat = index->GetDesc().Stride == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+        Inputs = {};
+        Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+        Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+        Inputs.NumDescs = 1;
+        Inputs.pGeometryDescs = &Geometry;
+        Inputs.Flags = ToRayTracingBuildFlags(desc.AllowUpdate, desc.AllowCompaction);
+        Allocate(SizeInfo);
+    }
+    DirectX12RayTracingInstance::DirectX12RayTracingInstance(DirectX12Device* device, const RHI::RHIRayTracingInstancesDesc& desc)
+    { Device = device; SetInstancesDesc(desc); }
+    void DirectX12RayTracingInstance::SetInstancesDesc(const RHI::RHIRayTracingInstancesDesc& desc)
+    {
+        if (desc.Instances.empty()) throw std::runtime_error("DXR TLAS requires instances");
+        Instances = desc;
+        ReferencedResults.clear();
+        std::vector<D3D12_RAYTRACING_INSTANCE_DESC> native(desc.Instances.size());
+        for (size_t i = 0; i < native.size(); ++i)
+        {
+            const auto& instance = desc.Instances[i];
+            auto* blas = dynamic_cast<DirectX12RayTracingGeometry*>(instance.Geometry);
+            if (!blas || !blas->Result || instance.InstanceID > 0xffffff) throw std::runtime_error("Invalid DXR TLAS instance");
+            auto& out = native[i];
+            for (uint32_t row = 0; row < 3; ++row)
+                for (uint32_t col = 0; col < 4; ++col) out.Transform[row][col] = instance.Transform(row,col);
+            out.InstanceID = instance.InstanceID;
+            out.InstanceMask = instance.Mask;
+            out.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
+            out.AccelerationStructure = blas->Result->GetGPUVirtualAddress();
+            ReferencedResults.push_back(blas->Result);
+        }
+        InstanceUpload = CreateRayTracingBuffer(Device, native.size() * sizeof(native[0]), D3D12_RESOURCE_STATE_GENERIC_READ, true);
+        void* mapped = nullptr;
+        D3D12_RANGE empty{};
+        CheckDX12(InstanceUpload->Map(0, &empty, &mapped), "Map DXR instances");
+        memcpy(mapped, native.data(), native.size() * sizeof(native[0]));
+        InstanceUpload->Unmap(0, nullptr);
+        Inputs = {};
+        Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+        Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+        Inputs.NumDescs = static_cast<UINT>(native.size());
+        Inputs.InstanceDescs = InstanceUpload->GetGPUVirtualAddress();
+        Inputs.Flags = ToRayTracingBuildFlags(true, false);
+        Allocate(SizeInfo);
+    }
+
+    void DirectX12Texture::EnsureStorageTarget()
+    {
+        if (!EnumHasAnyFlags(Desc.Usage, RHI::ERHITextureCreateFlag::Presentable) || StorageTarget) return;
+        // DXGI images remain native presentation targets; only UAV views use this internal image.
+        RHI::RHITextureDesc storageDesc = Desc;
+        storageDesc.Format = ToStorageImageFormat(Desc.Format);
+        storageDesc.Usage = RHI::ERHITextureCreateFlag::UAV | RHI::ERHITextureCreateFlag::ShaderResource;
+        StorageTarget = std::make_shared<DirectX12Texture>(Device, storageDesc);
+    }
+
     DirectX12Texture::DirectX12Texture(DirectX12Device* inDevice, const RHI::RHITextureDesc& desc)
         : RHI::RHITexture(desc), Device(inDevice)
     {
+        if (Device) DeviceLifetime = Device->GetLifetimeToken();
 #if defined(_WIN32)
         if (!Device || !Device->GetNativeDevice())
         {
@@ -129,7 +222,7 @@ namespace RHIDirectX12
     DirectX12Texture::~DirectX12Texture()
     {
 #if defined(_WIN32)
-        if (Device && Device->IsValid())
+        if (!DeviceLifetime.expired() && Device && Device->IsValid())
         {
             for (const auto& view : RTVs)
                 Device->FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, view.second);
@@ -277,6 +370,7 @@ namespace RHIDirectX12
         texture->GetDevice()->GetNativeDevice()->CreateShaderResourceView(texture->GetNativeResource(), &srvDesc,
                                                                           CpuHandle);
         Device = texture->GetDevice();
+        DeviceLifetime = Device->GetLifetimeToken();
         OwnerUseToken = GetResourceState(resource)->ContextUses;
         ++*OwnerUseToken;
         bValid = true;
@@ -316,6 +410,7 @@ namespace RHIDirectX12
         buffer->GetDevice()->GetNativeDevice()->CreateShaderResourceView(buffer->GetNativeResource(), &srvDesc,
                                                                          CpuHandle);
         Device = buffer->GetDevice();
+        DeviceLifetime = Device->GetLifetimeToken();
         OwnerUseToken = GetResourceState(resource)->ContextUses;
         ++*OwnerUseToken;
         bValid = true;
@@ -346,8 +441,9 @@ namespace RHIDirectX12
             return;
         }
 
+        auto* storageTexture = texture->StorageTarget ? texture->StorageTarget.get() : texture;
         D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
-        uavDesc.Format = ToDxgiSrvFormat(createInfo.Format, texture->GetNativeFormat());
+        uavDesc.Format = texture->StorageTarget ? storageTexture->GetNativeFormat() : ToDxgiSrvFormat(createInfo.Format, texture->GetNativeFormat());
         uavDesc.ViewDimension = ToUavDimension(texture->GetDesc().Type, createInfo.ViewType);
         switch (uavDesc.ViewDimension)
         {
@@ -373,9 +469,10 @@ namespace RHIDirectX12
             return;
         }
 
-        texture->GetDevice()->GetNativeDevice()->CreateUnorderedAccessView(texture->GetNativeResource(), nullptr,
+        texture->GetDevice()->GetNativeDevice()->CreateUnorderedAccessView(storageTexture->GetNativeResource(), nullptr,
                                                                            &uavDesc, CpuHandle);
         Device = texture->GetDevice();
+        DeviceLifetime = Device->GetLifetimeToken();
         OwnerUseToken = GetResourceState(resource)->ContextUses;
         ++*OwnerUseToken;
         bValid = true;
@@ -414,6 +511,7 @@ namespace RHIDirectX12
         buffer->GetDevice()->GetNativeDevice()->CreateUnorderedAccessView(buffer->GetNativeResource(), nullptr,
                                                                           &uavDesc, CpuHandle);
         Device = buffer->GetDevice();
+        DeviceLifetime = Device->GetLifetimeToken();
         OwnerUseToken = GetResourceState(resource)->ContextUses;
         ++*OwnerUseToken;
         bValid = true;
@@ -502,7 +600,7 @@ namespace RHIDirectX12
         bMapped = false;
     }
 
-    DirectX12ShaderBase::DirectX12ShaderBase(const std::vector<char>& code)
+    DirectX12ShaderBase::DirectX12ShaderBase(const std::vector<char>& code, bool library)
     {
         ByteCode = code.size() >= 4 && std::memcmp(code.data(), "DXBC", 4) == 0 ? code : UnpackDXIL(code);
         if (ByteCode.empty())
@@ -517,6 +615,42 @@ namespace RHIDirectX12
         CheckDX12(container->Load(blob.Get()), "Load DXIL container");
         UINT32 index;
         CheckDX12(container->FindFirstPartKind(DXC_PART_DXIL, &index), "Find DXIL part");
+        if (library)
+        {
+            CheckDX12(container->GetPartReflection(index, IID_PPV_ARGS(&LibraryReflection)), "Reflect DXIL library");
+            RenderCore::HLSLCompiledBinaryResultPacker packer;
+            packer.Depack(code);
+            const std::string entry = packer.DepackedData.HeaderData.EntryPoint;
+            D3D12_LIBRARY_DESC desc{};
+            CheckDX12(LibraryReflection->GetDesc(&desc), "Reflect DXIL library description");
+            ID3D12FunctionReflection* function = nullptr;
+            D3D12_FUNCTION_DESC functionDesc{};
+            for (UINT i = 0; i < desc.FunctionCount; ++i)
+            {
+                auto* candidate = LibraryReflection->GetFunctionByIndex(i);
+                D3D12_FUNCTION_DESC info{};
+                CheckDX12(candidate->GetDesc(&info), "Reflect DXR function");
+                const std::string name = info.Name;
+                if (name == entry || name.find("?" + entry + "@") != std::string::npos)
+                { function = candidate; functionDesc = info; ExportName = ToWide(entry.c_str()); break; }
+            }
+            if (!function) throw std::runtime_error("DXR library entry point not found: " + entry);
+            for (UINT i = 0; i < functionDesc.BoundResources; ++i)
+            {
+                DirectX12ShaderBinding binding;
+                CheckDX12(function->GetResourceBindingDesc(i, &binding.Desc), "Reflect DXR resource");
+                binding.Name = binding.Desc.Name;
+                binding.Desc.Name = nullptr;
+                if (binding.Desc.Type == D3D_SIT_CBUFFER)
+                {
+                    D3D12_SHADER_BUFFER_DESC buffer{};
+                    CheckDX12(function->GetConstantBufferByName(binding.Name.c_str())->GetDesc(&buffer), "Reflect DXR cbuffer");
+                    binding.ConstantBufferSize = buffer.Size;
+                }
+                Bindings.push_back(std::move(binding));
+            }
+            return;
+        }
         CheckDX12(container->GetPartReflection(index, IID_PPV_ARGS(&Reflection)), "Reflect DXIL");
         D3D12_SHADER_DESC shaderDesc{};
         CheckDX12(Reflection->GetDesc(&shaderDesc), "Reflect shader description");
@@ -684,6 +818,7 @@ namespace RHIDirectX12
         : RHI::RHITexture(desc), Device(inDevice), Resource(std::move(resource)),
           NativeFormat(ToDxgiFormat(desc.Format))
     {
+        if (Device) DeviceLifetime = Device->GetLifetimeToken();
         States.assign(1, D3D12_RESOURCE_STATE_PRESENT);
     }
     D3D12_CPU_DESCRIPTOR_HANDLE DirectX12Texture::GetRTV(uint32_t mip, uint32_t slice)
@@ -754,7 +889,7 @@ namespace RHIDirectX12
     {
         if (OwnerUseToken)
             --*OwnerUseToken;
-        if (Device && Device->IsValid())
+        if (!DeviceLifetime.expired() && Device && Device->IsValid())
         {
             Device->FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, CpuHandle);
             Device->FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, ReadOnlyStorageUAV);
@@ -781,12 +916,13 @@ namespace RHIDirectX12
     {
         if (OwnerUseToken)
             --*OwnerUseToken;
-        if (Device && Device->IsValid())
+        if (!DeviceLifetime.expired() && Device && Device->IsValid())
             Device->FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, CpuHandle);
     }
     DirectX12Sampler::DirectX12Sampler(DirectX12Device* device, const RHI::RHISamplerDesc& desc)
         : RHI::RHISampler(desc), Device(device)
     {
+        if (Device) DeviceLifetime = Device->GetLifetimeToken();
         if (!Device->AllocateSamplerDescriptor(CpuHandle))
             throw std::runtime_error("Sampler heap exhausted");
         D3D12_SAMPLER_DESC sampler{};
@@ -803,7 +939,7 @@ namespace RHIDirectX12
     }
     DirectX12Sampler::~DirectX12Sampler()
     {
-        if (Device && Device->IsValid())
+        if (!DeviceLifetime.expired() && Device && Device->IsValid())
             Device->FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, CpuHandle);
     }
 

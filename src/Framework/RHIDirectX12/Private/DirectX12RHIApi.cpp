@@ -63,6 +63,8 @@ namespace RHIDirectX12
         }
 
 #if defined(_WIN32)
+        PlatformInfo.EnableRayTracing = Device->SupportsRayTracing();
+
         GraphicsQueue = std::make_unique<DirectX12Queue>(RHI::EQueueType::Graphics, Device.get(),
                                                          Device->GetGraphicsCommandQueue());
         ComputeQueue =
@@ -242,7 +244,7 @@ namespace RHIDirectX12
                 dst.pResource = readback->GetNativeResource();
                 dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
                 dst.PlacedFootprint.Offset = gpuSlice * layer;
-                dst.PlacedFootprint.Footprint = {ToDxgiFormat(desc.Format), width, height, depth, gpuPitch};
+                dst.PlacedFootprint.Footprint = {dx->GetNativeFormat(), width, height, depth, gpuPitch};
                 context->GetNativeCommandList()->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
                 context->TransitionResource(texture, oldState, subresource);
             }
@@ -350,14 +352,12 @@ namespace RHIDirectX12
 
     RHI::RHIRayTracingGeometrySP DirectX12RHIApi::CreateRayTracingGeometry(const RHI::RHIRayTracingGeometryDesc& desc)
     {
-        (void)desc;
-        return nullptr;
+        return std::make_shared<DirectX12RayTracingGeometry>(Device.get(), desc);
     }
 
     RHI::RHIRayTracingInstanceSP DirectX12RHIApi::CreateRayTracingInstance(const RHI::RHIRayTracingInstancesDesc& desc)
     {
-        (void)desc;
-        return nullptr;
+        return std::make_shared<DirectX12RayTracingInstance>(Device.get(), desc);
     }
 
     RHI::RHIStagingBufferSP DirectX12RHIApi::CreateStagingBuffer(uint32_t size)
@@ -380,8 +380,7 @@ namespace RHIDirectX12
     RHI::RHIRayTracingPipelineStateSP DirectX12RHIApi::CreateRayTracingsPipelineState(
         const RHI::RHIRayTracingPipelineStateDesc& desc)
     {
-        (void)desc;
-        return nullptr;
+        return std::make_shared<DirectX12RayTracingPipelineState>(Device.get(), desc);
     }
 
     RHI::RHIVertexDescStateSP DirectX12RHIApi::CreateVertexDescState(const RHI::RHIVertexDescStateDesc& desc)
@@ -446,38 +445,32 @@ namespace RHIDirectX12
 
     RHI::RHIRayGenShaderSP DirectX12RHIApi::CreateRayGenShader(const std::vector<char>& shaderSourceCode)
     {
-        (void)shaderSourceCode;
-        return nullptr;
+        return std::make_shared<DirectX12RayTracingShader<RHI::RHIRayGenShader>>(shaderSourceCode);
     }
 
     RHI::RHICloseHitShaderSP DirectX12RHIApi::CreateCloseHitShader(const std::vector<char>& shaderSourceCode)
     {
-        (void)shaderSourceCode;
-        return nullptr;
+        return std::make_shared<DirectX12RayTracingShader<RHI::RHICloseHitShader>>(shaderSourceCode);
     }
 
     RHI::RHIMissShaderSP DirectX12RHIApi::CreateMissShader(const std::vector<char>& shaderSourceCode)
     {
-        (void)shaderSourceCode;
-        return nullptr;
+        return std::make_shared<DirectX12RayTracingShader<RHI::RHIMissShader>>(shaderSourceCode);
     }
 
     RHI::RHIAnyHitShaderSP DirectX12RHIApi::CreateAnyHitShader(const std::vector<char>& shaderSourceCode)
     {
-        (void)shaderSourceCode;
-        return nullptr;
+        return std::make_shared<DirectX12RayTracingShader<RHI::RHIAnyHitShader>>(shaderSourceCode);
     }
 
     RHI::RHIIntersectionShaderSP DirectX12RHIApi::CreateIntersectionShader(const std::vector<char>& shaderSourceCode)
     {
-        (void)shaderSourceCode;
-        return nullptr;
+        return std::make_shared<DirectX12RayTracingShader<RHI::RHIIntersectionShader>>(shaderSourceCode);
     }
 
     RHI::RHICallableShaderSP DirectX12RHIApi::CreateCallableShader(const std::vector<char>& shaderSourceCode)
     {
-        (void)shaderSourceCode;
-        return nullptr;
+        return std::make_shared<DirectX12RayTracingShader<RHI::RHICallableShader>>(shaderSourceCode);
     }
 
     RHI::RHISwapchainSP DirectX12RHIApi::CreateSwapchain(void* inWindowHandle, uint32_t w, uint32_t h,
@@ -519,8 +512,8 @@ namespace RHIDirectX12
             throw std::invalid_argument("Unsupported transition creation flags");
         for (const auto& info : CreateInfo.TransitionInfos)
         {
-            if (info.Type == RHI::RHITransitionInfo::EType::BVH)
-                throw std::runtime_error("DirectX12 ray tracing is disabled");
+            if (info.Type == RHI::RHITransitionInfo::EType::BVH && !PlatformInfo.EnableRayTracing)
+                throw std::runtime_error("The selected DirectX12 adapter does not support DXR");
             if (info.Flags != RHI::EResourceTransitionFlags::None)
                 throw std::runtime_error("DirectX12 transition discard/compression flags are not implemented");
         }

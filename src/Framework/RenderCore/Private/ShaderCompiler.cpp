@@ -77,8 +77,9 @@ namespace RenderCore {
             return true;
         }
 
+        template<class Reflection, class Description>
         bool ReflectParameterMapFromDXIL(
-            ID3D12ShaderReflection* reflection,
+            Reflection* reflection,
             ShaderParameterAllocationMap& out)
         {
             if (!reflection)
@@ -86,7 +87,7 @@ namespace RenderCore {
                 return false;
             }
 
-            D3D12_SHADER_DESC shaderDesc{};
+            Description shaderDesc{};
             if (FAILED(reflection->GetDesc(&shaderDesc)))
             {
                 return false;
@@ -891,6 +892,11 @@ void ShaderCompiler::CompileToDirectX(const std::string& preprocessedSource, con
         AddArg(L"-E");
         AddArg(ToWide(input.EntryPoint));
     }
+    if (targetProfile.rfind("lib_", 0) == 0)
+    {
+        AddArg(L"-auto-binding-space");
+        AddArg(std::to_wstring(static_cast<uint32_t>(input.Frequency)));
+    }
     AddArg(L"-T");
     AddArg(ToWide(targetProfile));
 
@@ -965,14 +971,34 @@ void ShaderCompiler::CompileToDirectX(const std::string& preprocessedSource, con
         return;
     }
 
-    Microsoft::WRL::ComPtr<ID3D12ShaderReflection> shaderReflection;
-    if (FAILED(containerReflection->GetPartReflection(
-        dxilPartIndex,
-        IID_PPV_ARGS(&shaderReflection))) ||
-        !ReflectParameterMapFromDXIL(shaderReflection.Get(), out.ParameterMap))
+    if (targetProfile.rfind("lib_", 0) == 0)
     {
-        out.ErrorMessage = "Failed to reflect DXIL shader parameters.";
-        return;
+        Microsoft::WRL::ComPtr<ID3D12LibraryReflection> library;
+        if (FAILED(containerReflection->GetPartReflection(dxilPartIndex, IID_PPV_ARGS(&library))))
+        { out.ErrorMessage = "Failed to reflect DXIL library"; return; }
+        D3D12_LIBRARY_DESC desc{};
+        library->GetDesc(&desc);
+        bool found = false;
+        for (UINT i = 0; i < desc.FunctionCount; ++i)
+        {
+            auto* function = library->GetFunctionByIndex(i);
+            D3D12_FUNCTION_DESC info{};
+            function->GetDesc(&info);
+            const std::string name = info.Name;
+            if (name == input.EntryPoint || name.find("?" + input.EntryPoint + "@") != std::string::npos)
+            {
+                found = ReflectParameterMapFromDXIL<ID3D12FunctionReflection, D3D12_FUNCTION_DESC>(function, out.ParameterMap);
+                break;
+            }
+        }
+        if (!found) { out.ErrorMessage = "Failed to reflect the requested DXR entry point"; return; }
+    }
+    else
+    {
+        Microsoft::WRL::ComPtr<ID3D12ShaderReflection> shaderReflection;
+        if (FAILED(containerReflection->GetPartReflection(dxilPartIndex, IID_PPV_ARGS(&shaderReflection))) ||
+            !ReflectParameterMapFromDXIL<ID3D12ShaderReflection, D3D12_SHADER_DESC>(shaderReflection.Get(), out.ParameterMap))
+        { out.ErrorMessage = "Failed to reflect DXIL shader parameters."; return; }
     }
 
     HLSLPackSource packSource;

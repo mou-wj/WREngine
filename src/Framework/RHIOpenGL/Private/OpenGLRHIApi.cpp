@@ -1,3 +1,4 @@
+#include "OpenGLUtils.h"
 #include "OpenGLRHIApi.h"
 #include "OpenGLPlatformSurport.h"
 #include <algorithm>
@@ -230,12 +231,12 @@ namespace RHIOpenGL
 
     RHI::RHIRayTracingGeometrySP OpenGLRHIApi::CreateRayTracingGeometry(const RHI::RHIRayTracingGeometryDesc& desc)
     {
-        return nullptr;
+        ThrowRayTracingUnsupported();
     }
 
     RHI::RHIRayTracingInstanceSP OpenGLRHIApi::CreateRayTracingInstance(const RHI::RHIRayTracingInstancesDesc& desc)
     {
-        return nullptr;
+        ThrowRayTracingUnsupported();
     }
 
     RHI::RHIStagingBufferSP OpenGLRHIApi::CreateStagingBuffer(uint32_t size)
@@ -255,7 +256,7 @@ namespace RHIOpenGL
 
     RHI::RHIRayTracingPipelineStateSP OpenGLRHIApi::CreateRayTracingsPipelineState(const RHI::RHIRayTracingPipelineStateDesc& desc)
     {
-        return nullptr;
+        ThrowRayTracingUnsupported();
     }
 
     RHI::RHIVertexDescStateSP OpenGLRHIApi::CreateVertexDescState(const RHI::RHIVertexDescStateDesc& desc)
@@ -332,32 +333,32 @@ namespace RHIOpenGL
 
     RHI::RHIRayGenShaderSP OpenGLRHIApi::CreateRayGenShader(const std::vector<char>& shaderSourceCode)
     {
-        return nullptr;
+        ThrowRayTracingUnsupported();
     }
 
     RHI::RHICloseHitShaderSP OpenGLRHIApi::CreateCloseHitShader(const std::vector<char>& shaderSourceCode)
     {
-        return nullptr;
+        ThrowRayTracingUnsupported();
     }
 
     RHI::RHIMissShaderSP OpenGLRHIApi::CreateMissShader(const std::vector<char>& shaderSourceCode)
     {
-        return nullptr;
+        ThrowRayTracingUnsupported();
     }
 
     RHI::RHIAnyHitShaderSP OpenGLRHIApi::CreateAnyHitShader(const std::vector<char>& shaderSourceCode)
     {
-        return nullptr;
+        ThrowRayTracingUnsupported();
     }
 
     RHI::RHIIntersectionShaderSP OpenGLRHIApi::CreateIntersectionShader(const std::vector<char>& shaderSourceCode)
     {
-        return nullptr;
+        ThrowRayTracingUnsupported();
     }
 
     RHI::RHICallableShaderSP OpenGLRHIApi::CreateCallableShader(const std::vector<char>& shaderSourceCode)
     {
-        return nullptr;
+        ThrowRayTracingUnsupported();
     }
 
     RHI::RHISwapchainSP OpenGLRHIApi::CreateSwapchain(void* inWindowHandle, uint32_t w, uint32_t h, RHI::ERHIFormat format)

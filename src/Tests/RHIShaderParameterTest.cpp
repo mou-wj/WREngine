@@ -107,7 +107,7 @@ public:
 
     void Setup() override
     {
-        RHI::GRHIApi = new RHIDirectX12::DirectX12RHIApi();
+        RHI::GRHIApi = CreateTestRHIApi();
         RHI::GRHIApi->Init();
         auto* api = RHI::GRHIApi;
         if (!api)

@@ -20,6 +20,8 @@ namespace RHIDirectX12
             return true;
         }
 
+        if (!LifetimeToken) LifetimeToken = std::make_shared<int>(0);
+
 #if !defined(_WIN32)
         return false;
 #else
@@ -44,22 +46,26 @@ namespace RHIDirectX12
             return false;
         }
 
+        // Prefer a DXR-capable adapter; retain a graphics fallback for other RHI work.
         Microsoft::WRL::ComPtr<IDXGIAdapter1> candidate;
-        for (UINT adapterIndex = 0; Factory->EnumAdapters1(adapterIndex, &candidate) != DXGI_ERROR_NOT_FOUND;
-             ++adapterIndex)
+        for (UINT index = 0; Factory->EnumAdapterByGpuPreference(index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
+                 IID_PPV_ARGS(&candidate)) != DXGI_ERROR_NOT_FOUND; ++index)
         {
             DXGI_ADAPTER_DESC1 desc{};
             candidate->GetDesc1(&desc);
-            if ((desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0)
+            if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) continue;
+            Microsoft::WRL::ComPtr<ID3D12Device> probe;
+            if (FAILED(D3D12CreateDevice(candidate.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&probe)))) continue;
+            D3D12_FEATURE_DATA_D3D12_OPTIONS5 options{};
+            const bool dxr = SUCCEEDED(probe->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options, sizeof(options)))
+                && options.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
+            if (!NativeDevice || dxr)
             {
-                continue;
-            }
-
-            if (SUCCEEDED(D3D12CreateDevice(candidate.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&NativeDevice))))
-            {
+                NativeDevice = probe;
                 Adapter = candidate;
-                break;
+                RayTracingSupported = dxr;
             }
+            if (dxr) break;
         }
 
         if (!NativeDevice)
@@ -142,6 +148,7 @@ namespace RHIDirectX12
 
     void DirectX12Device::Shutdown()
     {
+        LifetimeToken.reset();
 #if defined(_WIN32)
         CbvSrvUavDescriptorAllocated = 0;
         CbvSrvUavDescriptorCapacity = 0;
