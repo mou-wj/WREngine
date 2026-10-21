@@ -5,7 +5,6 @@
 #include "OpenGLRHIApi.h"
 #include "DirectX12RHIApi.h"
 #include <cctype>
-#include <cstdlib>
 #include <optional>
 #include <stdexcept>
 #include "RHICaptureHelper.h"
@@ -49,7 +48,6 @@ namespace
                      "       Tests.exe --help\n"
                      "Default test: RHIShaderParameterTest\n"
                      "Default RHI: Vulkan\n"
-                     "RHI priority: -rhi > RHI_TEST_BACKEND > Vulkan\n"
                      "Backend names are case-insensitive; aliases: gl, d3d12, dx12.\n"
                      "Registered tests:\n";
         for (const auto& name : Test::RenderTestRegistry::GetNames())
@@ -108,9 +106,6 @@ int main(int argc, char** argv)
             else
                 throw std::invalid_argument("Unknown argument: '" + argument + "'");
         }
-        if (!SelectedRHI)
-            if (const char* backend = std::getenv("RHI_TEST_BACKEND"); backend && *backend)
-                SelectedRHI = ParseBackend(backend);
     }
     catch (const std::exception& ex)
     {

@@ -19,7 +19,7 @@ enum class TestRHIBackend
     DirectX12
 };
 
-// All tests default to Vulkan; command-line and environment overrides take precedence.
+// All tests default to Vulkan unless overridden by the -rhi command-line argument.
 RHI::RHIApi* CreateTestRHIApi();
 
 class TestBase
