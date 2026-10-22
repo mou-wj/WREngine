@@ -2,7 +2,7 @@
 #include "glad/gl.h"
 #include <iostream>
 namespace RHIOpenGL {
-	OpenGLPlatformContext::OpenGLPlatformContext(void* windowHandle,RHI::ERHIFormat pixelFormat) : mWindowHandle(windowHandle),mPixelFormat(pixelFormat)
+	OpenGLPlatformContext::OpenGLPlatformContext(void* windowHandle,RHI::ERHIFormat pixelFormat) : _mWindowHandle(windowHandle),_mPixelFormat(pixelFormat)
 	{
 	}
 
@@ -93,7 +93,7 @@ namespace RHIOpenGL {
     void* BootstrapDeviceContext = nullptr;
     void* BootstrapDefaultContext = nullptr;
     void* BootstrapGLContext = nullptr;
-    OpenGLPlatformContextWin32::OpenGLPlatformContextWin32(void* windowHandle,RHI::ERHIFormat pixelFormat) : OpenGLPlatformContext(windowHandle, pixelFormat), mWindow(static_cast<HWND>(windowHandle)) {}
+    OpenGLPlatformContextWin32::OpenGLPlatformContextWin32(void* windowHandle,RHI::ERHIFormat pixelFormat) : OpenGLPlatformContext(windowHandle, pixelFormat), m_MWindow(static_cast<HWND>(windowHandle)) {}
 
     OpenGLPlatformContextWin32::~OpenGLPlatformContextWin32() { Shutdown(); }
 
@@ -147,42 +147,42 @@ namespace RHIOpenGL {
 
     bool OpenGLPlatformContextWin32::Initialize()
     {
-        if (mInitialized) return true;
-        if (!mWindow) return false;
+        if (_bMInitialized) return true;
+        if (!m_MWindow) return false;
 
-        mDeviceContext = GetDC(mWindow);
-        if (!mDeviceContext) return false;
+        m_MDeviceContext = GetDC(m_MWindow);
+        if (!m_MDeviceContext) return false;
 
-        PIXELFORMATDESCRIPTOR pfd = GetPixelFormatDescriptor(mPixelFormat);
-        const int pixelFormat = ChoosePixelFormat(mDeviceContext, &pfd);
-        if (pixelFormat == 0) { ReleaseDC(mWindow, mDeviceContext); mDeviceContext = nullptr; return false; }
+        PIXELFORMATDESCRIPTOR pfd = GetPixelFormatDescriptor(_mPixelFormat);
+        const int pixelFormat = ChoosePixelFormat(m_MDeviceContext, &pfd);
+        if (pixelFormat == 0) { ReleaseDC(m_MWindow, m_MDeviceContext); m_MDeviceContext = nullptr; return false; }
 
-        if (!SetPixelFormat(mDeviceContext, pixelFormat, &pfd)) { ReleaseDC(mWindow, mDeviceContext); mDeviceContext = nullptr; return false; }
+        if (!SetPixelFormat(m_MDeviceContext, pixelFormat, &pfd)) { ReleaseDC(m_MWindow, m_MDeviceContext); m_MDeviceContext = nullptr; return false; }
         
-        mContext = TryCreateOpenGL43Context(mDeviceContext, (HGLRC)BootstrapGLContext);
-        if (!mContext) { ReleaseDC(mWindow, mDeviceContext); mDeviceContext = nullptr; return false; }
+        m_MContext = TryCreateOpenGL43Context(m_MDeviceContext, (HGLRC)BootstrapGLContext);
+        if (!m_MContext) { ReleaseDC(m_MWindow, m_MDeviceContext); m_MDeviceContext = nullptr; return false; }
 
         
 
         RECT rect{};
-        if (GetClientRect(mWindow, &rect)) { mWidth = static_cast<uint32_t>(rect.right - rect.left); mHeight = static_cast<uint32_t>(rect.bottom - rect.top); }
+        if (GetClientRect(m_MWindow, &rect)) { _mWidth = static_cast<uint32_t>(rect.right - rect.left); _mHeight = static_cast<uint32_t>(rect.bottom - rect.top); }
 
-        mInitialized = true;
+        _bMInitialized = true;
         return true;
     }
 
     void OpenGLPlatformContextWin32::Shutdown()
     {
-        if (mContext && wglGetCurrentContext() == mContext) wglMakeCurrent(nullptr, nullptr);
-        if (mContext) { wglDeleteContext(mContext); mContext = nullptr; }
-        if (mDeviceContext && mWindow) { ReleaseDC(mWindow, mDeviceContext); mDeviceContext = nullptr; }
-        mInitialized = false;
+        if (m_MContext && wglGetCurrentContext() == m_MContext) wglMakeCurrent(nullptr, nullptr);
+        if (m_MContext) { wglDeleteContext(m_MContext); m_MContext = nullptr; }
+        if (m_MDeviceContext && m_MWindow) { ReleaseDC(m_MWindow, m_MDeviceContext); m_MDeviceContext = nullptr; }
+        _bMInitialized = false;
     }
 
     bool OpenGLPlatformContextWin32::MakeCurrent()
     {
-        if (!mDeviceContext || !mContext) return false;
-        return wglMakeCurrent(mDeviceContext, mContext) == TRUE;
+        if (!m_MDeviceContext || !m_MContext) return false;
+        return wglMakeCurrent(m_MDeviceContext, m_MContext) == TRUE;
     }
 
     void OpenGLPlatformContextWin32::DoneCurrent()
@@ -192,17 +192,17 @@ namespace RHIOpenGL {
 
     void OpenGLPlatformContextWin32::SwapBuffers()
     {
-        if (mDeviceContext)
+        if (m_MDeviceContext)
         {
-            ::SwapBuffers(mDeviceContext);
+            ::SwapBuffers(m_MDeviceContext);
         }
             
     }
 
     void OpenGLPlatformContextWin32::Resize(uint32_t width, uint32_t height)
     {
-        mWidth = width;
-        mHeight = height;
+        _mWidth = width;
+        _mHeight = height;
     }
 
     

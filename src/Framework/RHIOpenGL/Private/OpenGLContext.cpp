@@ -15,8 +15,8 @@ namespace RHIOpenGL
             GLint ComponentCount = 0;
             GLenum ComponentType = GL_FLOAT;
             GLboolean Normalized = GL_FALSE;
-            bool IntegerAttribute = false;
-            bool IsValid = false;
+            bool bIntegerAttribute = false;
+            bool bIsValid = false;
         };
 
         VertexAttribFormatInfo GetVertexAttribFormatInfo(RHI::ERHIFormat format)
@@ -79,7 +79,7 @@ namespace RHIOpenGL
 
         if (!desc.VertexDescState)
         {
-            bVertexLayoutDirty = false;
+            m_bVertexLayoutDirty = false;
             return;
         }
 
@@ -98,12 +98,12 @@ namespace RHIOpenGL
             }
 
             const auto formatInfo = GetVertexAttribFormatInfo(attribute.Format);
-            if (!formatInfo.IsValid)
+            if (!formatInfo.bIsValid)
             {
                 continue;
             }
 
-            auto* vertexBuffer = dynamic_cast<OpenGLBuffer*>(BoundVertexBuffers[attribute.Binding]);
+            auto* vertexBuffer = dynamic_cast<OpenGLBuffer*>(m_BoundVertexBuffers[attribute.Binding]);
             if (!vertexBuffer)
             {
                 continue;
@@ -124,10 +124,10 @@ namespace RHIOpenGL
             glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer->GetHandle());
             glEnableVertexAttribArray(attribute.Location);
 
-            const uintptr_t byteOffset = static_cast<uintptr_t>(BoundVertexBufferOffsets[attribute.Binding]) +
+            const uintptr_t byteOffset = static_cast<uintptr_t>(m_BoundVertexBufferOffsets[attribute.Binding]) +
                 static_cast<uintptr_t>(attribute.Offset);
 
-            if (formatInfo.IntegerAttribute)
+            if (formatInfo.bIntegerAttribute)
             {
                 glVertexAttribIPointer(
                     attribute.Location,
@@ -154,7 +154,7 @@ namespace RHIOpenGL
             glVertexAttribDivisor(attribute.Location, divisor);
         }
 
-        bVertexLayoutDirty = false;
+        m_bVertexLayoutDirty = false;
     }
 
     void OpenGLGraphicContext::ApplyPrimitiveTopologyState(const RHI::RHIGraphicsPipelineStateDesc& desc)
@@ -162,19 +162,19 @@ namespace RHIOpenGL
         switch (desc.PrimitiveTopology)
         {
         case RHI::EPrimitiveTopology::PointList:
-            CurrentPrimitiveTopology = GL_POINTS;
+            m_CurrentPrimitiveTopology = GL_POINTS;
             break;
         case RHI::EPrimitiveTopology::LineList:
-            CurrentPrimitiveTopology = GL_LINES;
+            m_CurrentPrimitiveTopology = GL_LINES;
             break;
         case RHI::EPrimitiveTopology::LineStrip:
-            CurrentPrimitiveTopology = GL_LINE_STRIP;
+            m_CurrentPrimitiveTopology = GL_LINE_STRIP;
             break;
         case RHI::EPrimitiveTopology::TriangleStrip:
-            CurrentPrimitiveTopology = GL_TRIANGLE_STRIP;
+            m_CurrentPrimitiveTopology = GL_TRIANGLE_STRIP;
             break;
         default:
-            CurrentPrimitiveTopology = GL_TRIANGLES;
+            m_CurrentPrimitiveTopology = GL_TRIANGLES;
             break;
         }
     }
@@ -290,7 +290,7 @@ namespace RHIOpenGL
         // 2) 对每个 binding 让 ring buffer cache 准备一段
         for (const auto& kv : cbufferSizes)
         {
-            UBOCache.EnsureRange(kv.first, kv.second);
+            _uboCache.EnsureRange(kv.first, kv.second);
         }
 
         // 3) 按 BaseIndex 写入各 member
@@ -301,7 +301,7 @@ namespace RHIOpenGL
             {
                 continue;
             }
-            UBOCache.WriteSlice(uniformParam.BufferIndex,
+            _uboCache.WriteSlice(uniformParam.BufferIndex,
                 uniformParam.BaseIndex,
                 parameter.Data.data() + uniformParam.Offset,
                 uniformParam.Size);
@@ -310,7 +310,7 @@ namespace RHIOpenGL
         // 4) 把段绑到 GL（ring buffer 优势：单 GL buffer 跨多个 binding range 表达）
         for (const auto& kv : cbufferSizes)
         {
-            UBOCache.Bind(kv.first);
+            _uboCache.Bind(kv.first);
         }
     }
 
@@ -394,14 +394,14 @@ namespace RHIOpenGL
     }
 
     OpenGLCommandContext::OpenGLCommandContext(OpenGLQueue* inQueue)
-        : Queue(inQueue)
+        : _queue(inQueue)
     {
     }
 
     void OpenGLCommandContext::Begin()
     {
-        NativeCommands.clear();
-        UBOCache.Reset();
+        _nativeCommands.clear();
+        _uboCache.Reset();
     }
 
     void OpenGLCommandContext::End()
@@ -421,7 +421,7 @@ namespace RHIOpenGL
 
     void OpenGLCommandContext::CopyTexture(RHI::RHITexture* src, RHI::RHITexture* dst, const RHI::RHICopyTextureDesc& copyDesc)
     {
-        NativeCommands.emplace_back([src, dst, copyDesc]()
+        _nativeCommands.emplace_back([src, dst, copyDesc]()
         {
             auto* glSrc = dynamic_cast<OpenGLTexture*>(src);
             auto* glDst = dynamic_cast<OpenGLTexture*>(dst);
@@ -455,7 +455,7 @@ namespace RHIOpenGL
 
     void OpenGLCommandContext::BlitTexture(RHI::RHITexture* src, RHI::RHITexture* dst, const RHI::RHIBlitTextureDesc& blitDesc)
     {
-        NativeCommands.emplace_back([src, dst, blitDesc]()
+        _nativeCommands.emplace_back([src, dst, blitDesc]()
         {
             auto* glSrc = dynamic_cast<OpenGLTexture*>(src);
             auto* glDst = dynamic_cast<OpenGLTexture*>(dst);
@@ -501,9 +501,9 @@ namespace RHIOpenGL
 
     void OpenGLComputeContext::SetComputePipelineState(RHI::RHIComputePipelineState* pipelineState)
     {
-        NativeCommands.emplace_back([this, pipelineState]()
+        _nativeCommands.emplace_back([this, pipelineState]()
         {
-            UBOCache.Reset();
+            _uboCache.Reset();
 
             auto* glPipeline = dynamic_cast<OpenGLComputePipelineState*>(pipelineState);
             if (!glPipeline)
@@ -511,7 +511,7 @@ namespace RHIOpenGL
                 return;
             }
 
-            CurrentPipelineState = pipelineState;
+            m_CurrentPipelineState = pipelineState;
             glUseProgram(glPipeline->GetProgramHandle());
 
             // 收集 CS 的 UBO 声明大小，作为后续 EnsureRange 的下界；只记 hint
@@ -520,7 +520,7 @@ namespace RHIOpenGL
             {
                 for (const auto& kv : csBase->GetShaderResourceLayout().UniformBufferSizes)
                 {
-                    UBOCache.HintUniformBufferSize(kv.first, kv.second);
+                    _uboCache.HintUniformBufferSize(kv.first, kv.second);
                 }
             }
         });
@@ -528,7 +528,7 @@ namespace RHIOpenGL
 
     void OpenGLComputeContext::SetBatchedShaderParameters(RHI::RHIComputeShader* shader, const RHI::RHIBatchedShaderParameters& parameter)
     {
-        NativeCommands.emplace_back([this, shader, parameter]()
+        _nativeCommands.emplace_back([this, shader, parameter]()
         {
             RHI::RHIBatchedShaderParameters parameterCopy = parameter;
             (void)shader; // shader 类型当前未被绑定逻辑使用
@@ -538,14 +538,14 @@ namespace RHIOpenGL
 
     void OpenGLComputeContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
     {
-        NativeCommands.emplace_back([groupCountX, groupCountY, groupCountZ]()
+        _nativeCommands.emplace_back([groupCountX, groupCountY, groupCountZ]()
         {
             glDispatchCompute(groupCountX, groupCountY, groupCountZ);
         });
     }
 
     OpenGLGraphicContext::OpenGLGraphicContext(OpenGLQueue* inQueue)
-        : OpenGLCommandContext(inQueue),CurrentFramebuffer(new OpenGLFramebuffer())
+        : OpenGLCommandContext(inQueue),m_CurrentFramebuffer(new OpenGLFramebuffer())
     {
         
     }
@@ -554,7 +554,7 @@ namespace RHIOpenGL
     }
     void OpenGLGraphicContext::SetBatchedShaderParameters(RHI::RHIGraphicShader* shader, const RHI::RHIBatchedShaderParameters& parameter)
     {
-        NativeCommands.emplace_back([this, shader, parameter]()
+        _nativeCommands.emplace_back([this, shader, parameter]()
         {
             (void)shader; // shader 类型当前未被绑定逻辑使用
             ApplyShaderParameters(parameter);
@@ -563,24 +563,24 @@ namespace RHIOpenGL
 
     void OpenGLGraphicContext::SetStreamSource(uint32_t streamIndex, RHI::RHIBuffer* vertexBuffer, uint32_t offset)
     {
-        NativeCommands.emplace_back([this, streamIndex, vertexBuffer, offset]()
+        _nativeCommands.emplace_back([this, streamIndex, vertexBuffer, offset]()
         {
             if (streamIndex >= 8)
             {
                 return;
             }
 
-            BoundVertexBuffers[streamIndex] = vertexBuffer;
-            BoundVertexBufferOffsets[streamIndex] = offset;
-            bVertexLayoutDirty = true;
+            m_BoundVertexBuffers[streamIndex] = vertexBuffer;
+            m_BoundVertexBufferOffsets[streamIndex] = offset;
+            m_bVertexLayoutDirty = true;
         });
     }
 
     void OpenGLGraphicContext::SetGraphicPipelineState(RHI::RHIGraphicsPipelineState* pipelineState)
     {
-        NativeCommands.emplace_back([this, pipelineState]()
+        _nativeCommands.emplace_back([this, pipelineState]()
         {
-            UBOCache.Reset();
+            _uboCache.Reset();
 
             auto* glPipeline = dynamic_cast<OpenGLGraphicsPipelineState*>(pipelineState);
             if (!glPipeline)
@@ -588,13 +588,13 @@ namespace RHIOpenGL
                 return;
             }
 
-            CurrentPipelineState = pipelineState;
-            if (CurrentVertexArray == 0)
+            m_CurrentPipelineState = pipelineState;
+            if (m_CurrentVertexArray == 0)
             {
-                glGenVertexArrays(1, &CurrentVertexArray);
+                glGenVertexArrays(1, &m_CurrentVertexArray);
             }
 
-            glBindVertexArray(CurrentVertexArray);
+            glBindVertexArray(m_CurrentVertexArray);
             glUseProgram(glPipeline->GetProgramHandle());
 
             const auto& desc = pipelineState->GetDesc();
@@ -612,14 +612,14 @@ namespace RHIOpenGL
             {
                 for (const auto& kv : vsBase->GetShaderResourceLayout().UniformBufferSizes)
                 {
-                    UBOCache.HintUniformBufferSize(kv.first, kv.second);
+                    _uboCache.HintUniformBufferSize(kv.first, kv.second);
                 }
             }
             if (auto* fsBase = dynamic_cast<OpenGLShaderBase*>(desc.ShaderStages.FragmentShader))
             {
                 for (const auto& kv : fsBase->GetShaderResourceLayout().UniformBufferSizes)
                 {
-                    UBOCache.HintUniformBufferSize(kv.first, kv.second);
+                    _uboCache.HintUniformBufferSize(kv.first, kv.second);
                 }
             }
             
@@ -628,7 +628,7 @@ namespace RHIOpenGL
 
     void OpenGLGraphicContext::SetViewport(float x, float y, float w, float h, float minDepth, float maxDepth)
     {
-        NativeCommands.emplace_back([x, y, w, h, minDepth, maxDepth]()
+        _nativeCommands.emplace_back([x, y, w, h, minDepth, maxDepth]()
         {
             glViewport(static_cast<GLint>(x), static_cast<GLint>(y), static_cast<GLsizei>(w), static_cast<GLsizei>(h));
             glDepthRangef(minDepth, maxDepth);
@@ -637,7 +637,7 @@ namespace RHIOpenGL
 
     void OpenGLGraphicContext::SetScissor(int32_t x, int32_t y, uint32_t w, uint32_t h)
     {
-        NativeCommands.emplace_back([x, y, w, h]()
+        _nativeCommands.emplace_back([x, y, w, h]()
         {
             glScissor(x, y, static_cast<GLsizei>(w), static_cast<GLsizei>(h));
         });
@@ -645,35 +645,35 @@ namespace RHIOpenGL
 
     void OpenGLGraphicContext::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
     {
-        NativeCommands.emplace_back([this, vertexCount, instanceCount, firstVertex, firstInstance]()
+        _nativeCommands.emplace_back([this, vertexCount, instanceCount, firstVertex, firstInstance]()
         {
-            if (CurrentVertexArray != 0)
+            if (m_CurrentVertexArray != 0)
             {
-                glBindVertexArray(CurrentVertexArray);
+                glBindVertexArray(m_CurrentVertexArray);
             }
 
-            if (bVertexLayoutDirty && CurrentPipelineState)
+            if (m_bVertexLayoutDirty && m_CurrentPipelineState)
             {
-                ApplyVertexDescState(CurrentPipelineState->GetDesc());
+                ApplyVertexDescState(m_CurrentPipelineState->GetDesc());
             }
 
-            glDrawArrays(CurrentPrimitiveTopology, static_cast<GLint>(firstVertex), static_cast<GLsizei>(vertexCount * instanceCount));
+            glDrawArrays(m_CurrentPrimitiveTopology, static_cast<GLint>(firstVertex), static_cast<GLsizei>(vertexCount * instanceCount));
             (void)firstInstance;
         });
     }
 
     void OpenGLGraphicContext::DrawIndexed(RHI::RHIBuffer* indexBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance)
     {
-        NativeCommands.emplace_back([this, indexBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance]()
+        _nativeCommands.emplace_back([this, indexBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance]()
         {
-            if (CurrentVertexArray != 0)
+            if (m_CurrentVertexArray != 0)
             {
-                glBindVertexArray(CurrentVertexArray);
+                glBindVertexArray(m_CurrentVertexArray);
             }
 
-            if (bVertexLayoutDirty && CurrentPipelineState)
+            if (m_bVertexLayoutDirty && m_CurrentPipelineState)
             {
-                ApplyVertexDescState(CurrentPipelineState->GetDesc());
+                ApplyVertexDescState(m_CurrentPipelineState->GetDesc());
             }
 
             auto* glIndexBuffer = dynamic_cast<OpenGLBuffer*>(indexBuffer);
@@ -684,7 +684,7 @@ namespace RHIOpenGL
 
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, glIndexBuffer->GetHandle());
             const GLenum indexType = glIndexBuffer->GetDesc().Stride == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-            glDrawElements(CurrentPrimitiveTopology, static_cast<GLsizei>(indexCount * instanceCount), indexType, reinterpret_cast<void*>(static_cast<uintptr_t>(firstIndex * static_cast<uint32_t>(glIndexBuffer->GetDesc().Stride))));
+            glDrawElements(m_CurrentPrimitiveTopology, static_cast<GLsizei>(indexCount * instanceCount), indexType, reinterpret_cast<void*>(static_cast<uintptr_t>(firstIndex * static_cast<uint32_t>(glIndexBuffer->GetDesc().Stride))));
             (void)vertexOffset;
             (void)firstInstance;
         });
@@ -692,11 +692,11 @@ namespace RHIOpenGL
 
     void OpenGLGraphicContext::BeginRenderPass(const RHI::RHIRenderPassInfo& renderPassInfo)
     {
-        NativeCommands.emplace_back([this, renderPassInfo]()
+        _nativeCommands.emplace_back([this, renderPassInfo]()
         {
-            CurrentFramebuffer->Create();
-            CurrentFramebuffer->Reset();
-            CurrentFramebuffer->Bind();
+            m_CurrentFramebuffer->Create();
+            m_CurrentFramebuffer->Reset();
+            m_CurrentFramebuffer->Bind();
 
             const auto& targets = renderPassInfo.RenderTargets;
             GLenum drawBuffers[8] = {};
@@ -716,7 +716,7 @@ namespace RHIOpenGL
                     continue;
                 }
 
-                CurrentFramebuffer->AttachColorTexture(glColorTexture->GetHandle(), i, GL_TEXTURE_2D);
+                m_CurrentFramebuffer->AttachColorTexture(glColorTexture->GetHandle(), i, GL_TEXTURE_2D);
                 drawBuffers[colorCount++] = GL_COLOR_ATTACHMENT0 + i;
             }
 
@@ -730,7 +730,7 @@ namespace RHIOpenGL
                 auto* glDepthTexture = dynamic_cast<OpenGLTexture*>(targets.DepthStencil.Texture);
                 if (glDepthTexture)
                 {
-                    CurrentFramebuffer->AttachDepthTexture(glDepthTexture->GetHandle(), GL_TEXTURE_2D);
+                    m_CurrentFramebuffer->AttachDepthTexture(glDepthTexture->GetHandle(), GL_TEXTURE_2D);
                 }
             }
 
@@ -740,7 +740,7 @@ namespace RHIOpenGL
                     renderPassInfo.RenderArea.Width, renderPassInfo.RenderArea.Height);
             }
 
-            const GLenum framebufferStatus = CurrentFramebuffer->CheckStatus();
+            const GLenum framebufferStatus = m_CurrentFramebuffer->CheckStatus();
             if (framebufferStatus != GL_FRAMEBUFFER_COMPLETE)
             {
                 std::fprintf(stderr, "[OpenGLRHI] Framebuffer incomplete: 0x%x\n", framebufferStatus);
@@ -800,12 +800,12 @@ namespace RHIOpenGL
 
     void OpenGLGraphicContext::EndRenderPass()
     {
-        NativeCommands.emplace_back([this]()
+        _nativeCommands.emplace_back([this]()
         {
-            CurrentFramebuffer->Unbind();
+            m_CurrentFramebuffer->Unbind();
             glDisable(GL_SCISSOR_TEST);
 
-            if (CurrentVertexArray != 0)
+            if (m_CurrentVertexArray != 0)
             {
                 glBindVertexArray(0);
             }

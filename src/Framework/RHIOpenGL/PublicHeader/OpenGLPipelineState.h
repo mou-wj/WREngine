@@ -11,11 +11,11 @@ namespace RHIOpenGL
         explicit OpenGLGraphicsPipelineState(const RHI::RHIGraphicsPipelineStateDesc& desc);
         ~OpenGLGraphicsPipelineState() override;
 
-        uint32_t GetProgramHandle() const { return ProgramHandle; }
-        void SetProgramHandle(uint32_t handle) { ProgramHandle = handle; }
+        uint32_t GetProgramHandle() const { return m_ProgramHandle; }
+        void SetProgramHandle(uint32_t handle) { m_ProgramHandle = handle; }
 
     private:
-        uint32_t ProgramHandle = 0;
+        uint32_t m_ProgramHandle = 0;
     };
     using OpenGLGraphicsPipelineStateSP = std::shared_ptr<OpenGLGraphicsPipelineState>;
 
@@ -25,11 +25,11 @@ namespace RHIOpenGL
         explicit OpenGLComputePipelineState(const RHI::RHIComputePipelineStateDesc& desc);
         ~OpenGLComputePipelineState() override;
 
-        uint32_t GetProgramHandle() const { return ProgramHandle; }
-        void SetProgramHandle(uint32_t handle) { ProgramHandle = handle; }
+        uint32_t GetProgramHandle() const { return m_ProgramHandle; }
+        void SetProgramHandle(uint32_t handle) { m_ProgramHandle = handle; }
 
     private:
-        uint32_t ProgramHandle = 0;
+        uint32_t m_ProgramHandle = 0;
     };
     using OpenGLComputePipelineStateSP = std::shared_ptr<OpenGLComputePipelineState>;
 }

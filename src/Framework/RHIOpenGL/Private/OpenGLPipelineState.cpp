@@ -32,10 +32,10 @@ namespace RHIOpenGL
 
     OpenGLGraphicsPipelineState::~OpenGLGraphicsPipelineState()
     {
-        if (ProgramHandle != 0)
+        if (m_ProgramHandle != 0)
         {
-            const GLuint handle = ProgramHandle;
-            ProgramHandle = 0;
+            const GLuint handle = m_ProgramHandle;
+            m_ProgramHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteProgram(handle);
@@ -50,14 +50,14 @@ namespace RHIOpenGL
         // ProgramHandle 已就绪，后续 GetProgramHandle() 可用。
         EnqueueTaskAndWait([this, &desc]()
         {
-            ProgramHandle = glCreateProgram();
+            m_ProgramHandle = glCreateProgram();
 
             if (desc.ShaderStages.VertexShader)
             {
                 auto* vertexShader = dynamic_cast<OpenGLVertexShader*>(desc.ShaderStages.VertexShader);
                 if (vertexShader && vertexShader->GetHandle() != 0)
                 {
-                    glAttachShader(ProgramHandle, vertexShader->GetHandle());
+                    glAttachShader(m_ProgramHandle, vertexShader->GetHandle());
                 }
             }
 
@@ -66,20 +66,20 @@ namespace RHIOpenGL
                 auto* fragmentShader = dynamic_cast<OpenGLFragmentShader*>(desc.ShaderStages.FragmentShader);
                 if (fragmentShader && fragmentShader->GetHandle() != 0)
                 {
-                    glAttachShader(ProgramHandle, fragmentShader->GetHandle());
+                    glAttachShader(m_ProgramHandle, fragmentShader->GetHandle());
                 }
             }
 
-            LinkOpenGLProgram(ProgramHandle);
+            LinkOpenGLProgram(m_ProgramHandle);
         });
     }
 
     OpenGLComputePipelineState::~OpenGLComputePipelineState()
     {
-        if (ProgramHandle != 0)
+        if (m_ProgramHandle != 0)
         {
-            const GLuint handle = ProgramHandle;
-            ProgramHandle = 0;
+            const GLuint handle = m_ProgramHandle;
+            m_ProgramHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteProgram(handle);
@@ -93,18 +93,18 @@ namespace RHIOpenGL
         // 同 Graphics：转发到渲染线程并等待完成。
         EnqueueTaskAndWait([this, &desc]()
         {
-            ProgramHandle = glCreateProgram();
+            m_ProgramHandle = glCreateProgram();
 
             if (desc.ComputeShader)
             {
                 auto* computeShader = dynamic_cast<OpenGLComputeShader*>(desc.ComputeShader);
                 if (computeShader && computeShader->GetHandle() != 0)
                 {
-                    glAttachShader(ProgramHandle, computeShader->GetHandle());
+                    glAttachShader(m_ProgramHandle, computeShader->GetHandle());
                 }
             }
 
-            LinkOpenGLProgram(ProgramHandle);
+            LinkOpenGLProgram(m_ProgramHandle);
         });
     }
 }

@@ -8,7 +8,7 @@
 namespace RHIOpenGL
 {
     OpenGLSyncPoint::OpenGLSyncPoint(bool isSwapchainFence, RHI::EQueueType queueType)
-        : bIsSwapchainFence(isSwapchainFence)
+        : m_bIsSwapchainFence(isSwapchainFence)
     {
         _type = queueType;
     }
@@ -16,58 +16,58 @@ namespace RHIOpenGL
     OpenGLSyncPoint::~OpenGLSyncPoint() = default;
 
     uint64_t OpenGLSyncPoint::GetCurrentValue() {
-        return CurrentValue.load(std::memory_order_acquire);
+        return m_CurrentValue.load(std::memory_order_acquire);
     }
 
-    void OpenGLSyncPoint::SetCurrentValue(uint64_t Value)
+    void OpenGLSyncPoint::SetCurrentValue(uint64_t value)
     {
         // 只前进不后退：worker 按 FIFO 完成时天然单调，这里再兜一层 max，
         // 防止 swapchain fence 等特殊路径被误回拨。
-        uint64_t current = CurrentValue.load(std::memory_order_relaxed);
-        if (Value <= current)
+        uint64_t current = m_CurrentValue.load(std::memory_order_relaxed);
+        if (value <= current)
         {
             return;
         }
 
         {
-            std::lock_guard<std::mutex> lock(ValueMutex);
-            current = CurrentValue.load(std::memory_order_relaxed);
-            if (Value > current)
+            std::lock_guard<std::mutex> lock(m_ValueMutex);
+            current = m_CurrentValue.load(std::memory_order_relaxed);
+            if (value > current)
             {
-                CurrentValue.store(Value, std::memory_order_release);
+                m_CurrentValue.store(value, std::memory_order_release);
             }
         }
-        ValueCond.notify_all();
+        m_ValueCond.notify_all();
     }
 
-    void OpenGLSyncPoint::Wait(uint64_t Value, uint64_t TimeoutNS)
+    void OpenGLSyncPoint::Wait(uint64_t value, uint64_t timeoutNs)
     {
         // 已达成直接返回，不加锁（原子读）。
-        if (Value <= CurrentValue.load(std::memory_order_acquire))
+        if (value <= m_CurrentValue.load(std::memory_order_acquire))
         {
             return;
         }
 
-        std::unique_lock<std::mutex> lock(ValueMutex);
-        if (TimeoutNS == UINT64_MAX)
+        std::unique_lock<std::mutex> lock(m_ValueMutex);
+        if (timeoutNs == UINT64_MAX)
         {
-            ValueCond.wait(lock, [&]() { return Value <= CurrentValue.load(std::memory_order_acquire); });
+            m_ValueCond.wait(lock, [&]() { return value <= m_CurrentValue.load(std::memory_order_acquire); });
             return;
         }
 
         // 限时等待：以稳定时钟换算截止时间（旧实现的"循环次数比纳秒"是伪超时）。
         const auto deadline = std::chrono::steady_clock::now()
-            + std::chrono::nanoseconds(static_cast<std::chrono::nanoseconds::rep>(TimeoutNS));
-        ValueCond.wait_until(lock, deadline,
-            [&]() { return Value <= CurrentValue.load(std::memory_order_acquire); });
+            + std::chrono::nanoseconds(static_cast<std::chrono::nanoseconds::rep>(timeoutNs));
+        m_ValueCond.wait_until(lock, deadline,
+            [&]() { return value <= m_CurrentValue.load(std::memory_order_acquire); });
     }
 
 
     OpenGLSwapchain::OpenGLSwapchain(void* inWindowHandle, uint32_t width, uint32_t height, RHI::ERHIFormat format)
-        : WindowHandle(inWindowHandle)
-        , Width(width)
-        , Height(height)
-        , Format(format)
+        : m_WindowHandle(inWindowHandle)
+        , m_Width(width)
+        , m_Height(height)
+        , m_Format(format)
     {
         RHI::RHITextureDesc desc{};
         desc.Width = width;
@@ -78,50 +78,50 @@ namespace RHIOpenGL
         desc.Format = format;
         desc.Type = RHI::ERHITextureType::Texture2D;
         desc.Usage = RHI::ERHITextureCreateFlag::RenderTarget | RHI::ERHITextureCreateFlag::Presentable;
-        BackBufferTextures.resize(3);
-        BackBufferFences.resize(3);
+        m_BackBufferTextures.resize(3);
+        m_BackBufferFences.resize(3);
         for (int i = 0; i < 3; i++)
         {
-            BackBufferTextures[i] = std::make_shared<OpenGLTexture>(desc);
-			BackBufferFences[i] = new OpenGLSyncPoint(true);
+            m_BackBufferTextures[i] = std::make_shared<OpenGLTexture>(desc);
+			m_BackBufferFences[i] = new OpenGLSyncPoint(true);
         }
-		PlatformContext = CreateOpenGLPlatformContext(WindowHandle,desc.Format);
+		m_PlatformContext = CreateOpenGLPlatformContext(m_WindowHandle,desc.Format);
         EnqueueTaskAndWait([this]()
             {
-                PlatformContext->Initialize();
+                m_PlatformContext->Initialize();
             });
         
-        Framebuffer = new OpenGLFramebuffer();
-        Framebuffer->Create();
+        m_Framebuffer = new OpenGLFramebuffer();
+        m_Framebuffer->Create();
     }
 
     OpenGLSwapchain::~OpenGLSwapchain()
     {
-        BackBufferTextures.clear();
-		if (PlatformContext)
+        m_BackBufferTextures.clear();
+		if (m_PlatformContext)
 		{
-			delete PlatformContext;
-			PlatformContext = nullptr;
+			delete m_PlatformContext;
+			m_PlatformContext = nullptr;
 		}
-        if (Framebuffer) {
-            delete Framebuffer;
+        if (m_Framebuffer) {
+            delete m_Framebuffer;
         }
     }
 
     RHI::RHISwapchain::RHISwapchainSlot OpenGLSwapchain::AcquireNextSlot()
     {
         RHISwapchainSlot slot{};
-		slot.ReadySync = BackBufferFences[CurrentBackBufferIndex];
-        slot.Texture = BackBufferTextures[CurrentBackBufferIndex].get();
+		slot.ReadySync = m_BackBufferFences[m_CurrentBackBufferIndex];
+        slot.Texture = m_BackBufferTextures[m_CurrentBackBufferIndex].get();
         return slot;
     }
 
     void OpenGLSwapchain::Resize(uint32_t width, uint32_t height)
     {
-        Width = width;
-        Height = height;
+        m_Width = width;
+        m_Height = height;
 
-        for (auto& texture : BackBufferTextures) {
+        for (auto& texture : m_BackBufferTextures) {
             RHI::RHITextureDesc desc = texture->GetDesc();
             desc.Width = width;
             desc.Height = height;
@@ -131,72 +131,72 @@ namespace RHIOpenGL
     }
     void OpenGLSwapchain::Present() {
         
-        if (CurrentBackBufferIndex > BackBufferTextures.size()) {
+        if (m_CurrentBackBufferIndex > m_BackBufferTextures.size()) {
             return;
         }
-        auto& texture = BackBufferTextures[CurrentBackBufferIndex];
+        auto& texture = m_BackBufferTextures[m_CurrentBackBufferIndex];
 
-		bool makeCurrent = PlatformContext->MakeCurrent();
+		bool makeCurrent = m_PlatformContext->MakeCurrent();
         
-		Framebuffer->Bind();
+		m_Framebuffer->Bind();
 
-        Framebuffer->AttachColorTexture(texture->GetHandle(),0, GL_TEXTURE_2D);
+        m_Framebuffer->AttachColorTexture(texture->GetHandle(),0, GL_TEXTURE_2D);
 
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         glClearColor(0.2f, 0.3f, 0.4f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-		glBlitFramebuffer(0, 0, Width, Height, 0, 0, Width, Height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-		PlatformContext->SwapBuffers();
+		glBlitFramebuffer(0, 0, m_Width, m_Height, 0, 0, m_Width, m_Height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		m_PlatformContext->SwapBuffers();
         
-		CurrentBackBufferIndex = (CurrentBackBufferIndex + 1) % BackBufferTextures.size();
-		PlatformContext->DoneCurrent();
+		m_CurrentBackBufferIndex = (m_CurrentBackBufferIndex + 1) % m_BackBufferTextures.size();
+		m_PlatformContext->DoneCurrent();
         
     }
     OpenGLQueue::OpenGLQueue(RHI::EQueueType type)
-        : QueueType(type)
+        : m_QueueType(type)
     {
-        SyncPoint = new OpenGLSyncPoint(false, type);
+        m_SyncPoint = new OpenGLSyncPoint(false, type);
     }
 
     OpenGLQueue::~OpenGLQueue()
     {
-        std::lock_guard<std::mutex> lock(ContextPoolMutex);
-        for (auto* context : PendingContexts)
+        std::lock_guard<std::mutex> lock(m_ContextPoolMutex);
+        for (auto* context : m_PendingContexts)
         {
             delete context;
         }
-        for (auto* context : FreeContexts)
+        for (auto* context : m_FreeContexts)
         {
             delete context;
         }
-        for (auto* context : InFlightContexts)
+        for (auto* context : m_InFlightContexts)
         {
             delete context;
         }
-        PendingContexts.clear();
-        FreeContexts.clear();
-        InFlightContexts.clear();
+        m_PendingContexts.clear();
+        m_FreeContexts.clear();
+        m_InFlightContexts.clear();
 
-        delete SyncPoint;
-        SyncPoint = nullptr;
+        delete m_SyncPoint;
+        m_SyncPoint = nullptr;
     }
 
     RHI::EQueueType OpenGLQueue::GetType() const
     {
-        return QueueType;
+        return m_QueueType;
     }
 
     RHI::RHIContextBase* OpenGLQueue::AcquireCommandContext()
     {
-        std::lock_guard<std::mutex> lock(ContextPoolMutex);
-        if (!FreeContexts.empty())
+        std::lock_guard<std::mutex> lock(m_ContextPoolMutex);
+        if (!m_FreeContexts.empty())
         {
-            RHI::RHIContextBase* context = FreeContexts.back();
-            FreeContexts.pop_back();
+            RHI::RHIContextBase* context = m_FreeContexts.back();
+            m_FreeContexts.pop_back();
             return context;
         }
 
-        if (QueueType == RHI::EQueueType::Compute)
+        if (m_QueueType == RHI::EQueueType::Compute)
         {
             return new OpenGLComputeContext(this);
         }
@@ -211,27 +211,27 @@ namespace RHIOpenGL
             return nullptr;
         }
 
-        std::lock_guard<std::mutex> lock(ContextPoolMutex);
+        std::lock_guard<std::mutex> lock(m_ContextPoolMutex);
 
         // 在飞守卫：worker 还没执行完该 ctx 时，所有权在 worker 手里。
         // 主线程提前 Release（Execute→WaitIdle→Release 模式里的时序误差）
         // 直接返回即可——worker 会在 FinishContextExecution 里归还，
         // 不会重复入池，也不会在执行期间被 Acquire 拿回去重录。
-        if (InFlightContexts.find(context) != InFlightContexts.end())
+        if (m_InFlightContexts.find(context) != m_InFlightContexts.end())
         {
             return nullptr;
         }
 
-        auto pendingIt = std::find(PendingContexts.begin(), PendingContexts.end(), context);
-        if (pendingIt != PendingContexts.end())
+        auto pendingIt = std::find(m_PendingContexts.begin(), m_PendingContexts.end(), context);
+        if (pendingIt != m_PendingContexts.end())
         {
-            PendingContexts.erase(pendingIt);
+            m_PendingContexts.erase(pendingIt);
         }
 
-        auto freeIt = std::find(FreeContexts.begin(), FreeContexts.end(), context);
-        if (freeIt == FreeContexts.end())
+        auto freeIt = std::find(m_FreeContexts.begin(), m_FreeContexts.end(), context);
+        if (freeIt == m_FreeContexts.end())
         {
-            FreeContexts.push_back(context);
+            m_FreeContexts.push_back(context);
         }
 
         return nullptr;
@@ -250,9 +250,9 @@ namespace RHIOpenGL
         }
 
         {
-            std::lock_guard<std::mutex> lock(ContextPoolMutex);
-            PendingContexts.insert(PendingContexts.end(), cmds.begin(), cmds.end());
-            InFlightContexts.insert(cmds.begin(), cmds.end());
+            std::lock_guard<std::mutex> lock(m_ContextPoolMutex);
+            m_PendingContexts.insert(m_PendingContexts.end(), cmds.begin(), cmds.end());
+            m_InFlightContexts.insert(cmds.begin(), cmds.end());
         }
 
         QueueExecuteEntry entry;
@@ -261,8 +261,8 @@ namespace RHIOpenGL
         entry.FenceValue = AllocateNextFence();
 
         {
-            std::lock_guard<std::mutex> lock(ExecuteQueueMutex);
-            ExecuteQueueIns.push(entry);
+            std::lock_guard<std::mutex> lock(m_ExecuteQueueMutex);
+            m_ExecuteQueueIns.push(entry);
         }
 
         return entry.FenceValue;
@@ -270,42 +270,42 @@ namespace RHIOpenGL
 
     void OpenGLQueue::WaitValue(uint64_t fenceValue)
     {
-        if (SyncPoint)
+        if (m_SyncPoint)
         {
-            SyncPoint->Wait(fenceValue);
+            m_SyncPoint->Wait(fenceValue);
         }
     }
 
     void OpenGLQueue::WaitIdle()
     {
-        if (!SyncPoint)
+        if (!m_SyncPoint)
         {
             return;
         }
 
         // FIFO + 单调唯一 fence：等待最新已分配的 fence，即代表
         // 所有已提交 entry（含 Present）都已在 worker 上执行完毕。
-        SyncPoint->Wait(LastSubmittedFence.load(std::memory_order_acquire));
+        m_SyncPoint->Wait(m_LastSubmittedFence.load(std::memory_order_acquire));
     }
 
     uint64_t OpenGLQueue::AllocateNextFence()
     {
-        return LastSubmittedFence.fetch_add(1, std::memory_order_acq_rel) + 1;
+        return m_LastSubmittedFence.fetch_add(1, std::memory_order_acq_rel) + 1;
     }
 
     uint64_t OpenGLQueue::GetCurrentTimelineValue()
     {
-        return SyncPoint ? SyncPoint->GetCurrentValue() : 0;
+        return m_SyncPoint ? m_SyncPoint->GetCurrentValue() : 0;
     }
 
     RHI::RHISyncPoint* OpenGLQueue::GetSyncPoint()
     {
-        return SyncPoint;
+        return m_SyncPoint;
     }
 
     ExecuteQueue& OpenGLQueue::GetExecuteQueue()
     {
-        return ExecuteQueueIns;
+        return m_ExecuteQueueIns;
     }
 
     void OpenGLQueue::FinishContextExecution(RHI::RHIContextBase* context)
@@ -315,31 +315,31 @@ namespace RHIOpenGL
             return;
         }
 
-        std::lock_guard<std::mutex> lock(ContextPoolMutex);
-        InFlightContexts.erase(context);
+        std::lock_guard<std::mutex> lock(m_ContextPoolMutex);
+        m_InFlightContexts.erase(context);
 
-        auto pendingIt = std::find(PendingContexts.begin(), PendingContexts.end(), context);
-        if (pendingIt != PendingContexts.end())
+        auto pendingIt = std::find(m_PendingContexts.begin(), m_PendingContexts.end(), context);
+        if (pendingIt != m_PendingContexts.end())
         {
-            PendingContexts.erase(pendingIt);
+            m_PendingContexts.erase(pendingIt);
         }
 
-        auto freeIt = std::find(FreeContexts.begin(), FreeContexts.end(), context);
-        if (freeIt == FreeContexts.end())
+        auto freeIt = std::find(m_FreeContexts.begin(), m_FreeContexts.end(), context);
+        if (freeIt == m_FreeContexts.end())
         {
-            FreeContexts.push_back(context);
+            m_FreeContexts.push_back(context);
         }
     }
 
     std::mutex& OpenGLQueue::GetExecuteQueueMutex()
     {
-        return ExecuteQueueMutex;
+        return m_ExecuteQueueMutex;
     }
 
     bool OpenGLQueue::HasPendingExecute() const
     {
-        std::lock_guard<std::mutex> lock(ExecuteQueueMutex);
-        return !ExecuteQueueIns.empty();
+        std::lock_guard<std::mutex> lock(m_ExecuteQueueMutex);
+        return !m_ExecuteQueueIns.empty();
     }
 
     void OpenGLQueueManager::Present(RHI::RHISwapchain* swapchain, const RHI::RHIWaitInfo& waitInfo)
@@ -388,41 +388,41 @@ namespace RHIOpenGL
 
     void OpenGLQueueManager::StartWorker()
     {
-        if (WorkerThread.joinable())
+        if (m_WorkerThread.joinable())
         {
             return;
         }
 
-        bStopWorker = false;
-        WorkerThread = std::thread(&OpenGLQueueManager::WorkerLoop, this);
-        WorkerThreadId = WorkerThread.get_id();
+        m_bStopWorker = false;
+        m_WorkerThread = std::thread(&OpenGLQueueManager::WorkerLoop, this);
+        m_WorkerThreadId = m_WorkerThread.get_id();
     }
 
     void OpenGLQueueManager::StopWorker()
     {
-        bStopWorker = true;
-        WorkerCond.notify_all();
-        if (WorkerThread.joinable())
+        m_bStopWorker = true;
+        m_WorkerCond.notify_all();
+        if (m_WorkerThread.joinable())
         {
-            WorkerThread.join();
+            m_WorkerThread.join();
         }
-        WorkerThreadId = std::thread::id{};
+        m_WorkerThreadId = std::thread::id{};
     }
 
     bool OpenGLQueueManager::IsWorkerThread() const
     {
-        return WorkerThread.joinable() && std::this_thread::get_id() == WorkerThreadId;
+        return m_WorkerThread.joinable() && std::this_thread::get_id() == m_WorkerThreadId;
     }
 
     void OpenGLQueueManager::Init() {
         // worker 接管默认（bootstrap）上下文，作为其常驻 current context
-        bInit = InitializeWorkerPlatformContext();
+        m_bInit = InitializeWorkerPlatformContext();
     }
     void OpenGLQueueManager::WorkerLoop()
     {
-        while (!bStopWorker)
+        while (!m_bStopWorker)
         {
-            if (!bInit) {
+            if (!m_bInit) {
                 Init();
             }
 
@@ -430,16 +430,16 @@ namespace RHIOpenGL
             CheckError();
             // 先排空通用任务队列（主线程投递的 GL 任务），再执行命令队列
             executed |= DrainTasks();
-            executed |= TryExecuteQueue(GraphicsQueue);
-            executed |= TryExecuteQueue(ComputeQueue);
+            executed |= TryExecuteQueue(m_GraphicsQueue);
+            executed |= TryExecuteQueue(m_ComputeQueue);
 
             if (executed)
             {
                 continue;
             }
 
-            std::unique_lock<std::mutex> lock(WorkerMutex);
-            WorkerCond.wait_for(lock, std::chrono::milliseconds(1));
+            std::unique_lock<std::mutex> lock(m_WorkerMutex);
+            m_WorkerCond.wait_for(lock, std::chrono::milliseconds(1));
         }
     }
 
@@ -453,17 +453,17 @@ namespace RHIOpenGL
         // worker 自己提交任务（命令 lambda 内部的转发调用）时直接内联执行，
         // 否则会绕一圈排队、甚至与 EnqueueTaskAndWait 组合成自等死锁；
         // worker 未启动（初始化前/关闭后）也只能就地执行。
-        if (IsWorkerThread() || !WorkerThread.joinable())
+        if (IsWorkerThread() || !m_WorkerThread.joinable())
         {
             task();
             return;
         }
 
         {
-            std::lock_guard<std::mutex> lock(TaskQueueMutex);
-            TaskQueue.push(std::move(task));
+            std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
+            m_TaskQueue.push(std::move(task));
         }
-        WorkerCond.notify_all();
+        m_WorkerCond.notify_all();
     }
 
     void OpenGLQueueManager::EnqueueTaskAndWait(std::function<void()> task)
@@ -474,7 +474,7 @@ namespace RHIOpenGL
         }
 
         // 同上：worker 线程内调用必须内联，否则自己等自己，永久死锁。
-        if (IsWorkerThread() || !WorkerThread.joinable())
+        if (IsWorkerThread() || !m_WorkerThread.joinable())
         {
             task();
             return;
@@ -483,8 +483,8 @@ namespace RHIOpenGL
         auto promise = std::make_shared<std::promise<void>>();
         std::future<void> future = promise->get_future();
         {
-            std::lock_guard<std::mutex> lock(TaskQueueMutex);
-            TaskQueue.push([capturedTask = std::move(task), promise]()
+            std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
+            m_TaskQueue.push([capturedTask = std::move(task), promise]()
             {
                 try
                 {
@@ -498,14 +498,14 @@ namespace RHIOpenGL
                 }
             });
         }
-        WorkerCond.notify_all();
+        m_WorkerCond.notify_all();
         future.wait();
     }
 
     bool OpenGLQueueManager::HasPendingTasks() const
     {
-        std::lock_guard<std::mutex> lock(TaskQueueMutex);
-        return !TaskQueue.empty();
+        std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
+        return !m_TaskQueue.empty();
     }
 
     bool OpenGLQueueManager::DrainTasks()
@@ -515,13 +515,13 @@ namespace RHIOpenGL
         {
             std::function<void()> task;
             {
-                std::lock_guard<std::mutex> lock(TaskQueueMutex);
-                if (TaskQueue.empty())
+                std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
+                if (m_TaskQueue.empty())
                 {
                     break;
                 }
-                task = std::move(TaskQueue.front());
-                TaskQueue.pop();
+                task = std::move(m_TaskQueue.front());
+                m_TaskQueue.pop();
             }
 
             if (task)

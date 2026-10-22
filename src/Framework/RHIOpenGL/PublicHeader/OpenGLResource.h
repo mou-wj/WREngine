@@ -16,11 +16,11 @@ namespace RHIOpenGL
         explicit OpenGLTexture(const RHI::RHITextureDesc& desc);
         ~OpenGLTexture() override;
 
-        GLuint GetHandle() const { return TextureHandle; }
-        void SetHandle(GLuint handle) { TextureHandle = handle; }
+        GLuint GetHandle() const { return m_TextureHandle; }
+        void SetHandle(GLuint handle) { m_TextureHandle = handle; }
 
     private:
-        GLuint TextureHandle = 0;
+        GLuint m_TextureHandle = 0;
     };
     using OpenGLTextureSP = std::shared_ptr<OpenGLTexture>;
 
@@ -54,14 +54,14 @@ namespace RHIOpenGL
         OpenGLTextureView(const OpenGLTextureView&) = delete;
         OpenGLTextureView& operator=(const OpenGLTextureView&) = delete;
 
-        GLuint GetHandle() const { return ViewHandle; }
-        OpenGLTexture* GetSource() const { return SourceTexture; }
-        const Desc& GetDesc() const { return ViewInfo; }
+        GLuint GetHandle() const { return m_ViewHandle; }
+        OpenGLTexture* GetSource() const { return m_SourceTexture; }
+        const Desc& GetDesc() const { return m_ViewInfo; }
 
     private:
-        OpenGLTexture* SourceTexture = nullptr;
-        GLuint ViewHandle = 0;
-        Desc ViewInfo{};
+        OpenGLTexture* m_SourceTexture = nullptr;
+        GLuint m_ViewHandle = 0;
+        Desc m_ViewInfo{};
     };
 
     class OpenGLBuffer : public RHI::RHIBuffer
@@ -70,52 +70,52 @@ namespace RHIOpenGL
         explicit OpenGLBuffer(const RHI::RHIBufferDesc& desc);
         ~OpenGLBuffer() override;
 
-        GLuint GetHandle() const { return BufferHandle; }
-        void SetHandle(GLuint handle) { BufferHandle = handle; }
+        GLuint GetHandle() const { return m_BufferHandle; }
+        void SetHandle(GLuint handle) { m_BufferHandle = handle; }
 
     private:
-        GLuint BufferHandle = 0;
+        GLuint m_BufferHandle = 0;
     };
     using OpenGLBufferSP = std::shared_ptr<OpenGLBuffer>;
 
     class OpenGLShaderResourceView : public RHI::RHIShaderResourceView
     {
     public:
-        explicit OpenGLShaderResourceView(RHI::RHIViewableResource* Resource, const RHI::RHITexSRVCreateInfo& Desc);
-        explicit OpenGLShaderResourceView(RHI::RHIViewableResource* Resource, const RHI::RHIBufferSRVCreateInfo& Desc);
+        explicit OpenGLShaderResourceView(RHI::RHIViewableResource* resource, const RHI::RHITexSRVCreateInfo& desc);
+        explicit OpenGLShaderResourceView(RHI::RHIViewableResource* resource, const RHI::RHIBufferSRVCreateInfo& desc);
         ~OpenGLShaderResourceView() override = default;
         bool IsTexture();
         bool IsBuffer();
         // 纹理视图情形下返回 OpenGLTextureView（持有 glTextureView 句柄）；
         // buffer 视图情形下返回 nullptr。绑定阶段取 GL handle 用 GetTextureView()->GetHandle()。
-        OpenGLTextureView* GetTextureView() const { return TextureView.get(); }
-        const RHI::RHITexSRVCreateInfo& GetTexSRVDesc() const { return TexSRVDesc; }
-        const RHI::RHIBufferSRVCreateInfo& GetBufferSRVDesc() const { return BufferSRVDesc; }
+        OpenGLTextureView* GetTextureView() const { return m_TextureView.get(); }
+        const RHI::RHITexSRVCreateInfo& GetTexSRVDesc() const { return m_TexSRVDesc; }
+        const RHI::RHIBufferSRVCreateInfo& GetBufferSRVDesc() const { return m_BufferSRVDesc; }
 
     private:
-        std::unique_ptr<OpenGLTextureView> TextureView;
-        RHI::RHITexSRVCreateInfo TexSRVDesc;
-        RHI::RHIBufferSRVCreateInfo BufferSRVDesc;
-        bool IsTextureView = false;
+        std::unique_ptr<OpenGLTextureView> m_TextureView;
+        RHI::RHITexSRVCreateInfo m_TexSRVDesc;
+        RHI::RHIBufferSRVCreateInfo m_BufferSRVDesc;
+        bool m_bIsTextureView = false;
     };
     using OpenGLShaderResourceViewSP = std::shared_ptr<OpenGLShaderResourceView>;
 
     class OpenGLUnorderedAccessView : public RHI::RHIUnorderedAccessView
     {
     public:
-        explicit OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource, const RHI::RHITexUAVCreateInfo& Desc);
-        explicit OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource, const RHI::RHIBufferUAVCreateInfo& Desc);
+        explicit OpenGLUnorderedAccessView(RHI::RHIViewableResource* resource, const RHI::RHITexUAVCreateInfo& desc);
+        explicit OpenGLUnorderedAccessView(RHI::RHIViewableResource* resource, const RHI::RHIBufferUAVCreateInfo& desc);
         ~OpenGLUnorderedAccessView() override = default;
         bool IsTexture();
         bool IsBuffer();
-        OpenGLTextureView* GetTextureView() const { return TextureView.get(); }
-        const RHI::RHITexUAVCreateInfo& GetTexUAVDesc() const { return TexUAVDesc; }
-        const RHI::RHIBufferUAVCreateInfo& GetBufferUAVDesc() const { return BufferUAVDesc; }
+        OpenGLTextureView* GetTextureView() const { return m_TextureView.get(); }
+        const RHI::RHITexUAVCreateInfo& GetTexUAVDesc() const { return m_TexUAVDesc; }
+        const RHI::RHIBufferUAVCreateInfo& GetBufferUAVDesc() const { return m_BufferUAVDesc; }
     private:
-        std::unique_ptr<OpenGLTextureView> TextureView;
-        RHI::RHITexUAVCreateInfo TexUAVDesc;
-        RHI::RHIBufferUAVCreateInfo BufferUAVDesc;
-        bool IsTextureView = false;
+        std::unique_ptr<OpenGLTextureView> m_TextureView;
+        RHI::RHITexUAVCreateInfo m_TexUAVDesc;
+        RHI::RHIBufferUAVCreateInfo m_BufferUAVDesc;
+        bool m_bIsTextureView = false;
     };
     using OpenGLUnorderedAccessViewSP = std::shared_ptr<OpenGLUnorderedAccessView>;
     using EGLSLShaderResourceType = RenderCore::GLSLCompiledBinaryResultPacker::EGLSLShaderResourceType;
@@ -131,11 +131,11 @@ namespace RHIOpenGL
         // 数据来源：GLSLCompiledBinaryResultPacker::Header::UniformBuffers[i].Size
         // （SPIRV-Cross `get_declared_struct_size`，即 cbuffer 声明大小）。
         std::unordered_map<uint32_t, uint32_t> UniformBufferSizes;
-        bool IsValid(uint32_t binding, EGLSLShaderResourceType Type,uint32_t innerIndex){
+        bool IsValid(uint32_t binding, EGLSLShaderResourceType type,uint32_t innerIndex){
             if(Bindings.find(binding) == Bindings.end()){
                 return false;
             }
-            if(Bindings[binding].Type != Type ||innerIndex>= Bindings[binding].Count){
+            if(Bindings[binding].Type != type ||innerIndex>= Bindings[binding].Count){
                 return false;
             }
             return true;
@@ -150,13 +150,13 @@ namespace RHIOpenGL
 
     class OpenGLShaderBase{
     public:
-        RenderCore::GLSLCompiledBinaryResultPacker::Header GetShaderReflection() const { return Reflection; }
+        RenderCore::GLSLCompiledBinaryResultPacker::Header GetShaderReflection() const { return _reflection; }
         bool CompileOpenGLShader(GLuint shaderHandle, const std::vector<char>& source, const char* shaderName);
-        const OpenGLShaderResourceLayout& GetShaderResourceLayout() const { return ShaderResourceLayout; }
+        const OpenGLShaderResourceLayout& GetShaderResourceLayout() const { return _shaderResourceLayout; }
     protected:
         void FillOpenGLShaderResourceLayout();
-        OpenGLShaderResourceLayout ShaderResourceLayout;
-        RenderCore::GLSLCompiledBinaryResultPacker::Header Reflection;
+        OpenGLShaderResourceLayout _shaderResourceLayout;
+        RenderCore::GLSLCompiledBinaryResultPacker::Header _reflection;
     };
 
     class OpenGLVertexShader : public RHI::RHIVertexShader,public OpenGLShaderBase
@@ -166,12 +166,12 @@ namespace RHIOpenGL
         ~OpenGLVertexShader() override;
 
         bool Compile(const std::vector<char>& source);
-        GLuint GetHandle() const { return ShaderHandle; }
-        void SetHandle(GLuint handle) { ShaderHandle = handle; }
+        GLuint GetHandle() const { return m_ShaderHandle; }
+        void SetHandle(GLuint handle) { m_ShaderHandle = handle; }
 
     private:
-        GLuint ShaderHandle = 0;
-        std::vector<char> SourceCode;
+        GLuint m_ShaderHandle = 0;
+        std::vector<char> m_SourceCode;
     };
     using OpenGLVertexShaderSP = std::shared_ptr<OpenGLVertexShader>;
 
@@ -182,12 +182,12 @@ namespace RHIOpenGL
         ~OpenGLFragmentShader() override;
 
         bool Compile(const std::vector<char>& source);
-        GLuint GetHandle() const { return ShaderHandle; }
-        void SetHandle(GLuint handle) { ShaderHandle = handle; }
+        GLuint GetHandle() const { return m_ShaderHandle; }
+        void SetHandle(GLuint handle) { m_ShaderHandle = handle; }
 
     private:
-        GLuint ShaderHandle = 0;
-        std::vector<char> SourceCode;
+        GLuint m_ShaderHandle = 0;
+        std::vector<char> m_SourceCode;
     };
     using OpenGLFragmentShaderSP = std::shared_ptr<OpenGLFragmentShader>;
 
@@ -198,12 +198,12 @@ namespace RHIOpenGL
         ~OpenGLComputeShader() override;
 
         bool Compile(const std::vector<char>& source);
-        GLuint GetHandle() const { return ShaderHandle; }
-        void SetHandle(GLuint handle) { ShaderHandle = handle; }
+        GLuint GetHandle() const { return m_ShaderHandle; }
+        void SetHandle(GLuint handle) { m_ShaderHandle = handle; }
 
     private:
-        GLuint ShaderHandle = 0;
-        std::vector<char> SourceCode;
+        GLuint m_ShaderHandle = 0;
+        std::vector<char> m_SourceCode;
     };
     using OpenGLComputeShaderSP = std::shared_ptr<OpenGLComputeShader>;
 
@@ -214,12 +214,12 @@ namespace RHIOpenGL
         ~OpenGLGeometryShader() override;
 
         bool Compile(const std::vector<char>& source);
-        GLuint GetHandle() const { return ShaderHandle; }
-        void SetHandle(GLuint handle) { ShaderHandle = handle; }
+        GLuint GetHandle() const { return m_ShaderHandle; }
+        void SetHandle(GLuint handle) { m_ShaderHandle = handle; }
 
     private:
-        GLuint ShaderHandle = 0;
-        std::vector<char> SourceCode;
+        GLuint m_ShaderHandle = 0;
+        std::vector<char> m_SourceCode;
     };
     using OpenGLGeometryShaderSP = std::shared_ptr<OpenGLGeometryShader>;
 
@@ -230,12 +230,12 @@ namespace RHIOpenGL
         ~OpenGLTessControlShader() override;
 
         bool Compile(const std::vector<char>& source);
-        GLuint GetHandle() const { return ShaderHandle; }
-        void SetHandle(GLuint handle) { ShaderHandle = handle; }
+        GLuint GetHandle() const { return m_ShaderHandle; }
+        void SetHandle(GLuint handle) { m_ShaderHandle = handle; }
 
     private:
-        GLuint ShaderHandle = 0;
-        std::vector<char> SourceCode;
+        GLuint m_ShaderHandle = 0;
+        std::vector<char> m_SourceCode;
     };
     using OpenGLTessControlShaderSP = std::shared_ptr<OpenGLTessControlShader>;
 
@@ -246,12 +246,12 @@ namespace RHIOpenGL
         ~OpenGLTessEvalShader() override;
 
         bool Compile(const std::vector<char>& source);
-        GLuint GetHandle() const { return ShaderHandle; }
-        void SetHandle(GLuint handle) { ShaderHandle = handle; }
+        GLuint GetHandle() const { return m_ShaderHandle; }
+        void SetHandle(GLuint handle) { m_ShaderHandle = handle; }
 
     private:
-        GLuint ShaderHandle = 0;
-        std::vector<char> SourceCode;
+        GLuint m_ShaderHandle = 0;
+        std::vector<char> m_SourceCode;
     };
     using OpenGLTessEvalShaderSP = std::shared_ptr<OpenGLTessEvalShader>;
 
@@ -261,11 +261,11 @@ namespace RHIOpenGL
         explicit OpenGLSampler(const RHI::RHISamplerDesc& desc);
         ~OpenGLSampler() override;
 
-        GLuint GetHandle() const { return SamplerHandle; }
-        void SetHandle(GLuint handle) { SamplerHandle = handle; }
+        GLuint GetHandle() const { return m_SamplerHandle; }
+        void SetHandle(GLuint handle) { m_SamplerHandle = handle; }
 
     private:
-        GLuint SamplerHandle = 0;
+        GLuint m_SamplerHandle = 0;
     };
     using OpenGLSamplerSP = std::shared_ptr<OpenGLSampler>;
 
@@ -310,10 +310,10 @@ namespace RHIOpenGL
         void* Map(uint32_t offset, uint32_t numBytes) override;
         void Unmap() override;
 
-        void* GetMappedData() const { return MappedData; }
+        void* GetMappedData() const { return m_MappedData; }
 
     private:
-        void* MappedData = nullptr;
+        void* m_MappedData = nullptr;
     };
     using OpenGLStagingBufferSP = std::shared_ptr<OpenGLStagingBuffer>;
 }

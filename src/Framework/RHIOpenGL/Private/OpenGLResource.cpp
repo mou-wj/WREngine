@@ -87,13 +87,13 @@ namespace RHIOpenGL
             GLenum target = ConvertRHITextureTypeToGLTextureType(desc.Type);
 
 
-            glCreateTextures(target, 1, &TextureHandle);
+            glCreateTextures(target, 1, &m_TextureHandle);
 
             switch (desc.Type)
             {
             case RHI::ERHITextureType::Texture1D:
                 glTextureStorage1D(
-                    TextureHandle,
+                    m_TextureHandle,
                     desc.MipLevels,
                     internalFormat,
                     desc.Width);
@@ -102,7 +102,7 @@ namespace RHIOpenGL
             case RHI::ERHITextureType::Texture2D:
             case RHI::ERHITextureType::TextureCube:
                 glTextureStorage2D(
-                    TextureHandle,
+                    m_TextureHandle,
                     desc.MipLevels,
                     internalFormat,
                     desc.Width,
@@ -113,7 +113,7 @@ namespace RHIOpenGL
             case RHI::ERHITextureType::Texture2DArray:
             case RHI::ERHITextureType::TextureCubeArray:
                 glTextureStorage3D(
-                    TextureHandle,
+                    m_TextureHandle,
                     desc.MipLevels,
                     internalFormat,
                     desc.Width,
@@ -126,19 +126,19 @@ namespace RHIOpenGL
                 break;
             }
 
-            glTextureParameteri(TextureHandle, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTextureParameteri(TextureHandle, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTextureParameteri(m_TextureHandle, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTextureParameteri(m_TextureHandle, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         });
     }
 
     OpenGLTexture::~OpenGLTexture()
     {
-        if (TextureHandle != 0)
+        if (m_TextureHandle != 0)
         {
             // 析构不产生任何返回值，用异步版即可；句柄按值捕获——对象即将消亡，
             // 不能捕获 this。
-            const GLuint handle = TextureHandle;
-            TextureHandle = 0;
+            const GLuint handle = m_TextureHandle;
+            m_TextureHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteTextures(1, &handle);
@@ -152,8 +152,8 @@ namespace RHIOpenGL
         // 同 OpenGLTexture：创建转发 worker 并等待完成。
         EnqueueTaskAndWait([this, &desc]()
         {
-            glGenBuffers(1, &BufferHandle);
-            glBindBuffer(GL_ARRAY_BUFFER, BufferHandle);
+            glGenBuffers(1, &m_BufferHandle);
+            glBindBuffer(GL_ARRAY_BUFFER, m_BufferHandle);
             glBufferData(GL_ARRAY_BUFFER,
                 static_cast<GLsizeiptr>(desc.Size == 0 ? 1 : desc.Size),
                 nullptr,
@@ -166,10 +166,10 @@ namespace RHIOpenGL
 
     OpenGLBuffer::~OpenGLBuffer()
     {
-        if (BufferHandle != 0)
+        if (m_BufferHandle != 0)
         {
-            const GLuint handle = BufferHandle;
-            BufferHandle = 0;
+            const GLuint handle = m_BufferHandle;
+            m_BufferHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteBuffers(1, &handle);
@@ -179,33 +179,33 @@ namespace RHIOpenGL
 
     // ----- OpenGLTextureView -----
     OpenGLTextureView::OpenGLTextureView(OpenGLTexture* source, const Desc& viewDesc)
-        : SourceTexture(source), ViewInfo(viewDesc)
+        : m_SourceTexture(source), m_ViewInfo(viewDesc)
     {
-        if (SourceTexture == nullptr || SourceTexture->GetHandle() == 0)
+        if (m_SourceTexture == nullptr || m_SourceTexture->GetHandle() == 0)
         {
             return;
         }
         // SRV/UAV 在主线程创建，GL 调用同样转发 worker；句柄同步可读。
         EnqueueTaskAndWait([this]()
         {
-            glGenTextures(1, &ViewHandle);
-            glTextureView(ViewHandle,
-                          ViewInfo.Target,
-                          SourceTexture->GetHandle(),
-                          ViewInfo.InternalFormat,
-                          ViewInfo.FirstMipSlice,
-                          ViewInfo.MipCount,
-                          ViewInfo.FirstArraySlice,
-                          ViewInfo.ArraySize);
+            glGenTextures(1, &m_ViewHandle);
+            glTextureView(m_ViewHandle,
+                          m_ViewInfo.Target,
+                          m_SourceTexture->GetHandle(),
+                          m_ViewInfo.InternalFormat,
+                          m_ViewInfo.FirstMipSlice,
+                          m_ViewInfo.MipCount,
+                          m_ViewInfo.FirstArraySlice,
+                          m_ViewInfo.ArraySize);
         });
     }
 
     OpenGLTextureView::~OpenGLTextureView()
     {
-        if (ViewHandle != 0)
+        if (m_ViewHandle != 0)
         {
-            const GLuint handle = ViewHandle;
-            ViewHandle = 0;
+            const GLuint handle = m_ViewHandle;
+            m_ViewHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteTextures(1, &handle);
@@ -214,28 +214,28 @@ namespace RHIOpenGL
     }
 
     // ----- SRV -----
-    OpenGLShaderResourceView::OpenGLShaderResourceView(RHI::RHIViewableResource* Resource, const RHI::RHITexSRVCreateInfo& Desc)
-        : RHI::RHIShaderResourceView(Resource), TextureView(TryMakeTextureView(Resource, Desc)), IsTextureView(true), TexSRVDesc(Desc)
+    OpenGLShaderResourceView::OpenGLShaderResourceView(RHI::RHIViewableResource* resource, const RHI::RHITexSRVCreateInfo& desc)
+        : RHI::RHIShaderResourceView(resource), m_TextureView(TryMakeTextureView(resource, desc)), m_bIsTextureView(true), m_TexSRVDesc(desc)
     {
     }
-    OpenGLShaderResourceView::OpenGLShaderResourceView(RHI::RHIViewableResource* Resource, const RHI::RHIBufferSRVCreateInfo& Desc)
-        : RHI::RHIShaderResourceView(Resource), IsTextureView(false), BufferSRVDesc(Desc)
+    OpenGLShaderResourceView::OpenGLShaderResourceView(RHI::RHIViewableResource* resource, const RHI::RHIBufferSRVCreateInfo& desc)
+        : RHI::RHIShaderResourceView(resource), m_bIsTextureView(false), m_BufferSRVDesc(desc)
     {
     }
-    bool OpenGLShaderResourceView::IsTexture() { return IsTextureView; }
-    bool OpenGLShaderResourceView::IsBuffer() { return !IsTextureView; }
+    bool OpenGLShaderResourceView::IsTexture() { return m_bIsTextureView; }
+    bool OpenGLShaderResourceView::IsBuffer() { return !m_bIsTextureView; }
 
     // ----- UAV -----
-    OpenGLUnorderedAccessView::OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource, const RHI::RHITexUAVCreateInfo& Desc)
-        : RHI::RHIUnorderedAccessView(Resource), TextureView(TryMakeTextureView(Resource, Desc)), IsTextureView(true), TexUAVDesc(Desc)
+    OpenGLUnorderedAccessView::OpenGLUnorderedAccessView(RHI::RHIViewableResource* resource, const RHI::RHITexUAVCreateInfo& desc)
+        : RHI::RHIUnorderedAccessView(resource), m_TextureView(TryMakeTextureView(resource, desc)), m_bIsTextureView(true), m_TexUAVDesc(desc)
     {
     }
-    OpenGLUnorderedAccessView::OpenGLUnorderedAccessView(RHI::RHIViewableResource* Resource, const RHI::RHIBufferUAVCreateInfo& Desc)
-        : RHI::RHIUnorderedAccessView(Resource), IsTextureView(false), BufferUAVDesc(Desc)
+    OpenGLUnorderedAccessView::OpenGLUnorderedAccessView(RHI::RHIViewableResource* resource, const RHI::RHIBufferUAVCreateInfo& desc)
+        : RHI::RHIUnorderedAccessView(resource), m_bIsTextureView(false), m_BufferUAVDesc(desc)
     {
     }
-    bool OpenGLUnorderedAccessView::IsTexture() { return IsTextureView; }
-    bool OpenGLUnorderedAccessView::IsBuffer() { return !IsTextureView; }
+    bool OpenGLUnorderedAccessView::IsTexture() { return m_bIsTextureView; }
+    bool OpenGLUnorderedAccessView::IsBuffer() { return !m_bIsTextureView; }
 
     bool OpenGLShaderBase::CompileOpenGLShader(GLuint shaderHandle, const std::vector<char>& packedSource, const char* shaderName)
     {
@@ -245,7 +245,7 @@ namespace RHIOpenGL
         }
         RenderCore::GLSLCompiledBinaryResultPacker packer;
         packer.Depack(packedSource);
-        Reflection = packer.DepackedData.HeaderData;
+        _reflection = packer.DepackedData.HeaderData;
         FillOpenGLShaderResourceLayout();
         auto& source = packer.DepackedData.GLSLCode;
         const char* sourceText = source.empty() ? "" : source.data();
@@ -277,37 +277,37 @@ namespace RHIOpenGL
         return bCompiled;
     }
     void OpenGLShaderBase::FillOpenGLShaderResourceLayout() {
-        for (auto binding : Reflection.Resources) {
-            ShaderResourceLayout.Bindings[binding.Binding].Count = binding.Count;
-            ShaderResourceLayout.Bindings[binding.Binding].Type = binding.Type;
+        for (auto binding : _reflection.Resources) {
+            _shaderResourceLayout.Bindings[binding.Binding].Count = binding.Count;
+            _shaderResourceLayout.Bindings[binding.Binding].Type = binding.Type;
         }
         // UBO 段大小：来自 SPIRV-Cross 的 get_declared_struct_size，等价于 HLSL 里
         // cbuffer 声明大小。对齐由调用方（UniformBufferCache::EnsureRange）按
         // GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT 负责向上取整。
         // 注意：同一 binding 在多 shader（VS+FS）出现时取更大值，由 Context 在
         // pipeline 切换处 HintUniformBufferSize 时统一合并。
-        ShaderResourceLayout.UniformBufferSizes.clear();
-        for (const auto& ub : Reflection.UniformBuffers)
+        _shaderResourceLayout.UniformBufferSizes.clear();
+        for (const auto& ub : _reflection.UniformBuffers)
         {
-            auto it = ShaderResourceLayout.UniformBufferSizes.find(ub.Binding);
-            if (it == ShaderResourceLayout.UniformBufferSizes.end() || ub.Size > it->second)
+            auto it = _shaderResourceLayout.UniformBufferSizes.find(ub.Binding);
+            if (it == _shaderResourceLayout.UniformBufferSizes.end() || ub.Size > it->second)
             {
-                ShaderResourceLayout.UniformBufferSizes[ub.Binding] = ub.Size;
+                _shaderResourceLayout.UniformBufferSizes[ub.Binding] = ub.Size;
             }
         }
     }
     bool OpenGLVertexShader::Compile(const std::vector<char>& source)
     {
-        SourceCode = source;
-        return CompileOpenGLShader(ShaderHandle, SourceCode, "vertex");
+        m_SourceCode = source;
+        return CompileOpenGLShader(m_ShaderHandle, m_SourceCode, "vertex");
     }
 
     OpenGLVertexShader::~OpenGLVertexShader()
     {
-        if (ShaderHandle != 0)
+        if (m_ShaderHandle != 0)
         {
-            const GLuint handle = ShaderHandle;
-            ShaderHandle = 0;
+            const GLuint handle = m_ShaderHandle;
+            m_ShaderHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteShader(handle);
@@ -320,22 +320,22 @@ namespace RHIOpenGL
     {
         EnqueueTaskAndWait([this]()
         {
-            ShaderHandle = glCreateShader(GL_VERTEX_SHADER);
+            m_ShaderHandle = glCreateShader(GL_VERTEX_SHADER);
         });
     }
 
     bool OpenGLFragmentShader::Compile(const std::vector<char>& source)
     {
-        SourceCode = source;
-        return CompileOpenGLShader(ShaderHandle, SourceCode, "fragment");
+        m_SourceCode = source;
+        return CompileOpenGLShader(m_ShaderHandle, m_SourceCode, "fragment");
     }
 
     OpenGLFragmentShader::~OpenGLFragmentShader()
     {
-        if (ShaderHandle != 0)
+        if (m_ShaderHandle != 0)
         {
-            const GLuint handle = ShaderHandle;
-            ShaderHandle = 0;
+            const GLuint handle = m_ShaderHandle;
+            m_ShaderHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteShader(handle);
@@ -348,22 +348,22 @@ namespace RHIOpenGL
     {
         EnqueueTaskAndWait([this]()
         {
-            ShaderHandle = glCreateShader(GL_FRAGMENT_SHADER);
+            m_ShaderHandle = glCreateShader(GL_FRAGMENT_SHADER);
         });
     }
 
     bool OpenGLComputeShader::Compile(const std::vector<char>& source)
     {
-        SourceCode = source;
-        return CompileOpenGLShader(ShaderHandle, SourceCode, "compute");
+        m_SourceCode = source;
+        return CompileOpenGLShader(m_ShaderHandle, m_SourceCode, "compute");
     }
 
     OpenGLComputeShader::~OpenGLComputeShader()
     {
-        if (ShaderHandle != 0)
+        if (m_ShaderHandle != 0)
         {
-            const GLuint handle = ShaderHandle;
-            ShaderHandle = 0;
+            const GLuint handle = m_ShaderHandle;
+            m_ShaderHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteShader(handle);
@@ -376,22 +376,22 @@ namespace RHIOpenGL
     {
         EnqueueTaskAndWait([this]()
         {
-            ShaderHandle = glCreateShader(GL_COMPUTE_SHADER);
+            m_ShaderHandle = glCreateShader(GL_COMPUTE_SHADER);
         });
     }
 
     bool OpenGLGeometryShader::Compile(const std::vector<char>& source)
     {
-        SourceCode = source;
-        return CompileOpenGLShader(ShaderHandle, SourceCode, "geometry");
+        m_SourceCode = source;
+        return CompileOpenGLShader(m_ShaderHandle, m_SourceCode, "geometry");
     }
 
     OpenGLGeometryShader::~OpenGLGeometryShader()
     {
-        if (ShaderHandle != 0)
+        if (m_ShaderHandle != 0)
         {
-            const GLuint handle = ShaderHandle;
-            ShaderHandle = 0;
+            const GLuint handle = m_ShaderHandle;
+            m_ShaderHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteShader(handle);
@@ -404,22 +404,22 @@ namespace RHIOpenGL
     {
         EnqueueTaskAndWait([this]()
         {
-            ShaderHandle = glCreateShader(GL_GEOMETRY_SHADER);
+            m_ShaderHandle = glCreateShader(GL_GEOMETRY_SHADER);
         });
     }
 
     bool OpenGLTessControlShader::Compile(const std::vector<char>& source)
     {
-        SourceCode = source;
-        return CompileOpenGLShader(ShaderHandle, SourceCode, "tess control");
+        m_SourceCode = source;
+        return CompileOpenGLShader(m_ShaderHandle, m_SourceCode, "tess control");
     }
 
     OpenGLTessControlShader::~OpenGLTessControlShader()
     {
-        if (ShaderHandle != 0)
+        if (m_ShaderHandle != 0)
         {
-            const GLuint handle = ShaderHandle;
-            ShaderHandle = 0;
+            const GLuint handle = m_ShaderHandle;
+            m_ShaderHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteShader(handle);
@@ -432,22 +432,22 @@ namespace RHIOpenGL
     {
         EnqueueTaskAndWait([this]()
         {
-            ShaderHandle = glCreateShader(GL_TESS_CONTROL_SHADER);
+            m_ShaderHandle = glCreateShader(GL_TESS_CONTROL_SHADER);
         });
     }
 
     bool OpenGLTessEvalShader::Compile(const std::vector<char>& source)
     {
-        SourceCode = source;
-        return CompileOpenGLShader(ShaderHandle, SourceCode, "tess eval");
+        m_SourceCode = source;
+        return CompileOpenGLShader(m_ShaderHandle, m_SourceCode, "tess eval");
     }
 
     OpenGLTessEvalShader::~OpenGLTessEvalShader()
     {
-        if (ShaderHandle != 0)
+        if (m_ShaderHandle != 0)
         {
-            const GLuint handle = ShaderHandle;
-            ShaderHandle = 0;
+            const GLuint handle = m_ShaderHandle;
+            m_ShaderHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteShader(handle);
@@ -460,7 +460,7 @@ namespace RHIOpenGL
     {
         EnqueueTaskAndWait([this]()
         {
-            ShaderHandle = glCreateShader(GL_TESS_EVALUATION_SHADER);
+            m_ShaderHandle = glCreateShader(GL_TESS_EVALUATION_SHADER);
         });
     }
 
@@ -469,16 +469,16 @@ namespace RHIOpenGL
     {
         EnqueueTaskAndWait([this]()
         {
-            glGenSamplers(1, &SamplerHandle);
+            glGenSamplers(1, &m_SamplerHandle);
         });
     }
 
     OpenGLStagingBuffer::~OpenGLStagingBuffer()
     {
-        if (MappedData != nullptr)
+        if (m_MappedData != nullptr)
         {
-            std::free(MappedData);
-            MappedData = nullptr;
+            std::free(m_MappedData);
+            m_MappedData = nullptr;
         }
     }
 
@@ -504,10 +504,10 @@ namespace RHIOpenGL
 
     OpenGLSampler::~OpenGLSampler()
     {
-        if (SamplerHandle != 0)
+        if (m_SamplerHandle != 0)
         {
-            const GLuint handle = SamplerHandle;
-            SamplerHandle = 0;
+            const GLuint handle = m_SamplerHandle;
+            m_SamplerHandle = 0;
             EnqueueTask([handle]()
             {
                 glDeleteSamplers(1, &handle);
@@ -518,21 +518,21 @@ namespace RHIOpenGL
     OpenGLStagingBuffer::OpenGLStagingBuffer(uint32_t size)
         : RHI::RHIStagingBuffer(size)
     {
-        MappedData = std::malloc(size == 0 ? 1 : size);
+        m_MappedData = std::malloc(size == 0 ? 1 : size);
     }
 
     void* OpenGLStagingBuffer::Map(uint32_t offset, uint32_t numBytes)
     {
-        if (!MappedData)
+        if (!m_MappedData)
         {
-            MappedData = std::malloc((numBytes == 0 ? 1u : numBytes));
+            m_MappedData = std::malloc((numBytes == 0 ? 1u : numBytes));
         }
-        return static_cast<char*>(MappedData) + offset;
+        return static_cast<char*>(m_MappedData) + offset;
     }
 
     void OpenGLStagingBuffer::Unmap()
     {
-        MappedData = nullptr;
+        m_MappedData = nullptr;
     }
 
 }

@@ -29,20 +29,20 @@ namespace RHIOpenGL
     {
     public:
         explicit UniformBufferCache(uint32_t chunkCapacity = 64u * 1024u)
-            : chunkCapacity_(chunkCapacity ? chunkCapacity : 64u * 1024u)
+            : m_ChunkCapacity(chunkCapacity ? chunkCapacity : 64u * 1024u)
         {
         }
 
         ~UniformBufferCache()
         {
-            for (GLuint chunk : chunks_)
+            for (GLuint chunk : m_Chunks)
             {
                 if (chunk != 0)
                 {
                     glDeleteBuffers(1, &chunk);
                 }
             }
-            chunks_.clear();
+            m_Chunks.clear();
         }
 
         UniformBufferCache(const UniformBufferCache&) = delete;
@@ -54,9 +54,9 @@ namespace RHIOpenGL
         // 调用方在 pipeline 切换 / context begin 时触发。
         void Reset()
         {
-            bindings_.clear();
-            uniformBufferHints_.clear();
-            cursor_ = 0;
+            m_Bindings.clear();
+            m_UniformBufferHints.clear();
+            m_Cursor = 0;
         }
 
         // 记录 binding 的 cbuffer 参考大小（来自 shader 反射的声明大小）。
@@ -67,20 +67,20 @@ namespace RHIOpenGL
         {
             if (size == 0)
             {
-                uniformBufferHints_.erase(binding);
+                m_UniformBufferHints.erase(binding);
                 return;
             }
-            auto it = uniformBufferHints_.find(binding);
-            if (it == uniformBufferHints_.end() || size > it->second)
+            auto it = m_UniformBufferHints.find(binding);
+            if (it == m_UniformBufferHints.end() || size > it->second)
             {
-                uniformBufferHints_[binding] = size;
+                m_UniformBufferHints[binding] = size;
             }
         }
 
         uint32_t GetUniformBufferHint(uint32_t binding) const
         {
-            auto it = uniformBufferHints_.find(binding);
-            return (it == uniformBufferHints_.end()) ? 0u : it->second;
+            auto it = m_UniformBufferHints.find(binding);
+            return (it == m_UniformBufferHints.end()) ? 0u : it->second;
         }
 
         // 为 binding 分配（或在已存在且段大小足够时复用）至少 minSize 字节的段。
@@ -96,14 +96,14 @@ namespace RHIOpenGL
             // GL 端会读到旧值或 UB；如果 hint 大于等于声明大小，永远安全。
             const uint32_t hint = GetUniformBufferHint(binding);
             const uint32_t effectiveMin = std::max(minSize, hint);
-            const uint32_t needed = AlignUp(effectiveMin, alignment_);
+            const uint32_t needed = AlignUp(effectiveMin, m_Alignment);
             if (needed == 0)
             {
                 return false;
             }
 
-            auto it = bindings_.find(binding);
-            if (it != bindings_.end() && it->second.size >= needed)
+            auto it = m_Bindings.find(binding);
+            if (it != m_Bindings.end() && it->second.Size >= needed)
             {
                 return true; // 缓存命中且容量足够
             }
@@ -114,11 +114,11 @@ namespace RHIOpenGL
             }
 
             Entry entry;
-            entry.chunkIndex = static_cast<uint32_t>(chunks_.size()) - 1u;
-            entry.chunkOffset = cursor_;
-            entry.size = needed;
-            bindings_[binding] = entry;
-            cursor_ += needed;
+            entry.ChunkIndex = static_cast<uint32_t>(m_Chunks.size()) - 1u;
+            entry.ChunkOffset = m_Cursor;
+            entry.Size = needed;
+            m_Bindings[binding] = entry;
+            m_Cursor += needed;
             return true;
         }
 
@@ -130,20 +130,20 @@ namespace RHIOpenGL
             {
                 return;
             }
-            auto it = bindings_.find(binding);
-            if (it == bindings_.end())
+            auto it = m_Bindings.find(binding);
+            if (it == m_Bindings.end())
             {
                 return;
             }
             const Entry& e = it->second;
-            if (dstOffset > e.size || size > e.size - dstOffset)
+            if (dstOffset > e.Size || size > e.Size - dstOffset)
             {
                 return; // 越界保护
             }
-            const GLuint chunk = chunks_[e.chunkIndex];
+            const GLuint chunk = m_Chunks[e.ChunkIndex];
             glBindBuffer(GL_UNIFORM_BUFFER, chunk);
             glBufferSubData(GL_UNIFORM_BUFFER,
-                static_cast<GLintptr>(e.chunkOffset + dstOffset),
+                static_cast<GLintptr>(e.ChunkOffset + dstOffset),
                 static_cast<GLsizeiptr>(size),
                 data);
         }
@@ -151,38 +151,38 @@ namespace RHIOpenGL
         // 把 binding 关联段 glBindBufferRange 到 GL_UNIFORM_BUFFER 同名 binding。
         void Bind(uint32_t binding)
         {
-            auto it = bindings_.find(binding);
-            if (it == bindings_.end())
+            auto it = m_Bindings.find(binding);
+            if (it == m_Bindings.end())
             {
                 return;
             }
             const Entry& e = it->second;
-            if (e.chunkIndex >= chunks_.size())
+            if (e.ChunkIndex >= m_Chunks.size())
             {
                 return;
             }
-            const GLuint chunk = chunks_[e.chunkIndex];
+            const GLuint chunk = m_Chunks[e.ChunkIndex];
             glBindBufferRange(GL_UNIFORM_BUFFER, binding, chunk,
-                static_cast<GLintptr>(e.chunkOffset),
-                static_cast<GLsizeiptr>(e.size));
+                static_cast<GLintptr>(e.ChunkOffset),
+                static_cast<GLsizeiptr>(e.Size));
         }
 
         bool HasBinding(uint32_t binding) const
         {
-            return bindings_.find(binding) != bindings_.end();
+            return m_Bindings.find(binding) != m_Bindings.end();
         }
 
         bool HasUniformBufferHint(uint32_t binding) const
         {
-            return uniformBufferHints_.find(binding) != uniformBufferHints_.end();
+            return m_UniformBufferHints.find(binding) != m_UniformBufferHints.end();
         }
 
     private:
         struct Entry
         {
-            uint32_t chunkIndex = 0;
-            uint32_t chunkOffset = 0;
-            uint32_t size = 0;
+            uint32_t ChunkIndex = 0;
+            uint32_t ChunkOffset = 0;
+            uint32_t Size = 0;
         };
 
         static uint32_t AlignUp(uint32_t v, uint32_t a)
@@ -192,25 +192,25 @@ namespace RHIOpenGL
 
         void EnsureAlignmentQueried()
         {
-            if (alignmentQueried_)
+            if (m_bAlignmentQueried)
             {
                 return;
             }
             GLint align = 0;
             glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &align);
-            alignment_ = (align > 0) ? static_cast<uint32_t>(align) : 256u;
-            alignmentQueried_ = true;
+            m_Alignment = (align > 0) ? static_cast<uint32_t>(align) : 256u;
+            m_bAlignmentQueried = true;
         }
 
         // 确保当前 chunk（或新 chunk）有至少 neededSize 字节可用。
         // 失败 = neededSize > chunkCapacity_。
         bool EnsureChunkFor(uint32_t neededSize)
         {
-            if (neededSize > chunkCapacity_)
+            if (neededSize > m_ChunkCapacity)
             {
                 return false;
             }
-            if (!chunks_.empty() && cursor_ + neededSize <= chunkCapacity_)
+            if (!m_Chunks.empty() && m_Cursor + neededSize <= m_ChunkCapacity)
             {
                 return true;
             }
@@ -218,23 +218,23 @@ namespace RHIOpenGL
             glGenBuffers(1, &newChunk);
             glBindBuffer(GL_UNIFORM_BUFFER, newChunk);
             glBufferData(GL_UNIFORM_BUFFER,
-                static_cast<GLsizeiptr>(chunkCapacity_),
+                static_cast<GLsizeiptr>(m_ChunkCapacity),
                 nullptr,
                 GL_DYNAMIC_DRAW);
-            chunks_.push_back(newChunk);
-            cursor_ = 0;
+            m_Chunks.push_back(newChunk);
+            m_Cursor = 0;
             return true;
         }
 
-        uint32_t chunkCapacity_;
-        std::vector<GLuint> chunks_;
-        uint32_t cursor_ = 0;
-        uint32_t alignment_ = 0;
-        bool alignmentQueried_ = false;
-        std::unordered_map<uint32_t, Entry> bindings_;
+        uint32_t m_ChunkCapacity;
+        std::vector<GLuint> m_Chunks;
+        uint32_t m_Cursor = 0;
+        uint32_t m_Alignment = 0;
+        bool m_bAlignmentQueried = false;
+        std::unordered_map<uint32_t, Entry> m_Bindings;
         // cbuffer 参考大小（来自 shader 反射的声明大小），pipeline 切换时填入，
         // Reset() 时清空。不参与 GPU 分配，仅作 EnsureRange 的下界。
-        std::unordered_map<uint32_t, uint32_t> uniformBufferHints_;
+        std::unordered_map<uint32_t, uint32_t> m_UniformBufferHints;
     };
 
     class OpenGLCommandContext : public virtual RHI::RHIContextBase
@@ -250,18 +250,18 @@ namespace RHIOpenGL
         void CopyTexture(RHI::RHITexture* src, RHI::RHITexture* dst, const RHI::RHICopyTextureDesc& copyDesc) override;
         void BlitTexture(RHI::RHITexture* src, RHI::RHITexture* dst, const RHI::RHIBlitTextureDesc& blitDesc) override;
 
-        OpenGLQueue* GetQueue() const { return Queue; }
-        const std::vector<std::function<void()>>& GetNativeCommands() const { return NativeCommands; }
+        OpenGLQueue* GetQueue() const { return _queue; }
+        const std::vector<std::function<void()>>& GetNativeCommands() const { return _nativeCommands; }
     protected:
-        std::vector<std::function<void()>> NativeCommands;
+        std::vector<std::function<void()>> _nativeCommands;
         void UploadUniformBufferData(const RHI::RHIBatchedShaderParameters& parameter);
         // Compute / Graphic 共用的资源绑定主体：上传 UBO、按 EType 分派
         // Texture / SRV / UAV / Sampler / UniformBuffer。shader 类型
         // （RHIGraphicShader vs RHIComputeShader）当前未被逻辑引用，由派生
         // 类在自己的 SetBatchedShaderParameters 包装一层 lambda 后转发到本函数。
         void ApplyShaderParameters(const RHI::RHIBatchedShaderParameters& parameter);
-        OpenGLQueue* Queue = nullptr;
-        UniformBufferCache UBOCache;
+        OpenGLQueue* _queue = nullptr;
+        UniformBufferCache _uboCache;
     };
 
     class OpenGLComputeContext : public OpenGLCommandContext, public RHI::RHIComputeContex
@@ -275,7 +275,7 @@ namespace RHIOpenGL
         void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
 
     private:
-        RHI::RHIComputePipelineState* CurrentPipelineState = nullptr;
+        RHI::RHIComputePipelineState* m_CurrentPipelineState = nullptr;
     };
 
     class OpenGLGraphicContext : public OpenGLCommandContext, public RHI::RHIGraphicContex
@@ -305,12 +305,12 @@ namespace RHIOpenGL
         void ApplyRasterizerState(const RHI::RHIGraphicsPipelineStateDesc& desc);
         void ApplyDepthStencilState(const RHI::RHIGraphicsPipelineStateDesc& desc);
         void ApplyColorBlendState(const RHI::RHIGraphicsPipelineStateDesc& desc);
-        RHI::RHIGraphicsPipelineState* CurrentPipelineState = nullptr;
-        RHI::RHIBuffer* BoundVertexBuffers[8] = {};
-        uint32_t BoundVertexBufferOffsets[8] = {};
-        OpenGLFramebuffer* CurrentFramebuffer;
-        GLuint CurrentVertexArray = 0;
-        GLenum CurrentPrimitiveTopology = GL_TRIANGLES;
-        bool bVertexLayoutDirty = true;
+        RHI::RHIGraphicsPipelineState* m_CurrentPipelineState = nullptr;
+        RHI::RHIBuffer* m_BoundVertexBuffers[8] = {};
+        uint32_t m_BoundVertexBufferOffsets[8] = {};
+        OpenGLFramebuffer* m_CurrentFramebuffer;
+        GLuint m_CurrentVertexArray = 0;
+        GLenum m_CurrentPrimitiveTopology = GL_TRIANGLES;
+        bool m_bVertexLayoutDirty = true;
     };
 }

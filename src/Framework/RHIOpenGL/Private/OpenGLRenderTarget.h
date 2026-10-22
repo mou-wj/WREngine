@@ -15,7 +15,7 @@ namespace RHIOpenGL
         OpenGLFramebuffer(const OpenGLFramebuffer&) = delete;
         OpenGLFramebuffer& operator=(const OpenGLFramebuffer&) = delete;
 
-        GLuint GetHandle() const { return FramebufferHandle; }
+        GLuint GetHandle() const { return m_FramebufferHandle; }
 
         void Create();
         void Reset();
@@ -29,8 +29,8 @@ namespace RHIOpenGL
         bool IsComplete() const;
 
     private:
-        GLuint FramebufferHandle = 0;
-        uint32_t ColorAttachmentCount = 0;
-        bool HasDepthAttachment = false;
+        GLuint m_FramebufferHandle = 0;
+        uint32_t m_ColorAttachmentCount = 0;
+        bool m_bHasDepthAttachment = false;
     };
 }

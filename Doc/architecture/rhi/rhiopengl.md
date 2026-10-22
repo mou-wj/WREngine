@@ -60,7 +60,7 @@ flowchart TD
     A[上层 RHI 调用] --> B[OpenGLRHIApi / 资源工厂]
     A --> C[OpenGLCommandContext]
     B --> D[EnqueueTask / EnqueueTaskAndWait]
-    C --> E[NativeCommands 函数列表]
+    C --> E[_nativeCommands 函数列表]
     E --> F[图形或计算逻辑 ExecuteQueue]
     D --> G[单一 worker + current context]
     F --> G
@@ -73,7 +73,7 @@ flowchart TD
 - worker 内部再次调用上述接口会直接执行，避免 worker 等待自己。
 - worker 未启动时，任务也会内联执行；这不保证调用线程具有有效 current context，初始化前和关闭后的调用需要约束。
 
-通用 `TaskQueue` 和逻辑命令 `ExecuteQueue` 是不同队列。worker 每轮先排空任务，再尝试图形队列和计算队列，空闲时短暂等待。**两类队列之间没有统一的入队顺序保证**；同步任务完成，也不能代替等待此前尚未执行的命令条目。
+通用任务队列 `m_TaskQueue` 和逻辑命令队列 `ExecuteQueue` 是不同队列。worker 每轮先排空任务，再尝试图形队列和计算队列，空闲时短暂等待。**两类队列之间没有统一的入队顺序保证**；同步任务完成，也不能代替等待此前尚未执行的命令条目。
 
 当前同步任务包装会把异常保存进 promise，但等待端只调用 `future.wait()`，没有通过 `get()` 重抛；异步任务/命令执行也没有完整的错误传回协议。因此不能把“等待返回”理解为“操作一定成功”。
 
@@ -161,7 +161,7 @@ RHIContextBase
         -> OpenGLGraphicContext
 ```
 
-`Begin()` 清空 `NativeCommands` 并重置 UBO 缓存；`End()` 当前为空。Draw、Dispatch、纹理复制、blit、参数绑定及 RenderPass 操作记录为函数对象，提交后由 worker 依次调用。这里的 NativeCommands 是 CPU 回调列表，不是驱动提供的原生命令缓冲。
+`Begin()` 清空 `_nativeCommands` 并重置 UBO 缓存；`End()` 当前为空。Draw、Dispatch、纹理复制、blit、参数绑定及 RenderPass 操作记录为函数对象，提交后由 worker 依次调用。这里的 `_nativeCommands` 是 CPU 回调列表，不是驱动提供的原生命令缓冲。
 
 图形管线绑定时创建/绑定 VAO、使用 program，并应用顶点布局、拓扑、光栅化、深度及混合状态。RenderPass 使用 `OpenGLFramebuffer` 挂接颜色/深度附件、设置 draw buffers 并按描述清理，结束时解除 framebuffer 和部分动态状态。
 
@@ -181,8 +181,8 @@ CopyTexture 主要沿二维图像路径执行 `glCopyImageSubData`；BlitTexture
 
 1. `AcquireCommandContext()` 从空闲池获取或创建上下文。
 2. `ExecuteContext()` 复制上下文指针和等待信息到 `QueueExecuteEntry`，分配单调递增的 FenceValue，并登记在飞上下文。
-3. worker 检查队首等待值，依次执行该条目的 NativeCommands 或呈现回调。
-4. 执行结束后将上下文归还池，并推进 `OpenGLSyncPoint::CurrentValue`。
+3. worker 检查队首等待值，依次执行该条目上下文的 `_nativeCommands` 或呈现回调。
+4. 执行结束后将上下文归还池，并推进 `OpenGLSyncPoint::m_CurrentValue`。
 
 在飞集合用于阻止主线程提前把同一上下文重复归还池；它不代表命令引用的全部资源都已被后端持有。
 

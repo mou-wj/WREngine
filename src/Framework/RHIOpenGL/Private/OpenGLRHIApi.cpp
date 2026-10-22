@@ -16,14 +16,14 @@ namespace RHIOpenGL
     bool OpenGLRHIApi::Init()
     {
         RHI::GShaderPlatform = RHI::ERHIShaderPlatform::OpenGL;
-        PlatformInfo.DepthRange = RHI::EDepthRange::ZeroToOne;
-        PlatformInfo.bEnableRayTracing = false;
+        m_PlatformInfo.DepthRange = RHI::EDepthRange::ZeroToOne;
+        m_PlatformInfo.bEnableRayTracing = false;
         RHI::GShaderPlatform = RHI::ERHIShaderPlatform::OpenGL;
 
-        // 3. ����ƫ���� (���� Header ֮��ĵ�ַ)
+        // 转换数据的占位偏移；当前未创建原生屏障数据。
         RHI::G_RHITransition_PrivateDataOffset = 1;
 
-        // 4. �����ܷ����С
+        // 转换对象的占位大小。
         RHI::G_RHITransition_TotalSize = 2;
         bool initPlatform = InitializePlatformSurport();
         OpenGLQueueManager::GetInstance().StartWorker();
@@ -51,7 +51,7 @@ namespace RHIOpenGL
 
     const RHI::RHIPlatformInfo& OpenGLRHIApi::GetPlatformInfo() const
     {
-        return PlatformInfo;
+        return m_PlatformInfo;
     }
 
     RHI::RHITextureSP OpenGLRHIApi::CreateTexture(const RHI::RHITextureDesc& desc)
@@ -209,24 +209,24 @@ namespace RHIOpenGL
         std::free(mappedData);
     }
 
-    RHI::RHIShaderResourceViewSP OpenGLRHIApi::CreateTextureShaderResourceView(RHI::RHITexture* Texture, const RHI::RHITexSRVCreateInfo& Desc)
+    RHI::RHIShaderResourceViewSP OpenGLRHIApi::CreateTextureShaderResourceView(RHI::RHITexture* texture, const RHI::RHITexSRVCreateInfo& desc)
     {
-        return std::make_shared<OpenGLShaderResourceView>(Texture,Desc);
+        return std::make_shared<OpenGLShaderResourceView>(texture,desc);
     }
 
-    RHI::RHIUnorderedAccessViewSP OpenGLRHIApi::CreateTextureUnorderedAccessView(RHI::RHITexture* Texture, const RHI::RHITexUAVCreateInfo& Desc)
+    RHI::RHIUnorderedAccessViewSP OpenGLRHIApi::CreateTextureUnorderedAccessView(RHI::RHITexture* texture, const RHI::RHITexUAVCreateInfo& desc)
     {
-        return std::make_shared<OpenGLUnorderedAccessView>(Texture, Desc);
+        return std::make_shared<OpenGLUnorderedAccessView>(texture, desc);
     }
 
-    RHI::RHIShaderResourceViewSP OpenGLRHIApi::CreateBufferShaderResourceView(RHI::RHIBuffer* Buffer, const RHI::RHIBufferSRVCreateInfo& Desc)
+    RHI::RHIShaderResourceViewSP OpenGLRHIApi::CreateBufferShaderResourceView(RHI::RHIBuffer* buffer, const RHI::RHIBufferSRVCreateInfo& desc)
     {
-        return std::make_shared<OpenGLShaderResourceView>(Buffer,Desc);
+        return std::make_shared<OpenGLShaderResourceView>(buffer,desc);
     }
 
-    RHI::RHIUnorderedAccessViewSP OpenGLRHIApi::CreateBufferUnorderedAccessView(RHI::RHIBuffer* Buffer, const RHI::RHIBufferUAVCreateInfo& Desc)
+    RHI::RHIUnorderedAccessViewSP OpenGLRHIApi::CreateBufferUnorderedAccessView(RHI::RHIBuffer* buffer, const RHI::RHIBufferUAVCreateInfo& desc)
     {
-        return std::make_shared<OpenGLUnorderedAccessView>(Buffer,Desc);
+        return std::make_shared<OpenGLUnorderedAccessView>(buffer,desc);
     }
 
     RHI::RHIRayTracingGeometrySP OpenGLRHIApi::CreateRayTracingGeometry(const RHI::RHIRayTracingGeometryDesc& desc)
@@ -371,9 +371,9 @@ namespace RHIOpenGL
         return std::make_shared<OpenGLSampler>(desc);
     }
 
-    RHI::RHIQueue* OpenGLRHIApi::GetQueue(RHI::EQueueType Type)
+    RHI::RHIQueue* OpenGLRHIApi::GetQueue(RHI::EQueueType type)
     {
-		return OpenGLQueueManager::GetInstance().GetQueue(Type);
+		return OpenGLQueueManager::GetInstance().GetQueue(type);
     }
 
     RHI::RHIPresentExecutor* OpenGLRHIApi::GetPresentExecutor()
@@ -381,11 +381,11 @@ namespace RHIOpenGL
         return &OpenGLQueueManager::GetInstance();
     }
 
-    void OpenGLRHIApi::RHICreateTransition(RHI::RHITransition* Transition, const RHI::RHITransitionCreateInfo& CreateInfo)
+    void OpenGLRHIApi::RHICreateTransition(RHI::RHITransition* transition, const RHI::RHITransitionCreateInfo& createInfo)
     {
     }
 
-    void OpenGLRHIApi::RHIReleaseTransition(RHI::RHITransition* Transition)
+    void OpenGLRHIApi::RHIReleaseTransition(RHI::RHITransition* transition)
     {
     }
 
@@ -401,19 +401,19 @@ namespace RHIOpenGL
     {
         RHI::GRHIApi = CreateRHIApi();
         RHI::GRHIApi->Init();
-        bLoaded = true;
+        m_bLoaded = true;
     }
 
     void OpenGLRHIModule::ShutdownModule()
     {
         delete RHI::GRHIApi;
         RHI::GRHIApi = nullptr;
-        bLoaded = false;
+        m_bLoaded = false;
     }
 
     bool OpenGLRHIModule::IsLoaded() const
     {
-        return bLoaded;
+        return m_bLoaded;
     }
 
     RHI::RHIApi* OpenGLRHIModule::CreateRHIApi()

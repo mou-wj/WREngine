@@ -28,31 +28,31 @@ namespace RHIOpenGL
 
         void* GetWindowHandle() const
         {
-            return mWindowHandle;
+            return _mWindowHandle;
         }
 
         uint32_t GetWidth() const
         {
-            return mWidth;
+            return _mWidth;
         }
 
         uint32_t GetHeight() const
         {
-            return mHeight;
+            return _mHeight;
         }
 
         bool IsInitialized() const
         {
-            return mInitialized;
+            return _bMInitialized;
         }
 
     protected:
-        void* mWindowHandle = nullptr;
-        RHI::ERHIFormat mPixelFormat;
+        void* _mWindowHandle = nullptr;
+        RHI::ERHIFormat _mPixelFormat;
 
-        bool mInitialized = false;
-        uint32_t mWidth = 0;
-        uint32_t mHeight = 0;
+        bool _bMInitialized = false;
+        uint32_t _mWidth = 0;
+        uint32_t _mHeight = 0;
     };
     OpenGLPlatformContext* CreateOpenGLPlatformContext(void* windowHandle,RHI::ERHIFormat pixelFormat);
 
@@ -78,9 +78,9 @@ namespace RHIOpenGL
 		void Resize(uint32_t width, uint32_t height) override;
 
 	private:
-        HWND  mWindow = nullptr;
-        HDC   mDeviceContext = nullptr;
-        HGLRC mContext = nullptr;
+        HWND  m_MWindow = nullptr;
+        HDC   m_MDeviceContext = nullptr;
+        HGLRC m_MContext = nullptr;
     };
 
 #endif
