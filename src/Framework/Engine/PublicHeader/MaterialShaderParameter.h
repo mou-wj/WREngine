@@ -87,7 +87,7 @@ namespace Engine
 
     BEGIN_SHADER_PARAMETER_STRUCT(
         MaterialTextureParameters)
-        // º§ªÓŒ∆¿Ìmask
+        // ÊøÄÊ¥ªÁ∫πÁêÜmask
 		SHADER_PARAMETER(
 			uint32_t,
 			TextureMask)
@@ -161,8 +161,8 @@ namespace Engine
     
    ENGINE_API void BuildShaderParameters(
             const MaterialRenderProxy*
-            Proxy,
-            RenderCore::RenderGraphBuilder& Builder,
+            proxy,
+            RenderCore::RenderGraphBuilder& builder,
             MaterialShaderParameters&
-            OutParams);
+            outParams);
 }

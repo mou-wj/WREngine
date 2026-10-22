@@ -30,25 +30,25 @@ namespace Engine {
 		
 		// ------------------ Spatial (GameThread only) ------------------
 	protected:
-		Core::Mat4 LocalTransform;          // local transform
-		Core::Mat4 WorldTransform;          // cached world transform (derived)
-		Core::BoxSphereBounds Bounds;            // bounds used for frustum culling
-		EMobility Mobility;                 // mobility hint
+		Core::Mat4 _localTransform;          // local transform
+		Core::Mat4 _worldTransform;          // cached world transform (derived)
+		Core::BoxSphereBounds _bounds;            // bounds used for frustum culling
+		EMobility _mobility;                 // mobility hint
 
 		// ------------------ Render state (GameThread only) ------------------
-		bool bVisible;                      // visible / hidden
+		bool _bVisible;                      // visible / hidden
 
 		// ------------------ Scene linkage (GameThread only bookkeeping) ------------------
 
-		PrimitiveSceneProxy* PendingSceneProxy;      // bookkeeping pointer on GameThread (RenderThread owns proxy)
+		PrimitiveSceneProxy* _pendingSceneProxy;      // bookkeeping pointer on GameThread (RenderThread owns proxy)
 
 		// Debug
-		const char* DebugName;
+		const char* _debugName;
 
 	public:
 		// ------------------ Registration / lifecycle ------------------
 		// Register/unregister with the scene. Must be called on GameThread.
-		virtual void RegisterComponentWithScene(SceneInterface* Scene);
+		virtual void RegisterComponentWithScene(SceneInterface* scene);
 		virtual void UnregisterComponentFromScene();
 
 		// ------------------ SceneProxy management (virtual, override in derived) ------------------
@@ -57,21 +57,21 @@ namespace Engine {
 		virtual PrimitiveSceneProxy* CreateSceneProxy() const;
 
 		// Request the SceneProxy be destroyed on RenderThread. Should enqueue deletion.
-		virtual void DestroySceneProxy(PrimitiveSceneProxy* Proxy) const;
+		virtual void DestroySceneProxy(PrimitiveSceneProxy* proxy) const;
 
 		// Mark that render-related state changed (material/geometry/flags) and needs
 		// update on the RenderThread.
 		virtual void MarkRenderStateDirty();
 
 		// Update transform from GameThread and notify RenderThread (lightweight update).
-		virtual void UpdateTransform(const Core::Mat4& NewLocalTransform);
+		virtual void UpdateTransform(const Core::Mat4& newLocalTransform);
 
 		// Called when transform / bounds were updated on GameThread.
 		virtual void OnTransformChanged() override;
 
 		virtual const Core::BoxSphereBounds& GetBounds() const = 0;
 		// Calculate bounds (derived must implement to provide frustum culling bounds).
-		virtual Core::BoxSphereBounds CalcBounds(const Core::Mat4& LocalToWorld) = 0;
+		virtual Core::BoxSphereBounds CalcBounds(const Core::Mat4& localToWorld) = 0;
 
 		// Quick GameThread-only visibility query.
 		bool IsVisible() const;

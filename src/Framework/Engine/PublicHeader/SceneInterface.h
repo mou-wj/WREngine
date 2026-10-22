@@ -7,12 +7,12 @@
 #include <vector>
 
 namespace Engine {
-    // ǰ��������ֻ������Ⱦ�߳̿ɼ��Ĵ�������ͼ�ṹ
+    // Forward declarations for scene components and render-side snapshots.
     class PrimitiveComponent;
-    class PrimitiveSceneProxy; // �����ع���� Proxy ����
+    class PrimitiveSceneProxy; // Render-side primitive snapshot.
     class LightComponent;
     class SceneComponent;
-    class SceneView;          // ������Ⱦ�ӿ���ϵ
+    class SceneView; // View data passed to rendering.
 
     using FrameIndex = uint64_t;
 
@@ -25,7 +25,7 @@ namespace Engine {
     /*
     ===============================================================================
         SceneInterface
-        ������ࣺ��������Ⱦ����Renderer������Ⱦ�̴߳�һ������ʵ������ȡ���ݵ�������Լ
+        Shared scene interface implemented by Renderer.
     ===============================================================================
     */
     class ENGINE_API SceneInterface {
@@ -33,14 +33,14 @@ namespace Engine {
         virtual ~SceneInterface() = default;
 
         // -------------------------------------------------------------------------
-        // ��Ϸ�߳����ע��ӿ� (ʵ�����ڲ����뽫���װΪ����Ͷ�ݵ� Pending ����)
+        // Component registration; implementations queue pending scene updates.
         // -------------------------------------------------------------------------
-        virtual void AddPrimitive(PrimitiveComponent* Component) = 0;
-        virtual void RemovePrimitive(PrimitiveComponent* Component) = 0;
-        virtual void AddLight(LightComponent* Component) = 0;
-        virtual void RemoveLight(LightComponent* Component) = 0;
+        virtual void AddPrimitive(PrimitiveComponent* component) = 0;
+        virtual void RemovePrimitive(PrimitiveComponent* component) = 0;
+        virtual void AddLight(LightComponent* component) = 0;
+        virtual void RemoveLight(LightComponent* component) = 0;
         virtual void FlushPendingUpdates() = 0;
-        virtual void NotifyComponentChanged(SceneComponent* Component) = 0;
+        virtual void NotifyComponentChanged(SceneComponent* component) = 0;
         // Called externally to process pending global distance field block updates.
         virtual bool UpdateGlobalDistanceFieldIfNeeded() = 0;
 

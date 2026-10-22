@@ -151,9 +151,9 @@ private:
     // Dirty Flags
     // -------------------------------------------------
 
-    mutable bool m_ViewDirty;
-    mutable bool m_ProjectionDirty;
-    mutable bool m_ViewProjectionDirty;
+    mutable bool m_bViewDirty;
+    mutable bool m_bProjectionDirty;
+    mutable bool m_bViewProjectionDirty;
 };
 
 }

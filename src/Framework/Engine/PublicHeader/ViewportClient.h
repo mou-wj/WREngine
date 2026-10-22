@@ -8,14 +8,14 @@ namespace Engine {
     public:
         virtual ~ViewportClient() = default;
 
-        // ���ģ��� Client ��� ViewFamily
-        virtual void Draw(Viewport* InViewport) = 0;
+        // Build the view family and draw it through the viewport.
+        virtual void Draw(Viewport* inViewport) = 0;
 
         // Resize ֪ͨ
-        virtual void OnViewportResized(int Width, int Height) {}
+        virtual void OnViewportResized(int width, int height) {}
 
-        // ���루�Ժ����չ��
-        virtual void Tick(float DeltaTime) {}
+        // Per-frame client update.
+        virtual void Tick(float deltaTime) {}
     };
 
 

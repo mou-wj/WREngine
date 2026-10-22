@@ -11,7 +11,7 @@ namespace Engine
     void LightComponent::SetColor(
         const Core::Float3& color)
     {
-        Color = color;
+        _color = color;
 
         MarkRenderStateDirty();
     }
@@ -19,7 +19,7 @@ namespace Engine
     void LightComponent::SetIntensity(
         float intensity)
     {
-        Intensity = intensity;
+        _intensity = intensity;
 
         MarkRenderStateDirty();
     }
@@ -27,7 +27,7 @@ namespace Engine
     void LightComponent::SetCastShadow(
         bool castShadow)
     {
-        bCastShadow = castShadow;
+        _bCastShadow = castShadow;
 
         MarkRenderStateDirty();
     }
@@ -35,17 +35,17 @@ namespace Engine
     const Core::Float3&
         LightComponent::GetColor() const
     {
-        return Color;
+        return _color;
     }
 
     float LightComponent::GetIntensity() const
     {
-        return Intensity;
+        return _intensity;
     }
 
     bool LightComponent::IsCastShadow() const
     {
-        return bCastShadow;
+        return _bCastShadow;
     }
 
     DirectionalLightComponent::
@@ -69,7 +69,7 @@ namespace Engine
         SetDirection(
             const Core::Float3& direction)
     {
-        Direction = direction;
+        _direction = direction;
 
         MarkRenderStateDirty();
     }
@@ -78,14 +78,14 @@ namespace Engine
         DirectionalLightComponent::
         GetDirection() const
     {
-        return Direction;
+        return _direction;
     }
 
     void LocalLightComponent::
         SetAttenuationRadius(
             float radius)
     {
-        AttenuationRadius = radius;
+        _attenuationRadius = radius;
 
         MarkRenderStateDirty();
     }
@@ -93,7 +93,7 @@ namespace Engine
     float LocalLightComponent::
         GetAttenuationRadius() const
     {
-        return AttenuationRadius;
+        return _attenuationRadius;
     }
 
 
@@ -135,7 +135,7 @@ namespace Engine
         SetInnerConeAngle(
             float angle)
     {
-        InnerConeAngle = Core::DegToRad(angle);
+        _innerConeAngle = Core::DegToRad(angle);
 
         MarkRenderStateDirty();
     }
@@ -144,7 +144,7 @@ namespace Engine
         SetOuterConeAngle(
             float angle)
     {
-        OuterConeAngle = Core::DegToRad(angle);
+        _outerConeAngle = Core::DegToRad(angle);
 
         MarkRenderStateDirty();
     }
@@ -152,20 +152,20 @@ namespace Engine
     float SpotLightComponent::
         GetInnerConeAngle() const
     {
-        return InnerConeAngle;
+        return _innerConeAngle;
     }
 
     float SpotLightComponent::
         GetOuterConeAngle() const
     {
-        return OuterConeAngle;
+        return _outerConeAngle;
     }
 
     void SpotLightComponent::
         SetDirection(
             const Core::Float3& direction)
     {
-        Direction = direction;
+        _direction = direction;
 
         MarkRenderStateDirty();
     }
@@ -174,7 +174,7 @@ namespace Engine
         SpotLightComponent::
         GetDirection() const
     {
-        return Direction;
+        return _direction;
     }
 
     SkyLightComponent::

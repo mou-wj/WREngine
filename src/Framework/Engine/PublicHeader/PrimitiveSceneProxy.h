@@ -7,7 +7,7 @@
 #include "Math.hpp"
 #include "TypeIDCast.h"
 
-// Ç°ÖÃÉùÃ÷µ×²ã¼°ºËĞÄ²ãµÄäÖÈ¾×ÊÔ´
+// å‰ç½®å£°æ˜åº•å±‚åŠæ ¸å¿ƒå±‚çš„æ¸²æŸ“èµ„æº
 namespace RenderCore {
     class RenderBuffer;
     class VertexFactory;
@@ -24,7 +24,7 @@ namespace Engine {
 
     /*
     ===============================================================================
-        PrimitiveSceneProxy (»ùÀà)
+        PrimitiveSceneProxy (åŸºç±»)
     ===============================================================================
     */
     class ENGINE_API PrimitiveSceneProxy {
@@ -32,30 +32,30 @@ namespace Engine {
         PrimitiveSceneProxy();
         virtual ~PrimitiveSceneProxy();
 
-        int32_t GetPrimitiveId() const { return PrimitiveId; }
-        const Core::BoxSphereBounds& GetBounds() const { return ProxyBounds; }
-        const Core::Mat4& GetLocalToWorld() const { return LocalToWorld; }
-        const Core::Mat4& GetWorldToLocal() const { return WorldToLocal; }
+        int32_t GetPrimitiveId() const { return _primitiveId; }
+        const Core::BoxSphereBounds& GetBounds() const { return _proxyBounds; }
+        const Core::Mat4& GetLocalToWorld() const { return _localToWorld; }
+        const Core::Mat4& GetWorldToLocal() const { return _worldToLocal; }
 
-        virtual bool IsVisible() const { return bVisible; }
-        virtual bool CastsShadow() const { return bCastShadow; }
-        virtual bool IsOpaque() const { return bOpaque; }
+        virtual bool IsVisible() const { return _bVisible; }
+        virtual bool CastsShadow() const { return _bCastShadow; }
+        virtual bool IsOpaque() const { return _bOpaque; }
 
         virtual bool HasStaticGeometry() const = 0;
         virtual bool IsDynamic() const = 0;
         DECLARE_TYPE_ID_BASE_TYPE(PrimitiveSceneProxy)
     protected:
-        int32_t PrimitiveId;
-        Core::BoxSphereBounds ProxyBounds;
-        Core::Mat4 LocalToWorld;
-		Core::Mat4 WorldToLocal;
+        int32_t _primitiveId;
+        Core::BoxSphereBounds _proxyBounds;
+        Core::Mat4 _localToWorld;
+		Core::Mat4 _worldToLocal;
 
-        // ³£Á¿Êı¾İ×ÊÔ´
-        void* PrimitiveUniformBufferData = nullptr;
+        // å¸¸é‡æ•°æ®èµ„æº
+        void* _primitiveUniformBufferData = nullptr;
 
-        uint32_t bVisible : 1;
-        uint32_t bCastShadow : 1;
-        uint32_t bOpaque : 1;
-        uint32_t RenderFlags : 29;
+        uint32_t _bVisible : 1;
+        uint32_t _bCastShadow : 1;
+        uint32_t _bOpaque : 1;
+        uint32_t _renderFlags : 29;
     };
 } // namespace Engine

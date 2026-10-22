@@ -4,19 +4,19 @@
 namespace Engine {
 
     PrimitiveSceneProxy::PrimitiveSceneProxy()
-        : PrimitiveId(0)
-        , bVisible(true)
-        , bCastShadow(true)
-        , bOpaque(true)
-        , RenderFlags(0)
+        : _primitiveId(0)
+        , _bVisible(true)
+        , _bCastShadow(true)
+        , _bOpaque(true)
+        , _renderFlags(0)
     {
 
     }
 
     PrimitiveSceneProxy::~PrimitiveSceneProxy() {
-        // ×¢Òâ£ºÏñ VertexBuffer¡¢IndexBuffer¡¢PrimitiveUniformBuffer 
-        // ËüÃÇµÄÉúÃüÖÜÆÚ¶¼×ñÑ­ RenderResource ÏµÍ³µÄÑÓ³ÙÊÍ·Å£¨ÈçÄãÊµÏÖµÄ ReleaseRHIResource£©¡£
-        // Proxy ÄÚ²¿½ö×÷ÎªÖ»¶Á·½³ÖÓĞÖ¸Õë£¬²»ĞèÒª¡¢Ò²²»ÄÜÔÚÕâÀïÖ´ĞĞ delete¡£
+        // æ³¨æ„ï¼šåƒ VertexBufferã€IndexBufferã€PrimitiveUniformBuffer
+        // å®ƒä»¬çš„ç”Ÿå‘½å‘¨æœŸéƒ½éµå¾ª RenderResource ç³»ç»Ÿçš„å»¶è¿Ÿé‡Šæ”¾ï¼ˆå¦‚ä½ å®ç°çš„ ReleaseRHIResourceï¼‰ã€‚
+        // Proxy å†…éƒ¨ä»…ä½œä¸ºåªè¯»æ–¹æŒæœ‰æŒ‡é’ˆï¼Œä¸éœ€è¦ã€ä¹Ÿä¸èƒ½åœ¨è¿™é‡Œæ‰§è¡Œ deleteã€‚
     }
 
 } // namespace Engine

@@ -8,14 +8,14 @@ using namespace RenderCore;
 namespace Engine{
     // Engine/SceneViewport.cpp
     SceneViewport::SceneViewport(
-        ViewportClient* InClient,
-        Core::Int2 InSize
+        ViewportClient* inClient,
+        Core::Int2 inSize
     )
-        : Viewport(InClient)
-        , Width(InSize.x)
-        , Height(InSize.y)
+        : Viewport(inClient)
+        , m_Width(inSize.x)
+        , m_Height(inSize.y)
     {
-        Client = InClient;
+        _client = inClient;
 
         InitRHIResource();
 
@@ -28,45 +28,45 @@ namespace Engine{
 
     int SceneViewport::GetWidth() const
     {
-        return Width;
+        return m_Width;
     }
 
     int SceneViewport::GetHeight() const
     {
-        return Height;
+        return m_Height;
     }
 
-    void SceneViewport::Resize(int InWidth, int InHeight)
+    void SceneViewport::Resize(int inWidth, int inHeight)
     {
-        if (Width == InWidth && Height == InHeight)
+        if (m_Width == inWidth && m_Height == inHeight)
             return;
 
-        Width = InWidth;
-        Height = InHeight;
+        m_Width = inWidth;
+        m_Height = inHeight;
         ReleaseRHIResource();
         InitRHIResource();
 
-        if (Client)
+        if (_client)
         {
-            Client->OnViewportResized(Width, Height);
+            _client->OnViewportResized(m_Width, m_Height);
         }
     }
     RenderCore::RenderTexture* SceneViewport::GetRenderTarget() {
-        return ViewportTexture.get();
+        return m_ViewportTexture.get();
     }
 
 
     void* SceneViewport::GetViewportRenderTargetTexture() const {
-		return ViewportTexture.get();
+		return m_ViewportTexture.get();
     }
 
     void SceneViewport::Draw()
     {
-        if (!Client)
+        if (!_client)
             return;
-        // 2. ÈÃ Client ¹¹½¨ View / ViewFamily ²¢»æÖÆ
-        Client->Draw(this);
-        // ½»»»
+        // 2. è®© Client æ„å»º View / ViewFamily å¹¶ç»˜åˆ¶
+        _client->Draw(this);
+        // äº¤æ¢
         //auto tmp = RenderTarget;
         //RenderTarget = ViewportTexture;
         //ViewportTexture = tmp;
@@ -75,26 +75,26 @@ namespace Engine{
     void SceneViewport::InitRHIResource()
     {
         RHITextureDesc desc;
-        desc.Width = static_cast<uint32_t>(Width) > 0 ? static_cast<uint32_t>(Width) : 1;
-        desc.Height = static_cast<uint32_t>(Height) > 0 ? static_cast<uint32_t>(Height) : 1;
+        desc.Width = static_cast<uint32_t>(m_Width) > 0 ? static_cast<uint32_t>(m_Width) : 1;
+        desc.Height = static_cast<uint32_t>(m_Height) > 0 ? static_cast<uint32_t>(m_Height) : 1;
         desc.Depth = 1;
-        desc.MipLevels = 1; // 0 Í¨³£ÔÚ RHI ÖĞ±íÊ¾×Ô¶¯¼ÆËãÈ«Á´²ã¼¶
+        desc.MipLevels = 1; // 0 é€šå¸¸åœ¨ RHI ä¸­è¡¨ç¤ºè‡ªåŠ¨è®¡ç®—å…¨é“¾å±‚çº§
         desc.ArraySize = 1;
 
-        // Ó³Éä¸ñÊ½£ºÒòÎªÇ¿ÖÆÁË STBI_rgb_alpha£¬ÕâÀïÊ¹ÓÃ RGBA8
-        // ×¢Òâ£ºÈç¹ûÊÇ UI Í¼Æ¬½¨ÒéÓÃ RGBA8_UNORM£¬Èç¹ûÊÇÕÕÆ¬½¨ÒéÓÃ sRGB
+        // æ˜ å°„æ ¼å¼ï¼šå› ä¸ºå¼ºåˆ¶äº† STBI_rgb_alphaï¼Œè¿™é‡Œä½¿ç”¨ RGBA8
+        // æ³¨æ„ï¼šå¦‚æœæ˜¯ UI å›¾ç‰‡å»ºè®®ç”¨ RGBA8_UNORMï¼Œå¦‚æœæ˜¯ç…§ç‰‡å»ºè®®ç”¨ sRGB
         desc.Format = ERHIFormat::R8G8B8A8_UNorm;
 
         desc.Type = ERHITextureType::Texture2D;
         desc.SampleCount = 1;
         desc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::RenderTarget | ERHITextureCreateFlag::TransferSrc | ERHITextureCreateFlag::TransferDest | ERHITextureCreateFlag::UAV;
         desc.DebugName = "SceneViewportTarget";
-        // Èç¹ûĞèÒªÉú³É Mips£¬È·±£ Usage °üº¬ÏàÓ¦µÄ Flag (Èç RenderTarget »ò UAV£¬È¡¾öÓÚ RHI ÊµÏÖ)
+        // å¦‚æœéœ€è¦ç”Ÿæˆ Mipsï¼Œç¡®ä¿ Usage åŒ…å«ç›¸åº”çš„ Flag (å¦‚ RenderTarget æˆ– UAVï¼Œå–å†³äº RHI å®ç°)
         desc.bGenerateMips = false;
 
-        // 3. µ÷ÓÃ RHI ´´½¨ÎÆÀí
-        ViewportTexture = std::make_shared<RenderCore::RenderTexture>(desc);
-        ViewportTexture->InitRHIResource();
+        // 3. è°ƒç”¨ RHI åˆ›å»ºçº¹ç†
+        m_ViewportTexture = std::make_shared<RenderCore::RenderTexture>(desc);
+        m_ViewportTexture->InitRHIResource();
 
     }
     void SceneViewport::ReleaseRHIResource()
@@ -104,59 +104,59 @@ namespace Engine{
     }
     bool SceneViewport::OnMouseMove(
         const SlateCore::MouseMoveEvent&
-        Event)
+        event)
     {
-        return Client
-            ? Client->OnMouseMove(
-                Event)
+        return _client
+            ? _client->OnMouseMove(
+                event)
             : false;
     }
 
     bool SceneViewport::OnMouseButton(
         const SlateCore::MouseButtonEvent&
-        Event)
+        event)
     {
-        return Client
-            ? Client->OnMouseButton(
-                Event)
+        return _client
+            ? _client->OnMouseButton(
+                event)
             : false;
     }
 
     bool SceneViewport::OnMouseWheel(
         const SlateCore::MouseWheelEvent&
-        Event)
+        event)
     {
-        return Client
-            ? Client->OnMouseWheel(
-                Event)
+        return _client
+            ? _client->OnMouseWheel(
+                event)
             : false;
     }
 
     bool SceneViewport::OnKeyDown(
         const SlateCore::KeyEvent&
-        Event)
+        event)
     {
-        return Client
-            ? Client->OnKeyDown(
-                Event)
+        return _client
+            ? _client->OnKeyDown(
+                event)
             : false;
     }
 
     bool SceneViewport::OnKeyUp(
         const SlateCore::KeyEvent&
-        Event)
+        event)
     {
-        return Client
-            ? Client->OnKeyUp(
-                Event)
+        return _client
+            ? _client->OnKeyUp(
+                event)
             : false;
     }
 
     bool SceneViewport::
         OnFocusReceived()
     {
-        return Client
-            ? Client
+        return _client
+            ? _client
             ->OnFocusReceived()
             : false;
     }
@@ -164,26 +164,26 @@ namespace Engine{
     bool SceneViewport::
         OnFocusLost()
     {
-        return Client
-            ? Client
+        return _client
+            ? _client
             ->OnFocusLost()
             : false;
     }
 
     bool SceneViewport::OnResize(
-        uint32_t Width,
-        uint32_t Height)
+        uint32_t width,
+        uint32_t height)
     {
         Resize(
             static_cast<int>(
-                Width),
+                width),
             static_cast<int>(
-                Height));
+                height));
 
-        return Client
-            ? Client->OnResize(
-                Width,
-                Height)
+        return _client
+            ? _client->OnResize(
+                width,
+                height)
             : false;
     }
 

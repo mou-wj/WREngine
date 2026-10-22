@@ -14,12 +14,12 @@ namespace Engine {
 
     void IEngine::Init()
     {
-        // 注册渲染/物理模块
+        // 娉ㄥ唽娓叉煋/鐗╃悊妯″潡
     }
 
     void IEngine::Tick(float deltaTime)
     {
-        // 额外游戏逻辑
+        // 棰濆娓告垙閫昏緫
     }
 
     void IEngine::Shutdown()

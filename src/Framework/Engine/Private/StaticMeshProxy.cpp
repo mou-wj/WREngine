@@ -7,11 +7,11 @@
 namespace Engine {
 
 
-StaticMeshProxy::StaticMeshProxy(const StaticMeshComponent* InComponent):MeshComponent(InComponent)
+StaticMeshProxy::StaticMeshProxy(const StaticMeshComponent* inComponent):m_MeshComponent(inComponent)
 {
-    LocalToWorld = Core::MakeTranslationMatrix(InComponent->GetLocalLocation());
-    WorldToLocal = Core::Inverse(LocalToWorld);
-    ProxyBounds = InComponent->GetBounds();
+    _localToWorld = Core::MakeTranslationMatrix(inComponent->GetLocalLocation());
+    _worldToLocal = Core::Inverse(_localToWorld);
+    _proxyBounds = inComponent->GetBounds();
 }
 
 StaticMeshProxy::~StaticMeshProxy() {}

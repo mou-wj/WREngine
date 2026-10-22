@@ -291,7 +291,7 @@ namespace Renderer {
                         return;
 
                     constexpr uint32_t CascadeCount = 4;
-                    const std::array<float, 5>& splitDepths = sceneView.splitDepths;
+                    const std::array<float, 5>& splitDepths = sceneView.SplitDepths;
                     
 					LightShadowInfo& shadowInfo = Scene->GetLightShadowInfo(light);
                     ShadowAllocation allocation = shadowInfo.Allocation;
@@ -635,10 +635,10 @@ namespace Renderer {
         
         //To do： 这里后续平行光的级联阴影贴图相关的splitbuffer与视角相关，所以场景中的管理方式也需要修改，
 		auto& SplitBuffer = Scene->GPUResourceInfo.ShadowResourceInfo.SplitBuffer;
-		if (SplitBuffer == nullptr || SplitBuffer->GetRHI()->GetDesc().Size < (view.splitDepths.size() * sizeof(float))) {
+		if (SplitBuffer == nullptr || SplitBuffer->GetRHI()->GetDesc().Size < (view.SplitDepths.size() * sizeof(float))) {
 			RHI::RHIBufferDesc Desc;
             Desc.DebugName = "SceneSplitBuffer";
-			Desc.Size = view.splitDepths.size() * sizeof(float);
+			Desc.Size = view.SplitDepths.size() * sizeof(float);
 			Desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
 			SplitBuffer = std::make_shared<RenderCore::RenderBuffer>(Desc);
 			SplitBuffer->InitRHIResource();
@@ -651,8 +651,8 @@ namespace Renderer {
 		uploadDesc.Size = directionalLightShadowViewInfos.size() * sizeof(DirectionalLightCascadeShadowViewInfo);
         RenderGraphBuilder::UploadBufferDesc uploadDescSplit;
         uploadDescSplit.buffer = splitBufferUpload;
-        uploadDescSplit.Data = (void*)view.splitDepths.data();
-        uploadDescSplit.Size = view.splitDepths.size() * sizeof(float);
+        uploadDescSplit.Data = (void*)view.SplitDepths.data();
+        uploadDescSplit.Size = view.SplitDepths.size() * sizeof(float);
 		Core::Float4 test = directionalLightShadowViewInfos[0].ViewProj * Core::Float4(3, 3, 3, 1).Data;
         graphBuilder.AddUploadBuffers({ uploadDesc ,uploadDescSplit }, RenderCore::RenderGraphBuilder::EUploadPolicy::Immediate);
         

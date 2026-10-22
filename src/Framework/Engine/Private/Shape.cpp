@@ -9,75 +9,75 @@ namespace Engine {
 
 namespace {
 
-static void FillVertexBuffer(VertexBuffer& Buffer, std::vector<float>&& Data, uint32_t NumComponents)
+static void FillVertexBuffer(VertexBuffer& buffer, std::vector<float>&& data, uint32_t numComponents)
 {
-    Buffer.Vertices = std::move(Data);
-    Buffer.NumComponents = NumComponents;
-    Buffer.Valid = !Buffer.Vertices.empty();
+    buffer.Vertices = std::move(data);
+    buffer.NumComponents = numComponents;
+    buffer.bValid = !buffer.Vertices.empty();
 }
 
 static void FillLODFromData(
-    LODResource& OutLOD,
-    std::vector<float>&& Positions,
-    std::vector<float>&& UVs,
-    std::vector<float>&& Normals,
-    std::vector<float>&& Tangents,
-    std::vector<uint32_t>&& Indices)
+    LODResource& outLod,
+    std::vector<float>&& positions,
+    std::vector<float>&& uVs,
+    std::vector<float>&& normals,
+    std::vector<float>&& tangents,
+    std::vector<uint32_t>&& indices)
 {
-    FillVertexBuffer(OutLOD.VertexBuffers.PositionBuffer, std::move(Positions), 3);
-    FillVertexBuffer(OutLOD.VertexBuffers.UVBuffer, std::move(UVs), 2);
-    FillVertexBuffer(OutLOD.VertexBuffers.NormalBuffer, std::move(Normals), 3);
-    FillVertexBuffer(OutLOD.VertexBuffers.TangentBuffer, std::move(Tangents), 4);
-    OutLOD.IndexBuffer.Indices = std::move(Indices);
+    FillVertexBuffer(outLod.VertexBuffers.PositionBuffer, std::move(positions), 3);
+    FillVertexBuffer(outLod.VertexBuffers.UVBuffer, std::move(uVs), 2);
+    FillVertexBuffer(outLod.VertexBuffers.NormalBuffer, std::move(normals), 3);
+    FillVertexBuffer(outLod.VertexBuffers.TangentBuffer, std::move(tangents), 4);
+    outLod.IndexBuffer.Indices = std::move(indices);
 
-    SectionInfo Section;
-    Section.FirstIndex = 0;
-    Section.NumIndices = static_cast<uint32_t>(OutLOD.IndexBuffer.Indices.size());
-    Section.MaterialIndex = 0;
-    OutLOD.Sections.push_back(Section);
+    SectionInfo section;
+    section.FirstIndex = 0;
+    section.NumIndices = static_cast<uint32_t>(outLod.IndexBuffer.Indices.size());
+    section.MaterialIndex = 0;
+    outLod.Sections.push_back(section);
 }
 
-static void ComputeBoundsFromPositions(Core::BoxSphereBounds& OutBounds, const std::vector<float>& Positions)
+static void ComputeBoundsFromPositions(Core::BoxSphereBounds& outBounds, const std::vector<float>& positions)
 {
-    Core::AABB Bounds;
-    Bounds.SetEmpty();
+    Core::AABB bounds;
+    bounds.SetEmpty();
 
-    const size_t VertexCount = Positions.size() / 3;
-    for (size_t Index = 0; Index < VertexCount; ++Index) {
-        Core::Float3 Position(
-            Positions[Index * 3 + 0],
-            Positions[Index * 3 + 1],
-            Positions[Index * 3 + 2]);
-        Bounds.ExpandBy(Position);
+    const size_t vertexCount = positions.size() / 3;
+    for (size_t index = 0; index < vertexCount; ++index) {
+        Core::Float3 position(
+            positions[index * 3 + 0],
+            positions[index * 3 + 1],
+            positions[index * 3 + 2]);
+        bounds.ExpandBy(position);
     }
 
-    OutBounds.UpdateFromAABB(Bounds);
+    outBounds.UpdateFromAABB(bounds);
 }
 
 static std::shared_ptr<StaticMesh> CreateStaticMeshFromData(
-    std::vector<float>&& Positions,
-    std::vector<float>&& UVs,
-    std::vector<float>&& Normals,
-    std::vector<float>&& Tangents,
-    std::vector<uint32_t>&& Indices)
+    std::vector<float>&& positions,
+    std::vector<float>&& uVs,
+    std::vector<float>&& normals,
+    std::vector<float>&& tangents,
+    std::vector<uint32_t>&& indices)
 {
-    auto RenderData = std::make_shared<StaticMeshRenderData>();
-    LODResource LOD;
-    FillLODFromData(LOD, std::move(Positions), std::move(UVs), std::move(Normals), std::move(Tangents), std::move(Indices));
-    LOD.InitializeResources();
-    ComputeBoundsFromPositions(RenderData->Bounds, LOD.VertexBuffers.PositionBuffer.Vertices);
-    RenderData->AddLOD(std::move(LOD));
-    return std::make_shared<StaticMesh>(RenderData);
+    auto renderData = std::make_shared<StaticMeshRenderData>();
+    LODResource lod;
+    FillLODFromData(lod, std::move(positions), std::move(uVs), std::move(normals), std::move(tangents), std::move(indices));
+    lod.InitializeResources();
+    ComputeBoundsFromPositions(renderData->Bounds, lod.VertexBuffers.PositionBuffer.Vertices);
+    renderData->AddLOD(std::move(lod));
+    return std::make_shared<StaticMesh>(renderData);
 }
 
 static void BuildCubeData(
-    std::vector<float>& OutPositions,
-    std::vector<float>& OutUVs,
-    std::vector<float>& OutNormals,
-    std::vector<float>& OutTangents,
-    std::vector<uint32_t>& OutIndices)
+    std::vector<float>& outPositions,
+    std::vector<float>& outUVs,
+    std::vector<float>& outNormals,
+    std::vector<float>& outTangents,
+    std::vector<uint32_t>& outIndices)
 {
-    const float FacePositions[] = {
+    const float facePositions[] = {
         // +X face
          1, -1, -1,  1, -1,  1,  1,  1,  1,  1,  1, -1,
         // -X face
@@ -92,7 +92,7 @@ static void BuildCubeData(
          1, -1, -1, -1, -1, -1, -1,  1, -1,  1,  1, -1,
     };
 
-    const float FaceNormals[] = {
+    const float faceNormals[] = {
         // +X
          1, 0, 0,  1, 0, 0,  1, 0, 0,  1, 0, 0,
         // -X
@@ -107,7 +107,7 @@ static void BuildCubeData(
          0, 0,-1,  0, 0,-1,  0, 0,-1,  0, 0,-1,
     };
 
-    const float FaceUVs[] = {
+    const float faceUVs[] = {
         0, 0,  1, 0,  1, 1,  0, 1,
         0, 0,  1, 0,  1, 1,  0, 1,
         0, 0,  1, 0,  1, 1,  0, 1,
@@ -116,7 +116,7 @@ static void BuildCubeData(
         0, 0,  1, 0,  1, 1,  0, 1,
     };
 
-    const float FaceTangents[] = {
+    const float faceTangents[] = {
         // +X
          0, 0, 1, 0,  0, 0, 1, 0,  0, 0, 1, 0,  0, 0, 1, 0,
         // -X
@@ -131,12 +131,12 @@ static void BuildCubeData(
         -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0,
     };
 
-    OutPositions.assign(std::begin(FacePositions), std::end(FacePositions));
-    OutNormals.assign(std::begin(FaceNormals), std::end(FaceNormals));
-    OutUVs.assign(std::begin(FaceUVs), std::end(FaceUVs));
-    OutTangents.assign(std::begin(FaceTangents), std::end(FaceTangents));
+    outPositions.assign(std::begin(facePositions), std::end(facePositions));
+    outNormals.assign(std::begin(faceNormals), std::end(faceNormals));
+    outUVs.assign(std::begin(faceUVs), std::end(faceUVs));
+    outTangents.assign(std::begin(faceTangents), std::end(faceTangents));
 
-    static const uint32_t FaceIndices[] = {
+    static const uint32_t faceIndices[] = {
         0,  1,  2,  0,  2,  3,
         4,  5,  6,  4,  6,  7,
         8,  9, 10,  8, 10, 11,
@@ -144,314 +144,314 @@ static void BuildCubeData(
        16, 17, 18, 16, 18, 19,
        20, 21, 22, 20, 22, 23,
     };
-    OutIndices.assign(std::begin(FaceIndices), std::end(FaceIndices));
+    outIndices.assign(std::begin(faceIndices), std::end(faceIndices));
 }
 
 static void BuildPlaneData(
-    std::vector<float>& OutPositions,
-    std::vector<float>& OutUVs,
-    std::vector<float>& OutNormals,
-    std::vector<float>& OutTangents,
-    std::vector<uint32_t>& OutIndices)
+    std::vector<float>& outPositions,
+    std::vector<float>& outUVs,
+    std::vector<float>& outNormals,
+    std::vector<float>& outTangents,
+    std::vector<uint32_t>& outIndices)
 {
-    OutPositions = {
+    outPositions = {
         -1, 0, -1,
          1, 0, -1,
          1, 0,  1,
         -1, 0,  1,
     };
 
-    OutNormals = {
+    outNormals = {
          0, 1, 0,
          0, 1, 0,
          0, 1, 0,
          0, 1, 0,
     };
 
-    OutUVs = {
+    outUVs = {
         0, 0,
         1, 0,
         1, 1,
         0, 1,
     };
 
-    OutTangents = {
+    outTangents = {
         1, 0, 0, 0,
         1, 0, 0, 0,
         1, 0, 0, 0,
         1, 0, 0, 0,
     };
 
-    OutIndices = {0, 1, 2, 0, 2, 3};
+    outIndices = {0, 1, 2, 0, 2, 3};
 }
 
 static void BuildSphereData(
-    std::vector<float>& OutPositions,
-    std::vector<float>& OutUVs,
-    std::vector<float>& OutNormals,
-    std::vector<float>& OutTangents,
-    std::vector<uint32_t>& OutIndices,
-    int LatSegments = 16,
-    int LonSegments = 16)
+    std::vector<float>& outPositions,
+    std::vector<float>& outUVs,
+    std::vector<float>& outNormals,
+    std::vector<float>& outTangents,
+    std::vector<uint32_t>& outIndices,
+    int latSegments = 16,
+    int lonSegments = 16)
 {
-    const float Pi = 3.14159265359f;
-    const int LatCount = LatSegments + 1;
-    const int LonCount = LonSegments + 1;
+    const float pi = 3.14159265359f;
+    const int latCount = latSegments + 1;
+    const int lonCount = lonSegments + 1;
 
-    OutPositions.clear();
-    OutNormals.clear();
-    OutUVs.clear();
-    OutTangents.clear();
-    OutIndices.clear();
+    outPositions.clear();
+    outNormals.clear();
+    outUVs.clear();
+    outTangents.clear();
+    outIndices.clear();
 
-    OutPositions.reserve(LatCount * LonCount * 3);
-    OutNormals.reserve(LatCount * LonCount * 3);
-    OutUVs.reserve(LatCount * LonCount * 2);
-    OutTangents.reserve(LatCount * LonCount * 4);
+    outPositions.reserve(latCount * lonCount * 3);
+    outNormals.reserve(latCount * lonCount * 3);
+    outUVs.reserve(latCount * lonCount * 2);
+    outTangents.reserve(latCount * lonCount * 4);
 
-    for (int Lat = 0; Lat < LatCount; ++Lat) {
-        const float Theta = Lat * Pi / LatSegments;
-        const float SinTheta = std::sin(Theta);
-        const float CosTheta = std::cos(Theta);
+    for (int lat = 0; lat < latCount; ++lat) {
+        const float theta = lat * pi / latSegments;
+        const float sinTheta = std::sin(theta);
+        const float cosTheta = std::cos(theta);
 
-        for (int Lon = 0; Lon < LonCount; ++Lon) {
-            const float Phi = Lon * 2.0f * Pi / LonSegments;
-            const float SinPhi = std::sin(Phi);
-            const float CosPhi = std::cos(Phi);
+        for (int lon = 0; lon < lonCount; ++lon) {
+            const float phi = lon * 2.0f * pi / lonSegments;
+            const float sinPhi = std::sin(phi);
+            const float cosPhi = std::cos(phi);
 
-            const float X = SinTheta * CosPhi;
-            const float Y = CosTheta;
-            const float Z = SinTheta * SinPhi;
+            const float x = sinTheta * cosPhi;
+            const float y = cosTheta;
+            const float z = sinTheta * sinPhi;
 
-            OutPositions.push_back(X);
-            OutPositions.push_back(Y);
-            OutPositions.push_back(Z);
+            outPositions.push_back(x);
+            outPositions.push_back(y);
+            outPositions.push_back(z);
 
-            OutNormals.push_back(X);
-            OutNormals.push_back(Y);
-            OutNormals.push_back(Z);
+            outNormals.push_back(x);
+            outNormals.push_back(y);
+            outNormals.push_back(z);
 
-            OutUVs.push_back(static_cast<float>(Lon) / LonSegments);
-            OutUVs.push_back(1.0f - static_cast<float>(Lat) / LatSegments);
+            outUVs.push_back(static_cast<float>(lon) / lonSegments);
+            outUVs.push_back(1.0f - static_cast<float>(lat) / latSegments);
 
-            OutTangents.push_back(-SinPhi);
-            OutTangents.push_back(0.0f);
-            OutTangents.push_back(CosPhi);
-            OutTangents.push_back(0.0f);
+            outTangents.push_back(-sinPhi);
+            outTangents.push_back(0.0f);
+            outTangents.push_back(cosPhi);
+            outTangents.push_back(0.0f);
         }
     }
 
-    for (int Lat = 0; Lat < LatSegments; ++Lat) {
-        for (int Lon = 0; Lon < LonSegments; ++Lon) {
-            const uint32_t First = static_cast<uint32_t>(Lat * LonCount + Lon);
-            const uint32_t Second = static_cast<uint32_t>((Lat + 1) * LonCount + Lon);
+    for (int lat = 0; lat < latSegments; ++lat) {
+        for (int lon = 0; lon < lonSegments; ++lon) {
+            const uint32_t first = static_cast<uint32_t>(lat * lonCount + lon);
+            const uint32_t second = static_cast<uint32_t>((lat + 1) * lonCount + lon);
 
-            OutIndices.push_back(First);
-            OutIndices.push_back(Second);
-            OutIndices.push_back(Second + 1);
+            outIndices.push_back(first);
+            outIndices.push_back(second);
+            outIndices.push_back(second + 1);
 
-            OutIndices.push_back(First);
-            OutIndices.push_back(Second + 1);
-            OutIndices.push_back(First + 1);
+            outIndices.push_back(first);
+            outIndices.push_back(second + 1);
+            outIndices.push_back(first + 1);
         }
     }
 }
 
 static void BuildCylinderData(
-    std::vector<float>& OutPositions,
-    std::vector<float>& OutUVs,
-    std::vector<float>& OutNormals,
-    std::vector<float>& OutTangents,
-    std::vector<uint32_t>& OutIndices,
-    int Segments = 16)
+    std::vector<float>& outPositions,
+    std::vector<float>& outUVs,
+    std::vector<float>& outNormals,
+    std::vector<float>& outTangents,
+    std::vector<uint32_t>& outIndices,
+    int segments = 16)
 {
-    const float Pi = 3.14159265359f;
-    const float HalfHeight = 1.0f;
-    const int RingSize = Segments + 1;
+    const float pi = 3.14159265359f;
+    const float halfHeight = 1.0f;
+    const int ringSize = segments + 1;
 
-    OutPositions.clear();
-    OutUVs.clear();
-    OutNormals.clear();
-    OutTangents.clear();
-    OutIndices.clear();
+    outPositions.clear();
+    outUVs.clear();
+    outNormals.clear();
+    outTangents.clear();
+    outIndices.clear();
 
-    OutPositions.reserve((RingSize * 2 + RingSize * 2 + 2) * 3);
-    OutUVs.reserve((RingSize * 2 + RingSize * 2 + 2) * 2);
-    OutNormals.reserve((RingSize * 2 + RingSize * 2 + 2) * 3);
-    OutTangents.reserve((RingSize * 2 + RingSize * 2 + 2) * 4);
+    outPositions.reserve((ringSize * 2 + ringSize * 2 + 2) * 3);
+    outUVs.reserve((ringSize * 2 + ringSize * 2 + 2) * 2);
+    outNormals.reserve((ringSize * 2 + ringSize * 2 + 2) * 3);
+    outTangents.reserve((ringSize * 2 + ringSize * 2 + 2) * 4);
 
     // Side vertices
-    for (int Slice = 0; Slice < RingSize; ++Slice) {
-        const float Theta = Slice * 2.0f * Pi / Segments;
-        const float CosTheta = std::cos(Theta);
-        const float SinTheta = std::sin(Theta);
+    for (int slice = 0; slice < ringSize; ++slice) {
+        const float theta = slice * 2.0f * pi / segments;
+        const float cosTheta = std::cos(theta);
+        const float sinTheta = std::sin(theta);
 
-        OutPositions.push_back(CosTheta);
-        OutPositions.push_back(HalfHeight);
-        OutPositions.push_back(SinTheta);
-        OutNormals.push_back(CosTheta);
-        OutNormals.push_back(0.0f);
-        OutNormals.push_back(SinTheta);
-        OutUVs.push_back(static_cast<float>(Slice) / Segments);
-        OutUVs.push_back(0.0f);
-        OutTangents.push_back(-SinTheta);
-        OutTangents.push_back(0.0f);
-        OutTangents.push_back(CosTheta);
-        OutTangents.push_back(0.0f);
+        outPositions.push_back(cosTheta);
+        outPositions.push_back(halfHeight);
+        outPositions.push_back(sinTheta);
+        outNormals.push_back(cosTheta);
+        outNormals.push_back(0.0f);
+        outNormals.push_back(sinTheta);
+        outUVs.push_back(static_cast<float>(slice) / segments);
+        outUVs.push_back(0.0f);
+        outTangents.push_back(-sinTheta);
+        outTangents.push_back(0.0f);
+        outTangents.push_back(cosTheta);
+        outTangents.push_back(0.0f);
     }
 
-    for (int Slice = 0; Slice < RingSize; ++Slice) {
-        const float Theta = Slice * 2.0f * Pi / Segments;
-        const float CosTheta = std::cos(Theta);
-        const float SinTheta = std::sin(Theta);
+    for (int slice = 0; slice < ringSize; ++slice) {
+        const float theta = slice * 2.0f * pi / segments;
+        const float cosTheta = std::cos(theta);
+        const float sinTheta = std::sin(theta);
 
-        OutPositions.push_back(CosTheta);
-        OutPositions.push_back(-HalfHeight);
-        OutPositions.push_back(SinTheta);
-        OutNormals.push_back(CosTheta);
-        OutNormals.push_back(0.0f);
-        OutNormals.push_back(SinTheta);
-        OutUVs.push_back(static_cast<float>(Slice) / Segments);
-        OutUVs.push_back(1.0f);
-        OutTangents.push_back(-SinTheta);
-        OutTangents.push_back(0.0f);
-        OutTangents.push_back(CosTheta);
-        OutTangents.push_back(0.0f);
+        outPositions.push_back(cosTheta);
+        outPositions.push_back(-halfHeight);
+        outPositions.push_back(sinTheta);
+        outNormals.push_back(cosTheta);
+        outNormals.push_back(0.0f);
+        outNormals.push_back(sinTheta);
+        outUVs.push_back(static_cast<float>(slice) / segments);
+        outUVs.push_back(1.0f);
+        outTangents.push_back(-sinTheta);
+        outTangents.push_back(0.0f);
+        outTangents.push_back(cosTheta);
+        outTangents.push_back(0.0f);
     }
 
-    const uint32_t TopCenterIndex = static_cast<uint32_t>(OutPositions.size() / 3);
-    OutPositions.push_back(0.0f);
-    OutPositions.push_back(HalfHeight);
-    OutPositions.push_back(0.0f);
-    OutNormals.push_back(0.0f);
-    OutNormals.push_back(1.0f);
-    OutNormals.push_back(0.0f);
-    OutUVs.push_back(0.5f);
-    OutUVs.push_back(0.5f);
-    OutTangents.push_back(1.0f);
-    OutTangents.push_back(0.0f);
-    OutTangents.push_back(0.0f);
-    OutTangents.push_back(0.0f);
+    const uint32_t topCenterIndex = static_cast<uint32_t>(outPositions.size() / 3);
+    outPositions.push_back(0.0f);
+    outPositions.push_back(halfHeight);
+    outPositions.push_back(0.0f);
+    outNormals.push_back(0.0f);
+    outNormals.push_back(1.0f);
+    outNormals.push_back(0.0f);
+    outUVs.push_back(0.5f);
+    outUVs.push_back(0.5f);
+    outTangents.push_back(1.0f);
+    outTangents.push_back(0.0f);
+    outTangents.push_back(0.0f);
+    outTangents.push_back(0.0f);
 
-    const uint32_t TopRingIndex = static_cast<uint32_t>(OutPositions.size() / 3);
-    for (int Slice = 0; Slice < RingSize; ++Slice) {
-        const float Theta = Slice * 2.0f * Pi / Segments;
-        const float CosTheta = std::cos(Theta);
-        const float SinTheta = std::sin(Theta);
+    const uint32_t topRingIndex = static_cast<uint32_t>(outPositions.size() / 3);
+    for (int slice = 0; slice < ringSize; ++slice) {
+        const float theta = slice * 2.0f * pi / segments;
+        const float cosTheta = std::cos(theta);
+        const float sinTheta = std::sin(theta);
 
-        OutPositions.push_back(CosTheta);
-        OutPositions.push_back(HalfHeight);
-        OutPositions.push_back(SinTheta);
-        OutNormals.push_back(0.0f);
-        OutNormals.push_back(1.0f);
-        OutNormals.push_back(0.0f);
-        OutUVs.push_back((CosTheta + 1.0f) * 0.5f);
-        OutUVs.push_back((SinTheta + 1.0f) * 0.5f);
-        OutTangents.push_back(-SinTheta);
-        OutTangents.push_back(0.0f);
-        OutTangents.push_back(CosTheta);
-        OutTangents.push_back(0.0f);
+        outPositions.push_back(cosTheta);
+        outPositions.push_back(halfHeight);
+        outPositions.push_back(sinTheta);
+        outNormals.push_back(0.0f);
+        outNormals.push_back(1.0f);
+        outNormals.push_back(0.0f);
+        outUVs.push_back((cosTheta + 1.0f) * 0.5f);
+        outUVs.push_back((sinTheta + 1.0f) * 0.5f);
+        outTangents.push_back(-sinTheta);
+        outTangents.push_back(0.0f);
+        outTangents.push_back(cosTheta);
+        outTangents.push_back(0.0f);
     }
 
-    const uint32_t BottomCenterIndex = static_cast<uint32_t>(OutPositions.size() / 3);
-    OutPositions.push_back(0.0f);
-    OutPositions.push_back(-HalfHeight);
-    OutPositions.push_back(0.0f);
-    OutNormals.push_back(0.0f);
-    OutNormals.push_back(-1.0f);
-    OutNormals.push_back(0.0f);
-    OutUVs.push_back(0.5f);
-    OutUVs.push_back(0.5f);
-    OutTangents.push_back(1.0f);
-    OutTangents.push_back(0.0f);
-    OutTangents.push_back(0.0f);
-    OutTangents.push_back(0.0f);
+    const uint32_t bottomCenterIndex = static_cast<uint32_t>(outPositions.size() / 3);
+    outPositions.push_back(0.0f);
+    outPositions.push_back(-halfHeight);
+    outPositions.push_back(0.0f);
+    outNormals.push_back(0.0f);
+    outNormals.push_back(-1.0f);
+    outNormals.push_back(0.0f);
+    outUVs.push_back(0.5f);
+    outUVs.push_back(0.5f);
+    outTangents.push_back(1.0f);
+    outTangents.push_back(0.0f);
+    outTangents.push_back(0.0f);
+    outTangents.push_back(0.0f);
 
-    const uint32_t BottomRingIndex = static_cast<uint32_t>(OutPositions.size() / 3);
-    for (int Slice = 0; Slice < RingSize; ++Slice) {
-        const float Theta = Slice * 2.0f * Pi / Segments;
-        const float CosTheta = std::cos(Theta);
-        const float SinTheta = std::sin(Theta);
+    const uint32_t bottomRingIndex = static_cast<uint32_t>(outPositions.size() / 3);
+    for (int slice = 0; slice < ringSize; ++slice) {
+        const float theta = slice * 2.0f * pi / segments;
+        const float cosTheta = std::cos(theta);
+        const float sinTheta = std::sin(theta);
 
-        OutPositions.push_back(CosTheta);
-        OutPositions.push_back(-HalfHeight);
-        OutPositions.push_back(SinTheta);
-        OutNormals.push_back(0.0f);
-        OutNormals.push_back(-1.0f);
-        OutNormals.push_back(0.0f);
-        OutUVs.push_back((CosTheta + 1.0f) * 0.5f);
-        OutUVs.push_back((SinTheta + 1.0f) * 0.5f);
-        OutTangents.push_back(-SinTheta);
-        OutTangents.push_back(0.0f);
-        OutTangents.push_back(CosTheta);
-        OutTangents.push_back(0.0f);
+        outPositions.push_back(cosTheta);
+        outPositions.push_back(-halfHeight);
+        outPositions.push_back(sinTheta);
+        outNormals.push_back(0.0f);
+        outNormals.push_back(-1.0f);
+        outNormals.push_back(0.0f);
+        outUVs.push_back((cosTheta + 1.0f) * 0.5f);
+        outUVs.push_back((sinTheta + 1.0f) * 0.5f);
+        outTangents.push_back(-sinTheta);
+        outTangents.push_back(0.0f);
+        outTangents.push_back(cosTheta);
+        outTangents.push_back(0.0f);
     }
 
-    for (int Slice = 0; Slice < Segments; ++Slice) {
-        const uint32_t Top0 = static_cast<uint32_t>(Slice);
-        const uint32_t Top1 = static_cast<uint32_t>(Slice + 1);
-        const uint32_t Bottom0 = static_cast<uint32_t>(RingSize + Slice);
-        const uint32_t Bottom1 = static_cast<uint32_t>(RingSize + Slice + 1);
+    for (int slice = 0; slice < segments; ++slice) {
+        const uint32_t top0 = static_cast<uint32_t>(slice);
+        const uint32_t top1 = static_cast<uint32_t>(slice + 1);
+        const uint32_t bottom0 = static_cast<uint32_t>(ringSize + slice);
+        const uint32_t bottom1 = static_cast<uint32_t>(ringSize + slice + 1);
 
-        OutIndices.push_back(Top0);
-        OutIndices.push_back(Bottom0);
-        OutIndices.push_back(Bottom1);
-        OutIndices.push_back(Top0);
-        OutIndices.push_back(Bottom1);
-        OutIndices.push_back(Top1);
+        outIndices.push_back(top0);
+        outIndices.push_back(bottom0);
+        outIndices.push_back(bottom1);
+        outIndices.push_back(top0);
+        outIndices.push_back(bottom1);
+        outIndices.push_back(top1);
 
-        OutIndices.push_back(TopCenterIndex);
-        OutIndices.push_back(TopRingIndex + static_cast<uint32_t>(Slice + 1));
-        OutIndices.push_back(TopRingIndex + static_cast<uint32_t>(Slice));
+        outIndices.push_back(topCenterIndex);
+        outIndices.push_back(topRingIndex + static_cast<uint32_t>(slice + 1));
+        outIndices.push_back(topRingIndex + static_cast<uint32_t>(slice));
 
-        OutIndices.push_back(BottomCenterIndex);
-        OutIndices.push_back(BottomRingIndex + static_cast<uint32_t>(Slice));
-        OutIndices.push_back(BottomRingIndex + static_cast<uint32_t>(Slice + 1));
+        outIndices.push_back(bottomCenterIndex);
+        outIndices.push_back(bottomRingIndex + static_cast<uint32_t>(slice));
+        outIndices.push_back(bottomRingIndex + static_cast<uint32_t>(slice + 1));
     }
 }
 
 static std::shared_ptr<StaticMesh> CreateCubeMesh()
 {
-    std::vector<float> Positions;
-    std::vector<float> UVs;
-    std::vector<float> Normals;
-    std::vector<float> Tangents;
-    std::vector<uint32_t> Indices;
-    BuildCubeData(Positions, UVs, Normals, Tangents, Indices);
-    return CreateStaticMeshFromData(std::move(Positions), std::move(UVs), std::move(Normals), std::move(Tangents), std::move(Indices));
+    std::vector<float> positions;
+    std::vector<float> uVs;
+    std::vector<float> normals;
+    std::vector<float> tangents;
+    std::vector<uint32_t> indices;
+    BuildCubeData(positions, uVs, normals, tangents, indices);
+    return CreateStaticMeshFromData(std::move(positions), std::move(uVs), std::move(normals), std::move(tangents), std::move(indices));
 }
 
 static std::shared_ptr<StaticMesh> CreatePlaneMesh()
 {
-    std::vector<float> Positions;
-    std::vector<float> UVs;
-    std::vector<float> Normals;
-    std::vector<float> Tangents;
-    std::vector<uint32_t> Indices;
-    BuildPlaneData(Positions, UVs, Normals, Tangents, Indices);
-    return CreateStaticMeshFromData(std::move(Positions), std::move(UVs), std::move(Normals), std::move(Tangents), std::move(Indices));
+    std::vector<float> positions;
+    std::vector<float> uVs;
+    std::vector<float> normals;
+    std::vector<float> tangents;
+    std::vector<uint32_t> indices;
+    BuildPlaneData(positions, uVs, normals, tangents, indices);
+    return CreateStaticMeshFromData(std::move(positions), std::move(uVs), std::move(normals), std::move(tangents), std::move(indices));
 }
 
 static std::shared_ptr<StaticMesh> CreateSphereMesh()
 {
-    std::vector<float> Positions;
-    std::vector<float> UVs;
-    std::vector<float> Normals;
-    std::vector<float> Tangents;
-    std::vector<uint32_t> Indices;
-    BuildSphereData(Positions, UVs, Normals, Tangents, Indices);
-    return CreateStaticMeshFromData(std::move(Positions), std::move(UVs), std::move(Normals), std::move(Tangents), std::move(Indices));
+    std::vector<float> positions;
+    std::vector<float> uVs;
+    std::vector<float> normals;
+    std::vector<float> tangents;
+    std::vector<uint32_t> indices;
+    BuildSphereData(positions, uVs, normals, tangents, indices);
+    return CreateStaticMeshFromData(std::move(positions), std::move(uVs), std::move(normals), std::move(tangents), std::move(indices));
 }
 
 static std::shared_ptr<StaticMesh> CreateCylinderMesh()
 {
-    std::vector<float> Positions;
-    std::vector<float> UVs;
-    std::vector<float> Normals;
-    std::vector<float> Tangents;
-    std::vector<uint32_t> Indices;
-    BuildCylinderData(Positions, UVs, Normals, Tangents, Indices);
-    return CreateStaticMeshFromData(std::move(Positions), std::move(UVs), std::move(Normals), std::move(Tangents), std::move(Indices));
+    std::vector<float> positions;
+    std::vector<float> uVs;
+    std::vector<float> normals;
+    std::vector<float> tangents;
+    std::vector<uint32_t> indices;
+    BuildCylinderData(positions, uVs, normals, tangents, indices);
+    return CreateStaticMeshFromData(std::move(positions), std::move(uVs), std::move(normals), std::move(tangents), std::move(indices));
 }
 
 } // namespace

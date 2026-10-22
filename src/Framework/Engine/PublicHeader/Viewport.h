@@ -15,16 +15,16 @@ namespace Engine {
     class ENGINE_API Viewport : public RenderTarget
     {
     public:
-        Viewport(ViewportClient* InClient);
+        Viewport(ViewportClient* inClient);
         virtual ~Viewport() = default;
 
 
-        // äÖÈ¾Èë¿Ú£¨ÓÉ SceneViewport ÊµÏÖ£©
+        // æ¸²æŸ“å…¥å£ï¼ˆç”± SceneViewport å®ç°ï¼‰
         virtual void Draw() = 0;
         virtual int GetWidth() const = 0;
         virtual int GetHeight() const = 0;
     protected:
-        ViewportClient* Client = nullptr;
+        ViewportClient* _client = nullptr;
         
     };
 }

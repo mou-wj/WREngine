@@ -41,8 +41,8 @@ namespace Engine {
     };
 
     ENGINE_API void ModifyShaderCompilerEnvironment(
-        const MaterialPermutationParameters& Parameters,
-        RenderCore::ShaderCompilerEnvironment& OutEnvironment);
+        const MaterialPermutationParameters& parameters,
+        RenderCore::ShaderCompilerEnvironment& outEnvironment);
 
     class MaterialShaderType;
 
@@ -125,35 +125,35 @@ namespace Engine {
 namespace std {
     template<>
     struct std::hash<Engine::MaterialPermutationParameters> {
-        size_t operator()(const Engine::MaterialPermutationParameters& Key) const
+        size_t operator()(const Engine::MaterialPermutationParameters& key) const
         {
             size_t h = 0;
-            HashCombine(h, std::hash<uint8_t>()(static_cast<uint8_t>(Key.ShadingModel)));
+            HashCombine(h, std::hash<uint8_t>()(static_cast<uint8_t>(key.ShadingModel)));
             return h;
         }
     };
 
     template<>
     struct std::hash<Engine::MaterialShaderKey> {
-        size_t operator()(const Engine::MaterialShaderKey& Key) const
+        size_t operator()(const Engine::MaterialShaderKey& key) const
         {
             size_t h = 0;
-            HashCombine(h, std::hash<void*>()(Key.ShaderType));
-            HashCombine(h, std::hash<RenderCore::ShaderPermutationId>()(Key.PermutationId));
-            HashCombine(h, std::hash<Engine::MaterialPermutationParameters>()(Key.MaterialParameter));
+            HashCombine(h, std::hash<void*>()(key.ShaderType));
+            HashCombine(h, std::hash<RenderCore::ShaderPermutationId>()(key.PermutationId));
+            HashCombine(h, std::hash<Engine::MaterialPermutationParameters>()(key.MaterialParameter));
             return h;
         }
     };
     template<>
     struct std::hash<Engine::MeshMaterialShaderKey> {
-        size_t operator()(const Engine::MeshMaterialShaderKey& Key) const
+        size_t operator()(const Engine::MeshMaterialShaderKey& key) const
         {
             size_t h = 0;
-            HashCombine(h, std::hash<void*>()(Key.ShaderType));
-            HashCombine(h, std::hash<void*>()(Key.VF));
-            HashCombine(h, std::hash<RenderCore::ShaderPermutationId>()(Key.PermutationId));
-            HashCombine(h, std::hash<RenderCore::VertexFactoryFeatureFlags>()(Key.VertexFactoryFlags));
-            HashCombine(h, std::hash<Engine::MaterialPermutationParameters>()(Key.MaterialParameter));
+            HashCombine(h, std::hash<void*>()(key.ShaderType));
+            HashCombine(h, std::hash<void*>()(key.VF));
+            HashCombine(h, std::hash<RenderCore::ShaderPermutationId>()(key.PermutationId));
+            HashCombine(h, std::hash<RenderCore::VertexFactoryFeatureFlags>()(key.VertexFactoryFlags));
+            HashCombine(h, std::hash<Engine::MaterialPermutationParameters>()(key.MaterialParameter));
             return h;
         }
     };
@@ -184,36 +184,36 @@ namespace Engine {
         struct ShaderCompiledInitializer : public RenderCore::ShaderCompiledInitializer {
             RenderCore::VertexFactoryType* FactoryType;
 			ShaderCompiledInitializer(
-				const RenderCore::ShaderType* Type,
-				const std::vector<char>& Code,
-				const RenderCore::ShaderParameterAllocationMap& ParameterMap,
-				uint32_t PermutationId,
-				RenderCore::VertexFactoryType* InFactoryType)
-				: RenderCore::ShaderCompiledInitializer(Type, Code, ParameterMap, PermutationId),
-				FactoryType(InFactoryType) {
+				const RenderCore::ShaderType* type,
+				const std::vector<char>& code,
+				const RenderCore::ShaderParameterAllocationMap& parameterMap,
+				uint32_t permutationId,
+				RenderCore::VertexFactoryType* inFactoryType)
+				: RenderCore::ShaderCompiledInitializer(type, code, parameterMap, permutationId),
+				FactoryType(inFactoryType) {
 			}
         };
         MeshMaterialShaderType(
-            const std::string& InName,
-            const std::string& InSourceFile,
-            const std::string& InEntryPoint,
-            RHI::ERHIShaderFrequency InFrequency,
-            RenderCore::ModifyCompilationEnvironmentFuncType InModifyCompilationEnvironment,
-            RenderCore::ShouldCompilePermutationFuncType InShouldCompilePermutation,
-            RenderCore::ConstructCompiledFuncType InConstructCompiled,
-            int32_t InTotalPermutationCount = 1,
-            const RenderCore::ShaderParametersMetadata* InRootParametersMetadata = nullptr
+            const std::string& inName,
+            const std::string& inSourceFile,
+            const std::string& inEntryPoint,
+            RHI::ERHIShaderFrequency inFrequency,
+            RenderCore::ModifyCompilationEnvironmentFuncType inModifyCompilationEnvironment,
+            RenderCore::ShouldCompilePermutationFuncType inShouldCompilePermutation,
+            RenderCore::ConstructCompiledFuncType inConstructCompiled,
+            int32_t inTotalPermutationCount = 1,
+            const RenderCore::ShaderParametersMetadata* inRootParametersMetadata = nullptr
         )
             : ShaderType(
-                InName,
-                InSourceFile,
-                InEntryPoint,
-                InFrequency,
-                InModifyCompilationEnvironment,
-                InShouldCompilePermutation,
-                InConstructCompiled,
-                InTotalPermutationCount,
-                InRootParametersMetadata,
+                inName,
+                inSourceFile,
+                inEntryPoint,
+                inFrequency,
+                inModifyCompilationEnvironment,
+                inShouldCompilePermutation,
+                inConstructCompiled,
+                inTotalPermutationCount,
+                inRootParametersMetadata,
                 EShaderTypeFlag::MeshMaterial
             )
         {
@@ -245,16 +245,16 @@ namespace Engine {
         void Clear();
     public:
 
-        RenderCore::Shader* GetShader(const MeshMaterialShaderKey& Key);
+        RenderCore::Shader* GetShader(const MeshMaterialShaderKey& key);
 
     private:
-        RenderCore::Shader* CompileShader(const MeshMaterialShaderKey& Key);
+        RenderCore::Shader* CompileShader(const MeshMaterialShaderKey& key);
 
 
         std::unordered_map<
             MeshMaterialShaderKey,
             RenderCore::ShaderSP
-        > ShaderMap;
+        > m_ShaderMap;
 
     private:
 
@@ -291,17 +291,17 @@ namespace Engine {
         void Clear();
     public:
 
-        RenderCore::Shader* GetShader(const MaterialShaderKey& Key);
+        RenderCore::Shader* GetShader(const MaterialShaderKey& key);
 
 
     private:
-        RenderCore::Shader* CompileShader(const MaterialShaderKey& Key);
+        RenderCore::Shader* CompileShader(const MaterialShaderKey& key);
 
 
         std::unordered_map<
             MaterialShaderKey,
             RenderCore::ShaderSP
-        > ShaderMap;
+        > m_ShaderMap;
 
     private:
 
@@ -320,26 +320,26 @@ namespace Engine {
         using Super = RenderCore::ShaderType;
 
         MaterialShaderType(
-            const std::string& InName,
-            const std::string& InShaderPath,
-            const std::string& InEntryPoint,
-            ERHIShaderFrequency InFrequency,
-            RenderCore::ModifyCompilationEnvironmentFuncType InModifyCompilationEnvironment,
-            RenderCore::ShouldCompilePermutationFuncType InShouldCompilePermutation,
-            RenderCore::ConstructCompiledFuncType InConstructInstance,
-            int32_t InTotalPermutationCount = 1,
-            const RenderCore::ShaderParametersMetadata* InRootParametersMetadata = nullptr
+            const std::string& inName,
+            const std::string& inShaderPath,
+            const std::string& inEntryPoint,
+            ERHIShaderFrequency inFrequency,
+            RenderCore::ModifyCompilationEnvironmentFuncType inModifyCompilationEnvironment,
+            RenderCore::ShouldCompilePermutationFuncType inShouldCompilePermutation,
+            RenderCore::ConstructCompiledFuncType inConstructInstance,
+            int32_t inTotalPermutationCount = 1,
+            const RenderCore::ShaderParametersMetadata* inRootParametersMetadata = nullptr
         )
             : ShaderType(
-                InName,
-                InShaderPath,
-                InEntryPoint,
-                InFrequency,
-                InModifyCompilationEnvironment,
-                InShouldCompilePermutation,
-                InConstructInstance,
-                InTotalPermutationCount,
-                InRootParametersMetadata,
+                inName,
+                inShaderPath,
+                inEntryPoint,
+                inFrequency,
+                inModifyCompilationEnvironment,
+                inShouldCompilePermutation,
+                inConstructInstance,
+                inTotalPermutationCount,
+                inRootParametersMetadata,
                 EShaderTypeFlag::Material
             )
         {

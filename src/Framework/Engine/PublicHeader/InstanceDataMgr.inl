@@ -2,178 +2,178 @@ namespace Engine
 {
     namespace InstanceDataMgrDetail
     {
-        inline RHI::RHIBufferDesc BuildStructuredBufferDesc(uint64_t SizeInBytes, uint32_t Stride, const char* DebugName)
+        inline RHI::RHIBufferDesc BuildStructuredBufferDesc(uint64_t sizeInBytes, uint32_t stride, const char* debugName)
         {
-            RHI::RHIBufferDesc Desc;
-            Desc.Size = std::max<uint64_t>(static_cast<uint64_t>(Stride), SizeInBytes);
-            Desc.Stride = Stride;
-            Desc.InitialQueueType = RHI::EQueueType::Graphics;
-            Desc.Usage =
+            RHI::RHIBufferDesc desc;
+            desc.Size = std::max<uint64_t>(static_cast<uint64_t>(stride), sizeInBytes);
+            desc.Stride = stride;
+            desc.InitialQueueType = RHI::EQueueType::Graphics;
+            desc.Usage =
                 RHI::ERHIBufferUsageFlag::Structured |
                 RHI::ERHIBufferUsageFlag::ShaderResource |
                 RHI::ERHIBufferUsageFlag::Vertex |
                 RHI::ERHIBufferUsageFlag::TransferDst;
-            Desc.DebugName = DebugName;
-            return Desc;
+            desc.DebugName = debugName;
+            return desc;
         }
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
     InstanceDataBlock<InstanceDataType, InstanceIdType>::InstanceDataBlock(
-        ManagerType* InOwner,
-        uint32_t InBlockId,
-        std::string InDebugName)
-        : Owner(InOwner)
-        , BlockId(InBlockId)
-        , DebugName(std::move(InDebugName))
+        ManagerType* inOwner,
+        uint32_t inBlockId,
+        std::string inDebugName)
+        : m_Owner(inOwner)
+        , m_BlockId(inBlockId)
+        , m_DebugName(std::move(inDebugName))
     {
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
     uint32_t InstanceDataBlock<InstanceDataType, InstanceIdType>::AddSubParameters(
-        const std::vector<InstanceDataType>& InSubParameters)
+        const std::vector<InstanceDataType>& inSubParameters)
     {
-        if (!Owner || InSubParameters.empty())
+        if (!m_Owner || inSubParameters.empty())
         {
             return 0;
         }
 
-        std::lock_guard<std::mutex> Lock(Owner->Mutex);
-        const uint32_t LogicalOffset = static_cast<uint32_t>(SubParameters.size());
-        SubParameters.insert(SubParameters.end(), InSubParameters.begin(), InSubParameters.end());
-        bSubParametersDirty = true;
-        return LogicalOffset;
+        std::lock_guard<std::mutex> lock(m_Owner->m_Mutex);
+        const uint32_t logicalOffset = static_cast<uint32_t>(m_SubParameters.size());
+        m_SubParameters.insert(m_SubParameters.end(), inSubParameters.begin(), inSubParameters.end());
+        m_bSubParametersDirty = true;
+        return logicalOffset;
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
     uint32_t InstanceDataBlock<InstanceDataType, InstanceIdType>::AddInstanceIds(
-        const std::vector<InstanceIdType>& InInstanceIds)
+        const std::vector<InstanceIdType>& inInstanceIds)
     {
-        if (!Owner || InInstanceIds.empty())
+        if (!m_Owner || inInstanceIds.empty())
         {
             return 0;
         }
 
-        std::lock_guard<std::mutex> Lock(Owner->Mutex);
-        const uint32_t LogicalOffset = static_cast<uint32_t>(InstanceIds.size());
-        InstanceIds.insert(InstanceIds.end(), InInstanceIds.begin(), InInstanceIds.end());
-        bInstanceIdsDirty = true;
-        return LogicalOffset;
+        std::lock_guard<std::mutex> lock(m_Owner->m_Mutex);
+        const uint32_t logicalOffset = static_cast<uint32_t>(m_InstanceIds.size());
+        m_InstanceIds.insert(m_InstanceIds.end(), inInstanceIds.begin(), inInstanceIds.end());
+        m_bInstanceIdsDirty = true;
+        return logicalOffset;
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
     bool InstanceDataBlock<InstanceDataType, InstanceIdType>::UpdateSubParameters(
-        uint32_t LogicalOffset,
-        const std::vector<InstanceDataType>& InSubParameters)
+        uint32_t logicalOffset,
+        const std::vector<InstanceDataType>& inSubParameters)
     {
-        if (!Owner || InSubParameters.empty())
+        if (!m_Owner || inSubParameters.empty())
         {
             return false;
         }
 
-        std::lock_guard<std::mutex> Lock(Owner->Mutex);
-        const uint32_t Count = static_cast<uint32_t>(InSubParameters.size());
-        const uint32_t RequiredSize = LogicalOffset + Count;
-        if (RequiredSize > static_cast<uint32_t>(SubParameters.size()))
+        std::lock_guard<std::mutex> lock(m_Owner->m_Mutex);
+        const uint32_t count = static_cast<uint32_t>(inSubParameters.size());
+        const uint32_t requiredSize = logicalOffset + count;
+        if (requiredSize > static_cast<uint32_t>(m_SubParameters.size()))
         {
-            SubParameters.resize(RequiredSize);
+            m_SubParameters.resize(requiredSize);
         }
 
-        std::copy(InSubParameters.begin(), InSubParameters.end(), SubParameters.begin() + LogicalOffset);
-        bSubParametersDirty = true;
+        std::copy(inSubParameters.begin(), inSubParameters.end(), m_SubParameters.begin() + logicalOffset);
+        m_bSubParametersDirty = true;
         return true;
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
     void InstanceDataBlock<InstanceDataType, InstanceIdType>::UpdateGPUResources()
     {
-        if (bSubParametersDirty)
+        if (m_bSubParametersDirty)
         {
-            if (SubParameters.empty())
+            if (m_SubParameters.empty())
             {
-                InstanceDataBuffer.reset();
+                m_InstanceDataBuffer.reset();
             }
             else
             {
-                const uint64_t SizeInBytes = static_cast<uint64_t>(SubParameters.size()) * sizeof(InstanceDataType);
-                if (!InstanceDataBuffer || InstanceDataBuffer->GetRHI()->GetDesc().Size < SizeInBytes)
+                const uint64_t sizeInBytes = static_cast<uint64_t>(m_SubParameters.size()) * sizeof(InstanceDataType);
+                if (!m_InstanceDataBuffer || m_InstanceDataBuffer->GetRHI()->GetDesc().Size < sizeInBytes)
                 {
-                    InstanceDataBuffer = std::make_shared<RenderCore::RenderBuffer>(
+                    m_InstanceDataBuffer = std::make_shared<RenderCore::RenderBuffer>(
                         InstanceDataMgrDetail::BuildStructuredBufferDesc(
-                            SizeInBytes,
+                            sizeInBytes,
                             sizeof(InstanceDataType),
                             "InstanceDataBuffer"));
-                    InstanceDataBuffer->InitRHIResource();
+                    m_InstanceDataBuffer->InitRHIResource();
                 }
 
-                InstanceDataBuffer->UploadData(SubParameters.data(), static_cast<uint32_t>(SizeInBytes));
+                m_InstanceDataBuffer->UploadData(m_SubParameters.data(), static_cast<uint32_t>(sizeInBytes));
                 RenderCore::TransitionBufferImmediate(
                     RHI::GRHIApi,
-                    InstanceDataBuffer.get(),
+                    m_InstanceDataBuffer.get(),
                     RHI::ERHIResourceAccess::ShadingRateSource,
                     RHI::EQueueType::Graphics);
             }
 
-            bSubParametersDirty = false;
+            m_bSubParametersDirty = false;
         }
 
-        if (bInstanceIdsDirty)
+        if (m_bInstanceIdsDirty)
         {
-            if (InstanceIds.empty())
+            if (m_InstanceIds.empty())
             {
-                InstanceIdBuffer.reset();
+                m_InstanceIdBuffer.reset();
             }
             else
             {
-                const uint64_t SizeInBytes = static_cast<uint64_t>(InstanceIds.size()) * sizeof(InstanceIdType);
-                if (!InstanceIdBuffer || InstanceIdBuffer->GetRHI()->GetDesc().Size < SizeInBytes)
+                const uint64_t sizeInBytes = static_cast<uint64_t>(m_InstanceIds.size()) * sizeof(InstanceIdType);
+                if (!m_InstanceIdBuffer || m_InstanceIdBuffer->GetRHI()->GetDesc().Size < sizeInBytes)
                 {
-                    InstanceIdBuffer = std::make_shared<RenderCore::RenderBuffer>(
+                    m_InstanceIdBuffer = std::make_shared<RenderCore::RenderBuffer>(
                         InstanceDataMgrDetail::BuildStructuredBufferDesc(
-                            SizeInBytes,
+                            sizeInBytes,
                             sizeof(InstanceIdType),
                             "InstanceIdBuffer"));
-                    InstanceIdBuffer->InitRHIResource();
+                    m_InstanceIdBuffer->InitRHIResource();
                 }
 
-                InstanceIdBuffer->UploadData(InstanceIds.data(), static_cast<uint32_t>(SizeInBytes));
+                m_InstanceIdBuffer->UploadData(m_InstanceIds.data(), static_cast<uint32_t>(sizeInBytes));
                 RenderCore::TransitionBufferImmediate(
                     RHI::GRHIApi,
-                    InstanceIdBuffer.get(),
+                    m_InstanceIdBuffer.get(),
                     RHI::ERHIResourceAccess::VertexOrIndexBuffer,
                     RHI::EQueueType::Graphics);
             }
 
-            bInstanceIdsDirty = false;
+            m_bInstanceIdsDirty = false;
         }
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
     void InstanceDataBlock<InstanceDataType, InstanceIdType>::ClearGPUResources()
     {
-        SubParameters.clear();
-        InstanceIds.clear();
-        InstanceDataBuffer.reset();
-        InstanceIdBuffer.reset();
-        bSubParametersDirty = false;
-        bInstanceIdsDirty = false;
+        m_SubParameters.clear();
+        m_InstanceIds.clear();
+        m_InstanceDataBuffer.reset();
+        m_InstanceIdBuffer.reset();
+        m_bSubParametersDirty = false;
+        m_bInstanceIdsDirty = false;
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
     RenderCore::RenderBuffer* InstanceDataBlock<InstanceDataType, InstanceIdType>::GetInstanceIdBuffer() const
     {
-        return InstanceIdBuffer.get();
+        return m_InstanceIdBuffer.get();
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
     RHI::RHIShaderResourceView* InstanceDataBlock<InstanceDataType, InstanceIdType>::GetInstanceDataSRV() const
     {
-        RHI::RHIBufferSRVCreateInfo CreateInfo;
-        CreateInfo.Format = RHI::ERHIFormat::Unknown;
-        CreateInfo.NumElements = static_cast<uint32_t>(SubParameters.size());
-        CreateInfo.Stride = sizeof(InstanceDataType);
-        return InstanceDataBuffer
-            ? InstanceDataBuffer->GetViewCache().GetOrCreateSRV(InstanceDataBuffer->GetRHI(), CreateInfo)
+        RHI::RHIBufferSRVCreateInfo createInfo;
+        createInfo.Format = RHI::ERHIFormat::Unknown;
+        createInfo.NumElements = static_cast<uint32_t>(m_SubParameters.size());
+        createInfo.Stride = sizeof(InstanceDataType);
+        return m_InstanceDataBuffer
+            ? m_InstanceDataBuffer->GetViewCache().GetOrCreateSRV(m_InstanceDataBuffer->GetRHI(), createInfo)
             : nullptr;
     }
 
@@ -181,79 +181,79 @@ namespace Engine
     InstanceDataManager<InstanceDataType, InstanceIdType>&
         InstanceDataManager<InstanceDataType, InstanceIdType>::Get()
     {
-        static InstanceDataManager Instance;
-        return Instance;
+        static InstanceDataManager instance;
+        return instance;
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
     typename InstanceDataManager<InstanceDataType, InstanceIdType>::BlockRef
-        InstanceDataManager<InstanceDataType, InstanceIdType>::CreateInstanceBlock(const std::string& DebugName)
+        InstanceDataManager<InstanceDataType, InstanceIdType>::CreateInstanceBlock(const std::string& debugName)
     {
-        std::lock_guard<std::mutex> Lock(Mutex);
-        const uint32_t BlockId = NextBlockId++;
-        BlockRef Block(new BlockType(this, BlockId, DebugName));
-        Blocks.emplace(BlockId, Block);
-        return Block;
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        const uint32_t blockId = m_NextBlockId++;
+        BlockRef block(new BlockType(this, blockId, debugName));
+        m_Blocks.emplace(blockId, block);
+        return block;
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
-    void InstanceDataManager<InstanceDataType, InstanceIdType>::RemoveInstanceBlock(uint32_t BlockId)
+    void InstanceDataManager<InstanceDataType, InstanceIdType>::RemoveInstanceBlock(uint32_t blockId)
     {
-        std::lock_guard<std::mutex> Lock(Mutex);
-        auto It = Blocks.find(BlockId);
-        if (It == Blocks.end())
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        auto it = m_Blocks.find(blockId);
+        if (it == m_Blocks.end())
         {
             return;
         }
 
-        It->second->ClearGPUResources();
-        Blocks.erase(It);
+        it->second->ClearGPUResources();
+        m_Blocks.erase(it);
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
-    void InstanceDataManager<InstanceDataType, InstanceIdType>::RemoveInstanceBlock(const BlockRef& Block)
+    void InstanceDataManager<InstanceDataType, InstanceIdType>::RemoveInstanceBlock(const BlockRef& block)
     {
-        if (!Block)
+        if (!block)
         {
             return;
         }
 
-        RemoveInstanceBlock(Block->GetBlockId());
+        RemoveInstanceBlock(block->GetBlockId());
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
     void InstanceDataManager<InstanceDataType, InstanceIdType>::BeginUpdateGPUResources()
     {
-        std::lock_guard<std::mutex> Lock(Mutex);
-        for (auto& Pair : Blocks)
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        for (auto& pair : m_Blocks)
         {
-            if (!Pair.second)
+            if (!pair.second)
             {
                 continue;
             }
 
-            Pair.second->InstanceIds.clear();
-            Pair.second->bInstanceIdsDirty = true;
+            pair.second->m_InstanceIds.clear();
+            pair.second->m_bInstanceIdsDirty = true;
         }
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
     void InstanceDataManager<InstanceDataType, InstanceIdType>::UpdateGPUResources()
     {
-        std::lock_guard<std::mutex> Lock(Mutex);
-        for (auto& Pair : Blocks)
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        for (auto& pair : m_Blocks)
         {
-            if (Pair.second)
+            if (pair.second)
             {
-                Pair.second->UpdateGPUResources();
+                pair.second->UpdateGPUResources();
             }
         }
     }
 
     template<typename InstanceDataType, typename InstanceIdType>
-    RenderCore::RenderBuffer* InstanceDataManager<InstanceDataType, InstanceIdType>::GetInstanceIdBuffer(const BlockRef& Block) const
+    RenderCore::RenderBuffer* InstanceDataManager<InstanceDataType, InstanceIdType>::GetInstanceIdBuffer(const BlockRef& block) const
     {
-        std::lock_guard<std::mutex> Lock(Mutex);
-        return Block ? Block->GetInstanceIdBuffer() : nullptr;
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        return block ? block->GetInstanceIdBuffer() : nullptr;
     }
 }

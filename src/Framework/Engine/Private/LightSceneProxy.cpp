@@ -6,7 +6,7 @@ namespace Engine
 
     LightSceneProxy::
         LightSceneProxy(
-            const LightComponent* component) : Component(component)
+            const LightComponent* component) : _component(component)
     {
         
     }
@@ -14,26 +14,26 @@ namespace Engine
     void LightSceneProxy::
         UpdateFromComponent()
     {
-        if (Position != Component->GetWorldLocation()) {
+        if (_position != _component->GetWorldLocation()) {
             bUpdateCastShadow = true;
         }
-        Position =
-            Component->GetWorldLocation();
-        Color =
-            Component->GetColor();
+        _position =
+            _component->GetWorldLocation();
+        _color =
+            _component->GetColor();
 
-        Intensity =
-            Component->GetIntensity();
+        _intensity =
+            _component->GetIntensity();
 
-        bCastShadow =
-            Component->IsCastShadow();
+        _bCastShadow =
+            _component->IsCastShadow();
     }
 
     const Core::Float3&
         LightSceneProxy::
         GetPosition() const
     {
-        return Position;
+        return _position;
     }
 
 
@@ -41,19 +41,19 @@ namespace Engine
         LightSceneProxy::
         GetColor() const
     {
-        return Color;
+        return _color;
     }
 
     float LightSceneProxy::
         GetIntensity() const
     {
-        return Intensity;
+        return _intensity;
     }
 
     bool LightSceneProxy::
         IsCastShadow() const
     {
-        return bCastShadow;
+        return _bCastShadow;
     }
     DirectionalLightSceneProxy::
         DirectionalLightSceneProxy(
@@ -70,19 +70,19 @@ namespace Engine
     {
         LightSceneProxy::UpdateFromComponent();
 
-        auto dir = static_cast<const DirectionalLightComponent*>(Component);
+        auto dir = static_cast<const DirectionalLightComponent*>(_component);
         if (dir)
         {
-            if (Direction != dir->GetDirection()) {
+            if (_direction != dir->GetDirection()) {
                 bUpdateCastShadow = true;
             }
-            Direction = dir->GetDirection();
+            _direction = dir->GetDirection();
         }
     }
 
     const Core::Float3& DirectionalLightSceneProxy::GetDirection() const
     {
-        return Direction;
+        return _direction;
     }
 
     ELightType
@@ -99,7 +99,7 @@ namespace Engine
         :
         LightSceneProxy(component)
     {
-        AttenuationRadius =
+        _attenuationRadius =
             component->GetAttenuationRadius();
     }
 
@@ -112,9 +112,9 @@ namespace Engine
         auto localLight =
             static_cast<
             const LocalLightComponent*>(
-                Component);
+                _component);
 
-        AttenuationRadius =
+        _attenuationRadius =
             localLight->
             GetAttenuationRadius();
     }
@@ -123,7 +123,7 @@ namespace Engine
         GetAttenuationRadius()
         const
     {
-        return AttenuationRadius;
+        return _attenuationRadius;
     }
 
     PointLightSceneProxy::
@@ -153,17 +153,17 @@ namespace Engine
             component)
     {
 
-        InnerConeAngle =
+        _innerConeAngle =
             component->
             GetInnerConeAngle();
 
-        OuterConeAngle =
+        _outerConeAngle =
             component->
             GetOuterConeAngle();
-        if(Direction != component->GetDirection()) {
+        if(_direction != component->GetDirection()) {
             bUpdateCastShadow = true;
         }
-        Direction = component->GetDirection();
+        _direction = component->GetDirection();
         UpdateFromComponent();
     }
 
@@ -176,19 +176,19 @@ namespace Engine
         auto spot =
             static_cast<
             const SpotLightComponent*>(
-                Component);
+                _component);
 
-        InnerConeAngle =
+        _innerConeAngle =
             spot->GetInnerConeAngle();
 
-        OuterConeAngle =
+        _outerConeAngle =
             spot->GetOuterConeAngle();
-        Direction = spot->GetDirection();
+        _direction = spot->GetDirection();
     }
 
     const Core::Float3& SpotLightSceneProxy::GetDirection() const
     {
-        return Direction;
+        return _direction;
     }
 
     ELightType
@@ -202,14 +202,14 @@ namespace Engine
         GetInnerConeAngle()
         const
     {
-        return InnerConeAngle;
+        return _innerConeAngle;
     }
 
     float SpotLightSceneProxy::
         GetOuterConeAngle()
         const
     {
-        return OuterConeAngle;
+        return _outerConeAngle;
     }
 
     SkyLightSceneProxy::
@@ -226,11 +226,11 @@ namespace Engine
     {
         LightSceneProxy::UpdateFromComponent();
 
-        auto sky = static_cast<const SkyLightComponent*>(Component);
+        auto sky = static_cast<const SkyLightComponent*>(_component);
         if (sky)
         {
-            DiffuseIrradianceMap = sky->GetDiffuseIrradiance();
-            SpecularPrefilterMap = sky->GetSpecularPrefilter();
+            _diffuseIrradianceMap = sky->GetDiffuseIrradiance();
+            _specularPrefilterMap = sky->GetSpecularPrefilter();
         }
     }
 

@@ -12,68 +12,68 @@ namespace Engine
 
 
     bool DistanceFieldAtlas::Initialize(
-        uint32_t InAtlasResolutionX,
-        uint32_t InAtlasResolutionY,
-        uint32_t InAtlasResolutionZ,
-        uint32_t InBlockResolution,
+        uint32_t inAtlasResolutionX,
+        uint32_t inAtlasResolutionY,
+        uint32_t inAtlasResolutionZ,
+        uint32_t inBlockResolution,
         RHI::ERHITextureCreateFlags usage)
     {
         Release();
 
 
-        if (InBlockResolution == 0)
+        if (inBlockResolution == 0)
         {
             return false;
         }
 
 
-        if (InAtlasResolutionX % InBlockResolution != 0 ||
-            InAtlasResolutionY % InBlockResolution != 0 ||
-            InAtlasResolutionZ % InBlockResolution != 0)
+        if (inAtlasResolutionX % inBlockResolution != 0 ||
+            inAtlasResolutionY % inBlockResolution != 0 ||
+            inAtlasResolutionZ % inBlockResolution != 0)
         {
             return false;
         }
 
 
 
-        AtlasResolutionX = InAtlasResolutionX;
-        AtlasResolutionY = InAtlasResolutionY;
-        AtlasResolutionZ = InAtlasResolutionZ;
+        m_AtlasResolutionX = inAtlasResolutionX;
+        m_AtlasResolutionY = inAtlasResolutionY;
+        m_AtlasResolutionZ = inAtlasResolutionZ;
 
 
-        BlockResolution = InBlockResolution;
-
-
-
-        BlockCountX =
-            AtlasResolutionX / BlockResolution;
-
-
-        BlockCountY =
-            AtlasResolutionY / BlockResolution;
-
-
-        BlockCountZ =
-            AtlasResolutionZ / BlockResolution;
+        m_BlockResolution = inBlockResolution;
 
 
 
-        uint32_t TotalBlocks =
-            BlockCountX *
-            BlockCountY *
-            BlockCountZ;
+        m_BlockCountX =
+            m_AtlasResolutionX / m_BlockResolution;
+
+
+        m_BlockCountY =
+            m_AtlasResolutionY / m_BlockResolution;
+
+
+        m_BlockCountZ =
+            m_AtlasResolutionZ / m_BlockResolution;
 
 
 
-        AllocationMap.resize(
-            TotalBlocks,
+        uint32_t totalBlocks =
+            m_BlockCountX *
+            m_BlockCountY *
+            m_BlockCountZ;
+
+
+
+        m_AllocationMap.resize(
+            totalBlocks,
             0);
 
 
 
-        NextAllocationId = 0;
+        m_NextAllocationId = 0;
 
-        AtlasTexture = RenderCore::Create3DTexture(InAtlasResolutionX, InAtlasResolutionY, InAtlasResolutionZ, RHI::ERHIFormat::R32_Float, usage , "DistanceFieldAtlas");
+        m_AtlasTexture = RenderCore::Create3DTexture(inAtlasResolutionX, inAtlasResolutionY, inAtlasResolutionZ, RHI::ERHIFormat::R32_Float, usage , "DistanceFieldAtlas");
         return true;
     }
 
@@ -81,94 +81,94 @@ namespace Engine
 
     void DistanceFieldAtlas::Release()
     {
-        AllocationMap.clear();
+        m_AllocationMap.clear();
 
 
-        AtlasResolutionX = 0;
-        AtlasResolutionY = 0;
-        AtlasResolutionZ = 0;
+        m_AtlasResolutionX = 0;
+        m_AtlasResolutionY = 0;
+        m_AtlasResolutionZ = 0;
 
 
-        BlockCountX = 0;
-        BlockCountY = 0;
-        BlockCountZ = 0;
+        m_BlockCountX = 0;
+        m_BlockCountY = 0;
+        m_BlockCountZ = 0;
 
 
-        NextAllocationId = 0;
+        m_NextAllocationId = 0;
 
-        AtlasTexture.reset();
+        m_AtlasTexture.reset();
     }
 
 
 
     uint32_t DistanceFieldAtlas::CalculateIndex(
-        uint32_t X,
-        uint32_t Y,
-        uint32_t Z) const
+        uint32_t x,
+        uint32_t y,
+        uint32_t z) const
     {
-        return X +
-            Y * BlockCountX +
-            Z * BlockCountX * BlockCountY;
+        return x +
+            y * m_BlockCountX +
+            z * m_BlockCountX * m_BlockCountY;
     }
 
 
 
     bool DistanceFieldAtlas::Allocate(
-        DistanceFieldAllocation& OutAllocation)
+        DistanceFieldAllocation& outAllocation)
     {
-        for (uint32_t Z = 0; Z < BlockCountZ; Z++)
+        for (uint32_t z = 0; z < m_BlockCountZ; z++)
         {
-            for (uint32_t Y = 0; Y < BlockCountY; Y++)
+            for (uint32_t y = 0; y < m_BlockCountY; y++)
             {
-                for (uint32_t X = 0; X < BlockCountX; X++)
+                for (uint32_t x = 0; x < m_BlockCountX; x++)
                 {
-                    uint32_t Index =
+                    uint32_t index =
                         CalculateIndex(
-                            X,
-                            Y,
-                            Z);
+                            x,
+                            y,
+                            z);
 
 
 
-                    if (AllocationMap[Index] != 0)
+                    if (m_AllocationMap[index] != 0)
                     {
                         continue;
                     }
 
 
 
-                    AllocationMap[Index] = 1;
+                    m_AllocationMap[index] = 1;
 
 
 
-                    OutAllocation.Id =
-                        NextAllocationId++;
+                    outAllocation.Id =
+                        m_NextAllocationId++;
 
 
 
-                    OutAllocation.X =
-                        X * BlockResolution;
+                    outAllocation.X =
+                        x * m_BlockResolution;
 
 
-                    OutAllocation.Y =
-                        Y * BlockResolution;
+                    outAllocation.Y =
+                        y * m_BlockResolution;
 
 
-                    OutAllocation.Z =
-                        Z * BlockResolution;
+                    outAllocation.Z =
+                        z * m_BlockResolution;
 
 
 
-                    OutAllocation.SizeX =
-                        BlockResolution;
+                    outAllocation.SizeX =
+                        m_BlockResolution;
 
 
-                    OutAllocation.SizeY =
-                        BlockResolution;
+                    outAllocation.SizeY =
+                        m_BlockResolution;
 
 
-                    OutAllocation.SizeZ =
-                        BlockResolution;
+                    outAllocation.SizeZ =
+                        m_BlockResolution;
 
 
 
@@ -184,77 +184,77 @@ namespace Engine
 
 
     void DistanceFieldAtlas::Free(
-        const DistanceFieldAllocation& Allocation)
+        const DistanceFieldAllocation& allocation)
     {
-        if (!Allocation.IsValid())
+        if (!allocation.IsValid())
         {
             return;
         }
 
 
 
-        uint32_t X =
-            Allocation.X / BlockResolution;
+        uint32_t x =
+            allocation.X / m_BlockResolution;
 
 
-        uint32_t Y =
-            Allocation.Y / BlockResolution;
+        uint32_t y =
+            allocation.Y / m_BlockResolution;
 
 
-        uint32_t Z =
-            Allocation.Z / BlockResolution;
+        uint32_t z =
+            allocation.Z / m_BlockResolution;
 
 
 
-        if (X >= BlockCountX ||
-            Y >= BlockCountY ||
-            Z >= BlockCountZ)
+        if (x >= m_BlockCountX ||
+            y >= m_BlockCountY ||
+            z >= m_BlockCountZ)
         {
             return;
         }
 
 
 
-        uint32_t Index =
+        uint32_t index =
             CalculateIndex(
-                X,
-                Y,
-                Z);
+                x,
+                y,
+                z);
 
 
 
-        AllocationMap[Index] = 0;
+        m_AllocationMap[index] = 0;
     }
 
 
 
     bool DistanceFieldAtlas::IsAllocated(
-        uint32_t Id) const
+        uint32_t id) const
     {
         /*
-         * 当前版本:
+         * 褰撳墠鐗堟湰:
          *
          * Allocation ID
-         * 只用于调试和追踪
+         * 鍙敤浜庤皟璇曞拰杩借釜
          *
-         * 没有维护ID->Slot映射
+         * 娌℃湁缁存姢ID->Slot鏄犲皠
          *
          */
 
 
-        return Id != InvalidDistanceFieldAllocation;
+        return id != InvalidDistanceFieldAllocation;
     }
     void DistanceFieldAtlas::UploadData(
-        const DistanceFieldAllocation& Allocation,
-        const float* Data) {
+        const DistanceFieldAllocation& allocation,
+        const float* data) {
         RHI::RHIUpdateTextureRegion uploadReion;
-        uploadReion.xOffset = Allocation.X;
-        uploadReion.yOffset = Allocation.Y;
-        uploadReion.zOffset = Allocation.Z;
-        uploadReion.width = Allocation.SizeX;
-		uploadReion.height = Allocation.SizeY;
-        uploadReion.depth = Allocation.SizeZ;
-        AtlasTexture->UploadData(Data, uploadReion);
+        uploadReion.xOffset = allocation.X;
+        uploadReion.yOffset = allocation.Y;
+        uploadReion.zOffset = allocation.Z;
+        uploadReion.width = allocation.SizeX;
+		uploadReion.height = allocation.SizeY;
+        uploadReion.depth = allocation.SizeZ;
+        m_AtlasTexture->UploadData(data, uploadReion);
     }
 
 

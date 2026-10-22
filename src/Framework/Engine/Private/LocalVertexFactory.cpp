@@ -12,105 +12,105 @@ namespace Engine
 
 
         //
-        // ���� Vertex Layout
+        // Build the vertex layout.
         //
         void LocalVertexFactory::SetData(
-            const LocalVertexFactoryData& InData)
+            const LocalVertexFactoryData& inData)
     {
-        Data = InData;
+        m_Data = inData;
 
         //
-        // ��վ� Streams
+        // Clear the existing vertex streams.
         //
         Streams.clear();
 
         //
-        // ���� Vertex Elements
+        // Build vertex elements from the available streams.
         //
-        std::vector<VertexElement> Elements;
+        std::vector<VertexElement> elements;
 
         //
         // POSITION -> location 0
         //
-        auto AssignComponent = [&Elements,this](const RenderCore::VertexStreamComponent& Component, uint32_t& Location) {
-            if (Component.Buffer != nullptr) {
-                Elements.push_back(
+        auto assignComponent = [&elements,this](const RenderCore::VertexStreamComponent& component, uint32_t& location) {
+            if (component.Buffer != nullptr) {
+                elements.push_back(
                     AccessStreamComponent(
-                        Component,
-                        Location));
-                Location++;
+                        component,
+                        location));
+                location++;
             }
 
         };
-        uint32_t OptionalLocation = 0;
-        AssignComponent(Data.PositionComponent, OptionalLocation);
+        uint32_t optionalLocation = 0;
+        assignComponent(m_Data.PositionComponent, optionalLocation);
         LocalVertexFactoryFeatureFlags flags;
 		
         //
         // UV -> location 1
         //
-        AssignComponent(Data.UVComponent, OptionalLocation);
-        flags.SupportsTexCoord = Data.UVComponent.Buffer != nullptr;
+        assignComponent(m_Data.UVComponent, optionalLocation);
+        flags.SupportsTexCoord = m_Data.UVComponent.Buffer != nullptr;
 
 
         //
         // NORMAL -> location 2
         //
-        AssignComponent(Data.NormalComponent, OptionalLocation);
-        flags.SupportsNormal = Data.NormalComponent.Buffer != nullptr;
+        assignComponent(m_Data.NormalComponent, optionalLocation);
+        flags.SupportsNormal = m_Data.NormalComponent.Buffer != nullptr;
         //
         // TANGENT -> location 3
         //
-        AssignComponent(Data.TangentComponent, OptionalLocation);
-        flags.SupportsTangent = Data.TangentComponent.Buffer != nullptr;
+        assignComponent(m_Data.TangentComponent, optionalLocation);
+        flags.SupportsTangent = m_Data.TangentComponent.Buffer != nullptr;
         //
         // COLOR -> location 4
         //
-        AssignComponent(Data.ColorComponent, OptionalLocation);
-        flags.SupportsVertexColor = Data.ColorComponent.Buffer != nullptr;
+        assignComponent(m_Data.ColorComponent, optionalLocation);
+        flags.SupportsVertexColor = m_Data.ColorComponent.Buffer != nullptr;
         //
-        // ���� Vulkan VertexInputState
+        // Initialize the regular vertex input declaration.
         //
-        InitDeclaration(Elements,&RHIVertexDescState);
+        InitDeclaration(elements,&RHIVertexDescState);
         VertexFactoryFlags = flags.PackedFlags;
         //
         // Instance ID -> location 5
         //
-        RenderCore::VertexStreamComponent InstanceComponent;
-        InstanceComponent.Buffer = nullptr;
-        InstanceComponent.InputRate = RHI::ERHIInputRate::PerInstance;
-        InstanceComponent.Format = RHI::ERHIFormat::R32_UInt;
-        InstanceComponent.Stride = sizeof(uint32_t);
-        instanceLocation = OptionalLocation;
-        Elements.push_back(
+        RenderCore::VertexStreamComponent instanceComponent;
+        instanceComponent.Buffer = nullptr;
+        instanceComponent.InputRate = RHI::ERHIInputRate::PerInstance;
+        instanceComponent.Format = RHI::ERHIFormat::R32_UInt;
+        instanceComponent.Stride = sizeof(uint32_t);
+        m_InstanceLocation = optionalLocation;
+        elements.push_back(
             AccessStreamComponent(
-                InstanceComponent,
-                OptionalLocation));
+                instanceComponent,
+                optionalLocation));
         //
-        // ���� Vulkan VertexInputState
+        // Initialize the instanced vertex input declaration.
         //
-        InitDeclaration(Elements, &RHIInstancedVertexDescState);
+        InitDeclaration(elements, &m_RHIInstancedVertexDescState);
         
 
     }
     RHI::RHIVertexDescState* LocalVertexFactory::GetRHIInstancedVertexDescState() const {
-        return RHIInstancedVertexDescState;
+        return m_RHIInstancedVertexDescState;
     }
-    void LocalVertexFactory::BindInstanceBuffer(RHI::RHIGraphicCommandList& cmdList, RHI::RHIBuffer* InstanceBuffer, uint32_t Offset) const
+    void LocalVertexFactory::BindInstanceBuffer(RHI::RHIGraphicCommandList& cmdList, RHI::RHIBuffer* instanceBuffer, uint32_t offset) const
     {
-        if (instanceLocation < Streams.size())
-            cmdList.SetStreamSource(Streams[instanceLocation].Binding, InstanceBuffer, Offset);
+        if (m_InstanceLocation < Streams.size())
+            cmdList.SetStreamSource(Streams[m_InstanceLocation].Binding, instanceBuffer, offset);
     }
     //
     // Shader Permutation
     //
     bool LocalVertexFactory::ShouldCompilePermutation(
-        const VertexFactoryShaderPermutationParameters& Parameters)
+        const VertexFactoryShaderPermutationParameters& parameters)
     {
-        LocalVertexFactoryFeatureFlags Flags = {};
-        Flags.PackedFlags = Parameters.VertexFactoryFlags;
+        LocalVertexFactoryFeatureFlags flags = {};
+        flags.PackedFlags = parameters.VertexFactoryFlags;
         
-        return Flags.PackedFlags == 3 || Flags.PackedFlags == 19;
+        return flags.PackedFlags == 3 || flags.PackedFlags == 19;
         
         /*
            ===========================================================================
@@ -118,8 +118,8 @@ namespace Engine
            ===========================================================================
            */
 
-        if (Flags.SupportsTangent &&
-            !Flags.SupportsNormal)
+        if (flags.SupportsTangent &&
+            !flags.SupportsNormal)
         {
             return false;
         }
@@ -130,7 +130,7 @@ namespace Engine
         ===========================================================================
         */
 
-        if (Flags.SupportsInstanceData)
+        if (flags.SupportsInstanceData)
         {
             return false;
         }
@@ -143,12 +143,12 @@ namespace Engine
     // Shader Compile Environment
     //
     void LocalVertexFactory::ModifyCompilationEnvironment(
-        const VertexFactoryShaderPermutationParameters& Parameters,
-        ShaderCompilerEnvironment& OutEnvironment)
+        const VertexFactoryShaderPermutationParameters& parameters,
+        ShaderCompilerEnvironment& outEnvironment)
     {
 
-        LocalVertexFactoryFeatureFlags Flags = {};
-		Flags.PackedFlags = Parameters.VertexFactoryFlags;
+        LocalVertexFactoryFeatureFlags flags = {};
+		flags.PackedFlags = parameters.VertexFactoryFlags;
 
         /*
         ===========================================================================
@@ -156,7 +156,7 @@ namespace Engine
         ===========================================================================
         */
 
-        OutEnvironment.SetDefine("LOCAL_VERTEX_FACTORY", 1);
+        outEnvironment.SetDefine("LOCAL_VERTEX_FACTORY", 1);
 
         /*
         ===========================================================================
@@ -164,21 +164,21 @@ namespace Engine
         ===========================================================================
         */
 
-        OutEnvironment.SetDefine(
+        outEnvironment.SetDefine(
             "VF_SUPPORTS_TEXCOORD",
-            Flags.SupportsTexCoord);
+            flags.SupportsTexCoord);
 
-        OutEnvironment.SetDefine(
+        outEnvironment.SetDefine(
             "VF_SUPPORTS_NORMAL",
-            Flags.SupportsNormal);
+            flags.SupportsNormal);
 
-        OutEnvironment.SetDefine(
+        outEnvironment.SetDefine(
             "VF_SUPPORTS_TANGENT",
-            Flags.SupportsTangent);
+            flags.SupportsTangent);
 
-        OutEnvironment.SetDefine(
+        outEnvironment.SetDefine(
             "VF_SUPPORTS_VERTEX_COLOR",
-            Flags.SupportsVertexColor);
+            flags.SupportsVertexColor);
 
         /*
         ===========================================================================
@@ -186,9 +186,9 @@ namespace Engine
         ===========================================================================
         */
 
-        OutEnvironment.SetDefine(
+        outEnvironment.SetDefine(
             "VF_SUPPORTS_INSTANCE",
-            Flags.SupportsInstanceData);
+            flags.SupportsInstanceData);
 
     }
 

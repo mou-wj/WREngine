@@ -28,9 +28,9 @@ std::string AssetManager::NormalizePath(const std::string& path)
 
 AssetSP AssetManager::FindLoaded(const std::string& path) const
 {
-    std::lock_guard lock(Mutex);
-    const auto it = LoadedAssets.find(path);
-    return it == LoadedAssets.end() ? nullptr : it->second.lock();
+    std::lock_guard lock(m_Mutex);
+    const auto it = m_LoadedAssets.find(path);
+    return it == m_LoadedAssets.end() ? nullptr : it->second.lock();
 }
 
 AssetSP AssetManager::LoadSyncInternal(const std::string& path, std::type_index type, const AssetFactory& factory)
@@ -40,17 +40,17 @@ AssetSP AssetManager::LoadSyncInternal(const std::string& path, std::type_index 
     uint64_t generation = 0;
     bool ownsRequest = false;
     {
-        std::lock_guard lock(Mutex);
-        if (Stopping) throw std::runtime_error("AssetManager is shutting down");
-        if (auto asset = LoadedAssets[key].lock())
+        std::lock_guard lock(m_Mutex);
+        if (m_bStopping) throw std::runtime_error("AssetManager is shutting down");
+        if (auto asset = m_LoadedAssets[key].lock())
         {
             if (std::type_index(typeid(*asset)) != type)
                 throw std::invalid_argument("Asset type mismatch: " + key);
-            ResidentAssets[key] = asset;
+            m_ResidentAssets[key] = asset;
             return asset;
         }
-        const auto it = Loading.find(key);
-        if (it != Loading.end())
+        const auto it = m_Loading.find(key);
+        if (it != m_Loading.end())
         {
             request = it->second;
             if (request->Type != type) throw std::invalid_argument("Asset type mismatch: " + key);
@@ -61,8 +61,8 @@ AssetSP AssetManager::LoadSyncInternal(const std::string& path, std::type_index 
         {
             request = std::make_shared<LoadRequest>(type);
             request->Owner = std::this_thread::get_id();
-            Loading.emplace(key, request);
-            generation = ResidencyGeneration;
+            m_Loading.emplace(key, request);
+            generation = m_ResidencyGeneration;
             ownsRequest = true;
         }
     }
@@ -78,22 +78,22 @@ AssetSP AssetManager::LoadSyncInternal(const std::string& path, std::type_index 
         }
         if (asset) AssetRegistry::Get().Register({asset->GetName(), key, type});
         {
-            std::lock_guard lock(Mutex);
+            std::lock_guard lock(m_Mutex);
             if (asset)
             {
-                LoadedAssets[key] = asset;
-                if (generation == ResidencyGeneration && request->KeepResident && !Stopping) ResidentAssets[key] = asset;
+                m_LoadedAssets[key] = asset;
+                if (generation == m_ResidencyGeneration && request->bKeepResident && !m_bStopping) m_ResidentAssets[key] = asset;
             }
             request->Promise.set_value(asset);
-            Loading.erase(key);
+            m_Loading.erase(key);
         }
         return asset;
     }
     catch (...)
     {
-        std::lock_guard lock(Mutex);
+        std::lock_guard lock(m_Mutex);
         request->Promise.set_exception(std::current_exception());
-        Loading.erase(key);
+        m_Loading.erase(key);
         throw;
     }
 }
@@ -102,18 +102,18 @@ void AssetManager::QueueLoad(std::function<void()> task)
 {
     std::vector<std::future<void>> finished;
     {
-        std::lock_guard lock(Mutex);
-        if (Stopping) throw std::runtime_error("AssetManager is shutting down");
-        for (auto it = Tasks.begin(); it != Tasks.end();)
+        std::lock_guard lock(m_Mutex);
+        if (m_bStopping) throw std::runtime_error("AssetManager is shutting down");
+        for (auto it = m_Tasks.begin(); it != m_Tasks.end();)
         {
             if (it->wait_for(std::chrono::seconds(0)) == std::future_status::ready)
             {
                 finished.push_back(std::move(*it));
-                it = Tasks.erase(it);
+                it = m_Tasks.erase(it);
             }
             else ++it;
         }
-        Tasks.push_back(std::async(std::launch::async, std::move(task)));
+        m_Tasks.push_back(std::async(std::launch::async, std::move(task)));
     }
     for (auto& result : finished)
         try { result.get(); }
@@ -126,10 +126,10 @@ void AssetManager::Unload(const std::string& path)
     const auto key = NormalizePath(path);
     AssetSP removed;
     {
-        std::lock_guard lock(Mutex);
-        if (auto loading = Loading.find(key); loading != Loading.end()) loading->second->KeepResident = false;
-        auto it = ResidentAssets.find(key);
-        if (it != ResidentAssets.end()) { removed = std::move(it->second); ResidentAssets.erase(it); }
+        std::lock_guard lock(m_Mutex);
+        if (auto loading = m_Loading.find(key); loading != m_Loading.end()) loading->second->bKeepResident = false;
+        auto it = m_ResidentAssets.find(key);
+        if (it != m_ResidentAssets.end()) { removed = std::move(it->second); m_ResidentAssets.erase(it); }
     }
 }
 
@@ -137,9 +137,9 @@ void AssetManager::Clear()
 {
     std::unordered_map<std::string, AssetSP> removed;
     {
-        std::lock_guard lock(Mutex);
-        ++ResidencyGeneration;
-        removed.swap(ResidentAssets);
+        std::lock_guard lock(m_Mutex);
+        ++m_ResidencyGeneration;
+        removed.swap(m_ResidentAssets);
     }
 }
 
@@ -151,9 +151,9 @@ void AssetManager::WaitForLoads()
         std::vector<std::future<void>> tasks;
         std::vector<std::shared_future<AssetSP>> requests;
         {
-            std::lock_guard lock(Mutex);
-            tasks.swap(Tasks);
-            for (const auto& [path, request] : Loading) requests.push_back(request->Future);
+            std::lock_guard lock(m_Mutex);
+            tasks.swap(m_Tasks);
+            for (const auto& [path, request] : m_Loading) requests.push_back(request->Future);
         }
         if (tasks.empty() && requests.empty()) break;
         for (auto& task : tasks)
@@ -167,8 +167,8 @@ void AssetManager::WaitForLoads()
 void AssetManager::Shutdown()
 {
     {
-        std::lock_guard lock(Mutex);
-        Stopping = true;
+        std::lock_guard lock(m_Mutex);
+        m_bStopping = true;
     }
     WaitForLoads();
     Clear();

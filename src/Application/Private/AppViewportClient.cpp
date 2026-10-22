@@ -139,13 +139,13 @@ namespace App {
         sceneView.ProjectionMatrix = proj;
         sceneView.ViewProjectionMatrix = proj * view;
 		sceneView.InvViewProjectionMatrix = Core::Inverse(sceneView.ViewProjectionMatrix);
-        sceneView.IsDepthRangeZeroToOne = camera.GetDepthRangeMode() == Camera::ZeroToOne;
+        sceneView.bDepthRangeZeroToOne = camera.GetDepthRangeMode() == Camera::ZeroToOne;
         Float4 testPos = { -4.89f, 0.0f, 0.0f, 1.0f };
         Float4 viewProjPos = sceneView.ViewProjectionMatrix * testPos.Data;
         Float4 inverseViewProjPos = sceneView.InvViewProjectionMatrix * viewProjPos.Data;
 
-        sceneView.Viewport.width = InViewport->GetWidth();
-        sceneView.Viewport.height = InViewport->GetHeight();
+        sceneView.Viewport.Width = InViewport->GetWidth();
+        sceneView.Viewport.Height = InViewport->GetHeight();
         family.Scene = scene;
         family.ClearViews();
         family.AddView(sceneView);

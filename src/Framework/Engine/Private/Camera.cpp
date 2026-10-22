@@ -55,9 +55,9 @@ Camera::Camera()
     m_OrthoHeight(10.f),
     m_NearPlane(0.1f),
     m_FarPlane(1000.f),
-    m_ViewDirty(true),
-    m_ProjectionDirty(true),
-    m_ViewProjectionDirty(true),
+    m_bViewDirty(true),
+    m_bProjectionDirty(true),
+    m_bViewProjectionDirty(true),
     m_DepthRangeMode(EDepthRangeMode::ZeroToOne)
 {
 }
@@ -72,8 +72,8 @@ void Camera::SetPosition(
 {
     m_Position = position;
 
-    m_ViewDirty = true;
-    m_ViewProjectionDirty = true;
+    m_bViewDirty = true;
+    m_bViewProjectionDirty = true;
 }
 
 void Camera::SetTarget(
@@ -81,8 +81,8 @@ void Camera::SetTarget(
 {
     m_Target = target;
 
-    m_ViewDirty = true;
-    m_ViewProjectionDirty = true;
+    m_bViewDirty = true;
+    m_bViewProjectionDirty = true;
 }
 
 void Camera::SetUp(
@@ -90,8 +90,8 @@ void Camera::SetUp(
 {
     m_Up = up;
 
-    m_ViewDirty = true;
-    m_ViewProjectionDirty = true;
+    m_bViewDirty = true;
+    m_bViewProjectionDirty = true;
 }
 
 const Core::Float3&
@@ -126,8 +126,8 @@ void Camera::SetPerspective(
     m_NearPlane = nearPlane;
     m_FarPlane = farPlane;
 
-    m_ProjectionDirty = true;
-    m_ViewProjectionDirty = true;
+    m_bProjectionDirty = true;
+    m_bViewProjectionDirty = true;
 }
 
 void Camera::SetOrthographic(
@@ -144,8 +144,8 @@ void Camera::SetOrthographic(
     m_NearPlane = nearPlane;
     m_FarPlane = farPlane;
 
-    m_ProjectionDirty = true;
-    m_ViewProjectionDirty = true;
+    m_bProjectionDirty = true;
+    m_bViewProjectionDirty = true;
 }
 
 ProjectionType
@@ -156,7 +156,7 @@ Camera::GetProjectionType() const
 
 void Camera::UpdateViewMatrix() const
 {
-    if (!m_ViewDirty)
+    if (!m_bViewDirty)
         return;
 
     m_ViewMatrix =
@@ -169,12 +169,12 @@ void Camera::UpdateViewMatrix() const
         Core::Inverse(
             m_ViewMatrix);
 
-    m_ViewDirty = false;
+    m_bViewDirty = false;
 }
 
 void Camera::UpdateProjectionMatrix() const
 {
-    if (!m_ProjectionDirty)
+    if (!m_bProjectionDirty)
         return;
 
     if (m_ProjectionType ==
@@ -228,12 +228,12 @@ void Camera::UpdateProjectionMatrix() const
         Core::Inverse(
             m_ProjectionMatrix);
 
-    m_ProjectionDirty = false;
+    m_bProjectionDirty = false;
 }
 
 void Camera::UpdateViewProjectionMatrix() const
 {
-    if (!m_ViewProjectionDirty)
+    if (!m_bViewProjectionDirty)
         return;
 
     UpdateViewMatrix();
@@ -247,7 +247,7 @@ void Camera::UpdateViewProjectionMatrix() const
         Core::Inverse(
             m_ViewProjectionMatrix);
 
-    m_ViewProjectionDirty = false;
+    m_bViewProjectionDirty = false;
 }
 
 const Core::Mat4&

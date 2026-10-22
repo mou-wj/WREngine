@@ -6,12 +6,12 @@ using namespace RenderCore;
 namespace Engine {
 
     void ModifyShaderCompilerEnvironment(
-        const MaterialPermutationParameters& Parameters,
-        RenderCore::ShaderCompilerEnvironment& OutEnvironment) {
+        const MaterialPermutationParameters& parameters,
+        RenderCore::ShaderCompilerEnvironment& outEnvironment) {
 
-        OutEnvironment.SetDefine(
+        outEnvironment.SetDefine(
             "MATERIAL_SHADING_MODEL",
-            static_cast<int32_t>(Parameters.ShadingModel));
+            static_cast<int32_t>(parameters.ShadingModel));
     }
 
     void MeshMaterialShaderMap::Initialize() {
@@ -36,13 +36,13 @@ namespace Engine {
         }
     }
     void MeshMaterialShaderMap::Clear() {
-        ShaderMap.clear();
+        m_ShaderMap.clear();
     }
     RenderCore::Shader* MeshMaterialShaderMap::GetShader(
         const MeshMaterialShaderKey& key
     ) {
-        auto it = ShaderMap.find(key);
-        if (it != ShaderMap.end()) {
+        auto it = m_ShaderMap.find(key);
+        if (it != m_ShaderMap.end()) {
             return it->second.get();
         }
         return CompileShader(key);
@@ -63,9 +63,9 @@ namespace Engine {
         auto vfType = key.VF;
 
 
-        // 2. ±éÀú¸Ã ShaderType µÄËùÓĞ±äÌå×éºÏ (ÓÉ IMPLEMENT_SHADER_TYPE ºê×Ô¶¯ÌáÈ¡)
+        // 2. éå†è¯¥ ShaderType çš„æ‰€æœ‰å˜ä½“ç»„åˆ (ç”± IMPLEMENT_SHADER_TYPE å®è‡ªåŠ¨æå–)
 
-        // 3. ¼ì²éµ±Ç°±äÌåÊÇ·ñĞèÒª±àÒë
+        // 3. æ£€æŸ¥å½“å‰å˜ä½“æ˜¯å¦éœ€è¦ç¼–è¯‘
         MeshMaterialShaderPermutationParameters permParams;
         permParams.MaterialParams.ShadingModel = key.MaterialParameter.ShadingModel;
         permParams.Platform = static_cast<uint32_t>(platform);
@@ -76,7 +76,7 @@ namespace Engine {
             return nullptr;
         }
 
-        // 4. ×¼±¸±àÒë»·¾³ (Environment)
+        // 4. å‡†å¤‡ç¼–è¯‘ç¯å¢ƒ (Environment)
         ShaderCompilerEnvironment env;
         env.IncludePaths.push_back(Core::GetShaderFilesRootDir());
         if (vfType) {
@@ -89,48 +89,48 @@ namespace Engine {
 
         }
 
-        // A. ´¦Àí Shader ²ÎÊı (VFS ×¢²á)
+        // A. å¤„ç† Shader å‚æ•° (VFS æ³¨å†Œ)
         if (st->RootParametersMetadata)
         {
-            // Éú³É HLSL ²¢×¢²áµ½ GShaderVirtualFileSystem
+            // ç”Ÿæˆ HLSL å¹¶æ³¨å†Œåˆ° GShaderVirtualFileSystem
             auto parameterInfos = ShaderCompiler::GenerateOrGetShaderPrameterMetaDataSF(*(st->RootParametersMetadata));
         }
 
-        // B. ´¦Àí±äÌåºê×¢Èë (µ÷ÓÃ×ÓÀà¾²Ì¬·½·¨)
+        // B. å¤„ç†å˜ä½“å®æ³¨å…¥ (è°ƒç”¨å­ç±»é™æ€æ–¹æ³•)
         if (st->ModifyCompilationEnvironment)
         {
-            // ÄÚ²¿»áµ÷ÓÃ Domain.SetFromId(permId) ºÍ Domain.ModifyCompilationEnvironment(env)
+            // å†…éƒ¨ä¼šè°ƒç”¨ Domain.SetFromId(permId) å’Œ Domain.ModifyCompilationEnvironment(env)
             st->ModifyCompilationEnvironment(permParams, env);
         }
 
 
 
-        // 5. ¹¹Ôì±àÒëÊäÈë²¢µ÷ÓÃ±àÒëÆ÷
+        // 5. æ„é€ ç¼–è¯‘è¾“å…¥å¹¶è°ƒç”¨ç¼–è¯‘å™¨
         ShaderCompileInput input;
         input.VirtualSourceFilePath = st->SourceFile;
         input.EntryPoint = st->EntryPoint;
         input.Frequency = st->Frequency;
         input.Platform = platform;
-        input.Environment = std::move(env); // ÒÆ¶¯»·¾³Êı¾İ
+        input.Environment = std::move(env); // ç§»åŠ¨ç¯å¢ƒæ•°æ®
 
         ShaderCompilationOutput output = ShaderCompiler::Compile(input);
 
         if (!output.Success)
         {
-            // ¼ÇÂ¼´íÎó²¢Ìø¹ı´Ë±äÌå
+            // è®°å½•é”™è¯¯å¹¶è·³è¿‡æ­¤å˜ä½“
             // LOG_ERROR("Failed to compile %s (Permutation %d)", st->Name.c_str(), permId);
             return nullptr;
         }
 
-        // 6. ¹¹Ôì RHI Shader ¶ÔÏó
+        // 6. æ„é€  RHI Shader å¯¹è±¡
         MeshMaterialShaderType::ShaderCompiledInitializer initializer(st, output.PackedBinaryData, output.ParameterMap, key.PermutationId,key.VF);
 
-        // 7. ÊµÀı»¯²¢»º´æ
+        // 7. å®ä¾‹åŒ–å¹¶ç¼“å­˜
         ShaderSP shaderInstance = std::shared_ptr<Shader>(st->ConstructCompiled(initializer));
 
-        // ShaderMap ½á¹¹: std::unordered_map<ShaderType*, std::map<ShaderPermutationId, ShaderSP>>
+        // ShaderMap ç»“æ„: std::unordered_map<ShaderType*, std::map<ShaderPermutationId, ShaderSP>>
 
-        ShaderMap[key] =
+        m_ShaderMap[key] =
             shaderInstance;
 
 
@@ -157,13 +157,13 @@ namespace Engine {
         }
     }
     void MaterialShaderMap::Clear() {
-        ShaderMap.clear();
+        m_ShaderMap.clear();
     }
     RenderCore::Shader* MaterialShaderMap::GetShader(
         const MaterialShaderKey& key
     ) {
-        auto it = ShaderMap.find(key);
-        if (it != ShaderMap.end()) {
+        auto it = m_ShaderMap.find(key);
+        if (it != m_ShaderMap.end()) {
             return it->second.get();
         }
         return CompileShader(key);
@@ -183,9 +183,9 @@ namespace Engine {
             GShaderPlatform;
 
 
-        // 2. ±éÀú¸Ã ShaderType µÄËùÓĞ±äÌå×éºÏ (ÓÉ IMPLEMENT_SHADER_TYPE ºê×Ô¶¯ÌáÈ¡)
+        // 2. éå†è¯¥ ShaderType çš„æ‰€æœ‰å˜ä½“ç»„åˆ (ç”± IMPLEMENT_SHADER_TYPE å®è‡ªåŠ¨æå–)
 
-        // 3. ¼ì²éµ±Ç°±äÌåÊÇ·ñĞèÒª±àÒë
+        // 3. æ£€æŸ¥å½“å‰å˜ä½“æ˜¯å¦éœ€è¦ç¼–è¯‘
         MaterialShaderPermutationParameters permParams;
         permParams.Platform = static_cast<uint32_t>(platform);
         permParams.PermutationId = static_cast<uint32_t>(key.PermutationId);
@@ -195,51 +195,51 @@ namespace Engine {
             return nullptr;
         }
 
-        // 4. ×¼±¸±àÒë»·¾³ (Environment)
+        // 4. å‡†å¤‡ç¼–è¯‘ç¯å¢ƒ (Environment)
         ShaderCompilerEnvironment env;
         env.IncludePaths.push_back(Core::GetShaderFilesRootDir());
-        // A. ´¦Àí Shader ²ÎÊı (VFS ×¢²á)
+        // A. å¤„ç† Shader å‚æ•° (VFS æ³¨å†Œ)
         if (st->RootParametersMetadata)
         {
-            // Éú³É HLSL ²¢×¢²áµ½ GShaderVirtualFileSystem
+            // ç”Ÿæˆ HLSL å¹¶æ³¨å†Œåˆ° GShaderVirtualFileSystem
             auto parameterInfos = ShaderCompiler::GenerateOrGetShaderPrameterMetaDataSF(*(st->RootParametersMetadata));
         }
 
-        // B. ´¦Àí±äÌåºê×¢Èë (µ÷ÓÃ×ÓÀà¾²Ì¬·½·¨)
+        // B. å¤„ç†å˜ä½“å®æ³¨å…¥ (è°ƒç”¨å­ç±»é™æ€æ–¹æ³•)
         if (st->ModifyCompilationEnvironment)
         {
-            // ÄÚ²¿»áµ÷ÓÃ Domain.SetFromId(permId) ºÍ Domain.ModifyCompilationEnvironment(env)
+            // å†…éƒ¨ä¼šè°ƒç”¨ Domain.SetFromId(permId) å’Œ Domain.ModifyCompilationEnvironment(env)
             st->ModifyCompilationEnvironment(permParams, env);
         }
 
 
 
-        // 5. ¹¹Ôì±àÒëÊäÈë²¢µ÷ÓÃ±àÒëÆ÷
+        // 5. æ„é€ ç¼–è¯‘è¾“å…¥å¹¶è°ƒç”¨ç¼–è¯‘å™¨
         ShaderCompileInput input;
         input.VirtualSourceFilePath = st->SourceFile;
         input.EntryPoint = st->EntryPoint;
         input.Frequency = st->Frequency;
         input.Platform = platform;
-        input.Environment = std::move(env); // ÒÆ¶¯»·¾³Êı¾İ
+        input.Environment = std::move(env); // ç§»åŠ¨ç¯å¢ƒæ•°æ®
 
         ShaderCompilationOutput output = ShaderCompiler::Compile(input);
 
         if (!output.Success)
         {
-            // ¼ÇÂ¼´íÎó²¢Ìø¹ı´Ë±äÌå
+            // è®°å½•é”™è¯¯å¹¶è·³è¿‡æ­¤å˜ä½“
             // LOG_ERROR("Failed to compile %s (Permutation %d)", st->Name.c_str(), permId);
             return nullptr;
         }
 
-        // 6. ¹¹Ôì RHI Shader ¶ÔÏó
+        // 6. æ„é€  RHI Shader å¯¹è±¡
         MaterialShaderType::ShaderCompiledInitializer initializer(st, output.PackedBinaryData, output.ParameterMap, key.PermutationId);
 
-        // 7. ÊµÀı»¯²¢»º´æ
+        // 7. å®ä¾‹åŒ–å¹¶ç¼“å­˜
         ShaderSP shaderInstance = std::shared_ptr<Shader>(st->ConstructCompiled(initializer));
 
-        // ShaderMap ½á¹¹: std::unordered_map<ShaderType*, std::map<ShaderPermutationId, ShaderSP>>
+        // ShaderMap ç»“æ„: std::unordered_map<ShaderType*, std::map<ShaderPermutationId, ShaderSP>>
 
-        ShaderMap[key] =
+        m_ShaderMap[key] =
             shaderInstance;
     }
 

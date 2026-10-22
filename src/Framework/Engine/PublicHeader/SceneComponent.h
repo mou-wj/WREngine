@@ -8,7 +8,7 @@
 namespace Engine
 {
 	class SceneInterface;
-    // SceneComponent 为场景独有，一个scenecomponent不能加入到多个scneeinterface
+    // SceneComponent 涓哄満鏅嫭鏈夛紝涓�涓猻cenecomponent涓嶈兘鍔犲叆鍒板涓猻cneeinterface
     class ENGINE_API SceneComponent
     {
     public:
@@ -84,27 +84,27 @@ namespace Engine
         void UpdateWorldTransform() const;
 
     protected:
-        Core::Float3 LocalLocation =
+        Core::Float3 _localLocation =
             Core::Float3(0.0f, 0.0f, 0.0f);
 
-        Core::Float3 LocalRotation =
+        Core::Float3 _localRotation =
             Core::Float3(0.0f, 0.0f, 0.0f);
 
-        Core::Float3 LocalScale =
+        Core::Float3 _localScale =
             Core::Float3(1.0f, 1.0f, 1.0f);
 
-        mutable Core::Mat4 WorldTransform =
+        mutable Core::Mat4 _worldTransform =
             Core::Mat4::Identity();
 
-        mutable bool bTransformDirty =
+        mutable bool _bTransformDirty =
             true;
 
     protected:
-        SceneComponent* Parent =
+        SceneComponent* _parent =
             nullptr;
 
         std::vector<SceneComponent*>
-            Children;
-        SceneInterface* SceneOwner = nullptr;
+            _children;
+        SceneInterface* _sceneOwner = nullptr;
     };
 }

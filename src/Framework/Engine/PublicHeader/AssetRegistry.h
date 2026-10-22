@@ -18,8 +18,8 @@ public:
     std::vector<AssetInfo> GetByName(const std::string& name) const;
 
 private:
-    mutable std::mutex Mutex;
-    std::unordered_map<std::string, AssetInfo> PathToInfo;
+    mutable std::mutex m_Mutex;
+    std::unordered_map<std::string, AssetInfo> m_PathToInfo;
 };
 
 }

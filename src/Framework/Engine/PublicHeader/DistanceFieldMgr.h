@@ -22,17 +22,17 @@ namespace Engine
 
     struct DistanceFieldTriangleBVHTraits
     {
-        static Core::BoxSphereBounds GetBounds(const DistanceFieldTriangle& Triangle);
+        static Core::BoxSphereBounds GetBounds(const DistanceFieldTriangle& triangle);
 
 
-        static Core::Float3 GetCentroid(const DistanceFieldTriangle& Triangle);
+        static Core::Float3 GetCentroid(const DistanceFieldTriangle& triangle);
 
 
-        static float ClosestDistance(const DistanceFieldTriangle& Triangle, const Core::Float3& Position);
+        static float ClosestDistance(const DistanceFieldTriangle& triangle, const Core::Float3& position);
 
-        static bool RayIntersect(const DistanceFieldTriangle& Primitive, const Core::Ray& Ray, float& OutDistance);
+        static bool RayIntersect(const DistanceFieldTriangle& primitive, const Core::Ray& ray, float& outDistance);
 
-        static bool IntersectVoxel(const DistanceFieldTriangle& Triangle, const Core::AABB& VoxelBounds);
+        static bool IntersectVoxel(const DistanceFieldTriangle& triangle, const Core::AABB& voxelBounds);
     };
 
     using DistanceFieldBVH = Core::BVH<DistanceFieldTriangle, DistanceFieldTriangleBVHTraits>;
@@ -47,7 +47,7 @@ namespace Engine
     {
     public:
 
-        explicit DistanceFieldManager(Core::TaskPool* InTaskPool = nullptr);
+        explicit DistanceFieldManager(Core::TaskPool* inTaskPool = nullptr);
 
         ~DistanceFieldManager();
 
@@ -57,43 +57,43 @@ namespace Engine
 
 
         void BuildMeshDistanceField(
-            StaticMeshRenderData& Mesh);
+            StaticMeshRenderData& mesh);
 
-		const DistanceFieldAtlas& GetAtlas() { return Atlas; }
+		const DistanceFieldAtlas& GetAtlas() { return m_Atlas; }
 
 
     private:
 
-        bool BuildCPUData(StaticMeshRenderData& Mesh);
+        bool BuildCPUData(StaticMeshRenderData& mesh);
 
 
 
         bool BuildTriangles(
-            const LODResource& LOD,
-            std::vector<DistanceFieldTriangle>& OutTriangles);
+            const LODResource& lod,
+            std::vector<DistanceFieldTriangle>& outTriangles);
 
 
 
         bool GenerateDistanceCPU(
-            DistanceFieldData& Data,
-            const DistanceFieldBVH& BVH);
+            DistanceFieldData& data,
+            const DistanceFieldBVH& bvh);
 
 
 
         void GenerateDistanceSlice(
-            DistanceFieldData& Data,
-            uint32_t Z,
-            const DistanceFieldBVH& BVH);
+            DistanceFieldData& data,
+            uint32_t z,
+            const DistanceFieldBVH& bvh);
 
-        RenderCore::RenderTextureSP BuildSurfaceMaskTexture(const Core::BoxSphereBounds& bounds, const LODResource& LOD);
+        RenderCore::RenderTextureSP BuildSurfaceMaskTexture(const Core::BoxSphereBounds& bounds, const LODResource& lod);
 
-        RenderCore::RenderTextureSP BuildSDFTexture(RenderCore::RenderTexture* SurfaceMask);
+        RenderCore::RenderTextureSP BuildSDFTexture(RenderCore::RenderTexture* surfaceMask);
 
     private:
 
-        Core::TaskPool* TaskPool = nullptr;
-        DistanceFieldAtlas Atlas;
-        bool IsInitialized = false;
+        Core::TaskPool* m_TaskPool = nullptr;
+        DistanceFieldAtlas m_Atlas;
+        bool m_bInitialized = false;
 
     };
 

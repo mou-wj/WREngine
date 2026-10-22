@@ -1,5 +1,5 @@
 #include "Material.h"
-#include "RenderResource.h" // ∞¸∫¨ƒ„µƒª˘¿‡“‘º∞ RenderTexture µƒ∂®“Â
+#include "RenderResource.h" // ÂåÖÂê´‰Ω†ÁöÑÂü∫Á±ª‰ª•Âèä RenderTexture ÁöÑÂÆö‰πâ
 #include "MaterialAsset.h"
 #include <stdexcept>
 #include "Shader.h"
@@ -11,108 +11,108 @@ namespace Engine {
     MaterialShaderMap GMaterialShaderMap;
 
     // ============================================================================
-// MaterialParameter  µœ÷
+// MaterialParameter ÂÆûÁé∞
 // ============================================================================
-    MaterialParameter::MaterialParameter(const std::string& InName, EMaterialParameterSemantic InSemantic)
-        : Name(InName), Semantic(InSemantic) {
+    MaterialParameter::MaterialParameter(const std::string& inName, EMaterialParameterSemantic inSemantic)
+        : m_Name(inName), m_Semantic(inSemantic) {
     }
 
-    MaterialRenderProxy::MaterialRenderProxy(const MaterialInterface* parent) : Parent(parent) {
+    MaterialRenderProxy::MaterialRenderProxy(const MaterialInterface* parent) : m_Parent(parent) {
 
     }
 
     // ============================================================================
-    // MaterialRenderProxy  µœ÷
+    // MaterialRenderProxy ÂÆûÁé∞
     // ============================================================================
-    void MaterialRenderProxy::AddParameter(std::unique_ptr<MaterialParameter> Param) {
-        if (Param) {
-            Parameters.push_back(std::move(Param));
+    void MaterialRenderProxy::AddParameter(std::unique_ptr<MaterialParameter> param) {
+        if (param) {
+            m_Parameters.push_back(std::move(param));
         }
     }
 
     // ============================================================================
-    // Material  µœ÷
+    // Material ÂÆûÁé∞
     // ============================================================================
-    void Material::SetBlendMode(EBlendMode InMode) {
-        if (BlendMode != InMode) {
-            BlendMode = InMode;
-            bProxyDirty = true;
-            ++Revision;
+    void Material::SetBlendMode(EBlendMode inMode) {
+        if (m_BlendMode != inMode) {
+            m_BlendMode = inMode;
+            m_bProxyDirty = true;
+            ++m_Revision;
         }
     }
-    void Material::SetShadingModel(EShadingModel InModel) {
-		if (ShadingModel != InModel) {
-			ShadingModel = InModel;
-			bProxyDirty = true;
-            ++Revision;
+    void Material::SetShadingModel(EShadingModel inModel) {
+		if (m_ShadingModel != inModel) {
+			m_ShadingModel = inModel;
+			m_bProxyDirty = true;
+            ++m_Revision;
 		}
     }
 
     MaterialRenderProxy* Material::GetRenderProxy() const {
-        if (bProxyDirty || !CachedProxy) {
-            CachedProxy = std::make_unique<MaterialRenderProxy>(this);
-            // Ω´◊ ≤˙ƒ⁄≥÷”–µƒª˘¥°ƒ¨»œ ˝æ›»´≤ø Clone Ω¯÷ª∂¡¥˙¿Ì
-            for (const auto& [Name, Param] : DefaultParameters) {
-                CachedProxy->AddParameter(Param->Clone());
+        if (m_bProxyDirty || !m_CachedProxy) {
+            m_CachedProxy = std::make_unique<MaterialRenderProxy>(this);
+            // Â∞ÜËµÑ‰∫ßÂÜÖÊåÅÊúâÁöÑÂü∫Á°ÄÈªòËÆ§Êï∞ÊçÆÂÖ®ÈÉ® Clone ËøõÂè™ËØª‰ª£ÁêÜ
+            for (const auto& [Name, Param] : m_DefaultParameters) {
+                m_CachedProxy->AddParameter(Param->Clone());
             }
-            bProxyDirty = false;
+            m_bProxyDirty = false;
         }
-        return CachedProxy.get();
+        return m_CachedProxy.get();
     }
 
-    void Material::SetParameterValueImpl(EMaterialParameterSemantic Semantic, const std::string& Name, std::unique_ptr<MaterialParameter> Param) {
-        const auto key = Name + ":" + std::to_string(static_cast<int>(Semantic)) + ":" + typeid(*Param).name();
-        DefaultParameters[key] = std::move(Param);
-        ++Revision;
-        bProxyDirty = true;
+    void Material::SetParameterValueImpl(EMaterialParameterSemantic semantic, const std::string& name, std::unique_ptr<MaterialParameter> param) {
+        const auto key = name + ":" + std::to_string(static_cast<int>(semantic)) + ":" + typeid(*param).name();
+        m_DefaultParameters[key] = std::move(param);
+        ++m_Revision;
+        m_bProxyDirty = true;
     }
 
     // ============================================================================
-    // MaterialInstance  µœ÷
+    // MaterialInstance ÂÆûÁé∞
     // ============================================================================
-    MaterialInstance::MaterialInstance(std::shared_ptr<MaterialAsset> InParent)
-        : ParentAsset(std::move(InParent))
+    MaterialInstance::MaterialInstance(std::shared_ptr<MaterialAsset> inParent)
+        : m_ParentAsset(std::move(inParent))
     {
-        if (!ParentAsset || !ParentAsset->GetMaterial())
+        if (!m_ParentAsset || !m_ParentAsset->GetMaterial())
             throw std::invalid_argument("A material instance requires a loaded parent MaterialAsset");
     }
 
-    const Material* MaterialInstance::GetMaterial() const { return ParentAsset->GetMaterial(); }
+    const Material* MaterialInstance::GetMaterial() const { return m_ParentAsset->GetMaterial(); }
     EBlendMode MaterialInstance::GetBlendMode() const { return GetMaterial()->GetBlendMode(); }
     EShadingModel MaterialInstance::GetShadingModel() const { return GetMaterial()->GetShadingModel(); }
-    uint64_t MaterialInstance::GetRevision() const { return Revision + GetMaterial()->GetRevision(); }
+    uint64_t MaterialInstance::GetRevision() const { return m_Revision + GetMaterial()->GetRevision(); }
 
     MaterialRenderProxy* MaterialInstance::GetRenderProxy() const {
         const auto parentRevision = GetMaterial()->GetRevision();
-        if (bProxyDirty || !CachedProxy || CachedParentRevision != parentRevision) {
-            CachedParentRevision = parentRevision;
-            CachedProxy = std::make_unique<MaterialRenderProxy>(this);
+        if (m_bProxyDirty || !m_CachedProxy || m_CachedParentRevision != parentRevision) {
+            m_CachedParentRevision = parentRevision;
+            m_CachedProxy = std::make_unique<MaterialRenderProxy>(this);
 
-            const Material* BaseMaterial = GetMaterial();
-            if (BaseMaterial) {
-                // 1. µπ◊∞∏∏≤ƒ÷ µƒƒ¨»œ≤Œ ˝
-                for (const auto& [Name, Param] : BaseMaterial->GetDefaultParameters()) {
-                    if (!OverriddenParameters.contains(Name)) {
-                        CachedProxy->AddParameter(Param->Clone());
+            const Material* baseMaterial = GetMaterial();
+            if (baseMaterial) {
+                // 1. ÂÄíË£ÖÁà∂ÊùêË¥®ÁöÑÈªòËÆ§ÂèÇÊï∞
+                for (const auto& [Name, Param] : baseMaterial->GetDefaultParameters()) {
+                    if (!m_OverriddenParameters.contains(Name)) {
+                        m_CachedProxy->AddParameter(Param->Clone());
                     }
                 }
             }
 
-            // 2. µπ◊∞ µ¿˝◊‘º∫÷ÿ–¥£®Override£©µƒ≤Œ ˝∏≤∏«ƒ¨»œ ˝æ›
-            for (const auto& [Name, Param] : OverriddenParameters) {
-                CachedProxy->AddParameter(Param->Clone());
+            // 2. ÂÄíË£ÖÂÆû‰æãËá™Â∑±ÈáçÂÜôÔºàOverrideÔºâÁöÑÂèÇÊï∞Ë¶ÜÁõñÈªòËÆ§Êï∞ÊçÆ
+            for (const auto& [Name, Param] : m_OverriddenParameters) {
+                m_CachedProxy->AddParameter(Param->Clone());
             }
 
-            bProxyDirty = false;
+            m_bProxyDirty = false;
         }
-        return CachedProxy.get();
+        return m_CachedProxy.get();
     }
 
-    void MaterialInstance::SetParameterValueImpl(EMaterialParameterSemantic Semantic, const std::string& Name, std::unique_ptr<MaterialParameter> Param) {
-        const auto key = Name + ":" + std::to_string(static_cast<int>(Semantic)) + ":" + typeid(*Param).name();
-        OverriddenParameters[key] = std::move(Param);
-        ++Revision;
-        bProxyDirty = true;
+    void MaterialInstance::SetParameterValueImpl(EMaterialParameterSemantic semantic, const std::string& name, std::unique_ptr<MaterialParameter> param) {
+        const auto key = name + ":" + std::to_string(static_cast<int>(semantic)) + ":" + typeid(*param).name();
+        m_OverriddenParameters[key] = std::move(param);
+        ++m_Revision;
+        m_bProxyDirty = true;
     }
 
     

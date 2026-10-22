@@ -45,7 +45,7 @@ namespace Engine
 
 
     //
-    // Mesh Vertex ������Դ
+    // Mesh vertex stream resources.
     //
     struct LocalVertexFactoryData
     {
@@ -65,22 +65,22 @@ namespace Engine
     public:
         LocalVertexFactory() = default;
 
-        void SetData(const LocalVertexFactoryData& InData);
+        void SetData(const LocalVertexFactoryData& inData);
         RHI::RHIVertexDescState* GetRHIInstancedVertexDescState() const;
-		void BindInstanceBuffer(RHI::RHIGraphicCommandList& cmdList, RHI::RHIBuffer* InstanceBuffer, uint32_t Offset) const;
+		void BindInstanceBuffer(RHI::RHIGraphicCommandList& cmdList, RHI::RHIBuffer* instanceBuffer, uint32_t offset) const;
 
     public:
 
-        static bool ShouldCompilePermutation(const RenderCore::VertexFactoryShaderPermutationParameters& Parameters);
-        static void ModifyCompilationEnvironment(const RenderCore::VertexFactoryShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment);
+        static bool ShouldCompilePermutation(const RenderCore::VertexFactoryShaderPermutationParameters& parameters);
+        static void ModifyCompilationEnvironment(const RenderCore::VertexFactoryShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment);
         static const RenderCore::ShaderParametersMetadata* GetShaderParameterMetadata()
         {
             return LocalVertexFactoryParameters::GetMetaData();
         }
     private:
-        uint32_t instanceLocation = 0;
-        RHI::RHIVertexDescState* RHIInstancedVertexDescState = nullptr;
-        LocalVertexFactoryData Data;
+        uint32_t m_InstanceLocation = 0;
+        RHI::RHIVertexDescState* m_RHIInstancedVertexDescState = nullptr;
+        LocalVertexFactoryData m_Data;
     };
 
 

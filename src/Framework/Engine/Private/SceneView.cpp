@@ -8,7 +8,7 @@ namespace Engine {
 
     /*
     ===============================================================================
-        SceneView ÊµÏÖ
+        SceneView å®ç°
     ===============================================================================
     */
 
@@ -22,7 +22,7 @@ namespace Engine {
         , Flags(VF_None)
     {
         Viewport = { 0, 0, 0, 0 };
-        // ³õÊ¼»¯¾ØÕóÎªµ¥Î»Õó
+        // åˆå§‹åŒ–çŸ©é˜µä¸ºå•ä½é˜µ
         ViewMatrix = Core::Float4x4::Identity();
         ProjectionMatrix = Core::Float4x4::Identity();
         ViewProjectionMatrix = Core::Float4x4::Identity();
@@ -33,90 +33,90 @@ namespace Engine {
 
     void SceneView::RebuildDerivedMatrices()
     {
-        // ¼ÆËã ViewProjectionMatrix = ProjectionMatrix * ViewMatrix
-        // Õë¶ÔÄãµÄĞĞÖ÷Ğò (Row-Major) ¾ØÕóÄ£°åÊµÏÖ±ê×¼³Ë·¨
+        // è®¡ç®— ViewProjectionMatrix = ProjectionMatrix * ViewMatrix
+        // é’ˆå¯¹ä½ çš„è¡Œä¸»åº (Row-Major) çŸ©é˜µæ¨¡æ¿å®ç°æ ‡å‡†ä¹˜æ³•
         for (size_t r = 0; r < 4; ++r)
         {
             for (size_t c = 0; c < 4; ++c)
             {
-                float Sum = 0.0f;
+                float sum = 0.0f;
                 for (size_t k = 0; k < 4; ++k)
                 {
-                    // Ñ°Ö·¹«Ê½: row * Cols + col
-                    Sum += ProjectionMatrix(r, k) * ViewMatrix(k, c);
+                    // å¯»å€å…¬å¼: row * Cols + col
+                    sum += ProjectionMatrix(r, k) * ViewMatrix(k, c);
                 }
-                ViewProjectionMatrix(r, c) = Sum;
+                ViewProjectionMatrix(r, c) = sum;
             }
         }
 
-        // ¹¤Òµ¼¶¿ò¼ÜÔ¤Áô£ºÔÚ´Ë´¦¼ÆËã InvViewProjectionMatrix ÓÃÓÚÑÓ³Ù¹ÜÏß»òÕÚµ²ÌŞ³ı
-        // ÎªÁË±£³ÖºËĞÄ¹Ç¼Ü¾«¼ò£¬´Ë´¦ÏÈÊ¡ÂÔ¸ß½×¾ØÕóÇóÄæËã·¨
+        // å·¥ä¸šçº§æ¡†æ¶é¢„ç•™ï¼šåœ¨æ­¤å¤„è®¡ç®— InvViewProjectionMatrix ç”¨äºå»¶è¿Ÿç®¡çº¿æˆ–é®æŒ¡å‰”é™¤
+        // ä¸ºäº†ä¿æŒæ ¸å¿ƒéª¨æ¶ç²¾ç®€ï¼Œæ­¤å¤„å…ˆçœç•¥é«˜é˜¶çŸ©é˜µæ±‚é€†ç®—æ³•
     }
 
     void SceneView::BuildFrustum()
     {
-        // ´ÓĞĞÖ÷ĞòµÄ View-Projection ¾ØÕóÖĞÌáÈ¡ 6 ¸öÊÓ×¶Ìå²Ã¼ôÃæ (Gribb-Hartmann ·½·¨)
-        // Ñ°Ö·¸ñÊ½: M(row, col)
-        const auto& M = ViewProjectionMatrix;
+        // ä»è¡Œä¸»åºçš„ View-Projection çŸ©é˜µä¸­æå– 6 ä¸ªè§†é”¥ä½“è£å‰ªé¢ (Gribb-Hartmann æ–¹æ³•)
+        // å¯»å€æ ¼å¼: M(row, col)
+        const auto& m = ViewProjectionMatrix;
 
-        // ×ó²Ã¼ôÃæ (Left Plane)
-        CachedFrustum.Planes[0] = { M(3,0) + M(0,0), M(3,1) + M(0,1), M(3,2) + M(0,2), M(3,3) + M(0,3) };
-        // ÓÒ²Ã¼ôÃæ (Right Plane)
-        CachedFrustum.Planes[1] = { M(3,0) - M(0,0), M(3,1) - M(0,1), M(3,2) - M(0,2), M(3,3) - M(0,3) };
-        // ÏÂ²Ã¼ôÃæ (Bottom Plane)
-        CachedFrustum.Planes[2] = { M(3,0) + M(1,0), M(3,1) + M(1,1), M(3,2) + M(1,2), M(3,3) + M(1,3) };
-        // ÉÏ²Ã¼ôÃæ (Top Plane)
-        CachedFrustum.Planes[3] = { M(3,0) - M(1,0), M(3,1) - M(1,1), M(3,2) - M(1,2), M(3,3) - M(1,3) };
-        // ½ü²Ã¼ôÃæ (Near Plane)
-        CachedFrustum.Planes[4] = { M(3,0) + M(2,0), M(3,1) + M(2,1), M(3,2) + M(2,2), M(3,3) + M(2,3) };
-        // Ô¶²Ã¼ôÃæ (Far Plane)
-        CachedFrustum.Planes[5] = { M(3,0) - M(2,0), M(3,1) - M(2,1), M(3,2) - M(2,2), M(3,3) - M(2,3) };
+        // å·¦è£å‰ªé¢ (Left Plane)
+        CachedFrustum.Planes[0] = { m(3,0) + m(0,0), m(3,1) + m(0,1), m(3,2) + m(0,2), m(3,3) + m(0,3) };
+        // å³è£å‰ªé¢ (Right Plane)
+        CachedFrustum.Planes[1] = { m(3,0) - m(0,0), m(3,1) - m(0,1), m(3,2) - m(0,2), m(3,3) - m(0,3) };
+        // ä¸‹è£å‰ªé¢ (Bottom Plane)
+        CachedFrustum.Planes[2] = { m(3,0) + m(1,0), m(3,1) + m(1,1), m(3,2) + m(1,2), m(3,3) + m(1,3) };
+        // ä¸Šè£å‰ªé¢ (Top Plane)
+        CachedFrustum.Planes[3] = { m(3,0) - m(1,0), m(3,1) - m(1,1), m(3,2) - m(1,2), m(3,3) - m(1,3) };
+        // è¿‘è£å‰ªé¢ (Near Plane)
+        CachedFrustum.Planes[4] = { m(3,0) + m(2,0), m(3,1) + m(2,1), m(3,2) + m(2,2), m(3,3) + m(2,3) };
+        // è¿œè£å‰ªé¢ (Far Plane)
+        CachedFrustum.Planes[5] = { m(3,0) - m(2,0), m(3,1) - m(2,1), m(3,2) - m(2,2), m(3,3) - m(2,3) };
 
-        // ¹éÒ»»¯ËùÓĞ²Ã¼ôÃæ·½³Ì£¬È·±£¾àÀë²âÊÔ×¼È·
-        for (auto& Plane : CachedFrustum.Planes)
+        // å½’ä¸€åŒ–æ‰€æœ‰è£å‰ªé¢æ–¹ç¨‹ï¼Œç¡®ä¿è·ç¦»æµ‹è¯•å‡†ç¡®
+        for (auto& plane : CachedFrustum.Planes)
         {
-            float Length = std::sqrt(Plane.a * Plane.a + Plane.b * Plane.b + Plane.c * Plane.c);
-            if (Length > 0.0f)
+            float length = std::sqrt(plane.A * plane.A + plane.B * plane.B + plane.C * plane.C);
+            if (length > 0.0f)
             {
-                Plane.a /= Length;
-                Plane.b /= Length;
-                Plane.c /= Length;
-                Plane.d /= Length;
+                plane.A /= length;
+                plane.B /= length;
+                plane.C /= length;
+                plane.D /= length;
             }
         }
     }
 
-    bool SceneView::IsBoxVisible(const Core::AABB& Box) const
+    bool SceneView::IsBoxVisible(const Core::AABB& box) const
     {
-        // ¹¤Òµ¼¶±ê×¼£º¸ßĞ§ Frustum-AABB ¼ì²â (ÀûÓÃÕı¸º¶¥µã²âÊÔ£¬±ÜÃâ±éÀú 8 ¸ö¶¥µã)
-        // ´«ÈëµÄ Box ÄÚº¬ Min ºÍ Max Á½¸öÈıÎ¬ÏòÁ¿
-        for (const auto& Plane : CachedFrustum.Planes)
+        // å·¥ä¸šçº§æ ‡å‡†ï¼šé«˜æ•ˆ Frustum-AABB æ£€æµ‹ (åˆ©ç”¨æ­£è´Ÿé¡¶ç‚¹æµ‹è¯•ï¼Œé¿å…éå† 8 ä¸ªé¡¶ç‚¹)
+        // ä¼ å…¥çš„ Box å†…å« Min å’Œ Max ä¸¤ä¸ªä¸‰ç»´å‘é‡
+        for (const auto& plane : CachedFrustum.Planes)
         {
-            // Ñ°ÕÒÔÚµ±Ç°Æ½Ãæ·¨Ïß·½ÏòÉÏ£¬AABB ¾àÀëÆ½Ãæ×î½üµÄ¡°×îÔ¶µã (Positive Vertex)¡±
-            float PV_x = (Plane.a > 0.0f) ? Box.Max.x : Box.Min.x;
-            float PV_y = (Plane.b > 0.0f) ? Box.Max.y : Box.Min.y;
-            float PV_z = (Plane.c > 0.0f) ? Box.Max.z : Box.Min.z;
+            // å¯»æ‰¾åœ¨å½“å‰å¹³é¢æ³•çº¿æ–¹å‘ä¸Šï¼ŒAABB è·ç¦»å¹³é¢æœ€è¿‘çš„â€œæœ€è¿œç‚¹ (Positive Vertex)â€
+            float pvX = (plane.A > 0.0f) ? box.Max.x : box.Min.x;
+            float pvY = (plane.B > 0.0f) ? box.Max.y : box.Min.y;
+            float pvZ = (plane.C > 0.0f) ? box.Max.z : box.Min.z;
 
-            // Èç¹ûÁ¬Õâ¸ö×îÈİÒ×ÁôÔÚÆ½ÃæÄÚ²¿µÄµã¶¼ÔÚÆ½ÃæÍâ²à£¨¼´Ëã³öÀ´µÄ´ø·ûºÅ¾àÀë < 0£©£¬ËµÃ÷±»³¹µ×²Ã¼ô
-            if (Plane.a * PV_x + Plane.b * PV_y + Plane.c * PV_z + Plane.d < 0.0f)
+            // å¦‚æœè¿è¿™ä¸ªæœ€å®¹æ˜“ç•™åœ¨å¹³é¢å†…éƒ¨çš„ç‚¹éƒ½åœ¨å¹³é¢å¤–ä¾§ï¼ˆå³ç®—å‡ºæ¥çš„å¸¦ç¬¦å·è·ç¦» < 0ï¼‰ï¼Œè¯´æ˜è¢«å½»åº•è£å‰ª
+            if (plane.A * pvX + plane.B * pvY + plane.C * pvZ + plane.D < 0.0f)
             {
-                return false; // Òş²Ø£¬²»¿É¼û
+                return false; // éšè—ï¼Œä¸å¯è§
             }
         }
-        return true; // ¿É¼û
+        return true; // å¯è§
     }
 
-    void SceneView::PackViewUniforms(ViewUniforms& OutUniforms) const
+    void SceneView::PackViewUniforms(ViewUniforms& outUniforms) const
     {
-        // 1. ¸´ÖÆ¾ØÕó
-        OutUniforms.ViewProj = ViewProjectionMatrix;
-        OutUniforms.InvViewProj = InvViewProjectionMatrix;
+        // 1. å¤åˆ¶çŸ©é˜µ
+        outUniforms.ViewProj = ViewProjectionMatrix;
+        outUniforms.InvViewProj = InvViewProjectionMatrix;
 
-        // 2. ¸´ÖÆÏà»úÎ»ÖÃ£¬²¢¶ÔÆë´òÈë Float4 ÄÚ´æÖĞ
-        OutUniforms.CameraPos.x = CameraWorldPos.x;
-        OutUniforms.CameraPos.y = CameraWorldPos.y;
-        OutUniforms.CameraPos.z = CameraWorldPos.z;
-        OutUniforms.CameraPos.w = 1.0f; // ³£¹æÆë´Î×ø±êÔ¤Áô
+        // 2. å¤åˆ¶ç›¸æœºä½ç½®ï¼Œå¹¶å¯¹é½æ‰“å…¥ Float4 å†…å­˜ä¸­
+        outUniforms.CameraPos.x = CameraWorldPos.x;
+        outUniforms.CameraPos.y = CameraWorldPos.y;
+        outUniforms.CameraPos.z = CameraWorldPos.z;
+        outUniforms.CameraPos.w = 1.0f; // å¸¸è§„é½æ¬¡åæ ‡é¢„ç•™
     }
     static Core::Float3 UnprojectFromNDC(
         const Core::Float4x4& invVP,
@@ -145,7 +145,7 @@ namespace Engine {
         //----------------------------------------
         std::array<Core::Float3, 8> fullCorners;
         float nearP = 0;
-        if (!IsDepthRangeZeroToOne) {
+        if (!bDepthRangeZeroToOne) {
             nearP = -1.0f;
         }
 
@@ -196,12 +196,12 @@ namespace Engine {
     }
     void SceneView::BuildSplitDepths() {
         
-        splitDepths[0] = NearClip;
-        splitDepths[4] = FarClip;
+        SplitDepths[0] = NearClip;
+        SplitDepths[4] = FarClip;
         float lambda = 0.7f;
         for (uint32_t i = 1; i < CascadeCount; i++)
         {
-            //¹¹½¨Ã¿¸öcascadeÉî¶È
+            //æ„å»ºæ¯ä¸ªcascadeæ·±åº¦
             float p = float(i) / 4.0f;
 
             float logSplit =
@@ -212,75 +212,75 @@ namespace Engine {
                 NearClip +
                 (FarClip - NearClip) * p;
 
-            splitDepths[i] =
+            SplitDepths[i] =
                 Core::Lerp(linearSplit, logSplit, lambda);
         }
     }
 
-    int SceneViewFamily::AddView(const SceneView& View)
+    int SceneViewFamily::AddView(const SceneView& view)
     {
-        Views.push_back(View);
-        return static_cast<int>(Views.size()) - 1;
+        m_Views.push_back(view);
+        return static_cast<int>(m_Views.size()) - 1;
     }
 
-    int SceneViewFamily::AddView(SceneView&& View)
+    int SceneViewFamily::AddView(SceneView&& view)
     {
-        Views.push_back(std::move(View));
-        return static_cast<int>(Views.size()) - 1;
+        m_Views.push_back(std::move(view));
+        return static_cast<int>(m_Views.size()) - 1;
     }
 
-    bool SceneViewFamily::RemoveView(int Index)
+    bool SceneViewFamily::RemoveView(int index)
     {
-        if (Index >= 0 && Index < static_cast<int>(Views.size()))
+        if (index >= 0 && index < static_cast<int>(m_Views.size()))
         {
-            Views.erase(Views.begin() + Index);
+            m_Views.erase(m_Views.begin() + index);
             return true;
         }
         return false;
     }
     void SceneViewFamily::ClearViews() 
     {
-        Views.clear();
+        m_Views.clear();
     }
 
-    SceneView* SceneViewFamily::GetView(int Index)
+    SceneView* SceneViewFamily::GetView(int index)
     {
-        if (Index >= 0 && Index < static_cast<int>(Views.size()))
+        if (index >= 0 && index < static_cast<int>(m_Views.size()))
         {
-            return &Views[Index];
+            return &m_Views[index];
         }
         return nullptr;
     }
 
     void SceneViewFamily::RebuildAllDerivedMatrices()
     {
-        for (auto& View : Views)
+        for (auto& view : m_Views)
         {
-            View.RebuildDerivedMatrices();
+            view.RebuildDerivedMatrices();
         }
     }
 
     void SceneViewFamily::BuildAllViews() {
-        for (auto& View : Views)
+        for (auto& view : m_Views)
         {
-            View.BuildSplitDepths();
-            View.BuildFrustum();
+            view.BuildSplitDepths();
+            view.BuildFrustum();
         }
     }
 
-    std::vector<int> SceneViewFamily::FindViewsThatSeeBox(const Core::AABB& Box) const
+    std::vector<int> SceneViewFamily::FindViewsThatSeeBox(const Core::AABB& box) const
     {
-        std::vector<int> VisibleViewIndices;
-        VisibleViewIndices.reserve(Views.size());
+        std::vector<int> visibleViewIndices;
+        visibleViewIndices.reserve(m_Views.size());
 
-        for (size_t i = 0; i < Views.size(); ++i)
+        for (size_t i = 0; i < m_Views.size(); ++i)
         {
-            if (Views[i].IsBoxVisible(Box))
+            if (m_Views[i].IsBoxVisible(box))
             {
-                VisibleViewIndices.push_back(static_cast<int>(i));
+                visibleViewIndices.push_back(static_cast<int>(i));
             }
         }
-        return VisibleViewIndices;
+        return visibleViewIndices;
     }
 
 } // namespace Engine

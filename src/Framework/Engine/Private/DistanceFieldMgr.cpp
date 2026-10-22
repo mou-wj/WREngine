@@ -10,181 +10,181 @@ namespace Engine
     DistanceFieldManager GDistanceFieldMgr;
 
     Float3 ClosestPointOnTriangle(
-        const Float3& P,
-        const Float3& A,
-        const Float3& B,
-        const Float3& C)
+        const Float3& p,
+        const Float3& a,
+        const Float3& b,
+        const Float3& c)
     {
-        Float3 AB = B - A;
-        Float3 AC = C - A;
-        Float3 AP = P - A;
+        Float3 ab = b - a;
+        Float3 ac = c - a;
+        Float3 ap = p - a;
 
 
-        float D1 = Dot(AB, AP);
-        float D2 = Dot(AC, AP);
+        float d1 = Dot(ab, ap);
+        float d2 = Dot(ac, ap);
 
 
-        if (D1 <= 0.0f && D2 <= 0.0f)
+        if (d1 <= 0.0f && d2 <= 0.0f)
         {
-            return A;
+            return a;
         }
 
 
 
-        Float3 BP = P - B;
+        Float3 bp = p - b;
 
-        float D3 = Dot(AB, BP);
-        float D4 = Dot(AC, BP);
+        float d3 = Dot(ab, bp);
+        float d4 = Dot(ac, bp);
 
 
-        if (D3 >= 0.0f && D4 <= D3)
+        if (d3 >= 0.0f && d4 <= d3)
         {
-            return B;
+            return b;
         }
 
 
 
-        float VC = D1 * D4 - D3 * D2;
+        float vc = d1 * d4 - d3 * d2;
 
 
-        if (VC <= 0.0f && D1 >= 0.0f && D3 <= 0.0f)
+        if (vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f)
         {
-            float V = D1 / (D1 - D3);
+            float v = d1 / (d1 - d3);
 
-            return A + AB * V;
+            return a + ab * v;
         }
 
 
 
-        Float3 CP = P - C;
+        Float3 cp = p - c;
 
 
-        float D5 = Dot(AB, CP);
-        float D6 = Dot(AC, CP);
+        float d5 = Dot(ab, cp);
+        float d6 = Dot(ac, cp);
 
 
 
-        if (D6 >= 0.0f && D5 <= D6)
+        if (d6 >= 0.0f && d5 <= d6)
         {
-            return C;
+            return c;
         }
 
 
 
-        float VB = D5 * D2 - D1 * D6;
+        float vb = d5 * d2 - d1 * d6;
 
 
-        if (VB <= 0.0f && D2 >= 0.0f && D6 <= 0.0f)
+        if (vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f)
         {
-            float W = D2 / (D2 - D6);
+            float w = d2 / (d2 - d6);
 
-            return A + AC * W;
+            return a + ac * w;
         }
 
 
 
-        float VA = D3 * D6 - D5 * D4;
+        float va = d3 * d6 - d5 * d4;
 
 
-        if (VA <= 0.0f && (D4 - D3) >= 0.0f && (D5 - D6) >= 0.0f)
+        if (va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f)
         {
-            Float3 BC = C - B;
+            Float3 bc = c - b;
 
-            float W = (D4 - D3) / ((D4 - D3) + (D5 - D6));
+            float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
 
-            return B + BC * W;
+            return b + bc * w;
         }
 
 
 
-        float Denom = 1.0f / (VA + VB + VC);
+        float denom = 1.0f / (va + vb + vc);
 
-        float V = VB * Denom;
+        float v = vb * denom;
 
-        float W = VC * Denom;
+        float w = vc * denom;
 
 
-        return A + AB * V + AC * W;
+        return a + ab * v + ac * w;
     }
 
-    Core::BoxSphereBounds DistanceFieldTriangleBVHTraits::GetBounds(const DistanceFieldTriangle& Triangle)
+    Core::BoxSphereBounds DistanceFieldTriangleBVHTraits::GetBounds(const DistanceFieldTriangle& triangle)
     {
-        Core::AABB Box;
-        Box.SetEmpty();
-        Box.ExpandBy(Triangle.V0);
-        Box.ExpandBy(Triangle.V1);
-        Box.ExpandBy(Triangle.V2);
-        return Core::BoxSphereBounds(Box);
-    }
-
-
-    Core::Float3 DistanceFieldTriangleBVHTraits::GetCentroid(const DistanceFieldTriangle& Triangle)
-    {
-        return Core::Float3((Triangle.V0.x + Triangle.V1.x + Triangle.V2.x) / 3.0f, (Triangle.V0.y + Triangle.V1.y + Triangle.V2.y) / 3.0f, (Triangle.V0.z + Triangle.V1.z + Triangle.V2.z) / 3.0f);
+        Core::AABB box;
+        box.SetEmpty();
+        box.ExpandBy(triangle.V0);
+        box.ExpandBy(triangle.V1);
+        box.ExpandBy(triangle.V2);
+        return Core::BoxSphereBounds(box);
     }
 
 
-    float DistanceFieldTriangleBVHTraits::ClosestDistance(const DistanceFieldTriangle& Triangle, const Core::Float3& Position)
+    Core::Float3 DistanceFieldTriangleBVHTraits::GetCentroid(const DistanceFieldTriangle& triangle)
     {
-        Core::Float3 Point = ClosestPointOnTriangle(Position, Triangle.V0, Triangle.V1, Triangle.V2);
-
-        Core::Float3 Delta = Point - Position;
-
-        return sqrt(Delta.x * Delta.x + Delta.y * Delta.y + Delta.z * Delta.z);
+        return Core::Float3((triangle.V0.x + triangle.V1.x + triangle.V2.x) / 3.0f, (triangle.V0.y + triangle.V1.y + triangle.V2.y) / 3.0f, (triangle.V0.z + triangle.V1.z + triangle.V2.z) / 3.0f);
     }
 
-    bool DistanceFieldTriangleBVHTraits::RayIntersect(const DistanceFieldTriangle& Primitive, const Core::Ray& Ray, float& OutDistance)
+
+    float DistanceFieldTriangleBVHTraits::ClosestDistance(const DistanceFieldTriangle& triangle, const Core::Float3& position)
     {
-        constexpr float Epsilon = 1e-6f;
+        Core::Float3 point = ClosestPointOnTriangle(position, triangle.V0, triangle.V1, triangle.V2);
 
-        const Core::Float3 Edge1 = Primitive.V1 - Primitive.V0;
-        const Core::Float3 Edge2 = Primitive.V2 - Primitive.V0;
+        Core::Float3 delta = point - position;
 
-        const Core::Float3 P = Core::Cross(Ray.Direction, Edge2);
+        return sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
+    }
 
-        const float Det = Core::Dot(Edge1, P);
+    bool DistanceFieldTriangleBVHTraits::RayIntersect(const DistanceFieldTriangle& primitive, const Core::Ray& ray, float& outDistance)
+    {
+        constexpr float epsilon = 1e-6f;
 
-        if (std::fabs(Det) < Epsilon)
+        const Core::Float3 edge1 = primitive.V1 - primitive.V0;
+        const Core::Float3 edge2 = primitive.V2 - primitive.V0;
+
+        const Core::Float3 p = Core::Cross(ray.Direction, edge2);
+
+        const float det = Core::Dot(edge1, p);
+
+        if (std::fabs(det) < epsilon)
         {
             return false;
         }
 
-        const float InvDet = 1.0f / Det;
+        const float invDet = 1.0f / det;
 
-        const Core::Float3 T = Ray.Origin - Primitive.V0;
+        const Core::Float3 t = ray.Origin - primitive.V0;
 
-        const float U = Core::Dot(T, P) * InvDet;
+        const float u = Core::Dot(t, p) * invDet;
 
-        if (U < 0.0f || U > 1.0f)
+        if (u < 0.0f || u > 1.0f)
         {
             return false;
         }
 
-        const Core::Float3 Q = Core::Cross(T, Edge1);
+        const Core::Float3 q = Core::Cross(t, edge1);
 
-        const float V = Core::Dot(Ray.Direction, Q) * InvDet;
+        const float v = Core::Dot(ray.Direction, q) * invDet;
 
-        if (V < 0.0f || U + V > 1.0f)
+        if (v < 0.0f || u + v > 1.0f)
         {
             return false;
         }
 
-        const float Distance = Core::Dot(Edge2, Q) * InvDet;
+        const float distance = Core::Dot(edge2, q) * invDet;
 
-        if (Distance < Epsilon)
+        if (distance < epsilon)
         {
             return false;
         }
 
-        OutDistance = Distance;
+        outDistance = distance;
 
         return true;
     }
 
-    bool DistanceFieldTriangleBVHTraits::IntersectVoxel(const DistanceFieldTriangle& Triangle, const Core::AABB& VoxelBounds)
+    bool DistanceFieldTriangleBVHTraits::IntersectVoxel(const DistanceFieldTriangle& triangle, const Core::AABB& voxelBounds)
     {
-		BoxSphereBounds TriangleSphere = GetBounds(Triangle);
-		return TriangleSphere.Box.Intersects(VoxelBounds) || VoxelBounds.Contains(TriangleSphere.Box);
+		BoxSphereBounds triangleSphere = GetBounds(triangle);
+		return triangleSphere.Box.Intersects(voxelBounds) || voxelBounds.Contains(triangleSphere.Box);
     }
     
 
@@ -259,8 +259,8 @@ namespace Engine
         }
     }
 
-    DistanceFieldManager::DistanceFieldManager(Core::TaskPool* InTaskPool)
-        : TaskPool(InTaskPool)
+    DistanceFieldManager::DistanceFieldManager(Core::TaskPool* inTaskPool)
+        : m_TaskPool(inTaskPool)
     {
         
     }
@@ -273,39 +273,39 @@ namespace Engine
 
     void DistanceFieldManager::Initialize()
     {
-        if (IsInitialized) {
+        if (m_bInitialized) {
             return;
         }
-        IsInitialized = true;
-        Atlas.Initialize(128, 128, 128, 64);
+        m_bInitialized = true;
+        m_Atlas.Initialize(128, 128, 128, 64);
     }
 
     void DistanceFieldManager::Release()
     {
-        IsInitialized = false;
-		Atlas.Release();
+        m_bInitialized = false;
+		m_Atlas.Release();
     }
 
 
 
-    void DistanceFieldManager::BuildMeshDistanceField(StaticMeshRenderData& Mesh)
+    void DistanceFieldManager::BuildMeshDistanceField(StaticMeshRenderData& mesh)
     {
-        bool BuildInCPU = true;
-        if (BuildInCPU) {
-            BuildCPUData(Mesh);
-            for (auto& LOD : Mesh.LODResources) {
+        bool buildInCpu = true;
+        if (buildInCpu) {
+            BuildCPUData(mesh);
+            for (auto& lod : mesh.LODResources) {
                 
-                if (LOD.DistanceFieldData.CPUData.Distance.empty()) {
+                if (lod.DistanceFieldData.CPUData.Distance.empty()) {
                     continue;
                 }
-				auto AllocationSuccess = Atlas.Allocate(LOD.DistanceFieldData.Allocation);
-                Atlas.UploadData(LOD.DistanceFieldData.Allocation, LOD.DistanceFieldData.CPUData.Distance.data());
+				auto allocationSuccess = m_Atlas.Allocate(lod.DistanceFieldData.Allocation);
+                m_Atlas.UploadData(lod.DistanceFieldData.Allocation, lod.DistanceFieldData.CPUData.Distance.data());
                 
             }
         }
         else {
-			for (auto& LOD : Mesh.LODResources) {
-				auto SurfaceMask = BuildSurfaceMaskTexture(Mesh.Bounds, LOD);
+			for (auto& lod : mesh.LODResources) {
+				auto surfaceMask = BuildSurfaceMaskTexture(mesh.Bounds, lod);
                 
 			}
         }
@@ -313,60 +313,60 @@ namespace Engine
 
 
 
-    bool DistanceFieldManager::BuildCPUData(StaticMeshRenderData& Mesh)
+    bool DistanceFieldManager::BuildCPUData(StaticMeshRenderData& mesh)
     {
-        const uint32_t Resolution = GLocalSDFResolution;
+        const uint32_t resolution = GLocalSDFResolution;
 
 
-        const Core::AABB& Bounds = Mesh.Bounds.Box;
+        const Core::AABB& bounds = mesh.Bounds.Box;
 
 
 
         bool res = true;
-        for (auto& LOD : Mesh.LODResources) {
-            auto& OutData = LOD.DistanceFieldData.CPUData;
-            OutData.Volume.ResolutionX = Resolution;
-            OutData.Volume.ResolutionY = Resolution;
-            OutData.Volume.ResolutionZ = Resolution;
+        for (auto& lod : mesh.LODResources) {
+            auto& outData = lod.DistanceFieldData.CPUData;
+            outData.Volume.ResolutionX = resolution;
+            outData.Volume.ResolutionY = resolution;
+            outData.Volume.ResolutionZ = resolution;
 
 
-            OutData.Volume.MinBounds = Bounds.Min;
-            OutData.Volume.MaxBounds = Bounds.Max;
+            outData.Volume.MinBounds = bounds.Min;
+            outData.Volume.MaxBounds = bounds.Max;
 
 
-            Core::Float3 Size = Bounds.Max - Bounds.Min;
+            Core::Float3 size = bounds.Max - bounds.Min;
 
 
-            OutData.Volume.VoxelSize = Core::Float3(
-                Size.x / Resolution,
-                Size.y / Resolution,
-                Size.z / Resolution);
+            outData.Volume.VoxelSize = Core::Float3(
+                size.x / resolution,
+                size.y / resolution,
+                size.z / resolution);
 
 
-            OutData.Resize(
-                Resolution,
-                Resolution,
-                Resolution);
+            outData.Resize(
+                resolution,
+                resolution,
+                resolution);
 
-            std::vector<DistanceFieldTriangle> Triangles;
+            std::vector<DistanceFieldTriangle> triangles;
 
 
-            if (!BuildTriangles(LOD, Triangles))
+            if (!BuildTriangles(lod, triangles))
             {
                 continue;
             }
 
 
 
-            DistanceFieldBVH BVH;
+            DistanceFieldBVH bvh;
 
-            BVH.Build(Triangles);
+            bvh.Build(triangles);
 
 
 
             res &= GenerateDistanceCPU(
-                OutData,
-                BVH);
+                outData,
+                bvh);
         }
 
         return res;
@@ -374,54 +374,54 @@ namespace Engine
 
 
 
-    bool DistanceFieldManager::BuildTriangles(const LODResource& LOD, std::vector<DistanceFieldTriangle>& OutTriangles)
+    bool DistanceFieldManager::BuildTriangles(const LODResource& lod, std::vector<DistanceFieldTriangle>& outTriangles)
     {
 
-        const auto& Positions = LOD.VertexBuffers.PositionBuffer.Vertices;
+        const auto& positions = lod.VertexBuffers.PositionBuffer.Vertices;
 
-        const auto& Indices = LOD.IndexBuffer.Indices;
+        const auto& indices = lod.IndexBuffer.Indices;
 
 
-        if (Positions.empty() || Indices.empty())
+        if (positions.empty() || indices.empty())
         {
             return false;
         }
 
 
 
-        OutTriangles.reserve(Indices.size() / 3);
+        outTriangles.reserve(indices.size() / 3);
 
 
 
-        for (size_t Index = 0; Index < Indices.size(); Index += 3)
+        for (size_t index = 0; index < indices.size(); index += 3)
         {
-            uint32_t I0 = Indices[Index];
-            uint32_t I1 = Indices[Index + 1];
-            uint32_t I2 = Indices[Index + 2];
+            uint32_t i0 = indices[index];
+            uint32_t i1 = indices[index + 1];
+            uint32_t i2 = indices[index + 2];
 
 
-            DistanceFieldTriangle Triangle;
+            DistanceFieldTriangle triangle;
 
 
-            Triangle.V0 = Core::Float3(
-                Positions[I0 * 3],
-                Positions[I0 * 3 + 1],
-                Positions[I0 * 3 + 2]);
+            triangle.V0 = Core::Float3(
+                positions[i0 * 3],
+                positions[i0 * 3 + 1],
+                positions[i0 * 3 + 2]);
 
 
-            Triangle.V1 = Core::Float3(
-                Positions[I1 * 3],
-                Positions[I1 * 3 + 1],
-                Positions[I1 * 3 + 2]);
+            triangle.V1 = Core::Float3(
+                positions[i1 * 3],
+                positions[i1 * 3 + 1],
+                positions[i1 * 3 + 2]);
 
 
-            Triangle.V2 = Core::Float3(
-                Positions[I2 * 3],
-                Positions[I2 * 3 + 1],
-                Positions[I2 * 3 + 2]);
+            triangle.V2 = Core::Float3(
+                positions[i2 * 3],
+                positions[i2 * 3 + 1],
+                positions[i2 * 3 + 2]);
 
 
-            OutTriangles.push_back(Triangle);
+            outTriangles.push_back(triangle);
         }
 
 
@@ -430,32 +430,32 @@ namespace Engine
 
 
 
-    bool DistanceFieldManager::GenerateDistanceCPU(DistanceFieldData& Data, const DistanceFieldBVH& BVH)
+    bool DistanceFieldManager::GenerateDistanceCPU(DistanceFieldData& data, const DistanceFieldBVH& bvh)
     {
-        std::vector<Core::TaskHandle> Tasks;
+        std::vector<Core::TaskHandle> tasks;
 
 
-        for (uint32_t Z = 0; Z < Data.Volume.ResolutionZ; Z++)
+        for (uint32_t z = 0; z < data.Volume.ResolutionZ; z++)
         {
-            if (TaskPool)
+            if (m_TaskPool)
             {
-                Tasks.emplace_back(TaskPool->AddTask(
-                    [&, Z]()
+                tasks.emplace_back(m_TaskPool->AddTask(
+                    [&, z]()
                     {
-                        GenerateDistanceSlice(Data, Z, BVH);
+                        GenerateDistanceSlice(data, z, bvh);
                     }));
             }
             else
             {
-                GenerateDistanceSlice(Data, Z, BVH);
+                GenerateDistanceSlice(data, z, bvh);
             }
         }
 
 
 
-        if (TaskPool)
+        if (m_TaskPool)
         {
-            TaskPool->WaitAll(Tasks);
+            m_TaskPool->WaitAll(tasks);
         }
 
 
@@ -470,42 +470,42 @@ namespace Engine
         return Core::Float3(randomx, randomy, randomz);
     }
 
-    void DistanceFieldManager::GenerateDistanceSlice(DistanceFieldData& Data, uint32_t Z, const DistanceFieldBVH& BVH)
+    void DistanceFieldManager::GenerateDistanceSlice(DistanceFieldData& data, uint32_t z, const DistanceFieldBVH& bvh)
     {
-        const uint32_t SizeX = Data.Volume.ResolutionX;
-        const uint32_t SizeY = Data.Volume.ResolutionY;
+        const uint32_t sizeX = data.Volume.ResolutionX;
+        const uint32_t sizeY = data.Volume.ResolutionY;
 
 
 
-        for (uint32_t Y = 0; Y < SizeY; Y++)
+        for (uint32_t y = 0; y < sizeY; y++)
         {
-            for (uint32_t X = 0; X < SizeX; X++)
+            for (uint32_t x = 0; x < sizeX; x++)
             {
-                uint32_t Index = Data.GetIndex(X, Y, Z);
+                uint32_t index = data.GetIndex(x, y, z);
 
 
 
-                Core::Float3 Position(
-                    Data.Volume.MinBounds.x + X * Data.Volume.VoxelSize.x,
-                    Data.Volume.MinBounds.y + Y * Data.Volume.VoxelSize.y,
-                    Data.Volume.MinBounds.z + Z * Data.Volume.VoxelSize.z);
+                Core::Float3 position(
+                    data.Volume.MinBounds.x + x * data.Volume.VoxelSize.x,
+                    data.Volume.MinBounds.y + y * data.Volume.VoxelSize.y,
+                    data.Volume.MinBounds.z + z * data.Volume.VoxelSize.z);
 
 
 
-                Data.Distance[Index] = BVH.ClosestDistance(Position);
-                float radius = BVH.GetRootNode().Bounds.Sphere.Radius;
+                data.Distance[index] = bvh.ClosestDistance(position);
+                float radius = bvh.GetRootNode().Bounds.Sphere.Radius;
 				float randomRange = radius * 0.01f;
-                Core::Ray Hit;
-                Hit.Origin = Position;
-                Core::Float3 center = BVH.GetRootNode().Bounds.Box.GetCenter();
+                Core::Ray hit;
+                hit.Origin = position;
+                Core::Float3 center = bvh.GetRootNode().Bounds.Box.GetCenter();
 				center = RandomSeed(center, randomRange);
-                Hit.Direction = center - Hit.Origin;
-                Hit.Direction = Core::Normalize(Hit.Direction);
+                hit.Direction = center - hit.Origin;
+                hit.Direction = Core::Normalize(hit.Direction);
                 std::set<uint32_t> intersectIds;
-                BVH.RayIntersect(Hit, intersectIds);
-                float positiveDis = Data.Distance[Index];
+                bvh.RayIntersect(hit, intersectIds);
+                float positiveDis = data.Distance[index];
                 if (intersectIds.size() % 2 == 1) {
-                    Data.Distance[Index] = -positiveDis;
+                    data.Distance[index] = -positiveDis;
                 }
                 if (intersectIds.size() == 0) {
                     int i = 10;
@@ -514,9 +514,9 @@ namespace Engine
                 if (intersectIds.size() > 2) {
                     std::set<float> hitDistences;
                     for (auto id : intersectIds) {
-                        auto pri = BVH.GetPrimitive(id);
+                        auto pri = bvh.GetPrimitive(id);
                         float dis = 0;
-                        bool sc = DistanceFieldTriangleBVHTraits::RayIntersect(BVH.GetPrimitive(id), Hit, dis);
+                        bool sc = DistanceFieldTriangleBVHTraits::RayIntersect(bvh.GetPrimitive(id), hit, dis);
                         if (hitDistences.empty()) {
 							hitDistences.insert(dis);
                         }
@@ -537,168 +537,168 @@ namespace Engine
                         
                     }
                     if (hitDistences.size() > 2) {
-                        Data.Distance[Index] = -positiveDis;
+                        data.Distance[index] = -positiveDis;
                     }
                     if (hitDistences.size() % 2 == 1) {
-                        Data.Distance[Index] = -positiveDis;
+                        data.Distance[index] = -positiveDis;
                     }
                     else {
-                        Data.Distance[Index] = -positiveDis;
+                        data.Distance[index] = -positiveDis;
                     }
                     
                 }
             }
         }
     }
-    static Core::Float3 GetVoxelPosition(const DistanceFieldVolumeDesc& Volume, uint32_t X, uint32_t Y, uint32_t Z)
+    static Core::Float3 GetVoxelPosition(const DistanceFieldVolumeDesc& volume, uint32_t x, uint32_t y, uint32_t z)
     {
         return Core::Float3(
-            Volume.MinBounds.x + (X + 0.5f) * Volume.VoxelSize.x,
-            Volume.MinBounds.y + (Y + 0.5f) * Volume.VoxelSize.y,
-            Volume.MinBounds.z + (Z + 0.5f) * Volume.VoxelSize.z
+            volume.MinBounds.x + (x + 0.5f) * volume.VoxelSize.x,
+            volume.MinBounds.y + (y + 0.5f) * volume.VoxelSize.y,
+            volume.MinBounds.z + (z + 0.5f) * volume.VoxelSize.z
         );
     }
-    static Core::AABB GetVoxelBounds(const DistanceFieldVolumeDesc& Volume, uint32_t X, uint32_t Y, uint32_t Z)
+    static Core::AABB GetVoxelBounds(const DistanceFieldVolumeDesc& volume, uint32_t x, uint32_t y, uint32_t z)
     {
-        Core::Float3 Min(
-            Volume.MinBounds.x + X * Volume.VoxelSize.x,
-            Volume.MinBounds.y + Y * Volume.VoxelSize.y,
-            Volume.MinBounds.z + Z * Volume.VoxelSize.z
+        Core::Float3 min(
+            volume.MinBounds.x + x * volume.VoxelSize.x,
+            volume.MinBounds.y + y * volume.VoxelSize.y,
+            volume.MinBounds.z + z * volume.VoxelSize.z
         );
 
-        Core::Float3 Max = Min + Volume.VoxelSize;
+        Core::Float3 max = min + volume.VoxelSize;
 
-        return Core::AABB(Min, Max);
+        return Core::AABB(min, max);
     }
-    RenderCore::RenderTextureSP DistanceFieldManager::BuildSurfaceMaskTexture(const Core::BoxSphereBounds& bounds, const LODResource& LOD)
+    RenderCore::RenderTextureSP DistanceFieldManager::BuildSurfaceMaskTexture(const Core::BoxSphereBounds& bounds, const LODResource& lod)
     {
-        std::vector<DistanceFieldTriangle> Triangles;
+        std::vector<DistanceFieldTriangle> triangles;
 
 
-        if (!BuildTriangles(LOD, Triangles))
+        if (!BuildTriangles(lod, triangles))
         {
             return nullptr;
         }
 
 
 
-        DistanceFieldBVH BVH;
+        DistanceFieldBVH bvh;
 
-        BVH.Build(Triangles);
-        const uint32_t Resolution = GLocalSDFResolution;
-		std::vector<uint8_t> SurfaceMask(Resolution * Resolution * Resolution, 255);
+        bvh.Build(triangles);
+        const uint32_t resolution = GLocalSDFResolution;
+		std::vector<uint8_t> surfaceMask(resolution * resolution * resolution, 255);
         
-        //²¹³ä
-        DistanceFieldVolumeDesc Volume;
+        //è¡¥å……
+        DistanceFieldVolumeDesc volume;
 
-        Volume.ResolutionX = Resolution;
-        Volume.ResolutionY = Resolution;
-        Volume.ResolutionZ = Resolution;
+        volume.ResolutionX = resolution;
+        volume.ResolutionY = resolution;
+        volume.ResolutionZ = resolution;
 
-        Volume.MinBounds = bounds.Box.Min;
-        Volume.MaxBounds = bounds.Box.Max;
+        volume.MinBounds = bounds.Box.Min;
+        volume.MaxBounds = bounds.Box.Max;
 
 
-        Core::Float3 Size =
+        Core::Float3 size =
             bounds.Box.Max - bounds.Box.Min;
 
 
-        Volume.VoxelSize =
+        volume.VoxelSize =
             Core::Float3(
-                Size.x / Resolution,
-                Size.y / Resolution,
-                Size.z / Resolution);
+                size.x / resolution,
+                size.y / resolution,
+                size.z / resolution);
 
 
 
-        constexpr uint32_t BlockSize = 8;
+        constexpr uint32_t blockSize = 8;
 
 
-        std::vector<Core::TaskHandle> Tasks;
+        std::vector<Core::TaskHandle> tasks;
 
 
 
-        auto ProcessBlock =
-            [&](uint32_t BX, uint32_t BY, uint32_t BZ)
+        auto processBlock =
+            [&](uint32_t bx, uint32_t by, uint32_t bz)
             {
-                uint32_t StartX = BX * BlockSize;
-                uint32_t StartY = BY * BlockSize;
-                uint32_t StartZ = BZ * BlockSize;
+                uint32_t startX = bx * blockSize;
+                uint32_t startY = by * blockSize;
+                uint32_t startZ = bz * blockSize;
 
 
-                uint32_t EndX = CORE_MIN(StartX + BlockSize, Resolution);
-                uint32_t EndY = CORE_MIN(StartY + BlockSize, Resolution);
-                uint32_t EndZ = CORE_MIN(StartZ + BlockSize, Resolution);
+                uint32_t endX = CORE_MIN(startX + blockSize, resolution);
+                uint32_t endY = CORE_MIN(startY + blockSize, resolution);
+                uint32_t endZ = CORE_MIN(startZ + blockSize, resolution);
 
 
 
-                Core::AABB BlockBounds(
+                Core::AABB blockBounds(
                     Core::Float3(
-                        Volume.MinBounds.x + StartX * Volume.VoxelSize.x,
-                        Volume.MinBounds.y + StartY * Volume.VoxelSize.y,
-                        Volume.MinBounds.z + StartZ * Volume.VoxelSize.z),
+                        volume.MinBounds.x + startX * volume.VoxelSize.x,
+                        volume.MinBounds.y + startY * volume.VoxelSize.y,
+                        volume.MinBounds.z + startZ * volume.VoxelSize.z),
                     Core::Float3(
-                        Volume.MinBounds.x + EndX * Volume.VoxelSize.x,
-                        Volume.MinBounds.y + EndY * Volume.VoxelSize.y,
-                        Volume.MinBounds.z + EndZ * Volume.VoxelSize.z)
+                        volume.MinBounds.x + endX * volume.VoxelSize.x,
+                        volume.MinBounds.y + endY * volume.VoxelSize.y,
+                        volume.MinBounds.z + endZ * volume.VoxelSize.z)
                 );
 
 
-                Core::BoxSphereBounds QueryBounds(BlockBounds);
+                Core::BoxSphereBounds queryBounds(blockBounds);
 
 
 
-                std::set<uint32_t> PrimitiveIds;
+                std::set<uint32_t> primitiveIds;
 
 
-                BVH.GetPrimitiveIdsInsideBounds(
-                    QueryBounds,
-                    PrimitiveIds);
+                bvh.GetPrimitiveIdsInsideBounds(
+                    queryBounds,
+                    primitiveIds);
 
 
 
-                if (PrimitiveIds.empty())
+                if (primitiveIds.empty())
                     return;
 
 
 
-                for (uint32_t Z = StartZ; Z < EndZ; Z++)
+                for (uint32_t z = startZ; z < endZ; z++)
                 {
-                    for (uint32_t Y = StartY; Y < EndY; Y++)
+                    for (uint32_t y = startY; y < endY; y++)
                     {
-                        for (uint32_t X = StartX; X < EndX; X++)
+                        for (uint32_t x = startX; x < endX; x++)
                         {
 
-                            Core::AABB VoxelBounds =
+                            Core::AABB voxelBounds =
                                 GetVoxelBounds(
-                                    Volume,
-                                    X, Y, Z);
+                                    volume,
+                                    x, y, z);
 
 
-                            uint32_t Index =
-                                Z * Resolution * Resolution +
-                                Y * Resolution +
-                                X;
+                            uint32_t index =
+                                z * resolution * resolution +
+                                y * resolution +
+                                x;
 
 
-                            for (uint32_t PrimitiveId : PrimitiveIds)
+                            for (uint32_t primitiveId : primitiveIds)
                             {
 
-                                const auto& Triangle =
-                                    BVH.GetPrimitive(
-                                        PrimitiveId);
+                                const auto& triangle =
+                                    bvh.GetPrimitive(
+                                        primitiveId);
 
 
 
                                 if (DistanceFieldTriangleBVHTraits::IntersectVoxel(
-                                    Triangle,
-                                    VoxelBounds))
+                                    triangle,
+                                    voxelBounds))
                                 {
 
-                                    SurfaceMask[Index] =
+                                    surfaceMask[index] =
                                         static_cast<uint8_t>(
-                                            PrimitiveId < 128 ?
-                                            PrimitiveId :
+                                            primitiveId < 128 ?
+                                            primitiveId :
                                             127);
 
 
@@ -715,30 +715,30 @@ namespace Engine
 
 
 
-        uint32_t BlockCount =
-            (Resolution + BlockSize - 1) / BlockSize;
+        uint32_t blockCount =
+            (resolution + blockSize - 1) / blockSize;
 
 
 
-        for (uint32_t Z = 0; Z < BlockCount; Z++)
+        for (uint32_t z = 0; z < blockCount; z++)
         {
-            for (uint32_t Y = 0; Y < BlockCount; Y++)
+            for (uint32_t y = 0; y < blockCount; y++)
             {
-                for (uint32_t X = 0; X < BlockCount; X++)
+                for (uint32_t x = 0; x < blockCount; x++)
                 {
 
-                    if (TaskPool)
+                    if (m_TaskPool)
                     {
-                        Tasks.emplace_back(
-                            TaskPool->AddTask(
-                                [&, X, Y, Z]()
+                        tasks.emplace_back(
+                            m_TaskPool->AddTask(
+                                [&, x, y, z]()
                                 {
-                                    ProcessBlock(X, Y, Z);
+                                    processBlock(x, y, z);
                                 }));
                     }
                     else
                     {
-                        ProcessBlock(X, Y, Z);
+                        processBlock(x, y, z);
                     }
 
                 }
@@ -747,40 +747,40 @@ namespace Engine
 
 
 
-        if (TaskPool)
+        if (m_TaskPool)
         {
-            TaskPool->WaitAll(Tasks);
+            m_TaskPool->WaitAll(tasks);
         }
 
 
 
-		RenderCore::RenderTextureSP SurfaceMaskTex = RenderCore::Create3DTexture(
-			Resolution,
-			Resolution,
-			Resolution,
+		RenderCore::RenderTextureSP surfaceMaskTex = RenderCore::Create3DTexture(
+			resolution,
+			resolution,
+			resolution,
 			RHI::ERHIFormat::B8G8R8_UNorm,
             RHI::ERHITextureCreateFlag::ShaderResource | RHI::ERHITextureCreateFlag::TransferDest,
 			"SurfaceMaskTest");
-		SurfaceMaskTex->UploadData(SurfaceMask.data(), 0, 0);
-        return SurfaceMaskTex;
+		surfaceMaskTex->UploadData(surfaceMask.data(), 0, 0);
+        return surfaceMaskTex;
     }
 
-    RenderCore::RenderTextureSP DistanceFieldManager::BuildSDFTexture(RenderCore::RenderTexture* SurfaceMask)
+    RenderCore::RenderTextureSP DistanceFieldManager::BuildSDFTexture(RenderCore::RenderTexture* surfaceMask)
     {
-        const uint32_t Resolution = GLocalSDFResolution;
-        RenderCore::RenderTextureSP SDFTex = RenderCore::Create3DTexture(
-            Resolution,
-            Resolution,
-            Resolution,
+        const uint32_t resolution = GLocalSDFResolution;
+        RenderCore::RenderTextureSP sdfTex = RenderCore::Create3DTexture(
+            resolution,
+            resolution,
+            resolution,
             RHI::ERHIFormat::B8G8R8_UNorm,
             RHI::ERHITextureCreateFlag::ShaderResource | RHI::ERHITextureCreateFlag::TransferDest,
             "SDFTexture");
         DistanceFieldJumpFlood3DPassInput input;
-        input.SurfaceMaskTexture = SurfaceMask;
-		input.OutputDistanceTexture = SDFTex.get();
-        input.GridResolution = Core::Int3(Resolution, Resolution, Resolution);
+        input.SurfaceMaskTexture = surfaceMask;
+		input.OutputDistanceTexture = sdfTex.get();
+        input.GridResolution = Core::Int3(resolution, resolution, resolution);
         ExecuteDistanceFieldJumpFlood3DPass(input);
-        return SDFTex;
+        return sdfTex;
     }
 
 

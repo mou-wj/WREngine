@@ -38,7 +38,7 @@ void SetVector(Material& material, const std::string& name, const std::array<flo
 }
 }
 
-MaterialAsset::MaterialAsset(const std::string& path) : Name(Core::GetFileName(path)), Path(path) {}
+MaterialAsset::MaterialAsset(const std::string& path) : m_Name(Core::GetFileName(path)), m_Path(path) {}
 MaterialAsset::~MaterialAsset() = default;
 
 std::shared_ptr<MaterialAsset> MaterialAsset::Create(
@@ -46,9 +46,9 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Create(
 {
     if (!material) throw std::invalid_argument("MaterialAsset cannot own a null material");
     auto asset = std::make_shared<MaterialAsset>(AssetManager::NormalizePath(path));
-    asset->Name = name.empty() ? Core::GetFileName(path) : name;
-    material->OwnerAsset = asset;
-    asset->MaterialPtr = std::move(material);
+    asset->m_Name = name.empty() ? Core::GetFileName(path) : name;
+    material->m_OwnerAsset = asset;
+    asset->m_MaterialPtr = std::move(material);
     return asset;
 }
 
@@ -56,8 +56,8 @@ bool MaterialAsset::Load()
 {
     try
     {
-        if (MaterialPtr) throw std::runtime_error("In-place material reload requires dependency invalidation");
-        std::ifstream file(Path);
+        if (m_MaterialPtr) throw std::runtime_error("In-place material reload requires dependency invalidation");
+        std::ifstream file(m_Path);
         if (!file) throw std::runtime_error("Cannot open material file");
         nlohmann::json data;
         file >> data;
@@ -95,7 +95,7 @@ bool MaterialAsset::Load()
             for (const auto& [name, value] : data["textureParameters"].items())
             {
                 auto path = std::filesystem::path(value.get<std::string>());
-                if (path.is_relative()) path = std::filesystem::path(Path).parent_path() / path;
+                if (path.is_relative()) path = std::filesystem::path(m_Path).parent_path() / path;
                 auto texture = AssetManager::Get().LoadSync<TextureAsset>(path.generic_string());
                 const auto parameter = ParameterName(name);
                 if (parameter == "BaseColor")
@@ -106,15 +106,15 @@ bool MaterialAsset::Load()
                     material->SetParameterValue<EMaterialParameterSemantic::Custom, FTextureType>(parameter, texture->GetTexture());
                 textures.push_back(std::move(texture));
             }
-        material->OwnerAsset = std::static_pointer_cast<MaterialAsset>(shared_from_this());
-        Name = data.value("name", Name);
-        Textures = std::move(textures);
-        MaterialPtr = std::move(material);
+        material->m_OwnerAsset = std::static_pointer_cast<MaterialAsset>(shared_from_this());
+        m_Name = data.value("name", m_Name);
+        m_Textures = std::move(textures);
+        m_MaterialPtr = std::move(material);
         return true;
     }
     catch (const std::exception& ex)
     {
-        std::cerr << "Material asset '" << Path << "': " << ex.what() << std::endl;
+        std::cerr << "Material asset '" << m_Path << "': " << ex.what() << std::endl;
         return false;
     }
 }

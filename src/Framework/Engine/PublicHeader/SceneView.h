@@ -8,28 +8,28 @@
 #include "EngineExport.h"
 #include "BoxSphereBounds.h"
 
-// °üº¬Äã¸Õ²Å¶¨ÒåµÄÊıÑ§»ù´¡Í·ÎÄ¼ş
+// åŒ…å«ä½ åˆšæ‰å®šä¹‰çš„æ•°å­¦åŸºç¡€å¤´æ–‡ä»¶
 #include "Math.hpp"
 
 namespace Engine {
-    // Ç°ÖÃÉùÃ÷
+    // å‰ç½®å£°æ˜
     class SceneInterface;
     class RenderTarget;
 
-    // ½á¹¹Ìå¶ÔÆë¶¨Òå
-    struct ViewRect { int x; int y; int width; int height; };
-    struct Plane { float a, b, c, d; };
+    // ç»“æ„ä½“å¯¹é½å®šä¹‰
+    struct ViewRect { int X; int Y; int Width; int Height; };
+    struct Plane { float A, B, C, D; };
     struct Frustum { std::array<Plane, 6> Planes; };
 
     /* ===============================================================================
-        ViewUniforms (16×Ö½ÚÑÏ¸ñ¶ÔÆëµÄ C++ ¾µÏñ»º³åÇø)
-        Ö±½ÓÍ¨¹ıÄãµÄ Float4x4 ºÍ Float4 Æ´×°£¬¿ÉÖ±½ÓÒ»¼ü memcpy ·¢ËÍÖÁ RHI
+        ViewUniforms (16å­—èŠ‚ä¸¥æ ¼å¯¹é½çš„ C++ é•œåƒç¼“å†²åŒº)
+        ç›´æ¥é€šè¿‡ä½ çš„ Float4x4 å’Œ Float4 æ‹¼è£…ï¼Œå¯ç›´æ¥ä¸€é”® memcpy å‘é€è‡³ RHI
     ===============================================================================
     */
     struct ViewUniforms {
         Core::Float4x4 ViewProj;
         Core::Float4x4 InvViewProj;
-        Core::Float4 CameraPos; // À©Õ¹Îª Float4 ³¹µ×¶Å¾øÄÚ´æ´íÎ»
+        Core::Float4 CameraPos; // æ‰©å±•ä¸º Float4 å½»åº•æœç»å†…å­˜é”™ä½
     };
 
     enum ViewFlags : uint32_t {
@@ -40,7 +40,7 @@ namespace Engine {
 
     /*
     ===============================================================================
-        SceneView (µ¥¸öÊÓ¿ÚÏà»úµÄ×´Ì¬¿ìÕÕ)
+        SceneView (å•ä¸ªè§†å£ç›¸æœºçš„çŠ¶æ€å¿«ç…§)
     ===============================================================================
     */
     class ENGINE_API SceneView {
@@ -48,22 +48,22 @@ namespace Engine {
         SceneView();
         ~SceneView();
 
-        // ºËĞÄ±ä»»¾ØÕó£¨ÍêÈ«¶ÔÆëÄãµÄ Matrix Ä£°åÀàĞÍ£©
+        // æ ¸å¿ƒå˜æ¢çŸ©é˜µï¼ˆå®Œå…¨å¯¹é½ä½ çš„ Matrix æ¨¡æ¿ç±»å‹ï¼‰
         Core::Float4x4 ViewMatrix;            // World -> View
         Core::Float4x4 ProjectionMatrix;      // View -> Clip
         Core::Float4x4 ViewProjectionMatrix;  // Precomputed Projection * View  
-        Core::Float4x4 InvViewProjectionMatrix; // Ô¤ÁôÄæ¾ØÕó£¨ÓÃÓÚÑÓ³ÙäÖÈ¾Î»ÖÃÖØ½¨£©
+        Core::Float4x4 InvViewProjectionMatrix; // é¢„ç•™é€†çŸ©é˜µï¼ˆç”¨äºå»¶è¿Ÿæ¸²æŸ“ä½ç½®é‡å»ºï¼‰
 
-        // Ïà»ú¿Õ¼äÊôĞÔ
-        Core::Float3 CameraWorldPos; // ±£³Ö Float3
-        Core::Float3 CameraWorldDir; // ±£³Ö Float3
+        // ç›¸æœºç©ºé—´å±æ€§
+        Core::Float3 CameraWorldPos; // ä¿æŒ Float3
+        Core::Float3 CameraWorldDir; // ä¿æŒ Float3
 
-        // ²Ã¼ôÃæ
+        // è£å‰ªé¢
         float NearClip;
         float FarClip;
-        bool IsDepthRangeZeroToOne;
+        bool bDepthRangeZeroToOne;
 
-        // ÊÓ¿ÚÓë»­²¼¹æ¸ñ
+        // è§†å£ä¸ç”»å¸ƒè§„æ ¼
         ViewRect Viewport;
         float RenderTargetWidth;
         float RenderTargetHeight;
@@ -73,64 +73,64 @@ namespace Engine {
 
         uint32_t Flags;
 
-        // ÊÓ×¶Ìå»º´æ
+        // è§†é”¥ä½“ç¼“å­˜
         Frustum CachedFrustum;
 		static const uint32_t CascadeCount = 4;
-        std::array<float, CascadeCount + 1> splitDepths;
-        // äÖÈ¾Ïß³Ì×¨ÓÃ¹¤¾ßº¯Êı (¹¹½¨Ê±»ò¹¹½¨ºóÖ´ĞĞ)
+        std::array<float, CascadeCount + 1> SplitDepths;
+        // æ¸²æŸ“çº¿ç¨‹ä¸“ç”¨å·¥å…·å‡½æ•° (æ„å»ºæ—¶æˆ–æ„å»ºåæ‰§è¡Œ)
         void RebuildDerivedMatrices();
         void BuildFrustum();
-        bool IsBoxVisible(const Core::AABB& Box) const;
-        void PackViewUniforms(ViewUniforms& OutUniforms) const;
+        bool IsBoxVisible(const Core::AABB& box) const;
+        void PackViewUniforms(ViewUniforms& outUniforms) const;
         std::array<Core::Float3, 8> GetFrustumCornersWS(float nearDepth,float farDepth) const;
         void BuildSplitDepths();
     };
 
     /*
     ===============================================================================
-        SceneViewFamily (ÊÓÍ¼×å£ºÕûºÏµ¥Ö¡äÖÈ¾µÄ³¡¾°¡¢»­²¼Óë¶àÊÓ½ÇÏà»ú¶ÓÁĞ)
+        SceneViewFamily (è§†å›¾æ—ï¼šæ•´åˆå•å¸§æ¸²æŸ“çš„åœºæ™¯ã€ç”»å¸ƒä¸å¤šè§†è§’ç›¸æœºé˜Ÿåˆ—)
     ===============================================================================
     */
     class ENGINE_API SceneViewFamily {
     public:
         SceneViewFamily() = default;
 
-        // ¹¤Òµ¼¶¹æ·¶£ºÑÏ½ûÒâÍâ¿½±´ÊÓÍ¼×å£¬·ÀÖ¹²úÉúÃ¿Ö¡ vector ¸´ÖÆ´øÀ´µÄÎŞÎ½¿ªÏú
+        // å·¥ä¸šçº§è§„èŒƒï¼šä¸¥ç¦æ„å¤–æ‹·è´è§†å›¾æ—ï¼Œé˜²æ­¢äº§ç”Ÿæ¯å¸§ vector å¤åˆ¶å¸¦æ¥çš„æ— è°“å¼€é”€
         SceneViewFamily(const SceneViewFamily&) = delete;
         SceneViewFamily& operator=(const SceneViewFamily&) = delete;
         SceneViewFamily(SceneViewFamily&&) = default;
 
-        // ÊÓÍ¼¹ÜÀí
-        int AddView(const SceneView& View);
-        int AddView(SceneView&& View);
-        bool RemoveView(int Index);
+        // è§†å›¾ç®¡ç†
+        int AddView(const SceneView& view);
+        int AddView(SceneView&& view);
+        bool RemoveView(int index);
         void ClearViews();
 
-        SceneView* GetView(int Index);
-        const std::vector<SceneView>& GetViews() const { return Views; }
-        int Size() const { return static_cast<int>(Views.size()); }
+        SceneView* GetView(int index);
+        const std::vector<SceneView>& GetViews() const { return m_Views; }
+        int Size() const { return static_cast<int>(m_Views.size()); }
 
         SceneInterface* GetScene() const { return Scene; }
         RenderTarget* GetRenderTarget() const { return RenderTarget; }
 
-        // ÅúÁ¿¸üĞÂ¿ØÖÆ
+        // æ‰¹é‡æ›´æ–°æ§åˆ¶
         void RebuildAllDerivedMatrices();
         void BuildAllViews();
 
-        // ÊÓ×¶ÌåÅúÁ¿¿É¼ûĞÔ¹ıÂË£º·µ»ØËùÓĞÄÜ¿´µ½Õâ¸ö AABB µÄ View Ë÷ÒıÁĞ±í
-        std::vector<int> FindViewsThatSeeBox(const Core::AABB& Box) const;
+        // è§†é”¥ä½“æ‰¹é‡å¯è§æ€§è¿‡æ»¤ï¼šè¿”å›æ‰€æœ‰èƒ½çœ‹åˆ°è¿™ä¸ª AABB çš„ View ç´¢å¼•åˆ—è¡¨
+        std::vector<int> FindViewsThatSeeBox(const Core::AABB& box) const;
 
-        // ¿ì½İ±éÀúÆ÷
+        // å¿«æ·éå†å™¨
         template<typename Fn>
-        void ForEachView(Fn&& Callback) {
-            for (auto& View : Views) {
-                Callback(View);
+        void ForEachView(Fn&& callback) {
+            for (auto& view : m_Views) {
+                callback(view);
             }
         }
         SceneInterface* Scene;
         RenderTarget* RenderTarget;
     private:
-        std::vector<SceneView> Views;
+        std::vector<SceneView> m_Views;
 
     };
 

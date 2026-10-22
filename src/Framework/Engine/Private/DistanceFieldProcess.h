@@ -26,12 +26,12 @@ namespace Engine {
     public:
         DECLARE_GLOBAL_SHADER_TYPE(DistanceFieldVoxelizeCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
         }
 
@@ -59,12 +59,12 @@ namespace Engine {
     public:
         DECLARE_GLOBAL_SHADER_TYPE(DistanceFieldJumpFlood3DCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
         }
 
@@ -95,8 +95,8 @@ namespace Engine {
         Core::Int3 GridResolution = Core::Int3(0, 0, 0);
     };
 
-    bool ExecuteDistanceFieldVoxelizePass(const DistanceFieldVoxelizePassInput& Input);
+    bool ExecuteDistanceFieldVoxelizePass(const DistanceFieldVoxelizePassInput& input);
 
-    bool ExecuteDistanceFieldJumpFlood3DPass(const DistanceFieldJumpFlood3DPassInput& Input);
+    bool ExecuteDistanceFieldJumpFlood3DPass(const DistanceFieldJumpFlood3DPassInput& input);
 
 } // namespace Renderer

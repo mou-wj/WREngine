@@ -3,10 +3,10 @@
 #include "PathInfo.h"
 
 namespace Engine {
-TextureAsset::TextureAsset(const std::string& path) : Name(Core::GetFileName(path)), Path(path) {}
+TextureAsset::TextureAsset(const std::string& path) : m_Name(Core::GetFileName(path)), m_Path(path) {}
 bool TextureAsset::Load()
 {
-    Texture = RenderCore::CreateTexture(Path);
-    return Texture != nullptr;
+    m_Texture = RenderCore::CreateTexture(m_Path);
+    return m_Texture != nullptr;
 }
 }

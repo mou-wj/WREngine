@@ -8,8 +8,8 @@ namespace Engine {
     {
     public:
         SceneViewport(
-            ViewportClient* InClient,
-            Core::Int2 InSize
+            ViewportClient* inClient,
+            Core::Int2 inSize
         );
 
         virtual ~SceneViewport();
@@ -18,7 +18,7 @@ namespace Engine {
         int GetWidth() const override;
         int GetHeight() const override;
 
-        void Resize(int Width, int Height) override;
+        void Resize(int width, int height) override;
 		RenderCore::RenderTexture* GetRenderTarget() override;
         void* GetViewportRenderTargetTexture() const override;
         void Draw() override;
@@ -29,23 +29,23 @@ namespace Engine {
         // Input
         bool OnMouseMove(
             const SlateCore::MouseMoveEvent&
-            Event) override;
+            event) override;
 
         bool OnMouseButton(
             const SlateCore::MouseButtonEvent&
-            Event) override;
+            event) override;
 
         bool OnMouseWheel(
             const SlateCore::MouseWheelEvent&
-            Event) override;
+            event) override;
 
         bool OnKeyDown(
             const SlateCore::KeyEvent&
-            Event) override;
+            event) override;
 
         bool OnKeyUp(
             const SlateCore::KeyEvent&
-            Event) override;
+            event) override;
 
         bool OnFocusReceived()
             override;
@@ -54,15 +54,15 @@ namespace Engine {
             override;
 
         bool OnResize(
-            uint32_t Width,
-            uint32_t Height)
+            uint32_t width,
+            uint32_t height)
             override;
     private:
 
     private:
-		RenderCore::RenderTextureSP ViewportTexture;
-        int Width = 0;
-        int Height = 0;
+		RenderCore::RenderTextureSP m_ViewportTexture;
+        int m_Width = 0;
+        int m_Height = 0;
 
     };
 

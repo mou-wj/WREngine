@@ -34,7 +34,7 @@ namespace Engine
         bool HasRootComponent() const;
 
     private:
-        SceneComponent* RootComponent = nullptr;
+        SceneComponent* m_RootComponent = nullptr;
     };
 
     template<typename T>
@@ -44,8 +44,8 @@ namespace Engine
             std::is_base_of_v<SceneComponent, T>,
             "T must derive from SceneComponent");
 
-        return RootComponent
-            ? RootComponent->template Cast<T>()
+        return m_RootComponent
+            ? m_RootComponent->template Cast<T>()
             : nullptr;
     }
 
@@ -56,8 +56,8 @@ namespace Engine
             std::is_base_of_v<SceneComponent, T>,
             "T must derive from SceneComponent");
 
-        return RootComponent
-            ? RootComponent->template Cast<T>()
+        return m_RootComponent
+            ? m_RootComponent->template Cast<T>()
             : nullptr;
     }
 }

@@ -44,7 +44,7 @@ void EngineModule::StartupModule()
     EngineObj = std::make_unique<IEngine>();
     EngineObj->Init();
     GDistanceFieldMgr.Initialize();
-    isLoaded = true;
+    m_bLoaded = true;
 }
 ```
 
@@ -135,7 +135,7 @@ SceneComponent
 
 `PrimitiveComponent` 也继承自 `SceneComponent`，用于表示可渲染对象的通用描述：
 
-- 自身有 `LocalTransform` / `WorldTransform`
+- 自身有 `_localTransform` / `_worldTransform`
 - 具备 `Bounds` 与可见性标志
 - 承担场景注册和 SceneProxy 创建流程
 - 提供 `CreateSceneProxy()`、`UpdateTransform()` 等接口
@@ -146,7 +146,7 @@ SceneComponent
 
 `StaticMeshComponent` 继承自 `PrimitiveComponent`，是可渲染静态网格的具体实现：
 
-- 持有 `StaticMesh* Mesh`
+- 持有 `StaticMesh* m_Mesh`
 - 支持材质覆盖：`SetMaterial()`
 - 支持 LOD 控制：`SetForcedLOD()`
 - 实现 `CreateSceneProxy()` 与 `GetBounds()`
@@ -168,10 +168,10 @@ PrimitiveSceneProxy
 
 `PrimitiveSceneProxy` 是渲染线程侧的快照对象，负责存储渲染所需的结构化数据：
 
-- `PrimitiveId`
-- `ProxyBounds`
-- `LocalToWorld` / `WorldToLocal`
-- `bVisible` / `bCastShadow` / `bOpaque`
+- `_primitiveId`
+- `_proxyBounds`
+- `_localToWorld` / `_worldToLocal`
+- `_bVisible` / `_bCastShadow` / `_bOpaque`
 - 需要渲染时的统一参数等
 
 它提供了 `IsVisible()`、`CastsShadow()`、`IsOpaque()` 等接口，说明它是渲染线程的抽象视图。
@@ -302,7 +302,7 @@ class ENGINE_API SceneObject
 其内部持有：
 
 ```cpp
-SceneComponent* RootComponent = nullptr;
+SceneComponent* m_RootComponent = nullptr;
 ```
 
 它的职责是：

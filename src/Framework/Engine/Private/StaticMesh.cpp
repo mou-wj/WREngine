@@ -14,136 +14,136 @@ namespace Engine {
 
 	void LODResource::InitializeResources() {
         // -----------------------------
-   // 1. …˙≥… Vertex Buffer
+   // 1. ÁîüÊàê Vertex Buffer
    // -----------------------------
-        auto CreateVertexBuffer = [](const std::vector<float>& Data, const char* Name)
+        auto createVertexBuffer = [](const std::vector<float>& data, const char* name)
             -> std::unique_ptr<RenderCore::RenderBuffer>
             {
-                if (Data.empty())
+                if (data.empty())
                     return nullptr;
 
-                RHI::RHIBufferDesc Desc;
-                Desc.Size = Data.size() * sizeof(float);
-                Desc.Stride = sizeof(float);
-                Desc.Usage = RHI::ERHIBufferUsageFlag::Vertex | RHI::ERHIBufferUsageFlag::TransferDst;
-                Desc.bCPUAccessible = false;
-                Desc.DebugName = Name;
+                RHI::RHIBufferDesc desc;
+                desc.Size = data.size() * sizeof(float);
+                desc.Stride = sizeof(float);
+                desc.Usage = RHI::ERHIBufferUsageFlag::Vertex | RHI::ERHIBufferUsageFlag::TransferDst;
+                desc.bCPUAccessible = false;
+                desc.DebugName = name;
 
-                auto Buffer = std::make_unique<RenderCore::RenderBuffer>(Desc);
+                auto buffer = std::make_unique<RenderCore::RenderBuffer>(desc);
 
-                Buffer->InitRHIResource();
+                buffer->InitRHIResource();
 
-                // ºŸ…Ëƒ„RHI”– Upload Ω”ø⁄£®√ª”–æÕÃÊªª≥… staging£©
-                Buffer->UploadData(Data.data(), Desc.Size);
-				RenderCore::TransitionBufferImmediate(RHI::GRHIApi,Buffer.get(), RHI::ERHIResourceAccess::VertexOrIndexBuffer, RHI::EQueueType::Graphics);
-                return Buffer;
+                // ÂÅáËÆæ‰Ω†RHIÊúâ Upload Êé•Âè£ÔºàÊ≤°ÊúâÂ∞±ÊõøÊç¢Êàê stagingÔºâ
+                buffer->UploadData(data.data(), desc.Size);
+				RenderCore::TransitionBufferImmediate(RHI::GRHIApi,buffer.get(), RHI::ERHIResourceAccess::VertexOrIndexBuffer, RHI::EQueueType::Graphics);
+                return buffer;
             };
 
         // Position
         VertexBuffers.PositionBuffer.Buffer =
-            CreateVertexBuffer(VertexBuffers.PositionBuffer.Vertices, "PositionBuffer");
+            createVertexBuffer(VertexBuffers.PositionBuffer.Vertices, "PositionBuffer");
 
         // UV
         VertexBuffers.UVBuffer.Buffer =
-            CreateVertexBuffer(VertexBuffers.UVBuffer.Vertices, "UVBuffer");
+            createVertexBuffer(VertexBuffers.UVBuffer.Vertices, "UVBuffer");
 
         // Normal
         VertexBuffers.NormalBuffer.Buffer =
-            CreateVertexBuffer(VertexBuffers.NormalBuffer.Vertices, "NormalBuffer");
+            createVertexBuffer(VertexBuffers.NormalBuffer.Vertices, "NormalBuffer");
 
         // Tangent
         VertexBuffers.TangentBuffer.Buffer =
-            CreateVertexBuffer(VertexBuffers.TangentBuffer.Vertices, "TangentBuffer");
+            createVertexBuffer(VertexBuffers.TangentBuffer.Vertices, "TangentBuffer");
 
         // Color
         VertexBuffers.ColorBuffer.Buffer =
-            CreateVertexBuffer(VertexBuffers.ColorBuffer.Vertices, "ColorBuffer");
+            createVertexBuffer(VertexBuffers.ColorBuffer.Vertices, "ColorBuffer");
 
         // -----------------------------
         // 2. Index Buffer
         // -----------------------------
         if (!IndexBuffer.Indices.empty())
         {
-            RHI::RHIBufferDesc Desc;
-            Desc.Size = IndexBuffer.Indices.size() * sizeof(uint32_t);
-            Desc.Stride = sizeof(uint32_t);
-            Desc.Usage = RHI::ERHIBufferUsageFlag::Index | RHI::ERHIBufferUsageFlag::TransferDst;
-            Desc.bCPUAccessible = false;
-            Desc.DebugName = "IndexBuffer";
+            RHI::RHIBufferDesc desc;
+            desc.Size = IndexBuffer.Indices.size() * sizeof(uint32_t);
+            desc.Stride = sizeof(uint32_t);
+            desc.Usage = RHI::ERHIBufferUsageFlag::Index | RHI::ERHIBufferUsageFlag::TransferDst;
+            desc.bCPUAccessible = false;
+            desc.DebugName = "IndexBuffer";
 
-            IndexBuffer.Buffer = std::make_unique<RenderCore::RenderBuffer>(Desc);
+            IndexBuffer.Buffer = std::make_unique<RenderCore::RenderBuffer>(desc);
             IndexBuffer.Buffer->InitRHIResource();
 
             IndexBuffer.Buffer->UploadData(
                 IndexBuffer.Indices.data(),
-                Desc.Size
+                desc.Size
             );
             RenderCore::TransitionBufferImmediate(RHI::GRHIApi, IndexBuffer.Buffer.get(), RHI::ERHIResourceAccess::VertexOrIndexBuffer, RHI::EQueueType::Graphics);
         }
 
         // -----------------------------
-        // 3. VertexFactory ≥ı ºªØ
+        // 3. VertexFactory ÂàùÂßãÂåñ
         // -----------------------------
         if (!VertexFactory)
             VertexFactory = std::make_unique<LocalVertexFactory>();
 
-        LocalVertexFactoryData VFData{};
+        LocalVertexFactoryData vfData{};
 
-        auto FillStream = [](auto& Component, const std::unique_ptr<RenderCore::RenderBuffer>& Buffer, uint32_t Stride,ERHIFormat format)
+        auto fillStream = [](auto& component, const std::unique_ptr<RenderCore::RenderBuffer>& buffer, uint32_t stride,ERHIFormat format)
             {
-                if (!Buffer)
+                if (!buffer)
                     return;
 
-                Component.Buffer = Buffer->GetRHI();
-                Component.ComponentOffset = 0;
-                Component.Stride = Stride;
-                Component.InputRate = RHI::ERHIInputRate::PerVertex;
-                Component.Format = format;
+                component.Buffer = buffer->GetRHI();
+                component.ComponentOffset = 0;
+                component.Stride = stride;
+                component.InputRate = RHI::ERHIInputRate::PerVertex;
+                component.Format = format;
             };
 
-        FillStream(VFData.PositionComponent, VertexBuffers.PositionBuffer.Buffer, sizeof(float) * 3,RHI::ERHIFormat::R32G32B32_Float);
-        FillStream(VFData.UVComponent, VertexBuffers.UVBuffer.Buffer, sizeof(float) * 2, RHI::ERHIFormat::R32G32_Float);
-        FillStream(VFData.NormalComponent, VertexBuffers.NormalBuffer.Buffer, sizeof(float) * 3, RHI::ERHIFormat::R32G32B32_Float);
-        FillStream(VFData.TangentComponent, VertexBuffers.TangentBuffer.Buffer, sizeof(float) * 4, RHI::ERHIFormat::R32G32B32A32_Float);
-        FillStream(VFData.ColorComponent, VertexBuffers.ColorBuffer.Buffer, sizeof(float) * 4, RHI::ERHIFormat::R32G32B32A32_Float);
+        fillStream(vfData.PositionComponent, VertexBuffers.PositionBuffer.Buffer, sizeof(float) * 3,RHI::ERHIFormat::R32G32B32_Float);
+        fillStream(vfData.UVComponent, VertexBuffers.UVBuffer.Buffer, sizeof(float) * 2, RHI::ERHIFormat::R32G32_Float);
+        fillStream(vfData.NormalComponent, VertexBuffers.NormalBuffer.Buffer, sizeof(float) * 3, RHI::ERHIFormat::R32G32B32_Float);
+        fillStream(vfData.TangentComponent, VertexBuffers.TangentBuffer.Buffer, sizeof(float) * 4, RHI::ERHIFormat::R32G32B32A32_Float);
+        fillStream(vfData.ColorComponent, VertexBuffers.ColorBuffer.Buffer, sizeof(float) * 4, RHI::ERHIFormat::R32G32B32A32_Float);
 
-        VertexFactory->SetData(VFData);
+        VertexFactory->SetData(vfData);
 	}
 	void LODResource::ReleaseResources() {
         // -----------------------------
-    // 1. Vertex Factory  Õ∑≈
+    // 1. Vertex Factory ÈáäÊîæ
     // -----------------------------
         if (VertexFactory)
         {
-            // »Áπ˚ƒ„”–GPU∞Û∂®ª∫¥Ê/PSO cache£¨’‚¿Ô”¶∏√«ÂµÙ
+            // Â¶ÇÊûú‰Ω†ÊúâGPUÁªëÂÆöÁºìÂ≠ò/PSO cacheÔºåËøôÈáåÂ∫îËØ•Ê∏ÖÊéâ
             VertexFactory.reset();
         }
 
         // -----------------------------
         // 2. Vertex Buffers
         // -----------------------------
-        auto ReleaseBuffer = [](std::unique_ptr<RenderCore::RenderBuffer>& Buffer)
+        auto releaseBuffer = [](std::unique_ptr<RenderCore::RenderBuffer>& buffer)
             {
-                if (Buffer)
+                if (buffer)
                 {
-                    Buffer->ReleaseRHIResource();
-                    Buffer.reset();
+                    buffer->ReleaseRHIResource();
+                    buffer.reset();
                 }
             };
 
-        ReleaseBuffer(VertexBuffers.PositionBuffer.Buffer);
-        ReleaseBuffer(VertexBuffers.UVBuffer.Buffer);
-        ReleaseBuffer(VertexBuffers.NormalBuffer.Buffer);
-        ReleaseBuffer(VertexBuffers.TangentBuffer.Buffer);
-        ReleaseBuffer(VertexBuffers.ColorBuffer.Buffer);
+        releaseBuffer(VertexBuffers.PositionBuffer.Buffer);
+        releaseBuffer(VertexBuffers.UVBuffer.Buffer);
+        releaseBuffer(VertexBuffers.NormalBuffer.Buffer);
+        releaseBuffer(VertexBuffers.TangentBuffer.Buffer);
+        releaseBuffer(VertexBuffers.ColorBuffer.Buffer);
 
         // -----------------------------
         // 3. Index Buffer
         // -----------------------------
-        ReleaseBuffer(IndexBuffer.Buffer);
+        releaseBuffer(IndexBuffer.Buffer);
 
         // -----------------------------
-        // 4. «Â CPU  ˝æ›£®ø…—°£©
+        // 4. Ê∏Ö CPU Êï∞ÊçÆÔºàÂèØÈÄâÔºâ
         // -----------------------------
         VertexBuffers.PositionBuffer.Vertices.clear();
         VertexBuffers.UVBuffer.Vertices.clear();

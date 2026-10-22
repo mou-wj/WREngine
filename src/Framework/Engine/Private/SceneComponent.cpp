@@ -13,9 +13,9 @@ namespace Engine
     {
         Detach();
 
-        for (SceneComponent* child : Children)
+        for (SceneComponent* child : _children)
         {
-            child->Parent = nullptr;
+            child->_parent = nullptr;
         }
     }
 
@@ -23,7 +23,7 @@ namespace Engine
         SceneComponent* parent,
         bool keepWorldTransform)
     {
-        if (Parent == parent)
+        if (_parent == parent)
         {
             return;
         }
@@ -33,11 +33,11 @@ namespace Engine
 
         Detach(false);
 
-        Parent = parent;
+        _parent = parent;
 
-        if (Parent)
+        if (_parent)
         {
-            Parent->Children.push_back(this);
+            _parent->_children.push_back(this);
         }
 
         if (keepWorldTransform)
@@ -45,23 +45,23 @@ namespace Engine
             Core::Mat4 localTransform =
                 worldTransform;
 
-            if (Parent)
+            if (_parent)
             {
                 localTransform =
                     Core::Inverse(
-                        Parent->GetComponentTransform())
+                        _parent->GetComponentTransform())
                     * worldTransform;
             }
 
-            LocalLocation =
+            _localLocation =
                 Core::GetTranslation(
                     localTransform);
 
-            LocalRotation =
+            _localRotation =
                 Core::GetEulerRotation(
                     localTransform);
 
-            LocalScale =
+            _localScale =
                 Core::GetScale(
                     localTransform);
         }
@@ -72,7 +72,7 @@ namespace Engine
     void SceneComponent::Detach(
         bool keepWorldTransform)
     {
-        if (!Parent)
+        if (!_parent)
         {
             return;
         }
@@ -81,7 +81,7 @@ namespace Engine
             GetComponentTransform();
 
         auto& siblings =
-            Parent->Children;
+            _parent->_children;
 
         siblings.erase(
             std::remove(
@@ -90,19 +90,19 @@ namespace Engine
                 this),
             siblings.end());
 
-        Parent = nullptr;
+        _parent = nullptr;
 
         if (keepWorldTransform)
         {
-            LocalLocation =
+            _localLocation =
                 Core::GetTranslation(
                     worldTransform);
 
-            LocalRotation =
+            _localRotation =
                 Core::GetEulerRotation(
                     worldTransform);
 
-            LocalScale =
+            _localScale =
                 Core::GetScale(
                     worldTransform);
         }
@@ -113,30 +113,30 @@ namespace Engine
     SceneComponent*
         SceneComponent::GetAttachParent() const
     {
-        return Parent;
+        return _parent;
     }
 
     const std::vector<SceneComponent*>&
         SceneComponent::GetAttachChildren() const
     {
-        return Children;
+        return _children;
     }
 
     void SceneComponent::SetSceneOwner(SceneInterface* owner)
     {
-        SceneOwner = owner;
+        _sceneOwner = owner;
     }
 
     SceneInterface* SceneComponent::GetSceneOwner() const
     {
-        if (SceneOwner)
+        if (_sceneOwner)
         {
-            return SceneOwner;
+            return _sceneOwner;
         }
 
-        if (Parent)
+        if (_parent)
         {
-            return Parent->GetSceneOwner();
+            return _parent->GetSceneOwner();
         }
 
         return nullptr;
@@ -145,38 +145,38 @@ namespace Engine
     void SceneComponent::SetLocalLocation(
         const Core::Float3& location)
     {
-        LocalLocation = location;
+        _localLocation = location;
         MarkTransformDirty();
     }
 
     void SceneComponent::SetLocalRotation(
         const Core::Float3& rotation)
     {
-        LocalRotation = rotation;
+        _localRotation = rotation;
         MarkTransformDirty();
     }
 
     void SceneComponent::SetLocalScale(
         const Core::Float3& scale)
     {
-        LocalScale = scale;
+        _localScale = scale;
         MarkTransformDirty();
     }
 
     void SceneComponent::SetWorldLocation(
         const Core::Float3& location)
     {
-        if (!Parent)
+        if (!_parent)
         {
-            LocalLocation = location;
+            _localLocation = location;
         }
         else
         {
             Core::Mat4 parentInverse =
                 Core::Inverse(
-                    Parent->GetComponentTransform());
+                    _parent->GetComponentTransform());
 
-            LocalLocation =
+            _localLocation =
                 Core::TransformPoint(
                     parentInverse,
                     location);
@@ -188,33 +188,33 @@ namespace Engine
     void SceneComponent::SetWorldRotation(
         const Core::Float3& rotation)
     {
-        LocalRotation = rotation;
+        _localRotation = rotation;
         MarkTransformDirty();
     }
 
     void SceneComponent::SetWorldScale(
         const Core::Float3& scale)
     {
-        LocalScale = scale;
+        _localScale = scale;
         MarkTransformDirty();
     }
 
     const Core::Float3&
         SceneComponent::GetLocalLocation() const
     {
-        return LocalLocation;
+        return _localLocation;
     }
 
     const Core::Float3&
         SceneComponent::GetLocalRotation() const
     {
-        return LocalRotation;
+        return _localRotation;
     }
 
     const Core::Float3&
         SceneComponent::GetLocalScale() const
     {
-        return LocalScale;
+        return _localScale;
     }
 
     Core::Float3
@@ -223,7 +223,7 @@ namespace Engine
         UpdateTransformIfDirty();
 
         return Core::GetTranslation(
-            WorldTransform);
+            _worldTransform);
     }
 
     Core::Float3
@@ -232,7 +232,7 @@ namespace Engine
         UpdateTransformIfDirty();
 
         return Core::GetEulerRotation(
-            WorldTransform);
+            _worldTransform);
     }
 
     Core::Float3
@@ -241,7 +241,7 @@ namespace Engine
         UpdateTransformIfDirty();
 
         return Core::GetScale(
-            WorldTransform);
+            _worldTransform);
     }
 
     const Core::Mat4&
@@ -249,7 +249,7 @@ namespace Engine
     {
         UpdateTransformIfDirty();
 
-        return WorldTransform;
+        return _worldTransform;
     }
 
     Core::Float3
@@ -259,7 +259,7 @@ namespace Engine
 
         return Core::Normalize(
             Core::TransformVector(
-                WorldTransform,
+                _worldTransform,
                 Core::Float3(
                     1.0f,
                     0.0f,
@@ -273,7 +273,7 @@ namespace Engine
 
         return Core::Normalize(
             Core::TransformVector(
-                WorldTransform,
+                _worldTransform,
                 Core::Float3(
                     0.0f,
                     1.0f,
@@ -287,7 +287,7 @@ namespace Engine
 
         return Core::Normalize(
             Core::TransformVector(
-                WorldTransform,
+                _worldTransform,
                 Core::Float3(
                     0.0f,
                     0.0f,
@@ -309,9 +309,9 @@ namespace Engine
 
     void SceneComponent::MarkTransformDirty()
     {
-        bTransformDirty = true;
+        _bTransformDirty = true;
 
-        for (SceneComponent* child : Children)
+        for (SceneComponent* child : _children)
         {
             child->MarkTransformDirty();
         }
@@ -322,7 +322,7 @@ namespace Engine
 
     void SceneComponent::UpdateTransformIfDirty() const
     {
-        if (!bTransformDirty)
+        if (!_bTransformDirty)
         {
             return;
         }
@@ -334,23 +334,23 @@ namespace Engine
     {
         Core::Mat4 localTransform =
             Core::MakeTransformMatrix(
-                LocalLocation,
-                LocalRotation,
-                LocalScale);
+                _localLocation,
+                _localRotation,
+                _localScale);
 
-        if (Parent)
+        if (_parent)
         {
-            WorldTransform =
-                Parent->GetComponentTransform()
+            _worldTransform =
+                _parent->GetComponentTransform()
                 * localTransform;
         }
         else
         {
-            WorldTransform =
+            _worldTransform =
                 localTransform;
         }
 
-        bTransformDirty =
+        _bTransformDirty =
             false;
     }
 }

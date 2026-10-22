@@ -8,29 +8,29 @@ namespace Engine {
 
     void BuildShaderParameters(
             const MaterialRenderProxy*
-            Proxy,
-            RenderCore::RenderGraphBuilder& Builder,
+            proxy,
+            RenderCore::RenderGraphBuilder& builder,
             MaterialShaderParameters&
-            Out)
+            out)
     {
         // ====================
         // default init
         // ====================
 
-        Out.UniformData
+        out.UniformData
             .BaseColor =
         { 1,1,1,1 };
 
-        Out.UniformData
+        out.UniformData
             .Metallic = 0.8f;
 
-        Out.UniformData
+        out.UniformData
             .Roughness = 0.2f;
 
-        Out.UniformData
+        out.UniformData
             .Specular = 0.5f;
-        Out.UniformData.AmbientOcclusion = 1;
-        Out.TextureData
+        out.UniformData.AmbientOcclusion = 1;
+        out.TextureData
             .TextureMask = 0;
 
         RenderCore::RenderGraphTextureDesc emptyDesc;
@@ -39,46 +39,46 @@ namespace Engine {
         emptyDesc.Height = 1;
         emptyDesc.Usage = ERHITextureCreateFlag::ShaderResource;
 
-		auto emptyTexture = Builder.CreateTexture(
+		auto emptyTexture = builder.CreateTexture(
 			"EmptyTexture",
             emptyDesc);
 
-        //Ä¬ÈÏ³õÊ¼»¯ÎÆÀíÎª¿ÕÎÆÀí
-        Out.TextureData.BaseColorTexture = emptyTexture;
-        Out.TextureData.OpacityTexture = emptyTexture;
-        Out.TextureData.NormalTexture = emptyTexture;
-        Out.TextureData.ORMTexture = emptyTexture;
-        Out.TextureData.EmissiveTexture = emptyTexture;
-        Out.SamplerData.LinearWrapSampler = GlobalSampler.get();
+        //é»˜è®¤åˆå§‹åŒ–çº¹ç†ä¸ºç©ºçº¹ç†
+        out.TextureData.BaseColorTexture = emptyTexture;
+        out.TextureData.OpacityTexture = emptyTexture;
+        out.TextureData.NormalTexture = emptyTexture;
+        out.TextureData.ORMTexture = emptyTexture;
+        out.TextureData.EmissiveTexture = emptyTexture;
+        out.SamplerData.LinearWrapSampler = GlobalSampler.get();
 
         // ====================
         // scalar
         // ====================
 
-        float Scalar;
+        float scalar;
 
-        if (Proxy->GetValue<
+        if (proxy->GetValue<
             EMaterialParameterSemantic
             ::Metallic,
             FScalarType>(
                 "Metallic",
-                Scalar))
+                scalar))
         {
-            Out.UniformData
+            out.UniformData
                 .Metallic =
-                Scalar;
+                scalar;
         }
 
-        if (Proxy->GetValue<
+        if (proxy->GetValue<
             EMaterialParameterSemantic
             ::Roughness,
             FScalarType>(
                 "Roughness",
-                Scalar))
+                scalar))
         {
-            Out.UniformData
+            out.UniformData
                 .Roughness =
-                Scalar;
+                scalar;
         }
 
         // ====================
@@ -86,22 +86,22 @@ namespace Engine {
         // ====================
 
         std::array<float, 4>
-            Color;
+            color;
 
-        if (Proxy->GetValue<
+        if (proxy->GetValue<
             EMaterialParameterSemantic
             ::BaseColor,
             FVectorType>(
                 "BaseColor",
-                Color))
+                color))
         {
-            Out.UniformData
+            out.UniformData
                 .BaseColor =
             {
-                Color[0],
-                Color[1],
-                Color[2],
-                Color[3]
+                color[0],
+                color[1],
+                color[2],
+                color[3]
             };
         }
 
@@ -111,40 +111,40 @@ namespace Engine {
 
         RenderCore
             ::RenderTexture*
-            Texture;
+            texture;
 
-        if (Proxy->GetValue<
+        if (proxy->GetValue<
             EMaterialParameterSemantic
             ::BaseColor,
             FTextureType>(
                 "BaseColor",
-                Texture))
+                texture))
         {
-            auto rdgBaseColorTexture = Builder.RegisterExternalTexture("BaseColorTexture",
-                Texture);
-            Out.TextureData
+            auto rdgBaseColorTexture = builder.RegisterExternalTexture("BaseColorTexture",
+                texture);
+            out.TextureData
                 .BaseColorTexture =
                 rdgBaseColorTexture;
 
-            Out.TextureData
+            out.TextureData
                 .TextureMask
                 |= 1 << 0;
         }
 
-        if (Proxy->GetValue<
+        if (proxy->GetValue<
             EMaterialParameterSemantic
             ::Normal,
             FTextureType>(
                 "Normal",
-                Texture))
+                texture))
         {
-            auto rdgNormalTexture = Builder.RegisterExternalTexture("NormalTexture",
-                Texture);
-            Out.TextureData
+            auto rdgNormalTexture = builder.RegisterExternalTexture("NormalTexture",
+                texture);
+            out.TextureData
                 .NormalTexture =
                 rdgNormalTexture;
 
-            Out.TextureData
+            out.TextureData
                 .TextureMask
                 |= 1 << 1;
         }

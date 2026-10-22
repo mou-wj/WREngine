@@ -7,25 +7,25 @@
 namespace Engine {
     // PrimitiveComponent implementation
     PrimitiveComponent::PrimitiveComponent()
-        : LocalTransform(Core::Mat4::Identity()), WorldTransform(Core::Mat4::Identity()), Bounds(), Mobility(EMobility::Static),
-        bVisible(true), PendingSceneProxy(nullptr), DebugName(nullptr) {
+        : _localTransform(Core::Mat4::Identity()), _worldTransform(Core::Mat4::Identity()), _bounds(), _mobility(EMobility::Static),
+        _bVisible(true), _pendingSceneProxy(nullptr), _debugName(nullptr) {
     }
 
     PrimitiveComponent::~PrimitiveComponent() {
         // Ensure scene proxy is destroyed on RenderThread if still present
-        if (PendingSceneProxy) {
-            DestroySceneProxy(PendingSceneProxy);
-            PendingSceneProxy = nullptr;
+        if (_pendingSceneProxy) {
+            DestroySceneProxy(_pendingSceneProxy);
+            _pendingSceneProxy = nullptr;
         }
         // Note: do NOT call OwnerScene removal here — caller should explicitly Unregister
     }
 
-    void PrimitiveComponent::RegisterComponentWithScene(SceneInterface* Scene) {
-        OwnerScene = Scene;
+    void PrimitiveComponent::RegisterComponentWithScene(SceneInterface* scene) {
+        OwnerScene = scene;
         // Scene is expected to perform bookkeeping on GameThread. Optionally, create proxy now.
-        PrimitiveSceneProxy* Proxy = CreateSceneProxy();
-        if (Proxy) {
-            PendingSceneProxy = Proxy; // bookkeeping on GameThread
+        PrimitiveSceneProxy* proxy = CreateSceneProxy();
+        if (proxy) {
+            _pendingSceneProxy = proxy; // bookkeeping on GameThread
             // Transfer ownership to RenderThread / Scene via a render command.
             //RenderCommand::Enqueue([Scene, Proxy]() {
             //    // In real engine: Scene->OnAddPrimitive_RenderThread(Proxy);
@@ -37,10 +37,10 @@ namespace Engine {
     void PrimitiveComponent::UnregisterComponentFromScene() {
         // Caller must ensure GameThread context.
         OwnerScene = nullptr;
-        if (PendingSceneProxy) {
-            PrimitiveSceneProxy* Proxy = PendingSceneProxy;
-            PendingSceneProxy = nullptr;
-            DestroySceneProxy(Proxy);
+        if (_pendingSceneProxy) {
+            PrimitiveSceneProxy* proxy = _pendingSceneProxy;
+            _pendingSceneProxy = nullptr;
+            DestroySceneProxy(proxy);
         }
     }
 
@@ -50,8 +50,8 @@ namespace Engine {
         return nullptr;
     }
 
-    void PrimitiveComponent::DestroySceneProxy(PrimitiveSceneProxy* Proxy) const {
-        if (!Proxy) return;
+    void PrimitiveComponent::DestroySceneProxy(PrimitiveSceneProxy* proxy) const {
+        if (!proxy) return;
         // Schedule deletion on the RenderThread.
         //RenderCommand::Enqueue([Proxy]() {
         //    delete Proxy;
@@ -67,16 +67,16 @@ namespace Engine {
         //});
     }
 
-    void PrimitiveComponent::UpdateTransform(const Core::Mat4& NewLocalTransform) {
+    void PrimitiveComponent::UpdateTransform(const Core::Mat4& newLocalTransform) {
         // Update on GameThread
-        LocalTransform = NewLocalTransform;
+        _localTransform = newLocalTransform;
         UpdateWorldTransform();
 
         // Send a lightweight transform update to RenderThread if proxy exists.
-        PrimitiveSceneProxy* Proxy = PendingSceneProxy;
-        if (Proxy) {
+        PrimitiveSceneProxy* proxy = _pendingSceneProxy;
+        if (proxy) {
             // Capture a snapshot of world transform for the RenderThread.
-            Core::Mat4 WorldSnapshot = WorldTransform;
+            Core::Mat4 worldSnapshot = _worldTransform;
             //RenderCommand::Enqueue([Proxy, WorldSnapshot]() {
             //    // In real engine: Proxy->SetWorldTransform(WorldSnapshot);
             //    (void)Proxy; (void)WorldSnapshot;
@@ -86,8 +86,8 @@ namespace Engine {
 
     void PrimitiveComponent::OnTransformChanged() {
         // Default: nothing. Derived classes may override to react to transform changes.
-        WorldTransform = LocalTransform = GetComponentTransform();
-        Bounds = CalcBounds(WorldTransform);
+        _worldTransform = _localTransform = GetComponentTransform();
+        _bounds = CalcBounds(_worldTransform);
     }
 
     void PrimitiveComponent::UpdateWorldTransform() {

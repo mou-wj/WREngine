@@ -1,11 +1,11 @@
 #pragma once
 #include "EngineExport.h"
-#include "MaterialCore.h" // °üº¬µ×²ãµÄ ShaderMap
+#include "MaterialCore.h" // åŒ…å«åº•å±‚çš„ ShaderMap
 #include <string>
 #include <unordered_map>
 #include <memory>
 
-// Ç°ÖÃÉùÃ÷Äã×Ô¼ºµÄ×Ê²úÀàĞÍºÍµ×²ãµÄäÖÈ¾×ÊÔ´
+// å‰ç½®å£°æ˜ä½ è‡ªå·±çš„èµ„äº§ç±»å‹å’Œåº•å±‚çš„æ¸²æŸ“èµ„æº
 namespace RenderCore {
     class RenderTexture;
     class Shader;
@@ -17,9 +17,9 @@ namespace Engine {
     class MaterialRenderProxy;
     class MaterialInterface;
     class MaterialAsset;
-    class TextureAsset; // Ê¹ÓÃÄã¶¨ÒåµÄ×Ê²úÀà
+    class TextureAsset; // ä½¿ç”¨ä½ å®šä¹‰çš„èµ„äº§ç±»
     // ============================================================================
-// 2. »ù´¡Êı¾İÀàĞÍ±êÇ©ÓëºËĞÄÓïÒå¶¨Òå
+// 2. åŸºç¡€æ•°æ®ç±»å‹æ ‡ç­¾ä¸æ ¸å¿ƒè¯­ä¹‰å®šä¹‰
 // ============================================================================
     struct FScalarType { using Type = float; };
     struct FVectorType { using Type = std::array<float, 4>; };
@@ -35,7 +35,7 @@ namespace Engine {
     };
 
     // ============================================================================
-    // 3. ±àÒëÆÚºÏ·¨ĞÔ¼ì²é°×Ãûµ¥£¨Ä£°åÌØ»¯ÏŞÖÆ£©
+    // 3. ç¼–è¯‘æœŸåˆæ³•æ€§æ£€æŸ¥ç™½åå•ï¼ˆæ¨¡æ¿ç‰¹åŒ–é™åˆ¶ï¼‰
     // ============================================================================
     template <EMaterialParameterSemantic Semantic, typename TParamType>
     struct TIsValidCombination : std::false_type {};
@@ -46,28 +46,28 @@ namespace Engine {
     template <> struct TIsValidCombination<EMaterialParameterSemantic::BaseColor, FTextureType> : std::true_type {};
     template <> struct TIsValidCombination<EMaterialParameterSemantic::Normal, FTextureType> : std::true_type {};
 
-    // Custom ÓïÒå×÷ÎªÍòÄÜºó±¸£¬È«ÀàĞÍÖ§³Ö
+    // Custom è¯­ä¹‰ä½œä¸ºä¸‡èƒ½åå¤‡ï¼Œå…¨ç±»å‹æ”¯æŒ
     template <> struct TIsValidCombination<EMaterialParameterSemantic::Custom, FScalarType> : std::true_type {};
     template <> struct TIsValidCombination<EMaterialParameterSemantic::Custom, FVectorType> : std::true_type {};
     template <> struct TIsValidCombination<EMaterialParameterSemantic::Custom, FTextureType> : std::true_type {};
     template <> struct TIsValidCombination<EMaterialParameterSemantic::Custom, FIntType> : std::true_type {};
 
     // ============================================================================
-    // 4. ²ÄÖÊ²ÎÊı¶àÌ¬ºËĞÄÀà
+    // 4. æè´¨å‚æ•°å¤šæ€æ ¸å¿ƒç±»
     // ============================================================================
     class ENGINE_API MaterialParameter {
     public:
-        MaterialParameter(const std::string& InName, EMaterialParameterSemantic InSemantic);
+        MaterialParameter(const std::string& inName, EMaterialParameterSemantic inSemantic);
         virtual ~MaterialParameter() = default;
 
-        const std::string& GetName() const { return Name; }
-        EMaterialParameterSemantic GetSemantic() const { return Semantic; }
+        const std::string& GetName() const { return m_Name; }
+        EMaterialParameterSemantic GetSemantic() const { return m_Semantic; }
 
         virtual std::unique_ptr<MaterialParameter> Clone() const = 0;
 
     private:
-        std::string Name;
-        EMaterialParameterSemantic Semantic;
+        std::string m_Name;
+        EMaterialParameterSemantic m_Semantic;
     };
 
     template <EMaterialParameterSemantic InSemantic, typename TParamType>
@@ -80,19 +80,19 @@ namespace Engine {
     public:
         using UnderlyingType = typename TParamType::Type;
 
-        TMaterialParameter(const std::string& InName, const UnderlyingType& InValue)
-            : MaterialParameter(InName, InSemantic), Value(InValue)
+        TMaterialParameter(const std::string& inName, const UnderlyingType& inValue)
+            : MaterialParameter(inName, InSemantic), m_Value(inValue)
         {
         }
 
         const UnderlyingType& GetValue() const
         {
-            return Value;
+            return m_Value;
         }
 
-        void SetValue(const UnderlyingType& InValue)
+        void SetValue(const UnderlyingType& inValue)
         {
-            Value = InValue;
+            m_Value = inValue;
         }
 
         std::unique_ptr<MaterialParameter> Clone() const override
@@ -100,16 +100,16 @@ namespace Engine {
             return std::make_unique<
                 TMaterialParameter<InSemantic, TParamType>>(
                     GetName(),
-                    Value);
+                    m_Value);
         }
 
     private:
-        UnderlyingType Value;
+        UnderlyingType m_Value;
     };
     
     
     // ============================================================================
-    // 5. MaterialRenderProxy (äÖÈ¾Ïß³ÌÊı¾İ¿ìÕÕ)
+    // 5. MaterialRenderProxy (æ¸²æŸ“çº¿ç¨‹æ•°æ®å¿«ç…§)
     // ============================================================================
     class ENGINE_API MaterialRenderProxy {
     public:
@@ -119,17 +119,17 @@ namespace Engine {
         MaterialRenderProxy(const MaterialRenderProxy&) = delete;
         MaterialRenderProxy& operator=(const MaterialRenderProxy&) = delete;
 
-		const MaterialInterface* GetParent() const { return Parent; }
-        void AddParameter(std::unique_ptr<MaterialParameter> Param);
+		const MaterialInterface* GetParent() const { return m_Parent; }
+        void AddParameter(std::unique_ptr<MaterialParameter> param);
 
         template <EMaterialParameterSemantic Semantic, typename TParamType>
-        bool GetValue(const std::string& Name, typename TParamType::Type& OutValue) const {
-            for (const auto& Param : Parameters) {
-                if (Param->GetSemantic() == Semantic && Param->GetName() == Name) {
+        bool GetValue(const std::string& name, typename TParamType::Type& outValue) const {
+            for (const auto& param : m_Parameters) {
+                if (param->GetSemantic() == Semantic && param->GetName() == name) {
                     using TargetParamClass = TMaterialParameter<Semantic, TParamType>;
-                    auto* TypedParam = dynamic_cast<const TargetParamClass*>(Param.get());
-                    if (TypedParam) {
-                        OutValue = TypedParam->GetValue();
+                    auto* typedParam = dynamic_cast<const TargetParamClass*>(param.get());
+                    if (typedParam) {
+                        outValue = typedParam->GetValue();
                         return true;
                     }
                 }
@@ -138,12 +138,12 @@ namespace Engine {
         }
 
     private:
-        std::vector<std::unique_ptr<MaterialParameter>> Parameters;
-        const MaterialInterface* Parent;
+        std::vector<std::unique_ptr<MaterialParameter>> m_Parameters;
+        const MaterialInterface* m_Parent;
     };
 
     // ============================================================================
-    // 6. ÓÎÏ·Ïß³Ì²ÄÖÊ¿ò¼Ü½Ó¿ÚÓë×ÓÀà
+    // 6. æ¸¸æˆçº¿ç¨‹æè´¨æ¡†æ¶æ¥å£ä¸å­ç±»
     // ============================================================================
     class Material;
 
@@ -160,14 +160,14 @@ namespace Engine {
         virtual EShadingModel GetShadingModel() const = 0;
 
         template <EMaterialParameterSemantic Semantic, typename TParamType>
-        void SetParameterValue(const std::string& Name, const typename TParamType::Type& Value) {
+        void SetParameterValue(const std::string& name, const typename TParamType::Type& value) {
             static_assert(TIsValidCombination<Semantic, TParamType>::value,
                 "Error: Pre-compiler checked invalid Semantic and Type combination!");
-            SetParameterValueImpl(Semantic, Name, std::make_unique<TMaterialParameter<Semantic, TParamType>>(Name, Value));
+            SetParameterValueImpl(Semantic, name, std::make_unique<TMaterialParameter<Semantic, TParamType>>(name, value));
         }
 
     protected:
-        virtual void SetParameterValueImpl(EMaterialParameterSemantic Semantic, const std::string& Name, std::unique_ptr<MaterialParameter> Param) = 0;
+        virtual void SetParameterValueImpl(EMaterialParameterSemantic semantic, const std::string& name, std::unique_ptr<MaterialParameter> param) = 0;
     };
 
     class ENGINE_API Material : public MaterialInterface {
@@ -176,38 +176,38 @@ namespace Engine {
         ~Material() override = default;
 
         const Material* GetMaterial() const override { return this; }
-        std::shared_ptr<MaterialAsset> GetAsset() const override { return OwnerAsset.lock(); }
-        uint64_t GetRevision() const override { return Revision; }
-        EBlendMode GetBlendMode() const override { return BlendMode; }
-        void SetBlendMode(EBlendMode InMode);
-        EShadingModel GetShadingModel() const { return ShadingModel; }
-        void SetShadingModel(EShadingModel InModel);
+        std::shared_ptr<MaterialAsset> GetAsset() const override { return m_OwnerAsset.lock(); }
+        uint64_t GetRevision() const override { return m_Revision; }
+        EBlendMode GetBlendMode() const override { return m_BlendMode; }
+        void SetBlendMode(EBlendMode inMode);
+        EShadingModel GetShadingModel() const { return m_ShadingModel; }
+        void SetShadingModel(EShadingModel inModel);
 
         MaterialRenderProxy* GetRenderProxy() const override;
-        const std::unordered_map<std::string, std::unique_ptr<MaterialParameter>>& GetDefaultParameters() const { return DefaultParameters; }
+        const std::unordered_map<std::string, std::unique_ptr<MaterialParameter>>& GetDefaultParameters() const { return m_DefaultParameters; }
 
     protected:
-        void SetParameterValueImpl(EMaterialParameterSemantic Semantic, const std::string& Name, std::unique_ptr<MaterialParameter> Param) override;
+        void SetParameterValueImpl(EMaterialParameterSemantic semantic, const std::string& name, std::unique_ptr<MaterialParameter> param) override;
 
     private:
         friend class MaterialAsset;
-        std::weak_ptr<MaterialAsset> OwnerAsset;
-        uint64_t Revision = 0;
-        EBlendMode BlendMode = EBlendMode::Opaque;
-		EShadingModel ShadingModel = EShadingModel::Unlit;
-        std::unordered_map<std::string, std::unique_ptr<MaterialParameter>> DefaultParameters;
+        std::weak_ptr<MaterialAsset> m_OwnerAsset;
+        uint64_t m_Revision = 0;
+        EBlendMode m_BlendMode = EBlendMode::Opaque;
+		EShadingModel m_ShadingModel = EShadingModel::Unlit;
+        std::unordered_map<std::string, std::unique_ptr<MaterialParameter>> m_DefaultParameters;
 
-        mutable std::unique_ptr<MaterialRenderProxy> CachedProxy;
-        mutable bool bProxyDirty = true;
+        mutable std::unique_ptr<MaterialRenderProxy> m_CachedProxy;
+        mutable bool m_bProxyDirty = true;
     };
 
     class ENGINE_API MaterialInstance : public MaterialInterface {
     public:
-        explicit MaterialInstance(std::shared_ptr<MaterialAsset> InParent);
+        explicit MaterialInstance(std::shared_ptr<MaterialAsset> inParent);
         ~MaterialInstance() override = default;
 
         const Material* GetMaterial() const override;
-        std::shared_ptr<MaterialAsset> GetAsset() const override { return ParentAsset; }
+        std::shared_ptr<MaterialAsset> GetAsset() const override { return m_ParentAsset; }
         uint64_t GetRevision() const override;
         EBlendMode GetBlendMode() const override;
         EShadingModel GetShadingModel() const override;
@@ -216,16 +216,16 @@ namespace Engine {
         MaterialRenderProxy* GetRenderProxy() const override;
 
     protected:
-        void SetParameterValueImpl(EMaterialParameterSemantic Semantic, const std::string& Name, std::unique_ptr<MaterialParameter> Param) override;
+        void SetParameterValueImpl(EMaterialParameterSemantic semantic, const std::string& name, std::unique_ptr<MaterialParameter> param) override;
 
     private:
-        std::shared_ptr<MaterialAsset> ParentAsset;
-        uint64_t Revision = 0;
-        mutable uint64_t CachedParentRevision = 0;
-        std::unordered_map<std::string, std::unique_ptr<MaterialParameter>> OverriddenParameters;
+        std::shared_ptr<MaterialAsset> m_ParentAsset;
+        uint64_t m_Revision = 0;
+        mutable uint64_t m_CachedParentRevision = 0;
+        std::unordered_map<std::string, std::unique_ptr<MaterialParameter>> m_OverriddenParameters;
 
-        mutable std::unique_ptr<MaterialRenderProxy> CachedProxy;
-        mutable bool bProxyDirty = true;
+        mutable std::unique_ptr<MaterialRenderProxy> m_CachedProxy;
+        mutable bool m_bProxyDirty = true;
     };
     class MaterialShaderParameters;
 

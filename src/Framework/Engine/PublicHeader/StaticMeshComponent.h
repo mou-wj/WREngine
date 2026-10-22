@@ -27,15 +27,15 @@ namespace Engine
         // Mesh
         //----------------------------------------
 
-        void SetStaticMesh(StaticMesh* InMesh);
-        StaticMesh* GetStaticMesh() const { return Mesh; }
+        void SetStaticMesh(StaticMesh* inMesh);
+        StaticMesh* GetStaticMesh() const { return m_Mesh; }
 
         //----------------------------------------
         // Material Override
         //----------------------------------------
 
-        void SetMaterial(uint32_t SlotIndex, MaterialInterface* Material);
-        MaterialInterface* GetMaterial(uint32_t SlotIndex) const;
+        void SetMaterial(uint32_t slotIndex, MaterialInterface* material);
+        MaterialInterface* GetMaterial(uint32_t slotIndex) const;
 
         uint32_t GetNumMaterials() const;
         MaterialInstance* GetMaterialInstance(uint32_t slotIndex) const;
@@ -55,15 +55,15 @@ namespace Engine
         // LOD
         //----------------------------------------
 
-        void SetForcedLOD(int32_t InLOD)
+        void SetForcedLOD(int32_t inLod)
         {
-            ForcedLOD = InLOD;
+            m_ForcedLOD = inLod;
             MarkRenderStateDirty();
         }
 
         int32_t GetForcedLOD() const
         {
-            return ForcedLOD;
+            return m_ForcedLOD;
         }
 
         //----------------------------------------
@@ -76,17 +76,17 @@ namespace Engine
 
     private:
         Core::BoxSphereBounds CalcBounds(
-            const Core::Mat4& LocalToWorld) override;
+            const Core::Mat4& localToWorld) override;
         // CPU-side mesh asset reference
-        std::shared_ptr<StaticMeshAsset> MeshAsset;
-        StaticMesh* Mesh = nullptr;
+        std::shared_ptr<StaticMeshAsset> m_MeshAsset;
+        StaticMesh* m_Mesh = nullptr;
 
         // Material overrides (same concept as UE OverrideMaterials)
-        std::vector<std::shared_ptr<MaterialAsset>> OverrideMaterials;
-        std::vector<std::unique_ptr<MaterialInstance>> MaterialInstances;
+        std::vector<std::shared_ptr<MaterialAsset>> m_OverrideMaterials;
+        std::vector<std::unique_ptr<MaterialInstance>> m_MaterialInstances;
 
         // -1 = auto LOD
-        int32_t ForcedLOD = -1;
+        int32_t m_ForcedLOD = -1;
     };
 
 } // namespace Engine

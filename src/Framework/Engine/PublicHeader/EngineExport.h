@@ -1,8 +1,8 @@
 #pragma once
 
-// ¿çÆ½Ì¨ DLL µ¼³ö/µ¼Èëºê
+// è·¨å¹³å° DLL å¯¼å‡º/å¯¼å…¥å®
 #if defined(_WIN32) || defined(_WIN64)
-#ifdef ENGINE_EXPORTS          // Engine ×Ô¼º±àÒëÊ±¶¨Òå
+#ifdef ENGINE_EXPORTS          // Engine è‡ªå·±ç¼–è¯‘æ—¶å®šä¹‰
 #define ENGINE_API __declspec(dllexport)
 #else
 #define ENGINE_API __declspec(dllimport)

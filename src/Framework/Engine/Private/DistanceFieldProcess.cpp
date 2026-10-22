@@ -25,7 +25,7 @@ namespace Engine {
         RHI::ERHIShaderFrequency::Compute
     );
 
-    static RenderCore::Shader* GetGlobalComputeShader(const char* ShaderName)
+    static RenderCore::Shader* GetGlobalComputeShader(const char* shaderName)
     {
         auto shaderTypeFlagIt = RenderCore::ShaderType::GetRegisterMap().find(RenderCore::ShaderType::EShaderTypeFlag::Global);
         if (shaderTypeFlagIt == RenderCore::ShaderType::GetRegisterMap().end())
@@ -33,7 +33,7 @@ namespace Engine {
             return nullptr;
         }
 
-        auto shaderTypeIt = shaderTypeFlagIt->second.find(ShaderName);
+        auto shaderTypeIt = shaderTypeFlagIt->second.find(shaderName);
         if (shaderTypeIt == shaderTypeFlagIt->second.end() || !shaderTypeIt->second)
         {
             return nullptr;
@@ -65,19 +65,19 @@ namespace Engine {
         return texture;
     }
 
-    bool ExecuteDistanceFieldVoxelizePass(const DistanceFieldVoxelizePassInput& Input)
+    bool ExecuteDistanceFieldVoxelizePass(const DistanceFieldVoxelizePassInput& input)
     {
-        if (!Input.VertexBuffer || !Input.IndexBuffer || !Input.OutputSDFTexture)
+        if (!input.VertexBuffer || !input.IndexBuffer || !input.OutputSDFTexture)
         {
             return false;
         }
 
-        if (Input.VertexCount == 0 || Input.IndexCount < 3)
+        if (input.VertexCount == 0 || input.IndexCount < 3)
         {
             return true;
         }
 
-        const uint32_t primitiveCount = Input.PrimitiveCount > 0 ? Input.PrimitiveCount : (Input.IndexCount / 3);
+        const uint32_t primitiveCount = input.PrimitiveCount > 0 ? input.PrimitiveCount : (input.IndexCount / 3);
         if (primitiveCount == 0)
         {
             return true;
@@ -97,24 +97,24 @@ namespace Engine {
 
         RHI::RHIBufferSRVCreateInfo vertexSRVDesc;
         vertexSRVDesc.Offset = 0;
-        vertexSRVDesc.NumElements = Input.VertexCount;
+        vertexSRVDesc.NumElements = input.VertexCount;
         vertexSRVDesc.Stride = sizeof(SDFVertexPosition);
         vertexSRVDesc.Format = RHI::ERHIFormat::Unknown;
 
         RHI::RHIBufferSRVCreateInfo indexSRVDesc;
         indexSRVDesc.Offset = 0;
-        indexSRVDesc.NumElements = Input.IndexCount;
+        indexSRVDesc.NumElements = input.IndexCount;
         indexSRVDesc.Stride = sizeof(uint32_t);
         indexSRVDesc.Format = RHI::ERHIFormat::Unknown;
 
-        const auto& sdfDesc = Input.OutputSDFTexture->GetRHI()->GetDesc();
+        const auto& sdfDesc = input.OutputSDFTexture->GetRHI()->GetDesc();
         RHI::RHITexUAVCreateInfo sdfUAVDesc;
         sdfUAVDesc.Format = sdfDesc.Format;
         sdfUAVDesc.ArraySize = sdfDesc.ArraySize;
 
-        auto* vertexSRV = Input.VertexBuffer->GetViewCache().GetOrCreateSRV(Input.VertexBuffer->GetRHI(), vertexSRVDesc);
-        auto* indexSRV = Input.IndexBuffer->GetViewCache().GetOrCreateSRV(Input.IndexBuffer->GetRHI(), indexSRVDesc);
-        auto* sdfUAV = Input.OutputSDFTexture->GetViewCache().GetOrCreateUAV(Input.OutputSDFTexture->GetRHI(), sdfUAVDesc);
+        auto* vertexSRV = input.VertexBuffer->GetViewCache().GetOrCreateSRV(input.VertexBuffer->GetRHI(), vertexSRVDesc);
+        auto* indexSRV = input.IndexBuffer->GetViewCache().GetOrCreateSRV(input.IndexBuffer->GetRHI(), indexSRVDesc);
+        auto* sdfUAV = input.OutputSDFTexture->GetViewCache().GetOrCreateUAV(input.OutputSDFTexture->GetRHI(), sdfUAVDesc);
 
         if (!vertexSRV || !indexSRV || !sdfUAV)
         {
@@ -123,19 +123,19 @@ namespace Engine {
 
         RenderCore::TransitionBufferImmediate(
             RHI::GRHIApi,
-            Input.VertexBuffer,
+            input.VertexBuffer,
             RHI::ERHIResourceAccess::SRV,
             RHI::EQueueType::Compute);
 
         RenderCore::TransitionBufferImmediate(
             RHI::GRHIApi,
-            Input.IndexBuffer,
+            input.IndexBuffer,
             RHI::ERHIResourceAccess::SRV,
             RHI::EQueueType::Compute);
 
         RenderCore::TransitionTextureImmediate(
             RHI::GRHIApi,
-            Input.OutputSDFTexture,
+            input.OutputSDFTexture,
             RHI::ERHIResourceAccess::UAV,
             RHI::EQueueType::Compute);
 
@@ -157,8 +157,8 @@ namespace Engine {
         cmd.SetComputePipelineState(pipelineState);
 
         DistanceFieldVoxelizeParameters params;
-        params.WorldToVoxel = Input.WorldToVoxel;
-        params.GridResolution = Input.GridResolution;
+        params.WorldToVoxel = input.WorldToVoxel;
+        params.GridResolution = input.GridResolution;
         params.PrimitiveCount = primitiveCount;
         params.VertexBuffer = vertexSRV;
         params.IndexBuffer = indexSRV;
@@ -174,25 +174,25 @@ namespace Engine {
 		fence.QueueType = RHI::EQueueType::Compute;
         auto fenceValue = computeQueue->ExecuteContext(computeContext);
         fence.Value = fenceValue;
-        Input.VertexBuffer->GetTracker().UpdateLastAccessFence(fence);
-        Input.IndexBuffer->GetTracker().UpdateLastAccessFence(fence);
-        Input.OutputSDFTexture->GetTracker().UpdateLastAccessFence(fence);
+        input.VertexBuffer->GetTracker().UpdateLastAccessFence(fence);
+        input.IndexBuffer->GetTracker().UpdateLastAccessFence(fence);
+        input.OutputSDFTexture->GetTracker().UpdateLastAccessFence(fence);
 
         return true;
     }
 
 
-    bool ExecuteDistanceFieldJumpFlood3DPass(const DistanceFieldJumpFlood3DPassInput& Input)
+    bool ExecuteDistanceFieldJumpFlood3DPass(const DistanceFieldJumpFlood3DPassInput& input)
     {
-        if (!Input.SurfaceMaskTexture || !Input.OutputDistanceTexture)
+        if (!input.SurfaceMaskTexture || !input.OutputDistanceTexture)
         {
             return false;
         }
 
-        Core::Int3 resolution = Input.GridResolution;
+        Core::Int3 resolution = input.GridResolution;
         if (resolution.x <= 0 || resolution.y <= 0 || resolution.z <= 0)
         {
-            const auto& desc = Input.OutputDistanceTexture->GetRHI()->GetDesc();
+            const auto& desc = input.OutputDistanceTexture->GetRHI()->GetDesc();
             resolution = Core::Int3(static_cast<int>(desc.Width), static_cast<int>(desc.Height), static_cast<int>(desc.Depth));
         }
         if (resolution.x <= 0 || resolution.y <= 0 || resolution.z <= 0)
@@ -219,10 +219,10 @@ namespace Engine {
             return false;
         }
 
-        const auto& maskDesc = Input.SurfaceMaskTexture->GetRHI()->GetDesc();
+        const auto& maskDesc = input.SurfaceMaskTexture->GetRHI()->GetDesc();
         const auto& seedADesc = seedTextureA->GetRHI()->GetDesc();
         const auto& seedBDesc = seedTextureB->GetRHI()->GetDesc();
-        const auto& distanceDesc = Input.OutputDistanceTexture->GetRHI()->GetDesc();
+        const auto& distanceDesc = input.OutputDistanceTexture->GetRHI()->GetDesc();
 
         RHI::RHITexSRVCreateInfo maskSRVDesc;
         maskSRVDesc.Format = maskDesc.Format;
@@ -248,12 +248,12 @@ namespace Engine {
         distanceUAVDesc.Format = distanceDesc.Format;
         distanceUAVDesc.ArraySize = distanceDesc.ArraySize;
 
-        auto* maskSRV = Input.SurfaceMaskTexture->GetViewCache().GetOrCreateSRV(Input.SurfaceMaskTexture->GetRHI(), maskSRVDesc);
+        auto* maskSRV = input.SurfaceMaskTexture->GetViewCache().GetOrCreateSRV(input.SurfaceMaskTexture->GetRHI(), maskSRVDesc);
         auto* seedASRV = seedTextureA->GetViewCache().GetOrCreateSRV(seedTextureA->GetRHI(), seedASRVDesc);
         auto* seedBSRV = seedTextureB->GetViewCache().GetOrCreateSRV(seedTextureB->GetRHI(), seedBSRVDesc);
         auto* seedAUAV = seedTextureA->GetViewCache().GetOrCreateUAV(seedTextureA->GetRHI(), seedAUAVDesc);
         auto* seedBUAV = seedTextureB->GetViewCache().GetOrCreateUAV(seedTextureB->GetRHI(), seedBUAVDesc);
-        auto* distanceUAV = Input.OutputDistanceTexture->GetViewCache().GetOrCreateUAV(Input.OutputDistanceTexture->GetRHI(), distanceUAVDesc);
+        auto* distanceUAV = input.OutputDistanceTexture->GetViewCache().GetOrCreateUAV(input.OutputDistanceTexture->GetRHI(), distanceUAVDesc);
 
         if (!maskSRV || !seedASRV || !seedBSRV || !seedAUAV || !seedBUAV || !distanceUAV)
         {
@@ -262,7 +262,7 @@ namespace Engine {
 
         RenderCore::TransitionTextureImmediate(
             RHI::GRHIApi,
-            Input.SurfaceMaskTexture,
+            input.SurfaceMaskTexture,
             RHI::ERHIResourceAccess::SRV,
             RHI::EQueueType::Compute);
 
@@ -280,7 +280,7 @@ namespace Engine {
 
         RenderCore::TransitionTextureImmediate(
             RHI::GRHIApi,
-            Input.OutputDistanceTexture,
+            input.OutputDistanceTexture,
             RHI::ERHIResourceAccess::UAV,
             RHI::EQueueType::Compute);
 
@@ -364,10 +364,10 @@ namespace Engine {
         fence.QueueType = RHI::EQueueType::Compute;
         auto fenceValue = computeQueue->ExecuteContext(computeContext);
         fence.Value = fenceValue;
-        Input.SurfaceMaskTexture->GetTracker().UpdateLastAccessFence(fence);
+        input.SurfaceMaskTexture->GetTracker().UpdateLastAccessFence(fence);
         seedTextureA->GetTracker().UpdateLastAccessFence(fence);
         seedTextureB->GetTracker().UpdateLastAccessFence(fence);
-        Input.OutputDistanceTexture->GetTracker().UpdateLastAccessFence(fence);
+        input.OutputDistanceTexture->GetTracker().UpdateLastAccessFence(fence);
 
         return true;
     }

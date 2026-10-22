@@ -83,7 +83,7 @@ private:
         std::thread::id Owner;
         std::promise<AssetSP> Promise;
         std::shared_future<AssetSP> Future;
-        bool KeepResident = true;
+        bool bKeepResident = true;
     };
 
     AssetManager();
@@ -94,13 +94,13 @@ private:
     AssetSP FindLoaded(const std::string& path) const;
     void QueueLoad(std::function<void()> task);
 
-    mutable std::mutex Mutex;
-    std::unordered_map<std::string, AssetSP> ResidentAssets;
-    std::unordered_map<std::string, std::weak_ptr<IAsset>> LoadedAssets;
-    std::unordered_map<std::string, std::shared_ptr<LoadRequest>> Loading;
-    std::vector<std::future<void>> Tasks;
-    uint64_t ResidencyGeneration = 0;
-    bool Stopping = false;
+    mutable std::mutex m_Mutex;
+    std::unordered_map<std::string, AssetSP> m_ResidentAssets;
+    std::unordered_map<std::string, std::weak_ptr<IAsset>> m_LoadedAssets;
+    std::unordered_map<std::string, std::shared_ptr<LoadRequest>> m_Loading;
+    std::vector<std::future<void>> m_Tasks;
+    uint64_t m_ResidencyGeneration = 0;
+    bool m_bStopping = false;
 };
 
 }

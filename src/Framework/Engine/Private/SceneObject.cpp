@@ -5,7 +5,7 @@ namespace Engine
     SceneObject::SceneObject() = default;
 
     SceneObject::SceneObject(SceneComponent* rootComponent)
-        : RootComponent(rootComponent)
+        : m_RootComponent(rootComponent)
     {
     }
 
@@ -13,21 +13,21 @@ namespace Engine
 
     SceneComponent* SceneObject::GetRootComponentRaw() const
     {
-        return RootComponent;
+        return m_RootComponent;
     }
 
     void SceneObject::SetRootComponent(SceneComponent* rootComponent)
     {
-        RootComponent = rootComponent;
+        m_RootComponent = rootComponent;
     }
 
     void SceneObject::ResetRootComponent()
     {
-        RootComponent = nullptr;
+        m_RootComponent = nullptr;
     }
 
     bool SceneObject::HasRootComponent() const
     {
-        return RootComponent != nullptr;
+        return m_RootComponent != nullptr;
     }
 }

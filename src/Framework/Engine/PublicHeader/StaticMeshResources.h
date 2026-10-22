@@ -24,7 +24,7 @@ namespace Engine {
             Buffer;
 
         uint32_t NumComponents = 0;
-        bool Valid = false;
+        bool bValid = false;
 
         uint64_t GetNumVertices() const
         {
@@ -104,7 +104,7 @@ namespace Engine {
 
         // Access a LOD resource (const, read-only for RenderThread)
         // Caller must ensure index < GetLODCount().
-        const LODResource& GetLODResource(size_t Index) const { return LODResources[Index]; }
+        const LODResource& GetLODResource(size_t index) const { return LODResources[index]; }
 
         // Get bounds for culling
         const Core::BoxSphereBounds& GetBounds() const { return Bounds; }
@@ -112,7 +112,7 @@ namespace Engine {
         
 
         // Utilities to append resources (used on GameThread during build/load)
-        void AddLOD(LODResource&& LOD) { LODResources.emplace_back(std::move(LOD)); }
+        void AddLOD(LODResource&& lod) { LODResources.emplace_back(std::move(lod)); }
 
         // Intended usage: build on GameThread, then the RenderThread may read these
         // structures concurrently (read-only). Do not modify after submitting to the scene.

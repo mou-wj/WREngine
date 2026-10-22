@@ -184,8 +184,8 @@ namespace Renderer {
                             LocalVertexFactory* vf = dynamic_cast<LocalVertexFactory*>(MeshBatch.VertexFactory);
                             vf->BindInstanceBuffer(cmd,MeshBatch.InstanceDataBufferAccessor->GetInstanceIdBuffer()->GetRHI(), 0);
                         }
-                        cmd.SetViewport(view.Viewport.x, view.Viewport.y, view.Viewport.width, view.Viewport.height, 0.0f, 1.0f);
-                        cmd.SetScissor(view.Viewport.x, view.Viewport.y, view.Viewport.width, view.Viewport.height);
+                        cmd.SetViewport(view.Viewport.X, view.Viewport.Y, view.Viewport.Width, view.Viewport.Height, 0.0f, 1.0f);
+                        cmd.SetScissor(view.Viewport.X, view.Viewport.Y, view.Viewport.Width, view.Viewport.Height);
                         //����vertex����
                         SetShaderParameters(cmd, vertexShader, &params->vertexParameters);
             
@@ -195,10 +195,10 @@ namespace Renderer {
                         RHIRenderPassInfo passInfo;
                         passInfo.RenderTargets = boundRenderTarget;
                         passInfo.RenderTargets.DepthStencil.ClearBinding.Depth = 1.0f;
-						passInfo.RenderArea.X = view.Viewport.x;
-                        passInfo.RenderArea.Y = view.Viewport.y;
-                        passInfo.RenderArea.Width = view.Viewport.width;
-                        passInfo.RenderArea.Height = view.Viewport.height;
+						passInfo.RenderArea.X = view.Viewport.X;
+                        passInfo.RenderArea.Y = view.Viewport.Y;
+                        passInfo.RenderArea.Width = view.Viewport.Width;
+                        passInfo.RenderArea.Height = view.Viewport.Height;
                         cmd.BeginRenderPass(passInfo);
                         //����
                         for (auto element : batch.Elements) {

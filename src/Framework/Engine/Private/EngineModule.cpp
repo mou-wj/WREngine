@@ -18,7 +18,7 @@ namespace Engine {
         EngineObj->Init();
         GDistanceFieldMgr.Initialize();
 
-        isLoaded = true;
+        m_bLoaded = true;
     }
 
     void EngineModule::ShutdownModule()
@@ -30,11 +30,11 @@ namespace Engine {
             EngineObj.reset();
         }
         GDistanceFieldMgr.Release();
-        isLoaded = false;
+        m_bLoaded = false;
     }
 
     bool EngineModule::IsLoaded() const {
-        return isLoaded;
+        return m_bLoaded;
     }
 
 

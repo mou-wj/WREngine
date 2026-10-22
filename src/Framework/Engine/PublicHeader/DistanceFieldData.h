@@ -40,43 +40,43 @@ namespace Engine
         }
 
 
-        void Resize(uint32_t X, uint32_t Y, uint32_t Z)
+        void Resize(uint32_t x, uint32_t y, uint32_t z)
         {
-            Volume.ResolutionX = X;
-            Volume.ResolutionY = Y;
-            Volume.ResolutionZ = Z;
+            Volume.ResolutionX = x;
+            Volume.ResolutionY = y;
+            Volume.ResolutionZ = z;
 
             Distance.resize(Volume.GetVoxelCount());
             SurfaceMask.resize(Volume.GetVoxelCount());
         }
 
 
-        uint32_t GetIndex(uint32_t X, uint32_t Y, uint32_t Z) const
+        uint32_t GetIndex(uint32_t x, uint32_t y, uint32_t z) const
         {
-            return X + Y * Volume.ResolutionX + Z * Volume.ResolutionX * Volume.ResolutionY;
+            return x + y * Volume.ResolutionX + z * Volume.ResolutionX * Volume.ResolutionY;
         }
 
 
-        float GetDistance(uint32_t X, uint32_t Y, uint32_t Z) const
+        float GetDistance(uint32_t x, uint32_t y, uint32_t z) const
         {
-            return Distance[GetIndex(X, Y, Z)];
+            return Distance[GetIndex(x, y, z)];
         }
 
 
-        uint8_t GetSurfaceMask(uint32_t X, uint32_t Y, uint32_t Z) const
+        uint8_t GetSurfaceMask(uint32_t x, uint32_t y, uint32_t z) const
         {
-            return SurfaceMask[GetIndex(X, Y, Z)];
+            return SurfaceMask[GetIndex(x, y, z)];
         }
     };
 
     static constexpr uint32_t InvalidDistanceFieldAllocation = UINT32_MAX;
 
     /**
-     * Distance Field AtlasÖĞµÄÒ»¿éÎïÀí¿Õ¼ä
+     * Distance Field Atlasä¸­çš„ä¸€å—ç‰©ç†ç©ºé—´
      *
-     * Ö»ÃèÊöTextureÖĞµÄÎ»ÖÃ
+     * åªæè¿°Textureä¸­çš„ä½ç½®
      *
-     * ²»°üº¬ÈÎºÎWorldĞÅÏ¢
+     * ä¸åŒ…å«ä»»ä½•Worldä¿¡æ¯
      */
     struct DistanceFieldAllocation
     {
@@ -120,16 +120,16 @@ namespace Engine
     /**
      * Distance Field Atlas Allocator
      *
-     * ¹ÜÀíTexture3DÄÚ²¿¿Õ¼ä·ÖÅä
+     * ç®¡ç†Texture3Då†…éƒ¨ç©ºé—´åˆ†é…
      *
-     * ²»¹ØĞÄ:
+     * ä¸å…³å¿ƒ:
      *
-     * - ÊÀ½ç×ø±ê
+     * - ä¸–ç•Œåæ ‡
      * - Mesh
      * - Scene
      * - Bounds
      *
-     * Ö»¸ºÔğ:
+     * åªè´Ÿè´£:
      *
      * Allocation <-> Physical Atlas Space
      */
@@ -146,21 +146,21 @@ namespace Engine
     public:
 
         /**
-         * ³õÊ¼»¯Atlas¿Õ¼ä
+         * åˆå§‹åŒ–Atlasç©ºé—´
          *
          * AtlasResolution:
          *
-         * Texture3D³ß´ç
+         * Texture3Då°ºå¯¸
          *
          * BlockResolution:
          *
-         * ×îĞ¡·ÖÅäµ¥Î»
+         * æœ€å°åˆ†é…å•ä½
          */
         bool Initialize(
-            uint32_t AtlasResolutionX,
-            uint32_t AtlasResolutionY,
-            uint32_t AtlasResolutionZ,
-            uint32_t BlockResolution,
+            uint32_t atlasResolutionX,
+            uint32_t atlasResolutionY,
+            uint32_t atlasResolutionZ,
+            uint32_t blockResolution,
             RHI::ERHITextureCreateFlags usage = RHI::ERHITextureCreateFlag::ShaderResource | RHI::ERHITextureCreateFlag::TransferDest);
 
 
@@ -170,71 +170,71 @@ namespace Engine
 
 
         /**
-         * ·ÖÅäÒ»¸öBlock¿Õ¼ä
+         * åˆ†é…ä¸€ä¸ªBlockç©ºé—´
          */
         bool Allocate(
-            DistanceFieldAllocation& OutAllocation);
+            DistanceFieldAllocation& outAllocation);
 
 
 
         /**
-         * ÊÍ·Å¿Õ¼ä
+         * é‡Šæ”¾ç©ºé—´
          */
         void Free(
-            const DistanceFieldAllocation& Allocation);
+            const DistanceFieldAllocation& allocation);
 
 
 
         /**
-         * ²éÑ¯AllocationÊÇ·ñÓĞĞ§
+         * æŸ¥è¯¢Allocationæ˜¯å¦æœ‰æ•ˆ
          */
         bool IsAllocated(
-            uint32_t Id) const;
+            uint32_t id) const;
 
 
 		void UploadData(
-			const DistanceFieldAllocation& Allocation,
-			const float* Data);
+			const DistanceFieldAllocation& allocation,
+			const float* data);
 
     public:
 
 
         uint32_t GetAtlasResolutionX() const
         {
-            return AtlasResolutionX;
+            return m_AtlasResolutionX;
         }
 
 
         uint32_t GetAtlasResolutionY() const
         {
-            return AtlasResolutionY;
+            return m_AtlasResolutionY;
         }
 
 
         uint32_t GetAtlasResolutionZ() const
         {
-            return AtlasResolutionZ;
+            return m_AtlasResolutionZ;
         }
 
 
 
         uint32_t GetBlockResolution() const
         {
-            return BlockResolution;
+            return m_BlockResolution;
         }
 
         RenderCore::RenderTexture* GetAtlasTexture() const
         {
-            return AtlasTexture.get();
+            return m_AtlasTexture.get();
         }
 
     private:
 
 
         uint32_t CalculateIndex(
-            uint32_t X,
-            uint32_t Y,
-            uint32_t Z) const;
+            uint32_t x,
+            uint32_t y,
+            uint32_t z) const;
 
 
 
@@ -242,41 +242,41 @@ namespace Engine
 
 
         //---------------------------------
-        // Atlas Texture³ß´ç
+        // Atlas Textureå°ºå¯¸
         //---------------------------------
 
-        uint32_t AtlasResolutionX = 0;
-        uint32_t AtlasResolutionY = 0;
-        uint32_t AtlasResolutionZ = 0;
-
-
-
-        //---------------------------------
-        // µ¥¸öAllocation´óĞ¡
-        //---------------------------------
-
-        uint32_t BlockResolution = 64;
+        uint32_t m_AtlasResolutionX = 0;
+        uint32_t m_AtlasResolutionY = 0;
+        uint32_t m_AtlasResolutionZ = 0;
 
 
 
         //---------------------------------
-        // BlockÊıÁ¿
+        // å•ä¸ªAllocationå¤§å°
         //---------------------------------
 
-        uint32_t BlockCountX = 0;
-        uint32_t BlockCountY = 0;
-        uint32_t BlockCountZ = 0;
+        uint32_t m_BlockResolution = 64;
 
 
 
         //---------------------------------
-        // ¿Õ¼äÕ¼ÓÃ
+        // Blockæ•°é‡
+        //---------------------------------
+
+        uint32_t m_BlockCountX = 0;
+        uint32_t m_BlockCountY = 0;
+        uint32_t m_BlockCountZ = 0;
+
+
+
+        //---------------------------------
+        // ç©ºé—´å ç”¨
         //
         // 0: free
         // 1: used
         //---------------------------------
 
-        std::vector<uint8_t> AllocationMap;
+        std::vector<uint8_t> m_AllocationMap;
 
 
 
@@ -284,9 +284,9 @@ namespace Engine
         // Allocation ID
         //---------------------------------
 
-        uint32_t NextAllocationId = 0;
+        uint32_t m_NextAllocationId = 0;
 
-        RenderCore::RenderTextureSP AtlasTexture;
+        RenderCore::RenderTextureSP m_AtlasTexture;
     };
 
 

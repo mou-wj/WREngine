@@ -46,16 +46,16 @@ namespace Engine
             const;
 
     protected:
-        Core::Float3 Color =
+        Core::Float3 _color =
             Core::Float3(
                 1.0f,
                 1.0f,
                 1.0f);
 
-        float Intensity =
+        float _intensity =
             1.0f;
 
-        bool bCastShadow =
+        bool _bCastShadow =
             true;
     };
 
@@ -77,7 +77,7 @@ namespace Engine
             GetDirection() const;
 
     protected:
-        Core::Float3 Direction =
+        Core::Float3 _direction =
             Core::Float3(
                 0.0f,
                 -1.0f,
@@ -94,7 +94,7 @@ namespace Engine
         float GetAttenuationRadius()
             const;
     protected:
-        float AttenuationRadius =
+        float _attenuationRadius =
             1000.0f;
     };
 
@@ -139,13 +139,13 @@ namespace Engine
             GetDirection() const;
 
     protected:
-        float InnerConeAngle =
+        float _innerConeAngle =
             Core::DegToRad(20.0f);
 
-        float OuterConeAngle =
+        float _outerConeAngle =
             Core::DegToRad(45.0f);
 
-        Core::Float3 Direction =
+        Core::Float3 _direction =
             Core::Float3(
                 0.0f,
                 -1.0f,
@@ -164,19 +164,19 @@ namespace Engine
     
     public:
         void SetDiffuseIrradiance(RenderCore::RenderTexture* diffuseIrradianceMap) {
-            DiffuseIrradianceMap = diffuseIrradianceMap ;
+            _diffuseIrradianceMap = diffuseIrradianceMap ;
         }
         void SetSpecularIrradiance(RenderCore::RenderTexture* specularIrradianceMap) {
-            SpecularPrefilterMap = specularIrradianceMap;
+            _specularPrefilterMap = specularIrradianceMap;
         }
-        RenderCore::RenderTexture* GetDiffuseIrradiance() const { return DiffuseIrradianceMap; }
-        RenderCore::RenderTexture* GetSpecularPrefilter() const { return SpecularPrefilterMap; }
+        RenderCore::RenderTexture* GetDiffuseIrradiance() const { return _diffuseIrradianceMap; }
+        RenderCore::RenderTexture* GetSpecularPrefilter() const { return _specularPrefilterMap; }
 
     protected:
-        RenderCore::RenderTexture* DiffuseIrradianceMap;
-        RenderCore::RenderTexture* SpecularPrefilterMap;
+        RenderCore::RenderTexture* _diffuseIrradianceMap;
+        RenderCore::RenderTexture* _specularPrefilterMap;
 
-        bool bPrecomputeDirty = true;
+        bool _bPrecomputeDirty = true;
     };
 
 }

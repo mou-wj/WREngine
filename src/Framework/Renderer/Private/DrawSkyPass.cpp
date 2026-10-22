@@ -143,8 +143,8 @@ namespace Renderer {
                 auto vertexbuffer = Engine::GStaticMesh_Cube->GetLODResource(0).VertexBuffers.PositionBuffer.Buffer.get();
                 auto indexbuffer = Engine::GStaticMesh_Cube->GetLODResource(0).IndexBuffer.Buffer.get();
                 cmd.SetStreamSource(0, vertexbuffer->GetRHI(), 0);
-                cmd.SetViewport(view.Viewport.x, view.Viewport.y, view.Viewport.width, view.Viewport.height, 0.0f, 1.0f);
-                cmd.SetScissor(view.Viewport.x, view.Viewport.y, view.Viewport.width, view.Viewport.height);
+                cmd.SetViewport(view.Viewport.X, view.Viewport.Y, view.Viewport.Width, view.Viewport.Height, 0.0f, 1.0f);
+                cmd.SetScissor(view.Viewport.X, view.Viewport.Y, view.Viewport.Width, view.Viewport.Height);
                 //设置vertex参数
                 SetShaderParameters(cmd, vs, &params->vsParam);
 
@@ -154,10 +154,10 @@ namespace Renderer {
                 RHIRenderPassInfo passInfo;
                 passInfo.RenderTargets = boundRenderTarget;
                 passInfo.RenderTargets.DepthStencil.ClearBinding.Depth = 1.0f;
-                passInfo.RenderArea.X = view.Viewport.x;
-                passInfo.RenderArea.Y = view.Viewport.y;
-                passInfo.RenderArea.Width = view.Viewport.width;
-                passInfo.RenderArea.Height = view.Viewport.height;
+                passInfo.RenderArea.X = view.Viewport.X;
+                passInfo.RenderArea.Y = view.Viewport.Y;
+                passInfo.RenderArea.Width = view.Viewport.Width;
+                passInfo.RenderArea.Height = view.Viewport.Height;
                 cmd.BeginRenderPass(passInfo);
                 //绘制
                 cmd.DrawIndexed(indexbuffer->GetRHI(), 36);

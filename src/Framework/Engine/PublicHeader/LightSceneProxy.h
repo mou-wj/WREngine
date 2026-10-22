@@ -34,7 +34,7 @@ namespace Engine
             const;
         bool bUpdateCastShadow = false;
     protected:
-        Core::Float3 Position =
+        Core::Float3 _position =
             Core::Float3(
                 0.0f,
                 0.0f,
@@ -42,18 +42,18 @@ namespace Engine
 
         // Direction is light-type specific (directional/spot)
 
-        Core::Float3 Color =
+        Core::Float3 _color =
             Core::Float3(
                 1.0f,
                 1.0f,
                 1.0f);
 
-        float Intensity =
+        float _intensity =
             1.0f;
 
-        bool bCastShadow =
+        bool _bCastShadow =
             true;
-        const LightComponent* Component = nullptr;
+        const LightComponent* _component = nullptr;
     };
 
     class ENGINE_API DirectionalLightSceneProxy
@@ -71,7 +71,7 @@ namespace Engine
         const Core::Float3& GetDirection() const;
 
     protected:
-        Core::Float3 Direction = Core::Float3(0.0f, -1.0f, 0.0f);
+        Core::Float3 _direction = Core::Float3(0.0f, -1.0f, 0.0f);
 
     public:
         ELightType GetLightType()
@@ -95,7 +95,7 @@ namespace Engine
             const;
 
     protected:
-        float AttenuationRadius =
+        float _attenuationRadius =
             1000.0f;
     };
 
@@ -138,13 +138,13 @@ namespace Engine
             const;
 
     protected:
-        float InnerConeAngle =
+        float _innerConeAngle =
             20.0f;
 
-        float OuterConeAngle =
+        float _outerConeAngle =
             45.0f;
 
-        Core::Float3 Direction = Core::Float3(0.0f, -1.0f, 0.0f);
+        Core::Float3 _direction = Core::Float3(0.0f, -1.0f, 0.0f);
     };
 
     class ENGINE_API SkyLightSceneProxy
@@ -158,21 +158,21 @@ namespace Engine
         void UpdateFromComponent() override;
 
         // Environment texture and precompute dirty flag (copied from component)
-        RenderCore::RenderTexture* GetEnvironmentMap() const { return EnvironmentMap; }
-        RenderCore::RenderTexture* GetDiffuseIrradiance() const { return DiffuseIrradianceMap; }
-        RenderCore::RenderTexture* GetSpecularPrefilter() const { return SpecularPrefilterMap; }
-        bool IsPrecomputeDirty() const { return bPrecomputeDirty; }
-        void ClearPrecomputeDirty() { bPrecomputeDirty = false; }
+        RenderCore::RenderTexture* GetEnvironmentMap() const { return _environmentMap; }
+        RenderCore::RenderTexture* GetDiffuseIrradiance() const { return _diffuseIrradianceMap; }
+        RenderCore::RenderTexture* GetSpecularPrefilter() const { return _specularPrefilterMap; }
+        bool IsPrecomputeDirty() const { return _bPrecomputeDirty; }
+        void ClearPrecomputeDirty() { _bPrecomputeDirty = false; }
 
     public:
         ELightType GetLightType()
             const override;
 
     protected:
-        RenderCore::RenderTexture* EnvironmentMap;
-        RenderCore::RenderTexture* DiffuseIrradianceMap;
-        RenderCore::RenderTexture* SpecularPrefilterMap;
-        bool bPrecomputeDirty = true;
+        RenderCore::RenderTexture* _environmentMap;
+        RenderCore::RenderTexture* _diffuseIrradianceMap;
+        RenderCore::RenderTexture* _specularPrefilterMap;
+        bool _bPrecomputeDirty = true;
     };
 
 }
