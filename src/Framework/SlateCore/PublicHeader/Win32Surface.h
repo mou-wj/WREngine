@@ -56,7 +56,7 @@ namespace SlateCore
             WPARAM key) const;
 
     private:
-        HWND hWnd = nullptr;
+        HWND m_HWnd = nullptr;
     };
 }
 

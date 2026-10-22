@@ -18,15 +18,15 @@ namespace SlateCore
 
     bool Win32Surface::Initialize()
     {
-        if (hWnd)
+        if (m_HWnd)
         {
             return true;
         }
 
         HWND parentHwnd = nullptr;
-        if (Owner)
+        if (_owner)
         {
-            auto* parentOwner = Owner->GetParent();
+            auto* parentOwner = _owner->GetParent();
             if (parentOwner)
             {
                 parentHwnd = static_cast<HWND>(parentOwner->GetNativeHandle());
@@ -52,21 +52,21 @@ namespace SlateCore
         const int posX = parentHwnd ? 0 : CW_USEDEFAULT;
         const int posY = parentHwnd ? 0 : CW_USEDEFAULT;
 
-        hWnd = CreateWindowEx(
+        m_HWnd = CreateWindowEx(
             0,
             wc.lpszClassName,
-            Title.c_str(),
+            _title.c_str(),
             windowStyle,
             posX,
             posY,
-            Width,
-            Height,
+            _width,
+            _height,
             parentHwnd,
             nullptr,
             wc.hInstance,
             this);
 
-        return hWnd != nullptr;
+        return m_HWnd != nullptr;
     }
 
     void Win32Surface::PollEvents()
@@ -81,46 +81,46 @@ namespace SlateCore
 
     void Win32Surface::Shutdown()
     {
-        if (hWnd)
+        if (m_HWnd)
         {
-            ::DestroyWindow(hWnd);
-            hWnd = nullptr;
+            ::DestroyWindow(m_HWnd);
+            m_HWnd = nullptr;
         }
     }
 
     void Win32Surface::Show()
     {
-        ::ShowWindow(hWnd, SW_SHOW);
+        ::ShowWindow(m_HWnd, SW_SHOW);
     }
 
     void Win32Surface::Hide()
     {
-        ::ShowWindow(hWnd, SW_HIDE);
+        ::ShowWindow(m_HWnd, SW_HIDE);
     }
 
     void Win32Surface::Close()
     {
-        if (Owner)
+        if (_owner)
         {
-            Owner->OnSurfaceCloseRequested();
+            _owner->OnSurfaceCloseRequested();
         }
 
-        if (hWnd)
+        if (m_HWnd)
         {
-            ::DestroyWindow(hWnd);
-            hWnd = nullptr;
+            ::DestroyWindow(m_HWnd);
+            m_HWnd = nullptr;
         }
     }
 
     void Win32Surface::SetPosition(int x, int y)
     {
-        if (!hWnd)
+        if (!m_HWnd)
         {
             return;
         }
 
         ::SetWindowPos(
-            hWnd,
+            m_HWnd,
             nullptr,
             x,
             y,
@@ -131,16 +131,16 @@ namespace SlateCore
 
     void Win32Surface::SetSize(int width, int height)
     {
-        Width = width;
-        Height = height;
+        _width = width;
+        _height = height;
 
-        if (!hWnd)
+        if (!m_HWnd)
         {
             return;
         }
 
         ::SetWindowPos(
-            hWnd,
+            m_HWnd,
             nullptr,
             0,
             0,
@@ -151,7 +151,7 @@ namespace SlateCore
 
     void* Win32Surface::GetNativeHandle() const
     {
-        return hWnd;
+        return m_HWnd;
     }
 
     Core::Int2 Win32Surface::GetFramebufferSize() const
@@ -222,32 +222,32 @@ namespace SlateCore
         switch (msg)
         {
         case WM_CLOSE:
-            if (Owner)
+            if (_owner)
             {
-                Owner->OnSurfaceCloseRequested();
+                _owner->OnSurfaceCloseRequested();
             }
             return 0;
 
         case WM_SIZE:
-            Width = LOWORD(lParam);
-            Height = HIWORD(lParam);
-            if (Owner)
+            _width = LOWORD(lParam);
+            _height = HIWORD(lParam);
+            if (_owner)
             {
-                Owner->OnResize(static_cast<uint32_t>(Width), static_cast<uint32_t>(Height));
+                _owner->OnResize(static_cast<uint32_t>(_width), static_cast<uint32_t>(_height));
             }
             return 0;
 
         case WM_SETFOCUS:
-            if (Owner)
+            if (_owner)
             {
-                Owner->OnFocusReceived();
+                _owner->OnFocusReceived();
             }
             return 0;
 
         case WM_KILLFOCUS:
-            if (Owner)
+            if (_owner)
             {
-                Owner->OnFocusLost();
+                _owner->OnFocusLost();
             }
             return 0;
         }
@@ -286,7 +286,7 @@ namespace SlateCore
         WPARAM wParam,
         LPARAM lParam)
     {
-        if (!Owner)
+        if (!_owner)
         {
             return false;
         }
@@ -308,11 +308,11 @@ namespace SlateCore
             lastX = event.X;
             lastY = event.Y;
 
-            event.Modifiers.Ctrl = (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
-            event.Modifiers.Shift = (::GetKeyState(VK_SHIFT) & 0x8000) != 0;
-            event.Modifiers.Alt = (::GetKeyState(VK_MENU) & 0x8000) != 0;
+            event.Modifiers.bCtrl = (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            event.Modifiers.bShift = (::GetKeyState(VK_SHIFT) & 0x8000) != 0;
+            event.Modifiers.bAlt = (::GetKeyState(VK_MENU) & 0x8000) != 0;
 
-            return Owner->OnMouseMove(event);
+            return _owner->OnMouseMove(event);
         }
 
         case WM_MOUSEWHEEL:
@@ -323,12 +323,12 @@ namespace SlateCore
             POINT pt;
             pt.x = GET_X_LPARAM(lParam);
             pt.y = GET_Y_LPARAM(lParam);
-            ::ScreenToClient(hWnd, &pt);
+            ::ScreenToClient(m_HWnd, &pt);
 
             event.X = pt.x;
             event.Y = pt.y;
 
-            return Owner->OnMouseWheel(event);
+            return _owner->OnMouseWheel(event);
         }
 
         case WM_LBUTTONDOWN:
@@ -366,7 +366,7 @@ namespace SlateCore
                 break;
             }
 
-            return Owner->OnMouseButton(event);
+            return _owner->OnMouseButton(event);
         }
 
         case WM_KEYDOWN:
@@ -375,7 +375,7 @@ namespace SlateCore
             KeyEvent event;
             event.Key = TranslateKey(wParam);
             event.Event = EInputEvent::Pressed;
-            return Owner->OnKeyDown(event);
+            return _owner->OnKeyDown(event);
         }
 
         case WM_KEYUP:
@@ -384,7 +384,7 @@ namespace SlateCore
             KeyEvent event;
             event.Key = TranslateKey(wParam);
             event.Event = EInputEvent::Released;
-            return Owner->OnKeyUp(event);
+            return _owner->OnKeyUp(event);
         }
         }
 

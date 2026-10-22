@@ -42,8 +42,8 @@ namespace SlateCore
             float height)
         {
             SetGeometry(
-                Geometry.X,
-                Geometry.Y,
+                _geometry.X,
+                _geometry.Y,
                 width,
                 height);
         }
@@ -52,14 +52,14 @@ namespace SlateCore
             float x,
             float y) const
         {
-            if (Visibility !=
+            if (_visibility !=
                 EVisibility::Visible)
             {
                 return false;
             }
 
             const auto& g =
-                Geometry;
+                _geometry;
 
             return
                 x >= g.X &&
@@ -76,22 +76,22 @@ namespace SlateCore
             float height)
         {
             bool posChanged = false;
-            if (x != Geometry.X || y != Geometry.Y) {
+            if (x != _geometry.X || y != _geometry.Y) {
                 posChanged = true;
             }
-            Geometry.X = x;
-            Geometry.Y = y;
+            _geometry.X = x;
+            _geometry.Y = y;
             if (posChanged) {
                 OnSetPosition(x, y);
             }
 
 
 			bool sizeChanged = false;
-            if (width != Geometry.Width || height != Geometry.Height) {
+            if (width != _geometry.Width || height != _geometry.Height) {
                 sizeChanged = true;
             }
-            Geometry.Width = width;
-            Geometry.Height = height;
+            _geometry.Width = width;
+            _geometry.Height = height;
             if (sizeChanged) {
                 OnSetSize(width, height);
             }
@@ -101,15 +101,15 @@ namespace SlateCore
         const WidgetGeometry&
             GetGeometry() const
         {
-            return Geometry;
+            return _geometry;
         }
 
         void SetVisibility(
             EVisibility visibility)
         {
-            if (Visibility == visibility)
+            if (_visibility == visibility)
                 return;
-            Visibility =
+            _visibility =
                 visibility;
             OnVisibilityChanged();
         }
@@ -117,13 +117,13 @@ namespace SlateCore
         EVisibility
             GetVisibility() const
         {
-            return Visibility;
+            return _visibility;
         }
 
     protected:
-        WidgetGeometry Geometry;
+        WidgetGeometry _geometry;
 
-        EVisibility Visibility =
+        EVisibility _visibility =
             EVisibility::Visible;
         virtual void OnVisibilityChanged()
         {
@@ -153,7 +153,7 @@ namespace SlateCore
     protected:
         bool InitializeOwnedSurface();
         PlatformSurface* GetOwnedSurface() const override;
-        void* NativeHandle = nullptr;
-        std::unique_ptr<PlatformSurface> OwnedSurface;
+        void* _nativeHandle = nullptr;
+        std::unique_ptr<PlatformSurface> _ownedSurface;
     };
 }

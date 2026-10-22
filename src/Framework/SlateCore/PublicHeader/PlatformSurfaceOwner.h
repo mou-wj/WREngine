@@ -18,12 +18,12 @@ namespace SlateCore
 
     public:
         PlatformSurfaceOwner* GetParent() const {
-            return Parent;
+            return _parent;
         }
 
         void SetParent(PlatformSurfaceOwner* parent)
         {
-            Parent = parent;
+            _parent = parent;
         }
 
         virtual void* GetNativeHandle() const
@@ -33,12 +33,12 @@ namespace SlateCore
 
         void SetCloseCallback(WindowCloseCallback cb)
         {
-            CloseCallback = std::move(cb);
+            _closeCallback = std::move(cb);
         }
 
         void SetResizeCallback(WindowResizeCallback cb)
         {
-            ResizeCallback = std::move(cb);
+            _resizeCallback = std::move(cb);
         }
 
         void SetPosition(int x, int y);
@@ -59,8 +59,8 @@ namespace SlateCore
     protected:
         virtual PlatformSurface* GetOwnedSurface() const;
 
-        WindowCloseCallback CloseCallback;
-        WindowResizeCallback ResizeCallback;
-        PlatformSurfaceOwner* Parent = nullptr;
+        WindowCloseCallback _closeCallback;
+        WindowResizeCallback _resizeCallback;
+        PlatformSurfaceOwner* _parent = nullptr;
     };
 }

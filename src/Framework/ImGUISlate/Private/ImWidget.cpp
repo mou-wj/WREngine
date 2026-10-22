@@ -63,9 +63,9 @@ namespace {
     void UpdateModifiers(const SlateCore::ModifierKeys& modifiers)
     {
         ImGuiIO& io = ImGui::GetIO();
-        io.AddKeyEvent(ImGuiMod_Ctrl, modifiers.Ctrl);
-        io.AddKeyEvent(ImGuiMod_Shift, modifiers.Shift);
-        io.AddKeyEvent(ImGuiMod_Alt, modifiers.Alt);
+        io.AddKeyEvent(ImGuiMod_Ctrl, modifiers.bCtrl);
+        io.AddKeyEvent(ImGuiMod_Shift, modifiers.bShift);
+        io.AddKeyEvent(ImGuiMod_Alt, modifiers.bAlt);
     }
 }
 
@@ -155,14 +155,14 @@ namespace ImGUISlate {
     }
     void ImWidget::Draw()
     {
-        if (Visibility != SlateCore::EVisibility::Visible)
+        if (_visibility != SlateCore::EVisibility::Visible)
         {
             return;
         }
 
         if (DrawHandler)
         {
-            DrawHandler(Geometry.X, Geometry.Y, Geometry.Width, Geometry.Height);
+            DrawHandler(_geometry.X, _geometry.Y, _geometry.Width, _geometry.Height);
         }
     }
     bool ImWidget::OnResize(uint32_t width, uint32_t height)
@@ -176,14 +176,14 @@ namespace ImGUISlate {
 	}
     void PopupImWidget::Draw()
     {
-        if (Visibility != SlateCore::EVisibility::Visible)
+        if (_visibility != SlateCore::EVisibility::Visible)
         {
             return;
         }
 
         if (DrawHandler)
         {
-            DrawHandler(Geometry.X, Geometry.Y, Geometry.Width, Geometry.Height);
+            DrawHandler(_geometry.X, _geometry.Y, _geometry.Width, _geometry.Height);
         }
     }
     bool PopupImWidget::OnResize(uint32_t width, uint32_t height)

@@ -38,7 +38,7 @@ namespace ImGUISlate
     void ImMainWindow::AddWidget(SlateCore::Widget* widget,const LayoutParams& params)
     {
         Layout->AddWidget(widget, params);
-        Layout->Layout(Width,Height);
+        Layout->Layout(_width,_height);
         if (widget->IsA<ImWidget>()) {
             ImWidget* imWidget = widget->Cast<ImWidget>();
             Renderer->RegisterWidget(imWidget);
@@ -76,9 +76,9 @@ namespace ImGUISlate
         uint32_t width,
         uint32_t height)
     {
-        Width = static_cast<int>(width);
-        Height = static_cast<int>(height);
-        Layout->Layout(Width, Height);
+        _width = static_cast<int>(width);
+        _height = static_cast<int>(height);
+        Layout->Layout(_width, _height);
 
         return true;
     }

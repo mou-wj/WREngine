@@ -15,31 +15,31 @@ namespace SlateCore {
         Window(int width, int height, const std::string& title);
         virtual ~Window() override = default;
 
-        // ��������
+        // 生命周期
         virtual bool Initialize();
         void PollEvents();
         void Shutdown();
 
-        // ���ڲ���
+        // 窗口操作
         void Show();
         void Hide();
         void Close();
 
-        // ��������
-        int GetWidth() const { return Width; }
-        int GetHeight() const { return Height; }
+        // 窗口属性
+        int GetWidth() const { return _width; }
+        int GetHeight() const { return _height; }
         Core::Int2 GetFramebufferSize() const;
-        const std::string& GetTitle() const { return Title; }
+        const std::string& GetTitle() const { return _title; }
         void* GetNativeHandle() const override;
 
         void SetRootWidget(Widget* widget)
         {
-            RootWidget = widget;
+            _rootWidget = widget;
         }
 
         Widget* GetRootWidgets() const
         {
-            return RootWidget;
+            return _rootWidget;
         }
 
     public:
@@ -59,11 +59,11 @@ namespace SlateCore {
         PlatformSurface* GetOwnedSurface() const override;
 
     protected:
-        int Width = 0;
-        int Height = 0;
-        std::string Title;
-        Widget* RootWidget = nullptr;
-        std::unique_ptr<PlatformSurface> Surface;
+        int _width = 0;
+        int _height = 0;
+        std::string _title;
+        Widget* _rootWidget = nullptr;
+        std::unique_ptr<PlatformSurface> _surface;
     };
 	using WindowSP = std::shared_ptr<Window>;
 
@@ -76,11 +76,11 @@ namespace SlateCore {
         using CreatorFunc = std::function<WindowSP(int, int, const std::string&)>;
 
     private:
-        static CreatorFunc Creator;
+        static CreatorFunc m_Creator;
     };
 
 #define REGISTER_WINDOW_PLATFORM(PlatformClass) \
-    CreatorFunc WindowFactory::Creator = [](int w, int h, const std::string& t) -> WindowSP{ \
+    CreatorFunc WindowFactory::m_Creator = [](int w, int h, const std::string& t) -> WindowSP{ \
         auto win = std::make_shared<PlatformClass>(w, h, t); \
         win->Initialize(); \
         return win; \

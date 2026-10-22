@@ -35,28 +35,28 @@ namespace SlateCore
 
         PlatformSurfaceOwner* GetOwner() const
         {
-            return Owner;
+            return _owner;
         }
 
         int GetWidth() const
         {
-            return Width;
+            return _width;
         }
 
         int GetHeight() const
         {
-            return Height;
+            return _height;
         }
 
         const std::string& GetTitle() const
         {
-            return Title;
+            return _title;
         }
 
     protected:
-        int Width = 0;
-        int Height = 0;
-        std::string Title;
-        PlatformSurfaceOwner* Owner = nullptr;
+        int _width = 0;
+        int _height = 0;
+        std::string _title;
+        PlatformSurfaceOwner* _owner = nullptr;
     };
 }

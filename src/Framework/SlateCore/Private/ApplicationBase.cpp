@@ -4,8 +4,8 @@ namespace SlateCore {
 	ApplicationBase* ApplicationBase::GetApplication() {
 		return CurApplication;
 	}
-	void ApplicationBase::SetApplication(ApplicationBase* InApplication) {
-		CurApplication = InApplication;
+	void ApplicationBase::SetApplication(ApplicationBase* inApplication) {
+		CurApplication = inApplication;
 	}
 
 

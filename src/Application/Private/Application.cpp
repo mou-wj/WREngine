@@ -23,7 +23,7 @@ bool Application::Initialize()
 {
     // 可以在这里初始化 Slate / Input / RHI
     SceneViewportClient = std::make_unique<AppViewportClient>();
-	Renderer = SlateRHIRenderer::GSlateRHIRendererModule->CreateSlateRenderer();
+	_renderer = SlateRHIRenderer::GSlateRHIRendererModule->CreateSlateRenderer();
 
     Window =  CreateWindowSP(800, 600, "My Application");
     
@@ -81,7 +81,7 @@ std::shared_ptr<ImGUISlate::ImMainWindow> Application::CreateWindowSP(int Width,
 	ImGUISlate::LayoutParams layoutParams;
     layoutParams.Weight = 2;
     NewWindow->AddWidget(SceneSlateWidget.get(), layoutParams);
-    Renderer->CreateViewport(SceneSlateWidget.get());
+    _renderer->CreateViewport(SceneSlateWidget.get());
     if (!ImGuiWidget)
     {
         ImGuiWidget = std::make_unique<ImGUISlate::ImWidget>([](int x, int y, int w, int h) {
@@ -129,7 +129,7 @@ void Application::TickFrame()
     // Draw 主 SceneViewport
     if (SceneSlateWidget)
     {
-        Renderer->Render(SceneSlateWidget.get());
+        _renderer->Render(SceneSlateWidget.get());
     }
     Window->Draw();
 

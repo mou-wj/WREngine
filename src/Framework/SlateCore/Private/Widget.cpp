@@ -11,16 +11,16 @@ namespace SlateCore {
 
     NativeWidget::~NativeWidget()
     {
-        if (OwnedSurface)
+        if (_ownedSurface)
         {
-            OwnedSurface->Shutdown();
-            OwnedSurface.reset();
+            _ownedSurface->Shutdown();
+            _ownedSurface.reset();
         }
     }
 
     PlatformSurface* NativeWidget::GetOwnedSurface() const
     {
-        return OwnedSurface.get();
+        return _ownedSurface.get();
     }
 
     void NativeWidget::SetParentOwnerSource(PlatformSurfaceOwner* parentOwner)
@@ -35,7 +35,7 @@ namespace SlateCore {
 
     void NativeWidget::SetNativeHandle(void* nativeHandle)
     {
-        NativeHandle = nativeHandle;
+        _nativeHandle = nativeHandle;
     }
 
     bool NativeWidget::HasParentNativeRelationship() const
@@ -55,39 +55,39 @@ namespace SlateCore {
     }
     void* NativeWidget::GetNativeHandle() const
     {
-        if (OwnedSurface)
+        if (_ownedSurface)
         {
-            return OwnedSurface->GetNativeHandle();
+            return _ownedSurface->GetNativeHandle();
         }
 
-        return NativeHandle;
+        return _nativeHandle;
     }
 
 
     bool NativeWidget::InitializeOwnedSurface()
     {
-        if (OwnedSurface)
+        if (_ownedSurface)
         {
             return true;
         }
 
 #ifdef _WIN32
-        OwnedSurface = std::make_unique<Win32Surface>(
-            Geometry.Width,
-            Geometry.Height,
+        _ownedSurface = std::make_unique<Win32Surface>(
+            _geometry.Width,
+            _geometry.Height,
             "SlateWidgetSurface",
             this);
 #else
         return false;
 #endif
 
-        if (!OwnedSurface->Initialize())
+        if (!_ownedSurface->Initialize())
         {
-            OwnedSurface.reset();
+            _ownedSurface.reset();
             return false;
         }
 
-        NativeHandle = OwnedSurface->GetNativeHandle();
+        _nativeHandle = _ownedSurface->GetNativeHandle();
         OnVisibilityChanged();
         return true;
     }

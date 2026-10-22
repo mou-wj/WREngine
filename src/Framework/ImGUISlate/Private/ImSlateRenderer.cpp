@@ -336,15 +336,15 @@ namespace ImGUISlate {
 
         io.AddKeyEvent(
             ImGuiMod_Ctrl,
-            event.Modifiers.Ctrl);
+            event.Modifiers.bCtrl);
 
         io.AddKeyEvent(
             ImGuiMod_Shift,
-            event.Modifiers.Shift);
+            event.Modifiers.bShift);
 
         io.AddKeyEvent(
             ImGuiMod_Alt,
-            event.Modifiers.Alt);
+            event.Modifiers.bAlt);
 
         ImGuiKey key = ConvertKey(event.Key);
 
@@ -364,15 +364,15 @@ namespace ImGUISlate {
 
         io.AddKeyEvent(
             ImGuiMod_Ctrl,
-            event.Modifiers.Ctrl);
+            event.Modifiers.bCtrl);
 
         io.AddKeyEvent(
             ImGuiMod_Shift,
-            event.Modifiers.Shift);
+            event.Modifiers.bShift);
 
         io.AddKeyEvent(
             ImGuiMod_Alt,
-            event.Modifiers.Alt);
+            event.Modifiers.bAlt);
 
         ImGuiKey key = ConvertKey(event.Key);
 

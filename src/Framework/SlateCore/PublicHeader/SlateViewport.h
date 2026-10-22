@@ -9,10 +9,10 @@ namespace SlateCore {
     public:
         virtual ~SlateViewport() = default;
 
-        // ³ß´ç
+        // å°ºå¯¸
         virtual int GetWidth() const = 0;
         virtual int GetHeight() const = 0;
-        virtual void Resize(int Width, int Height) = 0;
+        virtual void Resize(int width, int height) = 0;
         virtual void* GetViewportRenderTargetTexture() const = 0;
 
     };

@@ -10,26 +10,26 @@ namespace SlateCore {
         int width,
         int height,
         const std::string& title)
-        : Width(width)
-        , Height(height)
-        , Title(title)
+        : _width(width)
+        , _height(height)
+        , _title(title)
     {
     }
 
     bool Window::Initialize()
     {
-        if (Surface)
+        if (_surface)
         {
             return true;
         }
 
 #ifdef _WIN32
-        Surface = std::make_unique<Win32Surface>(
-            Width,
-            Height,
-            Title,
+        _surface = std::make_unique<Win32Surface>(
+            _width,
+            _height,
+            _title,
             this);
-        return Surface->Initialize();
+        return _surface->Initialize();
 #else
         return false;
 #endif
@@ -37,74 +37,74 @@ namespace SlateCore {
 
     void Window::PollEvents()
     {
-        if (Surface)
+        if (_surface)
         {
-            Surface->PollEvents();
+            _surface->PollEvents();
         }
     }
 
     void Window::Shutdown()
     {
-        if (Surface)
+        if (_surface)
         {
-            Surface->Shutdown();
+            _surface->Shutdown();
         }
     }
 
     void Window::Show()
     {
-        if (Surface)
+        if (_surface)
         {
-            Surface->Show();
+            _surface->Show();
         }
     }
 
     void Window::Hide()
     {
-        if (Surface)
+        if (_surface)
         {
-            Surface->Hide();
+            _surface->Hide();
         }
     }
 
     void Window::Close()
     {
-        if (Surface)
+        if (_surface)
         {
-            Surface->Close();
+            _surface->Close();
         }
     }
 
     Core::Int2 Window::GetFramebufferSize() const
     {
-        if (!Surface)
+        if (!_surface)
         {
             return { 0, 0 };
         }
 
-        return Surface->GetFramebufferSize();
+        return _surface->GetFramebufferSize();
     }
 
     void* Window::GetNativeHandle() const
     {
-        if (!Surface)
+        if (!_surface)
         {
             return nullptr;
         }
 
-        return Surface->GetNativeHandle();
+        return _surface->GetNativeHandle();
     }
 
     PlatformSurface* Window::GetOwnedSurface() const
     {
-        return Surface.get();
+        return _surface.get();
     }
 
     void Window::OnSurfaceCloseRequested()
     {
-        if (CloseCallback)
+        if (_closeCallback)
         {
-            CloseCallback();
+            _closeCallback();
         }
     }
 
@@ -112,104 +112,104 @@ namespace SlateCore {
         uint32_t width,
         uint32_t height)
     {
-        Width = static_cast<int>(width);
-        Height = static_cast<int>(height);
+        _width = static_cast<int>(width);
+        _height = static_cast<int>(height);
 
-        if (ResizeCallback)
+        if (_resizeCallback)
         {
-            ResizeCallback(Width, Height);
+            _resizeCallback(_width, _height);
         }
 
-        if (RootWidget)
+        if (_rootWidget)
         {
-            RootWidget->OnResize(width, height);
+            _rootWidget->OnResize(width, height);
         }
 
-        return RootWidget != nullptr;
+        return _rootWidget != nullptr;
     }
 
     bool Window::OnFocusReceived()
     {
-        if (!RootWidget)
+        if (!_rootWidget)
         {
             return false;
         }
 
-        return RootWidget->OnFocusReceived();
+        return _rootWidget->OnFocusReceived();
     }
 
     bool Window::OnFocusLost()
     {
-        if (!RootWidget)
+        if (!_rootWidget)
         {
             return false;
         }
 
-        return RootWidget->OnFocusLost();
+        return _rootWidget->OnFocusLost();
     }
 
     bool Window::OnMouseMove(
         const MouseMoveEvent& event)
     {
-        if (!RootWidget)
+        if (!_rootWidget)
         {
             return false;
         }
 
-        return RootWidget->OnMouseMove(event);
+        return _rootWidget->OnMouseMove(event);
     }
 
     bool Window::OnMouseButton(
         const MouseButtonEvent& event)
     {
-        if (!RootWidget)
+        if (!_rootWidget)
         {
             return false;
         }
 
-        return RootWidget->OnMouseButton(event);
+        return _rootWidget->OnMouseButton(event);
     }
 
     bool Window::OnMouseWheel(
         const MouseWheelEvent& event)
     {
-        if (!RootWidget)
+        if (!_rootWidget)
         {
             return false;
         }
 
-        return RootWidget->OnMouseWheel(event);
+        return _rootWidget->OnMouseWheel(event);
     }
 
     bool Window::OnKeyDown(
         const KeyEvent& event)
     {
-        if (!RootWidget)
+        if (!_rootWidget)
         {
             return false;
         }
 
-        return RootWidget->OnKeyDown(event);
+        return _rootWidget->OnKeyDown(event);
     }
 
     bool Window::OnKeyUp(
         const KeyEvent& event)
     {
-        if (!RootWidget)
+        if (!_rootWidget)
         {
             return false;
         }
 
-        return RootWidget->OnKeyUp(event);
+        return _rootWidget->OnKeyUp(event);
     }
 
 
     WindowSP WindowFactory::CreateWindowSP(int w, int h, const std::string& title) {
-        return Creator(w, h, title);
+        return m_Creator(w, h, title);
     }
 
 
-    WindowFactory::CreatorFunc WindowFactory::Creator = [](int w, int h, const std::string& t) -> WindowSP {
+    WindowFactory::CreatorFunc WindowFactory::m_Creator = [](int w, int h, const std::string& t) -> WindowSP {
         auto win = std::make_shared<Window>(w, h, t);
         win->Initialize();
         return win;

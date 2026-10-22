@@ -137,7 +137,7 @@ namespace ImGUISlate {
 
     void ImFileDialogWidget::Draw()
     {
-        if (Visibility != SlateCore::EVisibility::Visible || !DialogOpen)
+        if (_visibility != SlateCore::EVisibility::Visible || !DialogOpen)
         {
             return;
         }

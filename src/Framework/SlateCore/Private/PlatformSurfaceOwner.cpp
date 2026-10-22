@@ -8,10 +8,10 @@ namespace SlateCore
         int height,
         std::string title,
         PlatformSurfaceOwner* owner)
-        : Width(width)
-        , Height(height)
-        , Title(std::move(title))
-        , Owner(owner)
+        : _width(width)
+        , _height(height)
+        , _title(std::move(title))
+        , _owner(owner)
     {
     }
 
@@ -48,9 +48,9 @@ namespace SlateCore
 
     void PlatformSurfaceOwner::OnSurfaceCloseRequested()
     {
-        if (CloseCallback)
+        if (_closeCallback)
         {
-            CloseCallback();
+            _closeCallback();
         }
     }
 

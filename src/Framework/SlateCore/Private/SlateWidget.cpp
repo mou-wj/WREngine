@@ -20,15 +20,15 @@ namespace SlateCore
 
     void SlateWidget::OnVisibilityChanged()
     {
-        if (!OwnedSurface)
+        if (!_ownedSurface)
         {
             return;
         }
-        if (Visibility == EVisibility::Visible) {
-            OwnedSurface->Show();
+        if (_visibility == EVisibility::Visible) {
+            _ownedSurface->Show();
         }
-        else if (Visibility == EVisibility::Hidden) {
-            OwnedSurface->Hide();
+        else if (_visibility == EVisibility::Hidden) {
+            _ownedSurface->Hide();
         }
     }
     void SlateWidget::OnSetSize(float width, float height) {
@@ -42,31 +42,31 @@ namespace SlateCore
     {
         if (!child)
         {
-            ViewportChild = nullptr;
+            m_ViewportChild = nullptr;
             return true;
         }
 
-        ViewportChild = child;
+        m_ViewportChild = child;
         return true;
     }
 
     void SlateWidget::SetViewportChild(SlateViewport* viewport)
     {
-        ViewportChild = viewport;
+        m_ViewportChild = viewport;
     }
 
     SlateViewport* SlateWidget::GetViewportChild() const
     {
-        return ViewportChild;
+        return m_ViewportChild;
     }
 
 
 
     void SlateWidget::Draw()
     {
-        if (ViewportChild)
+        if (m_ViewportChild)
         {
-            ViewportChild->Draw();
+            m_ViewportChild->Draw();
         }
     }
 
@@ -76,86 +76,86 @@ namespace SlateCore
     {
 
 
-        if (!ViewportChild)
+        if (!m_ViewportChild)
         {
             return false;
         }
         
-        return ViewportChild->OnResize(width, height);
+        return m_ViewportChild->OnResize(width, height);
     }
 
     bool SlateWidget::OnFocusReceived()
     {
-        if (!ViewportChild)
+        if (!m_ViewportChild)
         {
             return false;
         }
 
-        return ViewportChild->OnFocusReceived();
+        return m_ViewportChild->OnFocusReceived();
     }
 
     bool SlateWidget::OnFocusLost()
     {
-        if (!ViewportChild)
+        if (!m_ViewportChild)
         {
             return false;
         }
 
-        return ViewportChild->OnFocusLost();
+        return m_ViewportChild->OnFocusLost();
     }
 
     bool SlateWidget::OnMouseMove(
         const MouseMoveEvent& event)
     {
-        if (!ViewportChild)
+        if (!m_ViewportChild)
         {
             return false;
         }
 
-        return ViewportChild->OnMouseMove(event);
+        return m_ViewportChild->OnMouseMove(event);
     }
 
     bool SlateWidget::OnMouseButton(
         const MouseButtonEvent& event)
     {
-        if (!ViewportChild)
+        if (!m_ViewportChild)
         {
             return false;
         }
 
-        return ViewportChild->OnMouseButton(event);
+        return m_ViewportChild->OnMouseButton(event);
     }
 
     bool SlateWidget::OnMouseWheel(
         const MouseWheelEvent& event)
     {
-        if (!ViewportChild)
+        if (!m_ViewportChild)
         {
             return false;
         }
 
-        return ViewportChild->OnMouseWheel(event);
+        return m_ViewportChild->OnMouseWheel(event);
     }
 
     bool SlateWidget::OnKeyDown(
         const KeyEvent& event)
     {
-        if (!ViewportChild)
+        if (!m_ViewportChild)
         {
             return false;
         }
 
-        return ViewportChild->OnKeyDown(event);
+        return m_ViewportChild->OnKeyDown(event);
     }
 
     bool SlateWidget::OnKeyUp(
         const KeyEvent& event)
     {
-        if (!ViewportChild)
+        if (!m_ViewportChild)
         {
             return false;
         }
 
-        return ViewportChild->OnKeyUp(event);
+        return m_ViewportChild->OnKeyUp(event);
     }
 }

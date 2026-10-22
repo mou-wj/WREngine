@@ -45,9 +45,9 @@ namespace SlateCore
 
     struct ModifierKeys
     {
-        bool Ctrl = false;
-        bool Shift = false;
-        bool Alt = false;
+        bool bCtrl = false;
+        bool bShift = false;
+        bool bAlt = false;
     };
 
     struct MouseMoveEvent
@@ -97,26 +97,26 @@ namespace SlateCore
 
     public:
         virtual bool OnMouseMove(
-            const MouseMoveEvent& Event);
+            const MouseMoveEvent& event);
 
         virtual bool OnMouseButton(
-            const MouseButtonEvent& Event);
+            const MouseButtonEvent& event);
 
         virtual bool OnMouseWheel(
-            const MouseWheelEvent& Event);
+            const MouseWheelEvent& event);
 
         virtual bool OnKeyDown(
-            const KeyEvent& Event);
+            const KeyEvent& event);
 
         virtual bool OnKeyUp(
-            const KeyEvent& Event);
+            const KeyEvent& event);
 
         virtual bool OnFocusReceived();
 
         virtual bool OnFocusLost();
 
         virtual bool OnResize(
-            uint32_t Width,
-            uint32_t Height);
+            uint32_t width,
+            uint32_t height);
     };
 }

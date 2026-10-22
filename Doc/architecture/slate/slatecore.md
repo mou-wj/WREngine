@@ -56,7 +56,7 @@ public:
 关键点在于：
 
 - `Window` 不是直接绑定某个平台 API，而是通过 `PlatformSurface` 和 `PlatformSurfaceOwner` 抽象平台层
-- 它持有 `RootWidget`，允许窗口拥有一个树形 UI 根节点
+- 它持有 `_rootWidget`，允许窗口拥有一个树形 UI 根节点
 - `WindowFactory` 负责创建不同平台窗口实现，使用注册机制 `REGISTER_WINDOW_PLATFORM(...)`
 
 也就是说，`SlateCore` 设计上把“平台实现”和“窗口抽象”分离，便于后续扩展到 Win32、GLFW 或其它窗口后端。
@@ -71,14 +71,14 @@ public:
 class SLATECORE_API EventHandler
 {
 public:
-    virtual bool OnMouseMove(const MouseMoveEvent& Event);
-    virtual bool OnMouseButton(const MouseButtonEvent& Event);
-    virtual bool OnMouseWheel(const MouseWheelEvent& Event);
-    virtual bool OnKeyDown(const KeyEvent& Event);
-    virtual bool OnKeyUp(const KeyEvent& Event);
+    virtual bool OnMouseMove(const MouseMoveEvent& event);
+    virtual bool OnMouseButton(const MouseButtonEvent& event);
+    virtual bool OnMouseWheel(const MouseWheelEvent& event);
+    virtual bool OnKeyDown(const KeyEvent& event);
+    virtual bool OnKeyUp(const KeyEvent& event);
     virtual bool OnFocusReceived();
     virtual bool OnFocusLost();
-    virtual bool OnResize(uint32_t Width, uint32_t Height);
+    virtual bool OnResize(uint32_t width, uint32_t height);
 };
 ```
 

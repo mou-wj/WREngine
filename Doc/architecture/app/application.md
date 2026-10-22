@@ -60,7 +60,7 @@ class APPLICATION_API Application : public SlateCore::ApplicationBase
 
 ```cpp
 SceneViewportClient = std::make_unique<AppViewportClient>();
-Renderer = SlateRHIRenderer::GSlateRHIRendererModule->CreateSlateRenderer();
+_renderer = SlateRHIRenderer::GSlateRHIRendererModule->CreateSlateRenderer();
 Window = CreateWindowSP(800, 600, "My Application");
 SceneViewportClient->InitResources();
 ```

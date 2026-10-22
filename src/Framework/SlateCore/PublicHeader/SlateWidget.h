@@ -44,6 +44,6 @@ namespace SlateCore
         virtual void OnSetPosition(float x, float y) override;
     private:
 
-        SlateViewport* ViewportChild = nullptr;
+        SlateViewport* m_ViewportChild = nullptr;
     };
 }

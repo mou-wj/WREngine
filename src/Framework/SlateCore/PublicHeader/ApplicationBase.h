@@ -8,19 +8,19 @@ namespace SlateCore {
     public:
         virtual ~ApplicationBase() = default;
 
-        // ÉúÃüÖÜÆÚ
+        // ç”Ÿå‘½å‘¨æœŸ
         virtual bool Initialize() = 0;
         virtual bool RequestExit() = 0;
         virtual void Shutdown() = 0;
 
 
-        // Ö¡Í¬²½
-        virtual void TickFrame() = 0;   // ¿ÉÒÔ°Ñ BeginFrame + EndFrame ºÏ²¢ÎªÒ»¸ö TickFrame
+        // å¸§åŒæ­¥
+        virtual void TickFrame() = 0;   // å¯ä»¥æŠŠ BeginFrame + EndFrame åˆå¹¶ä¸ºä¸€ä¸ª TickFrame
 
-        // È«¾Ö·ÃÎÊ
+        // å…¨å±€è®¿é—®
         static ApplicationBase* GetApplication();
-        static void SetApplication(ApplicationBase* InApplication);
+        static void SetApplication(ApplicationBase* inApplication);
     protected:
-		SlateRenderer* Renderer = nullptr;
+		SlateRenderer* _renderer = nullptr;
     };
 }

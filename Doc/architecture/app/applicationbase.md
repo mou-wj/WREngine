@@ -88,11 +88,11 @@ static ApplicationBase* SetApplication(ApplicationBase* InApplication);
 
 ## 5. 与 `SlateRenderer` 的协同
 
-`ApplicationBase` 内部保留了一个 `SlateRenderer* Renderer` 成员：
+`ApplicationBase` 内部保留了一个 `SlateRenderer* _renderer` 成员：
 
 ```cpp
 protected:
-    SlateRenderer* Renderer = nullptr;
+    SlateRenderer* _renderer = nullptr;
 ```
 
 这说明应用层的基础类并不直接绑定某个具体渲染器，而是允许派生类在初始化阶段注入：
