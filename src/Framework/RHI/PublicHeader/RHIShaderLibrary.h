@@ -26,14 +26,14 @@ public:
 
     virtual RHIShaderSP CreateShader(ShaderKeyHash key) = 0;
 
-    ERHIShaderPlatform GetPlatform() const { return Platform; }
+    ERHIShaderPlatform GetPlatform() const { return _platform; }
 
-    const std::string& GetName() const { return Name; }
+    const std::string& GetName() const { return _name; }
 protected:
-    std::string Name;
-    ERHIShaderPlatform Platform;
-    mutable std::mutex ShaderCacheMutex;
-    std::unordered_map<ShaderKeyHash, std::shared_ptr<RHIShader>> ShaderCache;
+    std::string _name;
+    ERHIShaderPlatform _platform;
+    mutable std::mutex _shaderCacheMutex;
+    std::unordered_map<ShaderKeyHash, std::shared_ptr<RHIShader>> _shaderCache;
 
 };
 

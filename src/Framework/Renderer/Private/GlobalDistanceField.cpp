@@ -119,7 +119,7 @@ namespace Renderer
 
 
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.computeShader = computeShader;
+        computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
         cmd.SetComputePipelineState(pipelineState);
 
@@ -135,7 +135,7 @@ namespace Renderer
 
 		RenderCore::TransitionResource(GRHIApi, cmd, buffer->GetRHI(), RHI::ERHIResourceAccess::Unknown, RHI::ERHIResourceAccess::TransferDest, RHI::EQueueType::Graphics, RHI::EQueueType::Compute);
 		RHIUpdateBufferRegion updateRegion;
-        updateRegion.size = bufferDesc.Size;
+        updateRegion.Size = bufferDesc.Size;
         GRHIApi->UpdateBuffer(cmd, buffer->GetRHI(), Input.sourceParams.data(), updateRegion);
         RenderCore::TransitionResource(GRHIApi, cmd, buffer->GetRHI(), RHI::ERHIResourceAccess::TransferDest, RHI::ERHIResourceAccess::SRV, RHI::EQueueType::Compute, RHI::EQueueType::Compute);
         
@@ -149,7 +149,7 @@ namespace Renderer
         auto outbuffer = RenderCore::GTransientResourceAllocator.AllocateBuffer(bufferDesc, 0, 1);
 
         RenderCore::TransitionResource(GRHIApi, cmd, outbuffer->GetRHI(), RHI::ERHIResourceAccess::Unknown, RHI::ERHIResourceAccess::TransferDest, RHI::EQueueType::Graphics, RHI::EQueueType::Compute);
-        updateRegion.size = bufferDesc.Size;
+        updateRegion.Size = bufferDesc.Size;
         GRHIApi->UpdateBuffer(cmd, outbuffer->GetRHI(), Input.outputParams.data(), updateRegion);
         RenderCore::TransitionResource(GRHIApi, cmd, outbuffer->GetRHI(), RHI::ERHIResourceAccess::TransferDest, RHI::ERHIResourceAccess::SRV, RHI::EQueueType::Compute, RHI::EQueueType::Compute);
 

@@ -413,7 +413,7 @@ private:
         geometryDesc.VertexStride = sizeof(float) * 3;
         geometryDesc.VertexCount = 3;
         geometryDesc.IndexCount = 3;
-        geometryDesc.AllowUpdate = true;
+        geometryDesc.bAllowUpdate = true;
         BottomLevelAS = api->CreateRayTracingGeometry(geometryDesc);
 
         RHI::RHIRayTracingInstancesDesc instancesDesc{};

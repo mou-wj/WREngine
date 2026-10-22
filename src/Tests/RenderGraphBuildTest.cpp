@@ -143,7 +143,7 @@ public:
        
         // 创建计算管线状态
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.computeShader = dynamic_cast<RHIComputeShader*>(blitTextureShader0->GetRHIShader());
+        computeDesc.ComputeShader = dynamic_cast<RHIComputeShader*>(blitTextureShader0->GetRHIShader());
         ComputePipelineState = RHI::GRHIApi->CreateComputePipelineState(computeDesc);
 	}
 

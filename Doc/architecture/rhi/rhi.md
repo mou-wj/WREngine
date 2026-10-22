@@ -96,7 +96,7 @@ RHIResource
 
 `RHIResource` 是基础资源基类，提供：
 
-- `ResourceType`
+- `_resourceType`
 - `GetResourceType()`
 
 它使所有资源类型具备统一的类型标识，方便上层管理和调试。

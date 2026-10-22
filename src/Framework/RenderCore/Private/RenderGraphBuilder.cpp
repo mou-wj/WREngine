@@ -817,17 +817,17 @@ namespace RenderCore {
                             Intent.Texture = Tex;
                             uint32_t mipSlice = Desc.FirstMipSlice;
                             if (Desc.MipCount == TexDesc.MipLevels && Desc.FirstMipSlice == 0) {
-                                mipSlice = RHISubresourceRange::kAllSubresources;
+                                mipSlice = RHISubresourceRange::KAllSubresources;
                             }
                             uint32_t arraySlice = Desc.FirstArraySlice;
                             if (Desc.ArraySize ==  TexDesc.ArraySize && Desc.FirstArraySlice == 0) {
-                                arraySlice = RHISubresourceRange::kAllSubresources;
+                                arraySlice = RHISubresourceRange::KAllSubresources;
                             }
 
                             Intent.SubresourceRange = RHISubresourceRange(
                                 mipSlice,
                                 arraySlice,
-                                RHISubresourceRange::kAllSubresources
+                                RHISubresourceRange::KAllSubresources
                             );
 
                             // SRV → ReadOnly
@@ -853,16 +853,16 @@ namespace RenderCore {
                             Intent.Texture = Tex;
                             uint32_t mipSlice = Desc.FirstMipSlice;
                             if (Desc.MipCount == TexDesc.MipLevels && Desc.FirstMipSlice == 0) {
-                                mipSlice = RHISubresourceRange::kAllSubresources;
+                                mipSlice = RHISubresourceRange::KAllSubresources;
                             }
                             uint32_t arraySlice = Desc.FirstArraySlice;
                             if (Desc.ArraySize == TexDesc.ArraySize && Desc.FirstArraySlice == 0) {
-                                arraySlice = RHISubresourceRange::kAllSubresources;
+                                arraySlice = RHISubresourceRange::KAllSubresources;
                             }
                             Intent.SubresourceRange = RHISubresourceRange(
                                 mipSlice,
                                 arraySlice,
-                                RHISubresourceRange::kAllSubresources
+                                RHISubresourceRange::KAllSubresources
                             );
 
                             // UAV → ReadWrite
@@ -966,16 +966,16 @@ namespace RenderCore {
                         auto Desc = binding.Texture->GetDesc();
                         uint32_t mipSlice = binding.MipIndex;
                         if (Desc.MipLevels == 1 && mipSlice == 0) {
-                            mipSlice = RHISubresourceRange::kAllSubresources;
+                            mipSlice = RHISubresourceRange::KAllSubresources;
                         }
                         uint32_t arraySlice = binding.ArraySlice;
                         if (Desc.ArraySize == 1 && arraySlice == 0) {
-                            arraySlice = RHISubresourceRange::kAllSubresources;
+                            arraySlice = RHISubresourceRange::KAllSubresources;
                         }
                         Intent.SubresourceRange = RHISubresourceRange(
                             mipSlice,
                             arraySlice,
-                            RHISubresourceRange::kAllSubresources
+                            RHISubresourceRange::KAllSubresources
                         );
 
                         Intent.SubresourceRange = RHISubresourceRange(); // whole
@@ -995,16 +995,16 @@ namespace RenderCore {
                     auto Desc = RTSlots.DepthStencil.Texture->GetDesc();
                     uint32_t mipSlice = RTSlots.DepthStencil.MipIndex;
                     if (Desc.MipLevels == 1 && mipSlice == 0) {
-                        mipSlice = RHISubresourceRange::kAllSubresources;
+                        mipSlice = RHISubresourceRange::KAllSubresources;
                     }
                     uint32_t arraySlice = RTSlots.DepthStencil.ArraySlice;
                     if (Desc.ArraySize == 1 && arraySlice == 0) {
-                        arraySlice = RHISubresourceRange::kAllSubresources;
+                        arraySlice = RHISubresourceRange::KAllSubresources;
                     }
                     Intent.SubresourceRange = RHISubresourceRange(
                         mipSlice,
                         arraySlice,
-                        RHISubresourceRange::kAllSubresources
+                        RHISubresourceRange::KAllSubresources
                     );
 
                     Intent.SubresourceRange = RHISubresourceRange(); // whole
@@ -1327,8 +1327,8 @@ namespace RenderCore {
                     }
 
                     RHI::RHIUpdateBufferRegion region;
-                    region.offset = 0;
-                    region.size = upload.Size;
+                    region.Offset = 0;
+                    region.Size = upload.Size;
                     GRHIApi->UpdateBuffer(
                         RHICmdList,
                         upload.Buffer->GetRHIBuffer(),

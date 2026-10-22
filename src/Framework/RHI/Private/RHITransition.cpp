@@ -1,6 +1,6 @@
 #include "RHITransition.h"
 namespace RHI {
-    // È«¾Ö±äÁ¿£¬ÓÉ RHI ÔÚ³õÊ¼»¯Ê±Ìî³ä
+    // å…¨å±€å˜é‡ï¼Œç”± RHI åœ¨åˆå§‹åŒ–æ—¶å¡«å……
     uint32_t G_RHITransition_TotalSize = 0;
     uint32_t G_RHITransition_PrivateDataOffset = 0;
 

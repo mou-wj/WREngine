@@ -175,7 +175,7 @@ namespace Renderer {
             RenderCore::Shader* shader = GShaderMap.GetShader(shaderType, 0);
             if (!shader) return;
             RHI::RHIComputePipelineStateDesc computeDesc;
-            computeDesc.computeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
+            computeDesc.ComputeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
             auto pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
             cmdlist.SetComputePipelineState(pipelineState);
             RHI::RHITexUAVCreateInfo SpecEnvUAVDesc;
@@ -210,7 +210,7 @@ namespace Renderer {
         RenderCore::Shader* shader = GShaderMap.GetShader(shaderType, 1);
         if (!shader) return;
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.computeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
+        computeDesc.ComputeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
         auto pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
         cmdlist.SetComputePipelineState(pipelineState);
         params.OutputSize = outsize;
@@ -268,7 +268,7 @@ namespace Renderer {
         RenderCore::Shader* shader = GShaderMap.GetShader(shaderType, 2);
         if (!shader) return;
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.computeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
+        computeDesc.ComputeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
         auto pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
         cmdlist.SetComputePipelineState(pipelineState);
         params.OutputSize = outsize;

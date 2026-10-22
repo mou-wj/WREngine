@@ -30,7 +30,7 @@ RHICaptureHelper::RHICaptureHelper() {
 
 void RHICaptureHelper::Load()
 {
-	if (loaded) return;
+	if (m_bLoaded) return;
 #ifdef ENABLE_RENDERDOC_CAPTURE
 	std::string libName;
 #if defined(_WIN32)
@@ -70,7 +70,7 @@ void RHICaptureHelper::CaptureEnd() {
 		auto res = reinterpret_cast<RenderDocAPIType*>(rdoc_api)->EndFrameCapture(devicePointer, windowPointer);
 		if (res == 0) {
 			printf("Failed to end capture!\n");
-			// »ñÈ¡µ±Ç° RenderDoc ÕıÔÚĞ´ÈëµÄÈÕÖ¾ÎÄ¼şÂ·¾¶
+			// è·å–å½“å‰ RenderDoc æ­£åœ¨å†™å…¥çš„æ—¥å¿—æ–‡ä»¶è·¯å¾„
 			std::string logPath = reinterpret_cast<RenderDocAPIType*>(rdoc_api)->GetLogFilePathTemplate();
 			printf("RenderDoc Log Path: %s\n", logPath);
 		}
@@ -127,24 +127,24 @@ void RHICaptureHelper::Init() {
 			int major = 0, minor = 0, match = 0;
 			reinterpret_cast<RenderDocAPIType*>(rdoc_api)->GetAPIVersion(&major, &minor, &match);
 			std::cout << "RenderDoc API Version: " << major << "." << minor << "." << match << std::endl;
-			// 1. ¿ªÆô "Ref All Resources"
-			// Õâ¸öÑ¡Ïî»áÇ¿ÖÆ RenderDoc °üº¬ËùÓĞÒÑ´´½¨µÄ×ÊÔ´£¬¼´Ê¹ÔÚµ±Ç°²¶»ñÖ¡ÄÚÃ»±»ÏÔÊ½ÒıÓÃ¡£
-			// Õâ¶ÔÓÚ´¿ Compute ÈÎÎñ·Ç³£¹Ø¼ü£¬ÒòÎªºÜ¶à Buffer ÊÇÔÚ³õÊ¼»¯½×¶Î´´½¨µÄ¡£
+			// 1. å¼€å¯ "Ref All Resources"
+			// è¿™ä¸ªé€‰é¡¹ä¼šå¼ºåˆ¶ RenderDoc åŒ…å«æ‰€æœ‰å·²åˆ›å»ºçš„èµ„æºï¼Œå³ä½¿åœ¨å½“å‰æ•è·å¸§å†…æ²¡è¢«æ˜¾å¼å¼•ç”¨ã€‚
+			// è¿™å¯¹äºçº¯ Compute ä»»åŠ¡éå¸¸å…³é”®ï¼Œå› ä¸ºå¾ˆå¤š Buffer æ˜¯åœ¨åˆå§‹åŒ–é˜¶æ®µåˆ›å»ºçš„ã€‚
 			reinterpret_cast<RenderDocAPIType*>(rdoc_api)->SetCaptureOptionU32(eRENDERDOC_Option_RefAllResources, 1);
 
-			// 2. ¿ªÆô "Capture All Cmd Lists"
-			// Õâ¸öÑ¡Ïî»á¸æËß RenderDoc ¼ÇÂ¼ËùÓĞÌá½»µ½¶ÓÁĞµÄÃüÁîÁĞ±í£¬ÎŞÂÛËüÊÇ·ñ¹ØÁªµ½ Present¡£
+			// 2. å¼€å¯ "Capture All Cmd Lists"
+			// è¿™ä¸ªé€‰é¡¹ä¼šå‘Šè¯‰ RenderDoc è®°å½•æ‰€æœ‰æäº¤åˆ°é˜Ÿåˆ—çš„å‘½ä»¤åˆ—è¡¨ï¼Œæ— è®ºå®ƒæ˜¯å¦å…³è”åˆ° Presentã€‚
 			reinterpret_cast<RenderDocAPIType*>(rdoc_api)->SetCaptureOptionU32(eRENDERDOC_Option_CaptureAllCmdLists, 1);
 
 			int active = reinterpret_cast<RenderDocAPIType*>(rdoc_api)->IsTargetControlConnected();
 			printf("RenderDoc Connected: %s\n", active ? "YES" : "NO");
 
-			// »ñÈ¡µ±Ç°ÕıÔÚ²¶»ñµÄÅäÖÃ£¬È·ÈÏÄãµÄ SetCaptureOption ÊÇ·ñÕæµÄÉúĞ§ÁË
+			// è·å–å½“å‰æ­£åœ¨æ•è·çš„é…ç½®ï¼Œç¡®è®¤ä½ çš„ SetCaptureOption æ˜¯å¦çœŸçš„ç”Ÿæ•ˆäº†
 			uint32_t refAll = reinterpret_cast<RenderDocAPIType*>(rdoc_api)->GetCaptureOptionU32(eRENDERDOC_Option_RefAllResources);
 			printf("RefAllResources: %u\n", refAll);
 
 
-			// ÉèÖÃ²¶»ñ
+			// è®¾ç½®æ•è·
 			SetCaptureOutPath(Core::GetExecutableDir() + "/test.rdc");
             SetNumCaptures(40);
 			inited = true;

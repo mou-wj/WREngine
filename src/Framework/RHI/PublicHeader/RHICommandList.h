@@ -17,7 +17,7 @@ namespace RHI {
     class RHITransition;
 
     // -----------------------------
-    // �������
+    // 命令基类。
     // -----------------------------
     struct RHI_API RHICommandBase
     {
@@ -26,7 +26,7 @@ namespace RHI {
     };
 
     // -----------------------------
-    // ��������
+    // 分派命令。
     // -----------------------------
     struct RHI_API RHICommandDispatch : public RHICommandBase
     {
@@ -44,9 +44,9 @@ namespace RHI {
 
     struct RHI_API RHICommandDrawIndexed : public RHICommandBase
     {
-        RHIBuffer* indexBuffer;
-        uint32_t indexCount, firstIndex, instanceCount, firstInstance;
-        int32_t vertexOffset;
+        RHIBuffer* IndexBuffer;
+        uint32_t IndexCount, FirstIndex, InstanceCount, FirstInstance;
+        int32_t VertexOffset;
         RHICommandDrawIndexed(RHIBuffer* indexBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance);
         void Execute(RHICommandListBase& cmdList) override;
     };
@@ -71,13 +71,13 @@ namespace RHI {
     struct RHI_API RHICommandBeginTransitions : public RHICommandBase
     {
         std::vector<const RHITransition*> Transitions;
-        RHICommandBeginTransitions(std::vector<const RHITransition*> InTransitions);
+        RHICommandBeginTransitions(std::vector<const RHITransition*> inTransitions);
         void Execute(RHICommandListBase& cmdList) override;
     };
     struct RHI_API RHICommandEndTransitions : public RHICommandBase
     {
         std::vector<const RHITransition*> Transitions;
-        RHICommandEndTransitions(std::vector<const RHITransition*> InTransitions);
+        RHICommandEndTransitions(std::vector<const RHITransition*> inTransitions);
         void Execute(RHICommandListBase& cmdList) override;
     };
 
@@ -99,18 +99,18 @@ namespace RHI {
     };
     struct RHI_API RHICommandUpdateTexture : public RHICommandBase
     {
-        RHITexture* texture;
-        const void* data;
-        RHIUpdateTextureRegion region;
+        RHITexture* Texture;
+        const void* Data;
+        RHIUpdateTextureRegion Region;
         RHICommandUpdateTexture(RHITexture* src, const void* data, const RHIUpdateTextureRegion& region);
         void Execute(RHICommandListBase& cmdList) override;
     };
 
     struct RHI_API RHICommandUpdateBuffer : public RHICommandBase
     {
-        RHIBuffer* buffer;
-        const void* data;
-        RHIUpdateBufferRegion region;
+        RHIBuffer* Buffer;
+        const void* Data;
+        RHIUpdateBufferRegion Region;
         RHICommandUpdateBuffer(RHIBuffer* buffer, const void* data, const RHIUpdateBufferRegion& region);
         void Execute(RHICommandListBase& cmdList) override;
     };
@@ -219,7 +219,7 @@ namespace RHI {
 
 
     // -----------------------------
-    // ͳһ�������б�����
+    // 统一命令列表基类。
     // -----------------------------
     class RHI_API RHICommandListBase
     {
@@ -227,22 +227,22 @@ namespace RHI {
         explicit RHICommandListBase(RHIContextBase* context);
         virtual ~RHICommandListBase();
 
-        // ��������
+        // 记录命令，立即模式下直接执行。
         template<typename T, typename... Args>
         void AddCommand(Args&&... args)
         {
-            if (immediate)
+            if (_bImmediate)
             {
                 T cmd(std::forward<Args>(args)...);
                 cmd.Execute(*this);
             }
             else
             {
-                commands.emplace_back(std::make_shared<T>(std::forward<Args>(args)...));
+                _commands.emplace_back(std::make_shared<T>(std::forward<Args>(args)...));
             }
         }
 
-        // ִ����������
+        // 执行已记录的全部命令。
         virtual void ExecuteAll();
         void Clear();
 
@@ -254,20 +254,20 @@ namespace RHI {
         RHIContextBase* GetCommandContex() const;
 
         // -----------------
-        // ��ӿ�
+        // 通用命令接口。
         // -----------------
         void Begin();
         void End();
 
-        void BeginTransitions(std::vector<const RHITransition*> Transitions);
-        void EndTransitions(std::vector<const RHITransition*> Transitions);
+        void BeginTransitions(std::vector<const RHITransition*> transitions);
+        void EndTransitions(std::vector<const RHITransition*> transitions);
         void CopyTexture(RHITexture* src, RHITexture* dst, const RHICopyTextureDesc& copyDesc);
         void BlitTexture(RHITexture* src, RHITexture* dst, const RHIBlitTextureDesc& blitDesc);
 
     protected:
-        bool immediate = false;
-        std::list<std::shared_ptr<RHICommandBase>> commands;
-        RHIContextBase* Context = nullptr;
+        bool _bImmediate = false;
+        std::list<std::shared_ptr<RHICommandBase>> _commands;
+        RHIContextBase* _context = nullptr;
 
         friend struct RHICommandDispatch;
         friend struct RHICommandDraw;
@@ -291,7 +291,7 @@ namespace RHI {
 
         void SetBatchedShaderParameters(RHIGraphicShader* shader, const RHIBatchedShaderParameters& batchedShaderParameter);
         void SetBatchedShaderParameters(RHIRayTracingShader* shader, const RHIBatchedShaderParameters& batchedShaderParameter);
-        void SetStreamSource(uint32_t streamIndex, RHIBuffer* VertexBuffer, uint32_t Offset);
+        void SetStreamSource(uint32_t streamIndex, RHIBuffer* vertexBuffer, uint32_t offset);
         void SetGraphicPipelineState(RHIGraphicsPipelineState* pipelineState);
         void SetViewport(float x, float y, float w, float h, float minDepth, float maxDepth);
         void SetScissor(int32_t x, int32_t y, uint32_t w, uint32_t h);

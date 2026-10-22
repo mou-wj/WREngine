@@ -77,60 +77,60 @@ namespace RHIOpenGL
             glVertexAttribDivisor(static_cast<GLuint>(attribIndex), 0);
         }
 
-        if (!desc.vertexDescState)
+        if (!desc.VertexDescState)
         {
             bVertexLayoutDirty = false;
             return;
         }
 
-        const auto& vertexDesc = desc.vertexDescState->GetDesc();
+        const auto& vertexDesc = desc.VertexDescState->GetDesc();
         std::unordered_map<uint32_t, RHI::RHIVertexBindingDesc> bindingDescs;
-        for (const auto& binding : vertexDesc.bindings)
+        for (const auto& binding : vertexDesc.Bindings)
         {
-            bindingDescs[binding.binding] = binding;
+            bindingDescs[binding.Binding] = binding;
         }
 
-        for (const auto& attribute : vertexDesc.attributes)
+        for (const auto& attribute : vertexDesc.Attributes)
         {
-            if (attribute.binding >= 8 || static_cast<GLint>(attribute.location) >= maxAttribCount)
+            if (attribute.Binding >= 8 || static_cast<GLint>(attribute.Location) >= maxAttribCount)
             {
                 continue;
             }
 
-            const auto formatInfo = GetVertexAttribFormatInfo(attribute.format);
+            const auto formatInfo = GetVertexAttribFormatInfo(attribute.Format);
             if (!formatInfo.IsValid)
             {
                 continue;
             }
 
-            auto* vertexBuffer = dynamic_cast<OpenGLBuffer*>(BoundVertexBuffers[attribute.binding]);
+            auto* vertexBuffer = dynamic_cast<OpenGLBuffer*>(BoundVertexBuffers[attribute.Binding]);
             if (!vertexBuffer)
             {
                 continue;
             }
 
             uint32_t stride = 0;
-            auto bindingIt = bindingDescs.find(attribute.binding);
+            auto bindingIt = bindingDescs.find(attribute.Binding);
             if (bindingIt != bindingDescs.end())
             {
-                stride = bindingIt->second.stride;
+                stride = bindingIt->second.Stride;
             }
 
             if (stride == 0)
             {
-                stride = static_cast<uint32_t>(RHI::GetFormatSize(attribute.format));
+                stride = static_cast<uint32_t>(RHI::GetFormatSize(attribute.Format));
             }
 
             glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer->GetHandle());
-            glEnableVertexAttribArray(attribute.location);
+            glEnableVertexAttribArray(attribute.Location);
 
-            const uintptr_t byteOffset = static_cast<uintptr_t>(BoundVertexBufferOffsets[attribute.binding]) +
-                static_cast<uintptr_t>(attribute.offset);
+            const uintptr_t byteOffset = static_cast<uintptr_t>(BoundVertexBufferOffsets[attribute.Binding]) +
+                static_cast<uintptr_t>(attribute.Offset);
 
             if (formatInfo.IntegerAttribute)
             {
                 glVertexAttribIPointer(
-                    attribute.location,
+                    attribute.Location,
                     formatInfo.ComponentCount,
                     formatInfo.ComponentType,
                     static_cast<GLsizei>(stride),
@@ -139,7 +139,7 @@ namespace RHIOpenGL
             else
             {
                 glVertexAttribPointer(
-                    attribute.location,
+                    attribute.Location,
                     formatInfo.ComponentCount,
                     formatInfo.ComponentType,
                     formatInfo.Normalized,
@@ -148,10 +148,10 @@ namespace RHIOpenGL
             }
 
             const GLuint divisor =
-                (bindingIt != bindingDescs.end() && bindingIt->second.inputRate == RHI::ERHIInputRate::PerInstance)
+                (bindingIt != bindingDescs.end() && bindingIt->second.InputRate == RHI::ERHIInputRate::PerInstance)
                 ? 1u
                 : 0u;
-            glVertexAttribDivisor(attribute.location, divisor);
+            glVertexAttribDivisor(attribute.Location, divisor);
         }
 
         bVertexLayoutDirty = false;
@@ -159,7 +159,7 @@ namespace RHIOpenGL
 
     void OpenGLGraphicContext::ApplyPrimitiveTopologyState(const RHI::RHIGraphicsPipelineStateDesc& desc)
     {
-        switch (desc.primitiveTopology)
+        switch (desc.PrimitiveTopology)
         {
         case RHI::EPrimitiveTopology::PointList:
             CurrentPrimitiveTopology = GL_POINTS;
@@ -181,19 +181,19 @@ namespace RHIOpenGL
 
     void OpenGLGraphicContext::ApplyRasterizerState(const RHI::RHIGraphicsPipelineStateDesc& desc)
     {
-        if (!desc.rasterizerState)
+        if (!desc.RasterizerState)
         {
             glDisable(GL_CULL_FACE);
             return;
         }
 
-        const auto& rasterizer = desc.rasterizerState->GetDesc();
-        if (rasterizer.cullMode == RHI::ERHICullMode::Back)
+        const auto& rasterizer = desc.RasterizerState->GetDesc();
+        if (rasterizer.CullMode == RHI::ERHICullMode::Back)
         {
             glEnable(GL_CULL_FACE);
             glCullFace(GL_BACK);
         }
-        else if (rasterizer.cullMode == RHI::ERHICullMode::Front)
+        else if (rasterizer.CullMode == RHI::ERHICullMode::Front)
         {
             glEnable(GL_CULL_FACE);
             glCullFace(GL_FRONT);
@@ -203,7 +203,7 @@ namespace RHIOpenGL
             glDisable(GL_CULL_FACE);
         }
 
-        if (rasterizer.frontFace == RHI::ERHIFrontFace::Clockwise)
+        if (rasterizer.FrontFace == RHI::ERHIFrontFace::Clockwise)
         {
             glFrontFace(GL_CW);
         }
@@ -215,14 +215,14 @@ namespace RHIOpenGL
 
     void OpenGLGraphicContext::ApplyDepthStencilState(const RHI::RHIGraphicsPipelineStateDesc& desc)
     {
-        if (!desc.depthStencilState)
+        if (!desc.DepthStencilState)
         {
             glDisable(GL_DEPTH_TEST);
             return;
         }
 
-        const auto& depthStencil = desc.depthStencilState->GetDesc();
-        if (depthStencil.depthTestEnable)
+        const auto& depthStencil = desc.DepthStencilState->GetDesc();
+        if (depthStencil.bDepthTestEnable)
         {
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_LESS);
@@ -232,7 +232,7 @@ namespace RHIOpenGL
             glDisable(GL_DEPTH_TEST);
         }
 
-        if (depthStencil.depthWriteEnable)
+        if (depthStencil.bDepthWriteEnable)
         {
             glDepthMask(GL_TRUE);
         }
@@ -244,7 +244,7 @@ namespace RHIOpenGL
 
     void OpenGLGraphicContext::ApplyColorBlendState(const RHI::RHIGraphicsPipelineStateDesc& desc)
     {
-        if (desc.colorBlendState && !desc.colorBlendState->GetDesc().attachments.empty())
+        if (desc.ColorBlendState && !desc.ColorBlendState->GetDesc().Attachments.empty())
         {
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -516,7 +516,7 @@ namespace RHIOpenGL
 
             // 收集 CS 的 UBO 声明大小，作为后续 EnsureRange 的下界；只记 hint
             // 不分配 GPU 资源。pipeline 切换时已经 Reset，所以这里覆盖干净。
-            if (auto* csBase = dynamic_cast<OpenGLShaderBase*>(glPipeline->GetDesc().computeShader))
+            if (auto* csBase = dynamic_cast<OpenGLShaderBase*>(glPipeline->GetDesc().ComputeShader))
             {
                 for (const auto& kv : csBase->GetShaderResourceLayout().UniformBufferSizes)
                 {
@@ -608,14 +608,14 @@ namespace RHIOpenGL
             // 所以同一 binding 在两 stage 各自反射出不同大小时以较大者为准——
             // 这与 GL 一 program 共享 UBO 槽位的语义一致（同一 binding 两 stage
             // 必须都看得见数据，段大小取大值才能覆盖两者期望）。
-            if (auto* vsBase = dynamic_cast<OpenGLShaderBase*>(desc.shaderStages.vertexShader))
+            if (auto* vsBase = dynamic_cast<OpenGLShaderBase*>(desc.ShaderStages.VertexShader))
             {
                 for (const auto& kv : vsBase->GetShaderResourceLayout().UniformBufferSizes)
                 {
                     UBOCache.HintUniformBufferSize(kv.first, kv.second);
                 }
             }
-            if (auto* fsBase = dynamic_cast<OpenGLShaderBase*>(desc.shaderStages.fragmentShader))
+            if (auto* fsBase = dynamic_cast<OpenGLShaderBase*>(desc.ShaderStages.FragmentShader))
             {
                 for (const auto& kv : fsBase->GetShaderResourceLayout().UniformBufferSizes)
                 {

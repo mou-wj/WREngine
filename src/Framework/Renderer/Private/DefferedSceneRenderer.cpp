@@ -75,46 +75,46 @@ namespace Renderer {
 
                 // ������դ��״̬
                 RHI::RHIRasterizerStateDesc rasterizerDesc;
-                rasterizerDesc.polygonMode = RHI::ERHIPolygonMode::Fill;
-                rasterizerDesc.cullMode = RHI::ERHICullMode::Back;
-                rasterizerDesc.frontFace = MeshBatch.FrontFace;
-                rasterizerDesc.lineWidth = 1.0f;
-                rasterizerDesc.depthBiasEnable = false;
+                rasterizerDesc.PolygonMode = RHI::ERHIPolygonMode::Fill;
+                rasterizerDesc.CullMode = RHI::ERHICullMode::Back;
+                rasterizerDesc.FrontFace = MeshBatch.FrontFace;
+                rasterizerDesc.LineWidth = 1.0f;
+                rasterizerDesc.bDepthBiasEnable = false;
 
                 auto rasterizerState = RHIPipelineStateCache::GetOrCreateRasterizerState(rasterizerDesc);
 
                 // �������ģ��״̬
                 RHI::RHIDepthStencilStateDesc depthStencilDesc;
-                depthStencilDesc.depthTestEnable = true;
-                depthStencilDesc.depthWriteEnable = true;
-                depthStencilDesc.depthCompareOp = RHI::ERHICompareOp::Less;
+                depthStencilDesc.bDepthTestEnable = true;
+                depthStencilDesc.bDepthWriteEnable = true;
+                depthStencilDesc.DepthCompareOp = RHI::ERHICompareOp::Less;
 
                 auto depthStencilState = RHIPipelineStateCache::GetOrCreateDepthStencilState(depthStencilDesc);
                 RHI::RHIGraphicsPipelineStateDesc pipelineDesc;
                 // ����ͼ�ι���״̬
-                pipelineDesc.shaderStages.vertexShader = dynamic_cast<RHI::RHIVertexShader*>(vertexShader->GetRHIShader());
-                pipelineDesc.shaderStages.fragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(pixelShader->GetRHIShader());
+                pipelineDesc.ShaderStages.VertexShader = dynamic_cast<RHI::RHIVertexShader*>(vertexShader->GetRHIShader());
+                pipelineDesc.ShaderStages.FragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(pixelShader->GetRHIShader());
                 // ����������ø����������...
-                pipelineDesc.rasterizerState = rasterizerState;
+                pipelineDesc.RasterizerState = rasterizerState;
 
-                pipelineDesc.depthStencilState = depthStencilState;
-                pipelineDesc.vertexDescState = MeshBatch.VertexFactory->GetRHIVertexDescState();
+                pipelineDesc.DepthStencilState = depthStencilState;
+                pipelineDesc.VertexDescState = MeshBatch.VertexFactory->GetRHIVertexDescState();
                 if (supportInstance) {
                     LocalVertexFactory* vf = dynamic_cast<LocalVertexFactory*>(MeshBatch.VertexFactory);
-                    pipelineDesc.vertexDescState = vf->GetRHIInstancedVertexDescState();
+                    pipelineDesc.VertexDescState = vf->GetRHIInstancedVertexDescState();
                 }
                 //rendertarget info
                 auto gbufferInfo = CreateGBufferInfo({});
 
 
-                pipelineDesc.attachmentDesc.colorAttachmentCount = gbufferInfo.NumTargets;
+                pipelineDesc.AttachmentDesc.ColorAttachmentCount = gbufferInfo.NumTargets;
                 for (int i = 0; i < gbufferInfo.NumTargets; i++) {
-                    pipelineDesc.attachmentDesc.colorAttachments[i].format = gbufferInfo.Targets[i].TargetFormat;
-                    pipelineDesc.attachmentDesc.colorAttachments[i].actions = ERenderTargetActions::Load_Store;
+                    pipelineDesc.AttachmentDesc.ColorAttachments[i].Format = gbufferInfo.Targets[i].TargetFormat;
+                    pipelineDesc.AttachmentDesc.ColorAttachments[i].Actions = ERenderTargetActions::Load_Store;
                 }
-                pipelineDesc.attachmentDesc.depthActions = ERenderTargetActions::Load_Store;
-                pipelineDesc.attachmentDesc.enableDepth = true;
-                pipelineDesc.attachmentDesc.depthStencilFormat = RHI::ERHIFormat::D32_Float;
+                pipelineDesc.AttachmentDesc.DepthActions = ERenderTargetActions::Load_Store;
+                pipelineDesc.AttachmentDesc.bEnableDepth = true;
+                pipelineDesc.AttachmentDesc.DepthStencilFormat = RHI::ERHIFormat::D32_Float;
 
                 BEGIN_SHADER_PARAMETER_STRUCT(PassParameters)
                     SHADER_PARAMETER_STRUCT_REFERENCE(StaticMeshMaterialShaderVSParameters, vertexParameters)
@@ -135,11 +135,11 @@ namespace Renderer {
                     RHI::RHIColorBlendStateDesc blendDesc;
                     // ������ɫ���״̬
                     RHI::RHIColorBlendAttachmentDesc blendAttachDesc;
-                    blendAttachDesc.blendEnable = false;
+                    blendAttachDesc.bBlendEnable = false;
                     std::vector<RHI::RHIColorBlendAttachmentDesc> attachments = { blendAttachDesc,blendAttachDesc,blendAttachDesc };
-                    blendDesc.attachments = attachments;
+                    blendDesc.Attachments = attachments;
                     auto colorBlendState = RHIPipelineStateCache::GetOrCreateColorBlendState(blendDesc);
-                    pipelineDesc.colorBlendState = colorBlendState;
+                    pipelineDesc.ColorBlendState = colorBlendState;
                 }
                 else {
                     LOG_ERROR("Blend mode not supported");

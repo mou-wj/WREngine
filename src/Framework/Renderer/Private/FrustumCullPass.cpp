@@ -105,7 +105,7 @@ namespace Renderer {
         cmd.Begin();
 
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.computeShader = computeShader;
+        computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
         cmd.SetComputePipelineState(pipelineState);
 
@@ -149,8 +149,8 @@ namespace Renderer {
         readbackCmd.Begin();
 
         RHI::RHIReadBufferInfo readInfo;
-        readInfo.offset = 0;
-        readInfo.size = Input.PrimitiveCount * sizeof(uint32_t);
+        readInfo.Offset = 0;
+        readInfo.Size = Input.PrimitiveCount * sizeof(uint32_t);
         void* mapped = RHI::GRHIApi->MapReadBuffer(
             readbackCmd,
             Input.VisibilityFlagsBuffer->GetRHI(),

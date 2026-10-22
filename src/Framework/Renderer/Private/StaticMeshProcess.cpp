@@ -296,7 +296,7 @@ namespace Renderer {
         }
         key.MaterialParameter.ShadingModel = EShadingModel::Lit;
         auto cshader = GMaterialShaderMap.GetShader(key);
-        computePipelineDesc.computeShader = dynamic_cast<RHI::RHIComputeShader*>(cshader->GetRHIShader());
+        computePipelineDesc.ComputeShader = dynamic_cast<RHI::RHIComputeShader*>(cshader->GetRHIShader());
         auto defferedDrawPipeline = RHIPipelineStateCache::GetOrCreateComputePipelineState(computePipelineDesc);
         builder.AddPass<StaticMeshMaterialDefferedShadingCSParameters>(
             passName,

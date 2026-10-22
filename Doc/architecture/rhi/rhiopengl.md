@@ -34,7 +34,7 @@
 
 `OpenGLRHIApi : RHI::RHIApi` 作为后端统一入口：
 
-1. 设置 shader 平台为 `ERHIShaderPlatform::OpenGL`，平台信息报告 `DepthRange=ZeroToOne`、`EnableRayTracing=false`。
+1. 设置 shader 平台为 `ERHIShaderPlatform::OpenGL`，平台信息报告 `DepthRange=ZeroToOne`、`bEnableRayTracing=false`。
 2. 调用 `InitializePlatformSurport()` 创建引导上下文并加载 GL 函数。
 3. 启动 `OpenGLQueueManager` 的 worker，后续通过它执行资源与命令操作。
 4. 提供资源、shader、管线、视图、交换链、队列及瞬态管理器工厂。
@@ -254,7 +254,7 @@ RHI 格式与纹理类型转换主要集中在 `OpenGLUtils`：
 | RHI transition | 空实现，未建立完整访问/屏障契约 |
 | 队列同步 | worker 软件时间轴，不是原生 GPU fence |
 | 瞬态资源 | 通用池 + GL 对象创建，回收时 glFinish，无 heap aliasing |
-| 光线追踪 | EnableRayTracing=false，相关资源、管线和上下文接口明确抛错；按已确认范围暂不实现软件光追 |
+| 光线追踪 | bEnableRayTracing=false，相关资源、管线和上下文接口明确抛错；按已确认范围暂不实现软件光追 |
 
 平台请求 4.3 context，但资源实现还使用 `glCreateTextures`、`glBindTextureUnit`、`glBindImageTextures` 等入口；当前应进一步核对版本/扩展及函数指针可用性，不能只依据初始化日志中的版本号判断整个后端可运行。
 

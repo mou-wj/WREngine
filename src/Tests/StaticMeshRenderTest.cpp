@@ -191,11 +191,11 @@ namespace Test {
 
             // 创建光栅化状态
             RHI::RHIRasterizerStateDesc rasterizerDesc;
-            rasterizerDesc.polygonMode = RHI::ERHIPolygonMode::Fill;
-            rasterizerDesc.cullMode = RHI::ERHICullMode::None;
-            rasterizerDesc.frontFace = RHI::ERHIFrontFace::Clockwise;
-            rasterizerDesc.lineWidth = 1.0f;
-            rasterizerDesc.depthBiasEnable = false;
+            rasterizerDesc.PolygonMode = RHI::ERHIPolygonMode::Fill;
+            rasterizerDesc.CullMode = RHI::ERHICullMode::None;
+            rasterizerDesc.FrontFace = RHI::ERHIFrontFace::Clockwise;
+            rasterizerDesc.LineWidth = 1.0f;
+            rasterizerDesc.bDepthBiasEnable = false;
 
             auto rasterizerState = RHIPipelineStateCache::GetOrCreateRasterizerState(rasterizerDesc);
 
@@ -205,28 +205,28 @@ namespace Test {
 
             // 创建深度模板状态
             RHI::RHIDepthStencilStateDesc depthStencilDesc;
-            depthStencilDesc.depthTestEnable = true;
-            depthStencilDesc.depthWriteEnable = true;
-            depthStencilDesc.depthCompareOp = RHI::ERHICompareOp::Less;
+            depthStencilDesc.bDepthTestEnable = true;
+            depthStencilDesc.bDepthWriteEnable = true;
+            depthStencilDesc.DepthCompareOp = RHI::ERHICompareOp::Less;
 
             auto depthStencilState = RHIPipelineStateCache::GetOrCreateDepthStencilState(depthStencilDesc);
 
             // 创建图形管线状态
-            pipelineDesc.shaderStages.vertexShader = dynamic_cast<RHI::RHIVertexShader*>(vertexShader->GetRHIShader());
-            pipelineDesc.shaderStages.fragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(pixelShader->GetRHIShader());
+            pipelineDesc.ShaderStages.VertexShader = dynamic_cast<RHI::RHIVertexShader*>(vertexShader->GetRHIShader());
+            pipelineDesc.ShaderStages.FragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(pixelShader->GetRHIShader());
             // 这里可以设置更多管线配置...
-            pipelineDesc.rasterizerState = rasterizerState;
+            pipelineDesc.RasterizerState = rasterizerState;
 
-            pipelineDesc.depthStencilState = depthStencilState;
-            pipelineDesc.vertexDescState = staticMeshAsset->GetMesh()->GetRenderData()->LODResources[0].VertexFactory->GetRHIVertexDescState();
+            pipelineDesc.DepthStencilState = depthStencilState;
+            pipelineDesc.VertexDescState = staticMeshAsset->GetMesh()->GetRenderData()->LODResources[0].VertexFactory->GetRHIVertexDescState();
 
             //rendertarget info
-            pipelineDesc.attachmentDesc.colorAttachmentCount = 1;
-            pipelineDesc.attachmentDesc.colorAttachments[0].format = RHI::ERHIFormat::R8G8B8A8_UNorm;
-            pipelineDesc.attachmentDesc.colorAttachments[0].actions = ERenderTargetActions::Clear_Store;
-            pipelineDesc.attachmentDesc.depthActions = ERenderTargetActions::Clear_Store;
-            pipelineDesc.attachmentDesc.enableDepth = true;
-            pipelineDesc.attachmentDesc.depthStencilFormat = RHI::ERHIFormat::D32_Float;
+            pipelineDesc.AttachmentDesc.ColorAttachmentCount = 1;
+            pipelineDesc.AttachmentDesc.ColorAttachments[0].Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
+            pipelineDesc.AttachmentDesc.ColorAttachments[0].Actions = ERenderTargetActions::Clear_Store;
+            pipelineDesc.AttachmentDesc.DepthActions = ERenderTargetActions::Clear_Store;
+            pipelineDesc.AttachmentDesc.bEnableDepth = true;
+            pipelineDesc.AttachmentDesc.DepthStencilFormat = RHI::ERHIFormat::D32_Float;
 
 
 
@@ -309,21 +309,21 @@ namespace Test {
                         RHI::RHIColorBlendStateDesc blendDesc;
                         // 创建颜色混合状态
                         RHI::RHIColorBlendAttachmentDesc blendAttachDesc;
-                        blendAttachDesc.blendEnable = false;
+                        blendAttachDesc.bBlendEnable = false;
                         std::vector<RHI::RHIColorBlendAttachmentDesc> attachments = { blendAttachDesc };
-                        blendDesc.attachments = attachments;
+                        blendDesc.Attachments = attachments;
                         auto colorBlendState = RHIPipelineStateCache::GetOrCreateColorBlendState(blendDesc);
-                        pipelineDesc.colorBlendState = colorBlendState;
+                        pipelineDesc.ColorBlendState = colorBlendState;
                     }
                     else {
                         RHI::RHIColorBlendStateDesc blendDesc;
                         // 创建颜色混合状态
                         RHI::RHIColorBlendAttachmentDesc blendAttachDesc;
-                        blendAttachDesc.blendEnable = true;
+                        blendAttachDesc.bBlendEnable = true;
                         std::vector<RHI::RHIColorBlendAttachmentDesc> attachments = { blendAttachDesc };
-                        blendDesc.attachments = attachments;
+                        blendDesc.Attachments = attachments;
                         auto colorBlendState = RHIPipelineStateCache::GetOrCreateColorBlendState(blendDesc);
-                        pipelineDesc.colorBlendState = colorBlendState;
+                        pipelineDesc.ColorBlendState = colorBlendState;
                     }
                     auto pipeline = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(pipelineDesc);
                     auto state = pipeline;

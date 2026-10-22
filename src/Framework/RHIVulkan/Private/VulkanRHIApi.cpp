@@ -157,7 +157,7 @@ bool VulkanRHIApi::Init()
 	// 4. 计算总分配大小
 	G_RHITransition_TotalSize = G_RHITransition_PrivateDataOffset + PrivateSize;
 
-	PlatformInfo.EnableRayTracing = true;
+	PlatformInfo.bEnableRayTracing = true;
 	ValidFlag = true;
     return true;
     // 初始化其他Vulkan资源
@@ -169,7 +169,7 @@ void VulkanRHIApi::Shutdown()
 	if (!ValidFlag) {
 		return;
 	}
-	PlatformInfo.EnableRayTracing = false;
+	PlatformInfo.bEnableRayTracing = false;
 	ValidFlag = false;
 	RHI::RHIPipelineStateCache::ClearAll();
 
@@ -220,7 +220,7 @@ void VulkanRHIApi::UpdateTexture(RHICommandListBase& cmdList, RHITexture* textur
 		return;
 	auto format = texture->GetDesc().Format;
 
-	VkDeviceSize totalSize = region.width * region.height * region.depth * RHI::GFormatInfoMap.at(format).BytesPerPixel; // 假设格式是RGBA8
+	VkDeviceSize totalSize = region.Width * region.Height * region.Depth * RHI::GFormatInfoMap.at(format).BytesPerPixel; // 假设格式是RGBA8
 
 
 	// 1. 获取 staging buffer
@@ -240,13 +240,13 @@ void VulkanRHIApi::UpdateTexture(RHICommandListBase& cmdList, RHITexture* textur
 	copyRegion.bufferRowLength = 0;
 	copyRegion.bufferImageHeight = 0;
 	copyRegion.imageSubresource.aspectMask = imageFlag;
-	copyRegion.imageSubresource.mipLevel = region.mipLevel;
-	copyRegion.imageSubresource.baseArrayLayer = region.arraySlice;
-	copyRegion.imageSubresource.layerCount = region.numArraySlices;
-	copyRegion.imageOffset = { static_cast<int32_t>(region.xOffset),
-	static_cast<int32_t>(region.yOffset),
-	static_cast<int32_t>(region.zOffset) };
-	copyRegion.imageExtent = { region.width, region.height, region.depth };
+	copyRegion.imageSubresource.mipLevel = region.MipLevel;
+	copyRegion.imageSubresource.baseArrayLayer = region.ArraySlice;
+	copyRegion.imageSubresource.layerCount = region.NumArraySlices;
+	copyRegion.imageOffset = { static_cast<int32_t>(region.XOffset),
+	static_cast<int32_t>(region.YOffset),
+	static_cast<int32_t>(region.ZOffset) };
+	copyRegion.imageExtent = { region.Width, region.Height, region.Depth };
 
 	VulkanTexture* vulkanTexture = dynamic_cast<VulkanTexture*>(texture);
 
@@ -259,7 +259,7 @@ void VulkanRHIApi::UpdateBuffer(RHICommandListBase& cmdList, RHIBuffer* buffer, 
 	if (!buffer || !data)
 		return;
 
-	VkDeviceSize totalSize = region.size;
+	VkDeviceSize totalSize = region.Size;
 
 	// 1. 获取 staging buffer
 	auto staging = Device->GetStagingManager()->Acquire(totalSize);
@@ -271,7 +271,7 @@ void VulkanRHIApi::UpdateBuffer(RHICommandListBase& cmdList, RHIBuffer* buffer, 
 	// 3. 构造 CopyBuffer 区域
 	VkBufferCopy copyRegion{};
 	copyRegion.srcOffset = 0;
-	copyRegion.dstOffset = region.offset;
+	copyRegion.dstOffset = region.Offset;
 	copyRegion.size = totalSize;
 
 	VulkanBuffer* vulkanBuffer = dynamic_cast<VulkanBuffer*>(buffer);
@@ -400,10 +400,10 @@ void* VulkanRHIApi::MapReadBuffer(RHICommandListBase& cmdList, RHIBuffer* buffer
 	//---------------------------------------
 
 	VkDeviceSize offset =
-		info.offset;
+		info.Offset;
 
 	VkDeviceSize size =
-		info.size;
+		info.Size;
 
 	if (size == 0)
 	{
@@ -738,10 +738,10 @@ void VulkanRHIApi::RHICreateTransition(RHITransition* Transition, const RHITrans
 			auto textureDesc = vulkanTexture->GetDesc();
 			VkImageSubresourceRange subresourceRange{};
             subresourceRange.aspectMask = vulkanTexture->GetAspectFlags();
-            subresourceRange.baseMipLevel = transitionInfo.MipIndex != RHISubresourceRange::kAllSubresources ? transitionInfo.MipIndex : 0;
-            subresourceRange.levelCount = transitionInfo.MipIndex != RHISubresourceRange::kAllSubresources ? 1 : vulkanTexture->GetDesc().MipLevels;
-            subresourceRange.baseArrayLayer = transitionInfo.ArraySlice != RHISubresourceRange::kAllSubresources ? transitionInfo.ArraySlice : 0;
-            subresourceRange.layerCount = transitionInfo.ArraySlice != RHISubresourceRange::kAllSubresources ? 1 : vulkanTexture->GetDesc().ArraySize;
+            subresourceRange.baseMipLevel = transitionInfo.MipIndex != RHISubresourceRange::KAllSubresources ? transitionInfo.MipIndex : 0;
+            subresourceRange.levelCount = transitionInfo.MipIndex != RHISubresourceRange::KAllSubresources ? 1 : vulkanTexture->GetDesc().MipLevels;
+            subresourceRange.baseArrayLayer = transitionInfo.ArraySlice != RHISubresourceRange::KAllSubresources ? transitionInfo.ArraySlice : 0;
+            subresourceRange.layerCount = transitionInfo.ArraySlice != RHISubresourceRange::KAllSubresources ? 1 : vulkanTexture->GetDesc().ArraySize;
 
 			pipelineBarrier->TransitionLayout(vulkanTexture->GetImage(), oldLayout, newLayout, subresourceRange, barrierSrcQueueFamily, barrierDstQueueFamily);
         }

@@ -71,11 +71,11 @@ namespace RenderCore {
             const VertexStream& Stream = Streams[i];
 
             RHI::RHIVertexBindingDesc BindingDesc;
-            BindingDesc.binding = Stream.Binding;
-            BindingDesc.stride = Stream.Stride;
-            BindingDesc.inputRate = Stream.InputRate;
+            BindingDesc.Binding = Stream.Binding;
+            BindingDesc.Stride = Stream.Stride;
+            BindingDesc.InputRate = Stream.InputRate;
 
-            Desc.bindings.push_back(BindingDesc);
+            Desc.Bindings.push_back(BindingDesc);
         }
 
         //
@@ -85,12 +85,12 @@ namespace RenderCore {
         {
             RHI::RHIVertexAttributeDesc AttrDesc;
 
-            AttrDesc.location = Element.Location;
-            AttrDesc.binding = Element.Binding;
-            AttrDesc.offset = Element.ElementOffset;
-            AttrDesc.format = Element.Format;
+            AttrDesc.Location = Element.Location;
+            AttrDesc.Binding = Element.Binding;
+            AttrDesc.Offset = Element.ElementOffset;
+            AttrDesc.Format = Element.Format;
 
-            Desc.attributes.push_back(AttrDesc);
+            Desc.Attributes.push_back(AttrDesc);
         }
 
         //

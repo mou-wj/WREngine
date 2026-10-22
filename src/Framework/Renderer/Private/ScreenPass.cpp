@@ -16,8 +16,8 @@ namespace Renderer {
 		auto fullScreenQuad = GShaderMap.GetShader(fullScreenQuadShaderType, 0);
 		//��ȡĬ�Ϲ���״̬
 		RHIGraphicsPipelineStateDesc pipelineStateDesc;
-		pipelineStateDesc.shaderStages.vertexShader = dynamic_cast<RHI::RHIVertexShader*>(drawTexture->GetRHIShader());
-        pipelineStateDesc.shaderStages.fragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(fullScreenQuad->GetRHIShader());
+		pipelineStateDesc.ShaderStages.VertexShader = dynamic_cast<RHI::RHIVertexShader*>(drawTexture->GetRHIShader());
+        pipelineStateDesc.ShaderStages.FragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(fullScreenQuad->GetRHIShader());
 		auto graphicStates = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(pipelineStateDesc);
 		//auto parameter = builder.AllocateParameter<ScenePassShaderParameter>();
 		//parameter->InText.Value = inTexture;

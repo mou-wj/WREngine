@@ -408,7 +408,7 @@ namespace Renderer
         CmdList.Begin();
 
         RHI::RHIComputePipelineStateDesc ComputeDesc;
-        ComputeDesc.computeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
+        ComputeDesc.ComputeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
         auto PipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(ComputeDesc);
         CmdList.SetComputePipelineState(PipelineState);
 
@@ -462,7 +462,7 @@ namespace Renderer
         CmdList.Begin();
 
         RHI::RHIComputePipelineStateDesc ComputeDesc;
-        ComputeDesc.computeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
+        ComputeDesc.ComputeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
         auto PipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(ComputeDesc);
         CmdList.SetComputePipelineState(PipelineState);
 

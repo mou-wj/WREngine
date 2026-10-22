@@ -28,11 +28,11 @@ namespace Renderer {
         auto ps = RenderCore::GShaderMap.GetShader<Renderer::DrawSkyPS>(0);
         // 创建光栅化状态
         RHI::RHIRasterizerStateDesc rasterizerDesc;
-        rasterizerDesc.polygonMode = RHI::ERHIPolygonMode::Fill;
-        rasterizerDesc.cullMode = RHI::ERHICullMode::None;
-        rasterizerDesc.frontFace = RHI::ERHIFrontFace::Clockwise;
-        rasterizerDesc.lineWidth = 1.0f;
-        rasterizerDesc.depthBiasEnable = false;
+        rasterizerDesc.PolygonMode = RHI::ERHIPolygonMode::Fill;
+        rasterizerDesc.CullMode = RHI::ERHICullMode::None;
+        rasterizerDesc.FrontFace = RHI::ERHIFrontFace::Clockwise;
+        rasterizerDesc.LineWidth = 1.0f;
+        rasterizerDesc.bDepthBiasEnable = false;
 
         auto rasterizerState = RHIPipelineStateCache::GetOrCreateRasterizerState(rasterizerDesc);
 
@@ -42,19 +42,19 @@ namespace Renderer {
 
         // 创建深度模板状态
         RHI::RHIDepthStencilStateDesc depthStencilDesc;
-        depthStencilDesc.depthTestEnable = true;
-        depthStencilDesc.depthWriteEnable = true;
-        depthStencilDesc.depthCompareOp = RHI::ERHICompareOp::LessOrEqual;
+        depthStencilDesc.bDepthTestEnable = true;
+        depthStencilDesc.bDepthWriteEnable = true;
+        depthStencilDesc.DepthCompareOp = RHI::ERHICompareOp::LessOrEqual;
 
         auto depthStencilState = RHIPipelineStateCache::GetOrCreateDepthStencilState(depthStencilDesc);
         RHI::RHIGraphicsPipelineStateDesc pipelineDesc;
         // 创建图形管线状态
-        pipelineDesc.shaderStages.vertexShader = dynamic_cast<RHI::RHIVertexShader*>(vs->GetRHIShader());
-        pipelineDesc.shaderStages.fragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(ps->GetRHIShader());
+        pipelineDesc.ShaderStages.VertexShader = dynamic_cast<RHI::RHIVertexShader*>(vs->GetRHIShader());
+        pipelineDesc.ShaderStages.FragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(ps->GetRHIShader());
         // 这里可以设置更多管线配置...
-        pipelineDesc.rasterizerState = rasterizerState;
+        pipelineDesc.RasterizerState = rasterizerState;
 
-        pipelineDesc.depthStencilState = depthStencilState;
+        pipelineDesc.DepthStencilState = depthStencilState;
         RHI::RHIVertexDescStateDesc Desc;
 
         //
@@ -62,11 +62,11 @@ namespace Renderer {
         //
 
         RHI::RHIVertexBindingDesc BindingDesc;
-        BindingDesc.binding = 0;
-        BindingDesc.stride = sizeof(float) * 3;
-        BindingDesc.inputRate = ERHIInputRate::PerVertex;
+        BindingDesc.Binding = 0;
+        BindingDesc.Stride = sizeof(float) * 3;
+        BindingDesc.InputRate = ERHIInputRate::PerVertex;
 
-        Desc.bindings.push_back(BindingDesc);
+        Desc.Bindings.push_back(BindingDesc);
 
 
         //
@@ -74,31 +74,31 @@ namespace Renderer {
         //
         RHI::RHIVertexAttributeDesc AttrDesc;
 
-        AttrDesc.location = 0;
-        AttrDesc.binding = 0;
-        AttrDesc.offset = 0;
-        AttrDesc.format = ERHIFormat::R32G32B32_Float;
+        AttrDesc.Location = 0;
+        AttrDesc.Binding = 0;
+        AttrDesc.Offset = 0;
+        AttrDesc.Format = ERHIFormat::R32G32B32_Float;
 
-        Desc.attributes.push_back(AttrDesc);
+        Desc.Attributes.push_back(AttrDesc);
         auto vertexDescState = RHIPipelineStateCache::GetOrCreateVertexDescState(Desc);
-        pipelineDesc.vertexDescState = vertexDescState;
+        pipelineDesc.VertexDescState = vertexDescState;
 
         RHI::RHIColorBlendStateDesc blendDesc;
         // 创建颜色混合状态
         RHI::RHIColorBlendAttachmentDesc blendAttachDesc;
-        blendAttachDesc.blendEnable = false;
+        blendAttachDesc.bBlendEnable = false;
         std::vector<RHI::RHIColorBlendAttachmentDesc> attachments = { blendAttachDesc };
-        blendDesc.attachments = attachments;
+        blendDesc.Attachments = attachments;
         auto colorBlendState = RHIPipelineStateCache::GetOrCreateColorBlendState(blendDesc);
-        pipelineDesc.colorBlendState = colorBlendState;
+        pipelineDesc.ColorBlendState = colorBlendState;
 
         //rendertarget info
-        pipelineDesc.attachmentDesc.colorAttachmentCount = 1;
-        pipelineDesc.attachmentDesc.colorAttachments[0].format = RHI::ERHIFormat::R8G8B8A8_UNorm;
-        pipelineDesc.attachmentDesc.colorAttachments[0].actions = ERenderTargetActions::Load_Store;
-        pipelineDesc.attachmentDesc.depthActions = ERenderTargetActions::Load_DontCare;
-        pipelineDesc.attachmentDesc.enableDepth = true;
-        pipelineDesc.attachmentDesc.depthStencilFormat = RHI::ERHIFormat::D32_Float;
+        pipelineDesc.AttachmentDesc.ColorAttachmentCount = 1;
+        pipelineDesc.AttachmentDesc.ColorAttachments[0].Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
+        pipelineDesc.AttachmentDesc.ColorAttachments[0].Actions = ERenderTargetActions::Load_Store;
+        pipelineDesc.AttachmentDesc.DepthActions = ERenderTargetActions::Load_DontCare;
+        pipelineDesc.AttachmentDesc.bEnableDepth = true;
+        pipelineDesc.AttachmentDesc.DepthStencilFormat = RHI::ERHIFormat::D32_Float;
         auto pipeline = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(pipelineDesc);
         BEGIN_SHADER_PARAMETER_STRUCT(DrawSkyPassParameters)
             SHADER_PARAMETER_STRUCT_REFERENCE(DrawSkyVertexParameters, vsParam)

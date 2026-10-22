@@ -33,10 +33,10 @@ VulkanGraphicsPipelineState::VulkanGraphicsPipelineState(VulkanDevice* device, c
     // Convert RHI desc to Vulkan create info
     createInfo = {}; // Initialize createInfo
     createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    VulkanRenderTargetLayout layout(pipelineDesc.attachmentDesc);
+    VulkanRenderTargetLayout layout(pipelineDesc.AttachmentDesc);
     auto renderPass = device->GetRenderPassManager()->GetOrCreateRenderPass(layout);
     createInfo.renderPass = renderPass->GetHandle();
-    createInfo.subpass = pipelineDesc.attachmentDesc.subpassIndex;
+    createInfo.subpass = pipelineDesc.AttachmentDesc.SubpassIndex;
 	auto layoutInfo = BuildPipelineLayoutInfo(pipelineDesc);
     pipelineLayout = device->GetPipelineLayoutCache()->GetOrCreateLayout(layoutInfo);
     
@@ -129,10 +129,10 @@ PipelineLayoutInfo VulkanGraphicsPipelineState::BuildPipelineLayoutInfo(const RH
         };
 
     processShader(
-        dynamic_cast<VulkanRHIShader*>(pipelineDesc.shaderStages.vertexShader));
+        dynamic_cast<VulkanRHIShader*>(pipelineDesc.ShaderStages.VertexShader));
 
     processShader(
-        dynamic_cast<VulkanRHIShader*>(pipelineDesc.shaderStages.fragmentShader));
+        dynamic_cast<VulkanRHIShader*>(pipelineDesc.ShaderStages.FragmentShader));
 
     return layoutInfo;
 }
@@ -141,13 +141,13 @@ PipelineLayoutInfo VulkanGraphicsPipelineState::BuildPipelineLayoutInfo(const RH
 void VulkanGraphicsPipelineState::CreatePipeline() {
     // 设置VkGraphicsPipelineCreateInfo的其他成员
     // 这里仅提供一个示例，具体成员需要根据pipelineDesc填充
-    VkPipelineVertexInputStateCreateInfo &vertexInputInfo = dynamic_cast<VulkanVertexDescState*>(desc.vertexDescState)->vertexInputInfo;
+    VkPipelineVertexInputStateCreateInfo &vertexInputInfo = dynamic_cast<VulkanVertexDescState*>(_desc.VertexDescState)->vertexInputInfo;
 
-    VkPipelineRasterizationStateCreateInfo rasterizer = dynamic_cast<VulkanRasterizerState*>(desc.rasterizerState)->rasterizerInfo;
+    VkPipelineRasterizationStateCreateInfo rasterizer = dynamic_cast<VulkanRasterizerState*>(_desc.RasterizerState)->rasterizerInfo;
 
-    VkPipelineColorBlendStateCreateInfo colorBlending = dynamic_cast<VulkanColorBlendState*>(desc.colorBlendState)->colorBlendInfo;
+    VkPipelineColorBlendStateCreateInfo colorBlending = dynamic_cast<VulkanColorBlendState*>(_desc.ColorBlendState)->colorBlendInfo;
 
-    VkPipelineDepthStencilStateCreateInfo depthStencil = dynamic_cast<VulkanDepthStencilState*>(desc.depthStencilState)->depthStencilInfo;
+    VkPipelineDepthStencilStateCreateInfo depthStencil = dynamic_cast<VulkanDepthStencilState*>(_desc.DepthStencilState)->depthStencilInfo;
 
     // 设置管线布局
     createInfo.layout = pipelineLayout->GetHandle();
@@ -165,7 +165,7 @@ void VulkanGraphicsPipelineState::CreatePipeline() {
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = TransformPrimitiveTopology(desc.primitiveTopology);
+    inputAssembly.topology = TransformPrimitiveTopology(_desc.PrimitiveTopology);
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     VkPipelineViewportStateCreateInfo viewportState{};
@@ -177,7 +177,7 @@ void VulkanGraphicsPipelineState::CreatePipeline() {
 
     VkPipelineMultisampleStateCreateInfo multisample{};
     multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisample.rasterizationSamples = TransformSampleCountFrom(desc.attachmentDesc.numSamples);
+    multisample.rasterizationSamples = TransformSampleCountFrom(_desc.AttachmentDesc.NumSamples);
     multisample.sampleShadingEnable = VK_FALSE;
     multisample.minSampleShading = 1.0f;
     multisample.pSampleMask = nullptr;
@@ -199,11 +199,11 @@ void VulkanGraphicsPipelineState::CreatePipeline() {
 
     // 设置着色器阶段
 	std::vector<RHI::RHIShader*> graphicShaders;
-    if (desc.shaderStages.vertexShader != nullptr) {
-        graphicShaders.push_back(desc.shaderStages.vertexShader);
+    if (_desc.ShaderStages.VertexShader != nullptr) {
+        graphicShaders.push_back(_desc.ShaderStages.VertexShader);
     }
-	if (desc.shaderStages.fragmentShader != nullptr) {
-		graphicShaders.push_back(desc.shaderStages.fragmentShader);
+	if (_desc.ShaderStages.FragmentShader != nullptr) {
+		graphicShaders.push_back(_desc.ShaderStages.FragmentShader);
 	}
 
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages(graphicShaders.size());
@@ -258,7 +258,7 @@ PipelineLayoutInfo VulkanComputePipelineState::BuildPipelineLayoutInfo(const RHI
 {
     PipelineLayoutInfo layoutInfo;
 
-    auto vulkanShaderSP = dynamic_cast<VulkanRHIShader*>(pipelineDesc.computeShader);
+    auto vulkanShaderSP = dynamic_cast<VulkanRHIShader*>(pipelineDesc.ComputeShader);
     if (!vulkanShaderSP)
         return layoutInfo;
 
@@ -334,7 +334,7 @@ void VulkanComputePipelineState::CreatePipeline() {
     // 这里仅提供一个示例，具体成员需要根据pipelineDesc填充
 
     // 设置着色器阶段
-    auto vulkanShaderSP = dynamic_cast<VulkanRHIShader*>(desc.computeShader);
+    auto vulkanShaderSP = dynamic_cast<VulkanRHIShader*>(_desc.ComputeShader);
     if (!vulkanShaderSP)
         throw std::runtime_error("Compute shader is null for compute pipeline");
 
@@ -510,17 +510,17 @@ void VulkanRayTracingPipeline::CreatePipeline() {
             shaderGroups.push_back(groupInfo);
         };
 
-    for (RHIRayTracingShader* shader : desc.RayGenTable)
+    for (RHIRayTracingShader* shader : _desc.RayGenTable)
     {
         addGeneralGroup(shader);
     }
 
-    for (RHIRayTracingShader* shader : desc.MissTable)
+    for (RHIRayTracingShader* shader : _desc.MissTable)
     {
         addGeneralGroup(shader);
     }
 
-    for (size_t i = 0; i < desc.HitGroupTable.size(); ++i)
+    for (size_t i = 0; i < _desc.HitGroupTable.size(); ++i)
     {
         VkRayTracingShaderGroupCreateInfoKHR groupInfo = {};
         groupInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
@@ -529,9 +529,9 @@ void VulkanRayTracingPipeline::CreatePipeline() {
         groupInfo.closestHitShader = VK_SHADER_UNUSED_KHR;
         groupInfo.intersectionShader = VK_SHADER_UNUSED_KHR;
 
-        RHIRayTracingShader* closestHitShader = desc.HitGroupTable[i];
+        RHIRayTracingShader* closestHitShader = _desc.HitGroupTable[i];
         RHIRayTracingShader* intersectionShader =
-            i < desc.IntersectTable.size() ? desc.IntersectTable[i] : nullptr;
+            i < _desc.IntersectTable.size() ? _desc.IntersectTable[i] : nullptr;
 
         if (intersectionShader)
         {
@@ -551,7 +551,7 @@ void VulkanRayTracingPipeline::CreatePipeline() {
         shaderGroups.push_back(groupInfo);
     }
 
-    for (RHIRayTracingShader* shader : desc.CallableTable)
+    for (RHIRayTracingShader* shader : _desc.CallableTable)
     {
         addGeneralGroup(shader);
     }
@@ -567,7 +567,7 @@ void VulkanRayTracingPipeline::CreatePipeline() {
     createInfo.pGroups = shaderGroups.data();
     createInfo.maxPipelineRayRecursionDepth = 1;
 
-    if (desc.RayGenTable.size() != 1)
+    if (_desc.RayGenTable.size() != 1)
         throw std::runtime_error("The RHI trace command requires exactly one ray-generation shader");
     if (!VKFunc::CreateRayTracingPipelinesKHR(device->GetHandle(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &createInfo, &pipeline))
         throw std::runtime_error("Failed to create the ray tracing pipeline");
@@ -584,8 +584,8 @@ void VulkanRayTracingPipeline::CreatePipeline() {
     const VkDeviceSize alignment = rtProperties.shaderGroupBaseAlignment;
     if (!stride || stride > rtProperties.maxShaderGroupStride)
         throw std::runtime_error("Invalid ray tracing shader record stride");
-    const uint32_t counts[] = { 1, static_cast<uint32_t>(desc.MissTable.size()),
-        static_cast<uint32_t>(desc.HitGroupTable.size()), static_cast<uint32_t>(desc.CallableTable.size()) };
+    const uint32_t counts[] = { 1, static_cast<uint32_t>(_desc.MissTable.size()),
+        static_cast<uint32_t>(_desc.HitGroupTable.size()), static_cast<uint32_t>(_desc.CallableTable.size()) };
     VkDeviceSize offsets[4]{};
     VkDeviceSize tableSize = 0;
     for (uint32_t i = 0; i < 4; ++i)

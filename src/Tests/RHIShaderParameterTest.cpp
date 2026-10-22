@@ -589,7 +589,7 @@ private:
 
         // 创建计算管线状态
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.computeShader = ComputeShader.get();
+        computeDesc.ComputeShader = ComputeShader.get();
         ComputePipelineState = api->CreateComputePipelineState(computeDesc);
     }
     void CreateSwapchain(RHI::RHIApi* api)

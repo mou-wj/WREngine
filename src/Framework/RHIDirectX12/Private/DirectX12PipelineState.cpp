@@ -215,8 +215,8 @@ namespace RHIDirectX12
             return;
         }
 
-        auto* vertexShader = dynamic_cast<DirectX12VertexShader*>(desc.shaderStages.vertexShader);
-        auto* pixelShader = dynamic_cast<DirectX12FragmentShader*>(desc.shaderStages.fragmentShader);
+        auto* vertexShader = dynamic_cast<DirectX12VertexShader*>(desc.ShaderStages.VertexShader);
+        auto* pixelShader = dynamic_cast<DirectX12FragmentShader*>(desc.ShaderStages.FragmentShader);
         if (!vertexShader || !pixelShader)
         {
             return;
@@ -229,11 +229,11 @@ namespace RHIDirectX12
 
         std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements;
         std::vector<std::string> semanticNames;
-        if (desc.vertexDescState)
+        if (desc.VertexDescState)
         {
-            const auto& vertexDesc = desc.vertexDescState->GetDesc();
-            inputElements.reserve(vertexDesc.attributes.size());
-            semanticNames.reserve(vertexDesc.attributes.size());
+            const auto& vertexDesc = desc.VertexDescState->GetDesc();
+            inputElements.reserve(vertexDesc.Attributes.size());
+            semanticNames.reserve(vertexDesc.Attributes.size());
 
             D3D12_SHADER_DESC shaderDesc{};
             CheckDX12(vertexShader->GetReflection()->GetDesc(&shaderDesc), "Reflect vertex inputs");
@@ -244,21 +244,21 @@ namespace RHIDirectX12
                 CheckDX12(vertexShader->GetReflection()->GetInputParameterDesc(i, &input), "Reflect vertex semantic");
                 if (input.SystemValueType != D3D_NAME_UNDEFINED)
                     continue;
-                auto attribute = std::find_if(vertexDesc.attributes.begin(), vertexDesc.attributes.end(),
-                                              [i](const auto& value) { return value.location == i; });
-                if (attribute == vertexDesc.attributes.end())
+                auto attribute = std::find_if(vertexDesc.Attributes.begin(), vertexDesc.Attributes.end(),
+                                              [i](const auto& value) { return value.Location == i; });
+                if (attribute == vertexDesc.Attributes.end())
                     throw std::runtime_error("Missing RHI vertex attribute for reflected input");
                 semanticNames.emplace_back(input.SemanticName);
                 D3D12_INPUT_ELEMENT_DESC element{};
                 element.SemanticName = semanticNames.back().c_str();
                 element.SemanticIndex = input.SemanticIndex;
-                element.Format = ToDxgiFormat(attribute->format);
-                element.InputSlot = attribute->binding;
-                element.AlignedByteOffset = attribute->offset;
+                element.Format = ToDxgiFormat(attribute->Format);
+                element.InputSlot = attribute->Binding;
+                element.AlignedByteOffset = attribute->Offset;
                 element.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
-                for (const auto& binding : vertexDesc.bindings)
-                    if (binding.binding == attribute->binding &&
-                        ToInputClassification(binding.inputRate) == D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA)
+                for (const auto& binding : vertexDesc.Bindings)
+                    if (binding.Binding == attribute->Binding &&
+                        ToInputClassification(binding.InputRate) == D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA)
                     {
                         element.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
                         element.InstanceDataStepRate = 1;
@@ -290,16 +290,16 @@ namespace RHIDirectX12
             rtDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
             rtDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
         }
-        if (desc.colorBlendState)
+        if (desc.ColorBlendState)
         {
-            const auto& blendDesc = desc.colorBlendState->GetDesc();
+            const auto& blendDesc = desc.ColorBlendState->GetDesc();
             psoDesc.BlendState.AlphaToCoverageEnable = FALSE;
             psoDesc.BlendState.IndependentBlendEnable = TRUE;
-            for (size_t i = 0; i < blendDesc.attachments.size() && i < 8; ++i)
+            for (size_t i = 0; i < blendDesc.Attachments.size() && i < 8; ++i)
             {
-                const auto& attachment = blendDesc.attachments[i];
+                const auto& attachment = blendDesc.Attachments[i];
                 auto& rtDesc = psoDesc.BlendState.RenderTarget[i];
-                rtDesc.BlendEnable = attachment.blendEnable ? TRUE : FALSE;
+                rtDesc.BlendEnable = attachment.bBlendEnable ? TRUE : FALSE;
                 rtDesc.LogicOpEnable = FALSE;
                 rtDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
                 rtDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
@@ -308,7 +308,7 @@ namespace RHIDirectX12
                 rtDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
                 rtDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
                 rtDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
-                rtDesc.RenderTargetWriteMask = static_cast<UINT8>(attachment.colorWriteMask);
+                rtDesc.RenderTargetWriteMask = static_cast<UINT8>(attachment.ColorWriteMask);
             }
         }
 
@@ -325,17 +325,17 @@ namespace RHIDirectX12
         psoDesc.RasterizerState.AntialiasedLineEnable = FALSE;
         psoDesc.RasterizerState.ForcedSampleCount = 0;
         psoDesc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-        if (desc.rasterizerState)
+        if (desc.RasterizerState)
         {
-            const auto& rsDesc = desc.rasterizerState->GetDesc();
-            psoDesc.RasterizerState.FillMode = ToFillMode(rsDesc.polygonMode);
-            psoDesc.RasterizerState.CullMode = ToCullMode(rsDesc.cullMode);
-            psoDesc.RasterizerState.FrontCounterClockwise = ToFrontCounterClockwise(rsDesc.frontFace);
+            const auto& rsDesc = desc.RasterizerState->GetDesc();
+            psoDesc.RasterizerState.FillMode = ToFillMode(rsDesc.PolygonMode);
+            psoDesc.RasterizerState.CullMode = ToCullMode(rsDesc.CullMode);
+            psoDesc.RasterizerState.FrontCounterClockwise = ToFrontCounterClockwise(rsDesc.FrontFace);
             psoDesc.RasterizerState.DepthBias =
-                rsDesc.depthBiasEnable ? static_cast<INT>(rsDesc.depthBiasConstantFactor) : 0;
-            psoDesc.RasterizerState.DepthBiasClamp = rsDesc.depthBiasClamp;
-            psoDesc.RasterizerState.SlopeScaledDepthBias = rsDesc.depthBiasSlopeFactor;
-            psoDesc.RasterizerState.DepthClipEnable = rsDesc.depthClampEnable ? FALSE : TRUE;
+                rsDesc.bDepthBiasEnable ? static_cast<INT>(rsDesc.DepthBiasConstantFactor) : 0;
+            psoDesc.RasterizerState.DepthBiasClamp = rsDesc.DepthBiasClamp;
+            psoDesc.RasterizerState.SlopeScaledDepthBias = rsDesc.DepthBiasSlopeFactor;
+            psoDesc.RasterizerState.DepthClipEnable = rsDesc.bDepthClampEnable ? FALSE : TRUE;
         }
 
         psoDesc.DepthStencilState.DepthEnable = TRUE;
@@ -349,34 +349,34 @@ namespace RHIDirectX12
         psoDesc.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
         psoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
         psoDesc.DepthStencilState.BackFace = psoDesc.DepthStencilState.FrontFace;
-        if (desc.depthStencilState)
+        if (desc.DepthStencilState)
         {
-            const auto& dsDesc = desc.depthStencilState->GetDesc();
-            psoDesc.DepthStencilState.DepthEnable = dsDesc.depthTestEnable ? TRUE : FALSE;
+            const auto& dsDesc = desc.DepthStencilState->GetDesc();
+            psoDesc.DepthStencilState.DepthEnable = dsDesc.bDepthTestEnable ? TRUE : FALSE;
             psoDesc.DepthStencilState.DepthWriteMask =
-                dsDesc.depthWriteEnable ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
-            psoDesc.DepthStencilState.DepthFunc = ToComparisonFunc(dsDesc.depthCompareOp);
-            psoDesc.DepthStencilState.StencilEnable = dsDesc.stencilTestEnable ? TRUE : FALSE;
-            psoDesc.DepthStencilState.StencilReadMask = static_cast<UINT8>(dsDesc.stencilReadMask);
-            psoDesc.DepthStencilState.StencilWriteMask = static_cast<UINT8>(dsDesc.stencilWriteMask);
+                dsDesc.bDepthWriteEnable ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+            psoDesc.DepthStencilState.DepthFunc = ToComparisonFunc(dsDesc.DepthCompareOp);
+            psoDesc.DepthStencilState.StencilEnable = dsDesc.bStencilTestEnable ? TRUE : FALSE;
+            psoDesc.DepthStencilState.StencilReadMask = static_cast<UINT8>(dsDesc.StencilReadMask);
+            psoDesc.DepthStencilState.StencilWriteMask = static_cast<UINT8>(dsDesc.StencilWriteMask);
         }
 
         psoDesc.InputLayout.pInputElementDescs = inputElements.empty() ? nullptr : inputElements.data();
         psoDesc.InputLayout.NumElements = static_cast<UINT>(inputElements.size());
         psoDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-        psoDesc.PrimitiveTopologyType = ToPrimitiveTopologyType(desc.primitiveTopology);
+        psoDesc.PrimitiveTopologyType = ToPrimitiveTopologyType(desc.PrimitiveTopology);
 
-        psoDesc.NumRenderTargets = desc.attachmentDesc.colorAttachmentCount;
-        for (uint32_t i = 0; i < desc.attachmentDesc.colorAttachmentCount && i < 8; ++i)
+        psoDesc.NumRenderTargets = desc.AttachmentDesc.ColorAttachmentCount;
+        for (uint32_t i = 0; i < desc.AttachmentDesc.ColorAttachmentCount && i < 8; ++i)
         {
-            psoDesc.RTVFormats[i] = ToDxgiFormat(desc.attachmentDesc.colorAttachments[i].format);
+            psoDesc.RTVFormats[i] = ToDxgiFormat(desc.AttachmentDesc.ColorAttachments[i].Format);
         }
-        if (desc.attachmentDesc.enableDepth || desc.attachmentDesc.enableStencil)
+        if (desc.AttachmentDesc.bEnableDepth || desc.AttachmentDesc.bEnableStencil)
         {
-            psoDesc.DSVFormat = ToDxgiFormat(desc.attachmentDesc.depthStencilFormat);
+            psoDesc.DSVFormat = ToDxgiFormat(desc.AttachmentDesc.DepthStencilFormat);
         }
 
-        psoDesc.SampleDesc.Count = std::max(1u, desc.attachmentDesc.numSamples);
+        psoDesc.SampleDesc.Count = std::max(1u, desc.AttachmentDesc.NumSamples);
         psoDesc.SampleDesc.Quality = 0;
 
         CheckDX12(Device->GetNativeDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&PipelineState)),
@@ -396,7 +396,7 @@ namespace RHIDirectX12
             return;
         }
 
-        auto* computeShader = dynamic_cast<DirectX12ComputeShader*>(desc.computeShader);
+        auto* computeShader = dynamic_cast<DirectX12ComputeShader*>(desc.ComputeShader);
         if (!computeShader)
         {
             return;

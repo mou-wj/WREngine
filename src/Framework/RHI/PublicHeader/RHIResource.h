@@ -13,13 +13,13 @@ class RHI_API RHIResource
 {
 public:
     explicit RHIResource(ERHIResourceType type = ERHIResourceType::Unknown)
-        : ResourceType(type) {}
+        : _resourceType(type) {}
     virtual ~RHIResource() = default;
 
-    ERHIResourceType GetResourceType() const { return ResourceType; }
+    ERHIResourceType GetResourceType() const { return _resourceType; }
 
 protected:
-    ERHIResourceType ResourceType;
+    ERHIResourceType _resourceType;
 };
 // --------------------------------------------------
 // 可被视图访问的资源基类
@@ -39,22 +39,22 @@ class RHI_API RHITexture : public RHIViewableResource
 {
 public:
 
-    RHITexture(const RHITextureDesc& desc) : RHIViewableResource(ERHIResourceType::Texture), Desc(desc) {
-        MipSizes.resize(Desc.MipLevels);
-        for (uint32_t i = 0; i < Desc.MipLevels; ++i) {
-            MipSizes[i] = Core::Int3(Desc.Width >> i, Desc.Height >> i, Desc.Depth >> i);
+    RHITexture(const RHITextureDesc& desc) : RHIViewableResource(ERHIResourceType::Texture), _desc(desc) {
+        _mipSizes.resize(_desc.MipLevels);
+        for (uint32_t i = 0; i < _desc.MipLevels; ++i) {
+            _mipSizes[i] = Core::Int3(_desc.Width >> i, _desc.Height >> i, _desc.Depth >> i);
         }
     }
     virtual ~RHITexture() = default;
 
     // 获取纹理描述
-    const RHITextureDesc& GetDesc() const { return Desc; }
+    const RHITextureDesc& GetDesc() const { return _desc; }
 
-    const Core::Int3& GetMipSize(uint32_t MipLevel) const { return MipSizes[MipLevel]; }
+    const Core::Int3& GetMipSize(uint32_t mipLevel) const { return _mipSizes[mipLevel]; }
 
 protected:
-    RHITextureDesc Desc;
-    std::vector<Core::Int3> MipSizes;
+    RHITextureDesc _desc;
+    std::vector<Core::Int3> _mipSizes;
 };
 
 // 缓冲区资源
@@ -62,35 +62,35 @@ class RHI_API RHIBuffer : public RHIViewableResource
 {
 public:
 
-    RHIBuffer(const RHIBufferDesc& desc) : RHIViewableResource(ERHIResourceType::Buffer), Desc(desc) {}
+    RHIBuffer(const RHIBufferDesc& desc) : RHIViewableResource(ERHIResourceType::Buffer), _desc(desc) {}
     virtual ~RHIBuffer() = default;
 
     // 获取缓冲区描述
-    const RHIBufferDesc& GetDesc() const { return Desc; }
+    const RHIBufferDesc& GetDesc() const { return _desc; }
 
 protected:
-    RHIBufferDesc Desc;
+    RHIBufferDesc _desc;
 };
 
 
 class RHI_API RHIResourceView {
 public:
-    explicit RHIResourceView(RHIViewableResource* Resource) : Resource(Resource) {}
-    RHIViewableResource* GetResource() const { return Resource; }
+    explicit RHIResourceView(RHIViewableResource* resource) : m_Resource(resource) {}
+    RHIViewableResource* GetResource() const { return m_Resource; }
 private:
-    RHIViewableResource* Resource = nullptr;
+    RHIViewableResource* m_Resource = nullptr;
 };
 
 class RHI_API RHIShaderResourceView : public RHIResourceView,public RHIResource  {
 public:
-    explicit RHIShaderResourceView(RHIViewableResource* Resource)
-        : RHIResourceView(Resource),RHIResource(ERHIResourceType::ShaderResourceView) {}
+    explicit RHIShaderResourceView(RHIViewableResource* resource)
+        : RHIResourceView(resource),RHIResource(ERHIResourceType::ShaderResourceView) {}
 };
 
 class RHI_API RHIUnorderedAccessView : public RHIResourceView,public RHIResource  {
 public:
-    explicit RHIUnorderedAccessView(RHIViewableResource* Resource)
-        : RHIResourceView(Resource),RHIResource(ERHIResourceType::UnorderedAccessView) {}
+    explicit RHIUnorderedAccessView(RHIViewableResource* resource)
+        : RHIResourceView(resource),RHIResource(ERHIResourceType::UnorderedAccessView) {}
 };
 struct RayTracingAccelerationStructureSizeInfo
 {
@@ -108,11 +108,11 @@ class RHI_API RHIRayTracingAccelerationStructure : public RHIResource
 public:
     RHIRayTracingAccelerationStructure() : RHIResource(ERHIResourceType::RayTracingAccelerationStructure) {}
 
-    const RayTracingAccelerationStructureSizeInfo& GetSizeInfo() const { return SizeInfo; }
+    const RayTracingAccelerationStructureSizeInfo& GetSizeInfo() const { return _sizeInfo; }
 
     virtual ERayTracingAccelerationStructureType GetType() const = 0;
 protected:
-    RayTracingAccelerationStructureSizeInfo SizeInfo;
+    RayTracingAccelerationStructureSizeInfo _sizeInfo;
 
 };
 struct RHIRayTracingGeometryDesc
@@ -125,8 +125,8 @@ struct RHIRayTracingGeometryDesc
     uint32_t VertexCount = 0;
     uint32_t IndexCount = 0;
 
-    bool AllowUpdate = false;
-    bool AllowCompaction = false;
+    bool bAllowUpdate = false;
+    bool bAllowCompaction = false;
 };
 class RHI_API RHIRayTracingGeometry : public RHIRayTracingAccelerationStructure
 {
@@ -139,18 +139,18 @@ public:
     virtual ~RHIRayTracingGeometry() = default;
 
     virtual void SetGeometryDesc(
-        const RHIRayTracingGeometryDesc& Desc) = 0;
+        const RHIRayTracingGeometryDesc& desc) = 0;
 
     const RHIRayTracingGeometryDesc& GetGeometryDesc() const
     {
-        return GeometryDesc;
+        return _geometryDesc;
     }
     virtual ERayTracingAccelerationStructureType GetType() const {
         return ERayTracingAccelerationStructureType::BottomLevel;
     }
 
 protected:
-    RHIRayTracingGeometryDesc GeometryDesc;
+    RHIRayTracingGeometryDesc _geometryDesc;
 };
 struct RHIRayTracingInstanceDesc
 {
@@ -178,27 +178,27 @@ public:
     virtual ~RHIRayTracingInstance() = default;
 
     virtual void SetInstancesDesc(
-        const RHIRayTracingInstancesDesc& Instances) = 0;
+        const RHIRayTracingInstancesDesc& instances) = 0;
 
     const RHIRayTracingInstancesDesc& GetInstancesDesc() const
     {
-        return Instances;
+        return _instances;
     }
     virtual ERayTracingAccelerationStructureType GetType() const {
         return ERayTracingAccelerationStructureType::TopLevel;
     }
 protected:
-    RHIRayTracingInstancesDesc Instances;
+    RHIRayTracingInstancesDesc _instances;
 };
 
 class RHIStagingBuffer
 {
 public:
-    RHIStagingBuffer(uint32_t InSize) : Size(InSize) {}
-    virtual void* Map(uint32_t Offset, uint32_t NumBytes) = 0;
+    RHIStagingBuffer(uint32_t inSize) : _size(inSize) {}
+    virtual void* Map(uint32_t offset, uint32_t numBytes) = 0;
     virtual void Unmap() = 0;
 protected:
-    uint32_t Size;
+    uint32_t _size;
 };
 
 // Shader基类
@@ -208,9 +208,9 @@ public:
     RHIShader() : RHIResource(ERHIResourceType::Shader) {}
     virtual ~RHIShader() = default;
     // 获取着色器类型
-    ERHIShaderFrequency GetShaderType() const { return ShaderType; }
+    ERHIShaderFrequency GetShaderType() const { return _shaderType; }
 protected:
-    ERHIShaderFrequency ShaderType = ERHIShaderFrequency::Unknown; // 着色器类型
+    ERHIShaderFrequency _shaderType = ERHIShaderFrequency::Unknown; // 着色器类型
 };
 
 class RHI_API RHIGraphicShader : public RHIShader
@@ -226,8 +226,8 @@ class RHI_API RHIVertexShader : public RHIGraphicShader
 {
 public:
     RHIVertexShader() {
-        ResourceType = ERHIResourceType::VertexShader;
-        ShaderType = ERHIShaderFrequency::Vertex;
+        _resourceType = ERHIResourceType::VertexShader;
+        _shaderType = ERHIShaderFrequency::Vertex;
     }
     virtual ~RHIVertexShader() = default;
 };
@@ -237,8 +237,8 @@ class RHI_API RHIFragmentShader : public RHIGraphicShader
 {
 public:
     RHIFragmentShader() {
-        ResourceType = ERHIResourceType::FragmentShader;
-        ShaderType = ERHIShaderFrequency::Fragment;
+        _resourceType = ERHIResourceType::FragmentShader;
+        _shaderType = ERHIShaderFrequency::Fragment;
     }
     virtual ~RHIFragmentShader() = default;
 };
@@ -248,8 +248,8 @@ class RHI_API RHIGeometryShader : public RHIGraphicShader
 {
 public:
     RHIGeometryShader() {
-        ResourceType = ERHIResourceType::GeometryShader;
-        ShaderType = ERHIShaderFrequency::Geometry;
+        _resourceType = ERHIResourceType::GeometryShader;
+        _shaderType = ERHIShaderFrequency::Geometry;
     }
     virtual ~RHIGeometryShader() = default;
 };
@@ -259,8 +259,8 @@ class RHI_API RHIComputeShader : public RHIShader
 {
 public:
     RHIComputeShader() {
-        ResourceType = ERHIResourceType::ComputeShader;
-        ShaderType = ERHIShaderFrequency::Compute;
+        _resourceType = ERHIResourceType::ComputeShader;
+        _shaderType = ERHIShaderFrequency::Compute;
     }
     virtual ~RHIComputeShader() = default;
 };
@@ -270,8 +270,8 @@ class RHI_API RHITessControlShader : public RHIGraphicShader
 {
 public:
     RHITessControlShader() {
-        ResourceType = ERHIResourceType::TessControlShader;
-        ShaderType = ERHIShaderFrequency::TessControl;
+        _resourceType = ERHIResourceType::TessControlShader;
+        _shaderType = ERHIShaderFrequency::TessControl;
     }
     virtual ~RHITessControlShader() = default;
 };
@@ -281,8 +281,8 @@ class RHI_API RHITessEvalShader : public RHIGraphicShader
 {
 public:
     RHITessEvalShader() {
-        ResourceType = ERHIResourceType::TessEvalShader;
-        ShaderType = ERHIShaderFrequency::TessEvaluation;
+        _resourceType = ERHIResourceType::TessEvalShader;
+        _shaderType = ERHIShaderFrequency::TessEvaluation;
     }
     virtual ~RHITessEvalShader() = default;
 };
@@ -292,8 +292,8 @@ class RHI_API RHIMeshShader : public RHIGraphicShader
 {
 public:
     RHIMeshShader() {
-        ResourceType = ERHIResourceType::MeshShader;
-        ShaderType = ERHIShaderFrequency::Mesh;
+        _resourceType = ERHIResourceType::MeshShader;
+        _shaderType = ERHIShaderFrequency::Mesh;
     }
     virtual ~RHIMeshShader() = default;
 };
@@ -303,8 +303,8 @@ class RHI_API RHITaskShader : public RHIGraphicShader
 {
 public:
     RHITaskShader() {
-        ResourceType = ERHIResourceType::TaskShader;
-        ShaderType = ERHIShaderFrequency::Task;
+        _resourceType = ERHIResourceType::TaskShader;
+        _shaderType = ERHIShaderFrequency::Task;
     }
     virtual ~RHITaskShader() = default;
 };
@@ -321,8 +321,8 @@ class RHI_API RHIRayGenShader : public RHIRayTracingShader
 {
 public:
     RHIRayGenShader() {
-        ResourceType = ERHIResourceType::RayGenShader;
-        ShaderType = ERHIShaderFrequency::RayGen;
+        _resourceType = ERHIResourceType::RayGenShader;
+        _shaderType = ERHIShaderFrequency::RayGen;
     }
     virtual ~RHIRayGenShader() = default;
 };
@@ -331,8 +331,8 @@ class RHI_API RHICloseHitShader : public RHIRayTracingShader
 {
 public:
     RHICloseHitShader() {
-        ResourceType = ERHIResourceType::CloseHitShader;
-        ShaderType = ERHIShaderFrequency::ClosestHit;
+        _resourceType = ERHIResourceType::CloseHitShader;
+        _shaderType = ERHIShaderFrequency::ClosestHit;
     }
     virtual ~RHICloseHitShader() = default;
 };
@@ -341,8 +341,8 @@ class RHI_API RHIMissShader : public RHIRayTracingShader
 {
 public:
     RHIMissShader() {
-        ResourceType = ERHIResourceType::MissShader;
-        ShaderType = ERHIShaderFrequency::Miss;
+        _resourceType = ERHIResourceType::MissShader;
+        _shaderType = ERHIShaderFrequency::Miss;
     }
     virtual ~RHIMissShader() = default;
 };
@@ -351,8 +351,8 @@ class RHI_API RHIAnyHitShader : public RHIRayTracingShader
 {
 public:
     RHIAnyHitShader() {
-        ResourceType = ERHIResourceType::AnyHitShader;
-        ShaderType = ERHIShaderFrequency::AnyHit;
+        _resourceType = ERHIResourceType::AnyHitShader;
+        _shaderType = ERHIShaderFrequency::AnyHit;
     }
     virtual ~RHIAnyHitShader() = default;
 };
@@ -361,8 +361,8 @@ class RHI_API RHIIntersectionShader : public RHIRayTracingShader
 {
 public:
     RHIIntersectionShader() {
-        ResourceType = ERHIResourceType::IntersectionShader;
-        ShaderType = ERHIShaderFrequency::Intersection;
+        _resourceType = ERHIResourceType::IntersectionShader;
+        _shaderType = ERHIShaderFrequency::Intersection;
     }
     virtual ~RHIIntersectionShader() = default;
 };
@@ -371,8 +371,8 @@ class RHI_API RHICallableShader : public RHIRayTracingShader
 {
 public:
     RHICallableShader() {
-        ResourceType = ERHIResourceType::CallableShader;
-        ShaderType = ERHIShaderFrequency::Callable;
+        _resourceType = ERHIResourceType::CallableShader;
+        _shaderType = ERHIShaderFrequency::Callable;
     }
     virtual ~RHICallableShader() = default;
 };
@@ -382,12 +382,12 @@ class RHI_API RHIVertexDescState : public RHIResource
 {
 public:
 
-    RHIVertexDescState(const RHIVertexDescStateDesc& desc) : RHIResource(ERHIResourceType::VertexDescState), desc(desc) {}
+    RHIVertexDescState(const RHIVertexDescStateDesc& desc) : RHIResource(ERHIResourceType::VertexDescState), m_Desc(desc) {}
 	// 获取顶点描述状态描述
-	const RHIVertexDescStateDesc& GetDesc() const { return desc; }
+	const RHIVertexDescStateDesc& GetDesc() const { return m_Desc; }
     virtual ~RHIVertexDescState() = default;
 private:
-    RHIVertexDescStateDesc desc;
+    RHIVertexDescStateDesc m_Desc;
 };
 
 // 光栅化状态
@@ -396,12 +396,12 @@ class RHI_API RHIRasterizerState : public RHIResource
 public:
 
 
-    RHIRasterizerState(const RHIRasterizerStateDesc& desc) : RHIResource(ERHIResourceType::RasterizerState), desc(desc) {}
+    RHIRasterizerState(const RHIRasterizerStateDesc& desc) : RHIResource(ERHIResourceType::RasterizerState), m_Desc(desc) {}
 	// 获取光栅化状态描述
-	const RHIRasterizerStateDesc& GetDesc() const { return desc; }
+	const RHIRasterizerStateDesc& GetDesc() const { return m_Desc; }
     virtual ~RHIRasterizerState() = default;
 private:
-    RHIRasterizerStateDesc desc;
+    RHIRasterizerStateDesc m_Desc;
 };
 
 // 颜色混合状态
@@ -409,12 +409,12 @@ class RHI_API RHIColorBlendState : public RHIResource
 {
 public:
 
-    RHIColorBlendState(const RHIColorBlendStateDesc& desc) : RHIResource(ERHIResourceType::ColorBlendState), desc(desc) {}
+    RHIColorBlendState(const RHIColorBlendStateDesc& desc) : RHIResource(ERHIResourceType::ColorBlendState), m_Desc(desc) {}
 	// 获取颜色混合状态描述
-	const RHIColorBlendStateDesc& GetDesc() const { return desc; }
+	const RHIColorBlendStateDesc& GetDesc() const { return m_Desc; }
     virtual ~RHIColorBlendState() = default;
 private:
-    RHIColorBlendStateDesc desc;
+    RHIColorBlendStateDesc m_Desc;
 };
 
 // 深度测试和模板状态
@@ -422,23 +422,23 @@ class RHI_API RHIDepthStencilState : public RHIResource
 {
 public:
 
-    RHIDepthStencilState(const RHIDepthStencilStateDesc& desc) : RHIResource(ERHIResourceType::DepthStencilState), desc(desc) {}
+    RHIDepthStencilState(const RHIDepthStencilStateDesc& desc) : RHIResource(ERHIResourceType::DepthStencilState), m_Desc(desc) {}
 	// 获取深度模板状态描述
-	const RHIDepthStencilStateDesc& GetDesc() const { return desc; }
+	const RHIDepthStencilStateDesc& GetDesc() const { return m_Desc; }
     virtual ~RHIDepthStencilState() = default;
 private:
-    RHIDepthStencilStateDesc desc;
+    RHIDepthStencilStateDesc m_Desc;
 };
 
 // 采样器资源
 class RHI_API RHISampler : public RHIResource
 {
 public:
-    RHISampler(const RHISamplerDesc& desc) : RHIResource(ERHIResourceType::Sampler), desc(desc) {}
+    RHISampler(const RHISamplerDesc& desc) : RHIResource(ERHIResourceType::Sampler), m_Desc(desc) {}
     virtual ~RHISampler() = default;
 
 private:
-    RHISamplerDesc desc;
+    RHISamplerDesc m_Desc;
     // 采样器相关接口
 };
 
@@ -484,8 +484,8 @@ using RHIDepthStencilStateSP = std::shared_ptr<RHIDepthStencilState>;
 // Shader Stage
 struct RHI_API RHIGraphicShaderStageDesc
 {
-    RHIVertexShader* vertexShader = nullptr; // 指向对应阶段的shader对象
-    RHIFragmentShader* fragmentShader = nullptr; // 指向对应阶段的shader对象
+    RHIVertexShader* VertexShader = nullptr; // 指向对应阶段的shader对象
+    RHIFragmentShader* FragmentShader = nullptr; // 指向对应阶段的shader对象
     // 可扩展entry point等
     
 };
@@ -494,17 +494,17 @@ struct RHI_API RHIGraphicShaderStageDesc
 // RenderTarget 描述
 struct RHIColorAttachmentDesc
 {
-    ERHIFormat format = ERHIFormat::Unknown;                    // 像素格式（PF_XXX 或自定义枚举）
-    ERenderTargetActions actions = ERenderTargetActions::Load_Store;
-    bool enableResolve = false;
-    uint32_t sampleCount = 1;               // MSAA
+    ERHIFormat Format = ERHIFormat::Unknown;                    // 像素格式（PF_XXX 或自定义枚举）
+    ERenderTargetActions Actions = ERenderTargetActions::Load_Store;
+    bool bEnableResolve = false;
+    uint32_t SampleCount = 1;               // MSAA
     static inline uint64_t CalculateHash(const RHIColorAttachmentDesc& att)
     {
         uint64_t hash = 14695981039346656037ull; // FNV64 offset
-        hash ^= static_cast<uint64_t>(att.format); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(att.actions); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(att.enableResolve); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(att.sampleCount); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(att.Format); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(att.Actions); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(att.bEnableResolve); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(att.SampleCount); hash *= 1099511628211ull;
         return hash;
     }
 };
@@ -513,41 +513,41 @@ struct RHIColorAttachmentDesc
 
 struct RHIGraphicAttachmentDesc {
     // RenderTarget 信息
-    uint32_t colorAttachmentCount = 0;
-    RHIColorAttachmentDesc colorAttachments[MAX_RENDER_TARGETS]{};
+    uint32_t ColorAttachmentCount = 0;
+    RHIColorAttachmentDesc ColorAttachments[MAX_RENDER_TARGETS]{};
 
     // Depth/Stencil Target 信息
-    bool enableDepth = false;                 // Depth 是否启用
-    bool enableStencil = false;               // Stencil 是否启用
-    ERHIFormat depthStencilFormat = ERHIFormat::Unknown;      // PF_XXX
-    ERenderTargetActions depthActions = ERenderTargetActions::Load_Store;
-    ERenderTargetActions stencilActions = ERenderTargetActions::Load_Store;
+    bool bEnableDepth = false;                 // Depth 是否启用
+    bool bEnableStencil = false;               // Stencil 是否启用
+    ERHIFormat DepthStencilFormat = ERHIFormat::Unknown;      // PF_XXX
+    ERenderTargetActions DepthActions = ERenderTargetActions::Load_Store;
+    ERenderTargetActions StencilActions = ERenderTargetActions::Load_Store;
 
-    uint32_t numSamples = 1;              // MSAA 样本数
+    uint32_t NumSamples = 1;              // MSAA 样本数
 
     // 子通道（Vulkan Subpass hint）
-    uint32_t subpassIndex = 0;
+    uint32_t SubpassIndex = 0;
     static uint64_t CalculateHash(const RHIGraphicAttachmentDesc& desc)
     {
         uint64_t hash = 14695981039346656037ull; // FNV64 offset
 
         // Color attachments
-        hash ^= static_cast<uint64_t>(desc.colorAttachmentCount); hash *= 1099511628211ull;
-        for (uint32_t i = 0; i < desc.colorAttachmentCount; ++i)
+        hash ^= static_cast<uint64_t>(desc.ColorAttachmentCount); hash *= 1099511628211ull;
+        for (uint32_t i = 0; i < desc.ColorAttachmentCount; ++i)
         {
-            hash ^= RHIColorAttachmentDesc::CalculateHash(desc.colorAttachments[i]); hash *= 1099511628211ull;
+            hash ^= RHIColorAttachmentDesc::CalculateHash(desc.ColorAttachments[i]); hash *= 1099511628211ull;
         }
 
         // Depth/Stencil
-        hash ^= static_cast<uint64_t>(desc.enableDepth); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(desc.enableStencil); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(desc.depthStencilFormat); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(desc.depthActions); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(desc.stencilActions); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.bEnableDepth); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.bEnableStencil); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.DepthStencilFormat); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.DepthActions); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.StencilActions); hash *= 1099511628211ull;
 
         // Global
-        hash ^= static_cast<uint64_t>(desc.numSamples); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(desc.subpassIndex); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.NumSamples); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.SubpassIndex); hash *= 1099511628211ull;
 
         return hash;
     }
@@ -558,14 +558,14 @@ struct RHIGraphicAttachmentDesc {
 struct RHI_API RHIGraphicsPipelineStateDesc
 {
     EQueueType InitialQueueType = EQueueType::Graphics;
-    RHIGraphicShaderStageDesc shaderStages;
+    RHIGraphicShaderStageDesc ShaderStages;
     // 可扩展其它管线相关状态引用，如顶点描述、光栅化、混合、深度模板等
-    RHIVertexDescState* vertexDescState = nullptr; // 顶点描述状态
-    EPrimitiveTopology primitiveTopology = EPrimitiveTopology::TriangleList;
-    RHIRasterizerState* rasterizerState = nullptr; // 光栅化状态
-    RHIColorBlendState* colorBlendState = nullptr; // 颜色混合状态
-    RHIDepthStencilState* depthStencilState = nullptr; // 深度测试和模板状态
-    RHIGraphicAttachmentDesc attachmentDesc;
+    RHIVertexDescState* VertexDescState = nullptr; // 顶点描述状态
+    EPrimitiveTopology PrimitiveTopology = EPrimitiveTopology::TriangleList;
+    RHIRasterizerState* RasterizerState = nullptr; // 光栅化状态
+    RHIColorBlendState* ColorBlendState = nullptr; // 颜色混合状态
+    RHIDepthStencilState* DepthStencilState = nullptr; // 深度测试和模板状态
+    RHIGraphicAttachmentDesc AttachmentDesc;
 
 };
 
@@ -573,31 +573,31 @@ struct RHI_API RHIGraphicsPipelineStateDesc
 class RHI_API RHIGraphicsPipelineState : public RHIResource
 {
 public:
-    RHIGraphicsPipelineState(const RHIGraphicsPipelineStateDesc& desc) : RHIResource(ERHIResourceType::GraphicPipelineState), desc(desc) {}
+    RHIGraphicsPipelineState(const RHIGraphicsPipelineStateDesc& desc) : RHIResource(ERHIResourceType::GraphicPipelineState), _desc(desc) {}
 
     virtual ~RHIGraphicsPipelineState() = default;
-    const RHIGraphicsPipelineStateDesc& GetDesc() const { return desc; }
+    const RHIGraphicsPipelineStateDesc& GetDesc() const { return _desc; }
 
 protected:
-    RHIGraphicsPipelineStateDesc desc;
+    RHIGraphicsPipelineStateDesc _desc;
 };
 
 // Compute Pipeline
 struct RHI_API RHIComputePipelineStateDesc
 {
-    RHIComputeShader* computeShader;// 指向Compute Shader
+    RHIComputeShader* ComputeShader;// 指向Compute Shader
     // 可扩展Compute管线特有参数
 };
 
 class RHI_API RHIComputePipelineState : public RHIResource
 {
 public:
-    RHIComputePipelineState(const RHIComputePipelineStateDesc& desc) : RHIResource(ERHIResourceType::ComputePipelineState), desc(desc) {}
+    RHIComputePipelineState(const RHIComputePipelineStateDesc& desc) : RHIResource(ERHIResourceType::ComputePipelineState), _desc(desc) {}
     ~RHIComputePipelineState() override = default;
-    const RHIComputePipelineStateDesc& GetDesc() const { return desc; }
+    const RHIComputePipelineStateDesc& GetDesc() const { return _desc; }
     // 可扩展Compute管线特有参数
 protected:
-    RHIComputePipelineStateDesc desc;
+    RHIComputePipelineStateDesc _desc;
 };
 
 // RayTracing Pipeline
@@ -613,12 +613,12 @@ struct RHI_API RHIRayTracingPipelineStateDesc
 class RHI_API RHIRayTracingPipelineState : public RHIResource
 {
 public:
-    RHIRayTracingPipelineState(const RHIRayTracingPipelineStateDesc& desc) : RHIResource(ERHIResourceType::RayTracingPipelineState), desc(desc) {}
+    RHIRayTracingPipelineState(const RHIRayTracingPipelineStateDesc& desc) : RHIResource(ERHIResourceType::RayTracingPipelineState), _desc(desc) {}
     ~RHIRayTracingPipelineState() override = default;
 
     // 可扩展RayTracing管线特有参数
 protected:
-    RHIRayTracingPipelineStateDesc desc;
+    RHIRayTracingPipelineStateDesc _desc;
 };
 
 
@@ -663,7 +663,7 @@ struct RHIBoundRenderTargets
     uint8_t NumColorAttachments = 0;
     Core::Int2 Dimensions{};
     RHIBoundRenderTargets() = default;
-    void Bound(RHITexture* colorTexture, ERenderTargetActions colorActions,RHITexture* depthTexture, ERenderTargetActions depthActions,int Width,int Height) {
+    void Bound(RHITexture* colorTexture, ERenderTargetActions colorActions,RHITexture* depthTexture, ERenderTargetActions depthActions,int width,int height) {
 
         // reset
         NumColorAttachments = 1;
@@ -710,8 +710,8 @@ struct RHIBoundRenderTargets
         DepthStencil.ClearBinding.Depth = 1.0f;
         DepthStencil.ClearBinding.Stencil = 0;
         
-        Dimensions.X = Width;
-        Dimensions.Y = Height;
+        Dimensions.X = width;
+        Dimensions.Y = height;
         
 
     }

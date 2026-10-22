@@ -152,7 +152,7 @@ namespace Engine {
         cmd.Begin();
 
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.computeShader = computeShader;
+        computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
         cmd.SetComputePipelineState(pipelineState);
 
@@ -297,7 +297,7 @@ namespace Engine {
         cmd.Begin();
 
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.computeShader = computeShader;
+        computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
         cmd.SetComputePipelineState(pipelineState);
 

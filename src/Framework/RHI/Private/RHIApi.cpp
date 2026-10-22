@@ -23,7 +23,7 @@ namespace RHI{
     { ERHIFormat::R32G32B32A32_Float, {"R32G32B32A32_Float",16,4, false, false, false, true } },
     { ERHIFormat::D24_UNorm_S8_UInt, {"D24_UNorm_S8_UInt", 4, 2, true, true, false, false} },
     { ERHIFormat::D32_Float, {"D32_Float", 4, 1, true, false, false, true } },
-    // ...¿É¸ù¾İĞèÒª¼ÌĞøÌí¼Ó
+    // ...å¯æ ¹æ®éœ€è¦ç»§ç»­æ·»åŠ 
     };
 
 }

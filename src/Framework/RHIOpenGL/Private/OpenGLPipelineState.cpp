@@ -52,18 +52,18 @@ namespace RHIOpenGL
         {
             ProgramHandle = glCreateProgram();
 
-            if (desc.shaderStages.vertexShader)
+            if (desc.ShaderStages.VertexShader)
             {
-                auto* vertexShader = dynamic_cast<OpenGLVertexShader*>(desc.shaderStages.vertexShader);
+                auto* vertexShader = dynamic_cast<OpenGLVertexShader*>(desc.ShaderStages.VertexShader);
                 if (vertexShader && vertexShader->GetHandle() != 0)
                 {
                     glAttachShader(ProgramHandle, vertexShader->GetHandle());
                 }
             }
 
-            if (desc.shaderStages.fragmentShader)
+            if (desc.ShaderStages.FragmentShader)
             {
-                auto* fragmentShader = dynamic_cast<OpenGLFragmentShader*>(desc.shaderStages.fragmentShader);
+                auto* fragmentShader = dynamic_cast<OpenGLFragmentShader*>(desc.ShaderStages.FragmentShader);
                 if (fragmentShader && fragmentShader->GetHandle() != 0)
                 {
                     glAttachShader(ProgramHandle, fragmentShader->GetHandle());
@@ -95,9 +95,9 @@ namespace RHIOpenGL
         {
             ProgramHandle = glCreateProgram();
 
-            if (desc.computeShader)
+            if (desc.ComputeShader)
             {
-                auto* computeShader = dynamic_cast<OpenGLComputeShader*>(desc.computeShader);
+                auto* computeShader = dynamic_cast<OpenGLComputeShader*>(desc.ComputeShader);
                 if (computeShader && computeShader->GetHandle() != 0)
                 {
                     glAttachShader(ProgramHandle, computeShader->GetHandle());

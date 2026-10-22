@@ -14,8 +14,8 @@ namespace RHI
         virtual ~RHIContextBase() = default;
         virtual void Begin() = 0;
         virtual void End() = 0;
-        virtual void BeginTransitions(std::vector<const RHITransition*> Transitions) = 0;
-        virtual void EndTransitions(std::vector<const RHITransition*> Transitions) = 0;
+        virtual void BeginTransitions(std::vector<const RHITransition*> transitions) = 0;
+        virtual void EndTransitions(std::vector<const RHITransition*> transitions) = 0;
         virtual void CopyTexture(RHITexture* src, RHITexture* dst, const RHICopyTextureDesc& copyDesc) = 0;
         // 新增：BlitTexture接口
         virtual void BlitTexture(RHITexture* src, RHITexture* dst, const RHIBlitTextureDesc& blitDesc) = 0;
@@ -26,7 +26,7 @@ namespace RHI
     public:
         virtual ~RHIComputeContex() = default;
         // ========================
-        // Compute �ӿ�
+        // 计算命令接口。
         // ========================
         virtual void SetComputePipelineState(RHIComputePipelineState* pipelineState) = 0;
         virtual void SetBatchedShaderParameters(RHIComputeShader* shader, const RHIBatchedShaderParameters& parameter) = 0;
@@ -40,9 +40,9 @@ namespace RHI
         virtual void SetBatchedShaderParameters(RHIGraphicShader* shader, const RHIBatchedShaderParameters& parameter) = 0;
 
         // ========================
-        // Graphics �ӿ�
+        // 图形命令接口。
         // ========================
-        virtual void SetStreamSource(uint32_t streamIndex, RHIBuffer* VertexBuffer, uint32_t Offset) = 0;
+        virtual void SetStreamSource(uint32_t streamIndex, RHIBuffer* vertexBuffer, uint32_t offset) = 0;
         virtual void SetGraphicPipelineState(RHIGraphicsPipelineState* pipelineState) = 0;
         virtual void SetViewport(float x, float y, float w, float h, float minDepth, float maxDepth) = 0;
         virtual void SetScissor(int32_t x, int32_t y, uint32_t w, uint32_t h) = 0;
@@ -56,7 +56,7 @@ namespace RHI
         virtual void EndRenderPass() = 0;
 
         // ========================
-        // RayTracing �ӿ�
+        // 光线追踪命令接口。
         // ========================
         virtual void SetBatchedShaderParameters(RHIRayTracingShader* shader, const RHIBatchedShaderParameters& parameter) = 0;
         virtual void SetRayTracingPipelineState(
@@ -113,13 +113,13 @@ public:
     virtual uint64_t GetCurrentValue() = 0;
 
     // CPU 端阻塞等待直到达到某个值
-    virtual void Wait(uint64_t Value, uint64_t TimeoutNS = UINT64_MAX) = 0;
+    virtual void Wait(uint64_t value, uint64_t timeoutNs = UINT64_MAX) = 0;
 
     // 获取所属队列类型
-    EQueueType GetQueueType() const { return Type; }
+    EQueueType GetQueueType() const { return _type; }
 
 protected:
-    EQueueType Type;
+    EQueueType _type;
 };
 
 struct RHIWaitInfo {
@@ -149,7 +149,7 @@ public:
     virtual RHISwapchainSlot AcquireNextSlot() = 0;
     
     // 窗口缩放处理
-    virtual void Resize(uint32_t Width, uint32_t Height) = 0;
+    virtual void Resize(uint32_t width, uint32_t height) = 0;
 
 protected:
 
@@ -161,7 +161,7 @@ class RHI_API RHIPresentExecutor
 {
 public:
     virtual ~RHIPresentExecutor() = default;
-    virtual void Present(RHISwapchain* Swapchain, const RHIWaitInfo& WaitInfo) = 0;
+    virtual void Present(RHISwapchain* swapchain, const RHIWaitInfo& waitInfo) = 0;
 };
 
 
@@ -178,15 +178,15 @@ public:
     };
 
     virtual RHIContextBase* AcquireCommandContext() = 0;
-    virtual RHIContextBase* ReleaseCommandContext(RHIContextBase* Context) = 0;
+    virtual RHIContextBase* ReleaseCommandContext(RHIContextBase* context) = 0;
 
     // 提交指令包，并返回完成点与可供后续等待的依赖对象
     virtual uint64_t ExecuteContext(RHIContextBase* context) = 0;
 
     // 批量提交并处理跨队列等待
-    virtual uint64_t ExecuteContext(const std::vector<RHIContextBase*>& Cmds,
-                               const std::vector<RHIWaitInfo>& WaitInfos) = 0;
-    virtual void WaitValue(uint64_t FenceValue) = 0;
+    virtual uint64_t ExecuteContext(const std::vector<RHIContextBase*>& cmds,
+                               const std::vector<RHIWaitInfo>& waitInfos) = 0;
+    virtual void WaitValue(uint64_t fenceValue) = 0;
     // 强制刷新硬件队列
     virtual void WaitIdle() = 0;
 

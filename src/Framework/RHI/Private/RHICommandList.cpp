@@ -28,12 +28,12 @@ void RHICommandDraw::Execute(RHICommandListBase& cmdList)
     }
 }
 
-RHICommandDrawIndexed::RHICommandDrawIndexed(RHIBuffer* indexBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance) : indexBuffer(indexBuffer), indexCount(indexCount), firstIndex(firstIndex), instanceCount(instanceCount), firstInstance(firstInstance), vertexOffset(vertexOffset) {}
+RHICommandDrawIndexed::RHICommandDrawIndexed(RHIBuffer* indexBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance) : IndexBuffer(indexBuffer), IndexCount(indexCount), FirstIndex(firstIndex), InstanceCount(instanceCount), FirstInstance(firstInstance), VertexOffset(vertexOffset) {}
 void RHICommandDrawIndexed::Execute(RHICommandListBase& cmdList) {
 	auto* graphicsContext = dynamic_cast<RHIGraphicContex*>(cmdList.GetContext());
 	if (graphicsContext)
 	{
-		graphicsContext->DrawIndexed(indexBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+		graphicsContext->DrawIndexed(IndexBuffer, IndexCount, InstanceCount, FirstIndex, VertexOffset, FirstInstance);
 	}
 }
 
@@ -65,7 +65,7 @@ void RHICommandEnd::Execute(RHICommandListBase& cmdList) {
         context->End();
     }
 }
-RHICommandBeginTransitions::RHICommandBeginTransitions(std::vector<const RHITransition*> InTransitions):Transitions(InTransitions) {}
+RHICommandBeginTransitions::RHICommandBeginTransitions(std::vector<const RHITransition*> inTransitions):Transitions(inTransitions) {}
 void RHICommandBeginTransitions::Execute(RHICommandListBase& cmdList) {
     auto* context = dynamic_cast<RHIContextBase*>(cmdList.GetContext());
     if (context)
@@ -73,7 +73,7 @@ void RHICommandBeginTransitions::Execute(RHICommandListBase& cmdList) {
         context->BeginTransitions(Transitions);
     }
 }
-RHICommandEndTransitions::RHICommandEndTransitions(std::vector<const RHITransition*> InTransitions) :Transitions(InTransitions) {}
+RHICommandEndTransitions::RHICommandEndTransitions(std::vector<const RHITransition*> inTransitions) :Transitions(inTransitions) {}
 void RHICommandEndTransitions::Execute(RHICommandListBase& cmdList) {
     auto* context = dynamic_cast<RHIContextBase*>(cmdList.GetContext());
     if (context)
@@ -111,20 +111,20 @@ void RHICommandBlitTexture::Execute(RHICommandListBase& cmdList)
     }
 }
 RHICommandUpdateTexture::RHICommandUpdateTexture(RHITexture* texture, const void* data, const RHIUpdateTextureRegion& region)
-    : texture(texture), data(data), region(region)
+    : Texture(texture), Data(data), Region(region)
 {
 }
 void RHICommandUpdateTexture::Execute(RHICommandListBase& cmdList)
 {
-    GRHIApi->UpdateTexture(cmdList,texture, data, region);
+    GRHIApi->UpdateTexture(cmdList,Texture, Data, Region);
 }
 RHICommandUpdateBuffer::RHICommandUpdateBuffer(RHIBuffer* buffer, const void* data, const RHIUpdateBufferRegion& region)
-    : buffer(buffer), data(data), region(region)
+    : Buffer(buffer), Data(data), Region(region)
 {
 }
 void RHICommandUpdateBuffer::Execute(RHICommandListBase& cmdList)
 {
-    GRHIApi->UpdateBuffer(cmdList, buffer, data, region);
+    GRHIApi->UpdateBuffer(cmdList, Buffer, Data, Region);
 }
 
 RHICommandSetComputePipelineState::RHICommandSetComputePipelineState(RHIComputePipelineState* pipelineState)
@@ -306,15 +306,15 @@ void RHICommandUpdateAccelerationStructure::Execute(RHICommandListBase& cmdList)
 
 
 RHICommandListBase::RHICommandListBase(RHIContextBase* context)
-    : Context(context)
+    : _context(context)
 {
 }
 
-RHICommandListBase::~RHICommandListBase() { commands.clear(); };
+RHICommandListBase::~RHICommandListBase() { _commands.clear(); };
 
 void RHICommandListBase::ExecuteAll()
 {
-    for (auto& cmd : commands)
+    for (auto& cmd : _commands)
     {
         if (cmd)
         {
@@ -325,27 +325,27 @@ void RHICommandListBase::ExecuteAll()
 
 void RHICommandListBase::Clear()
 {
-    commands.clear();
+    _commands.clear();
 }
 
 void RHICommandListBase::SetImmediate(bool bImmediate)
 {
-    immediate = bImmediate;
+    _bImmediate = bImmediate;
 }
 
 bool RHICommandListBase::IsImmediate() const
 {
-    return immediate;
+    return _bImmediate;
 }
 
 RHIContextBase* RHICommandListBase::GetContext() const
 {
-    return Context;
+    return _context;
 }
 
 RHIContextBase* RHICommandListBase::GetCommandContex() const
 {
-    return Context;
+    return _context;
 }
 
 void RHICommandListBase::Begin()
@@ -358,14 +358,14 @@ void RHICommandListBase::End()
     AddCommand<RHICommandEnd>();
 }
 
-void RHICommandListBase::BeginTransitions(std::vector<const RHITransition*> Transitions)
+void RHICommandListBase::BeginTransitions(std::vector<const RHITransition*> transitions)
 {
-    AddCommand<RHICommandBeginTransitions>(Transitions);
+    AddCommand<RHICommandBeginTransitions>(transitions);
 }
 
-void RHICommandListBase::EndTransitions(std::vector<const RHITransition*> Transitions)
+void RHICommandListBase::EndTransitions(std::vector<const RHITransition*> transitions)
 {
-    AddCommand<RHICommandEndTransitions>(Transitions);
+    AddCommand<RHICommandEndTransitions>(transitions);
 }
 void RHICommandListBase::CopyTexture(RHITexture* src, RHITexture* dst, const RHICopyTextureDesc& copyDesc)
 {
@@ -384,7 +384,7 @@ RHIComputeCommandList::RHIComputeCommandList(RHIComputeContex* context)
 
 RHIComputeContex* RHIComputeCommandList::GetComputeContext() const
 {
-    return dynamic_cast<RHIComputeContex*>(Context);
+    return dynamic_cast<RHIComputeContex*>(_context);
 }
 
 void RHIComputeCommandList::SetComputePipelineState(RHIComputePipelineState* pipelineState)
@@ -409,7 +409,7 @@ RHIGraphicCommandList::RHIGraphicCommandList(RHIGraphicContex* context)
 
 RHIGraphicContex* RHIGraphicCommandList::GetGraphicContext() const
 {
-    return dynamic_cast<RHIGraphicContex*>(Context);
+    return dynamic_cast<RHIGraphicContex*>(_context);
 }
 
 void RHIGraphicCommandList::SetBatchedShaderParameters(RHIGraphicShader* shader, const RHIBatchedShaderParameters& batchedShaderParameter)
@@ -422,9 +422,9 @@ void RHIGraphicCommandList::SetBatchedShaderParameters(RHIRayTracingShader* shad
     AddCommand<RHICommandSetRayTracingShaderParameters>(shader, batchedShaderParameter);
 }
 
-void RHIGraphicCommandList::SetStreamSource(uint32_t streamIndex, RHIBuffer* VertexBuffer, uint32_t Offset)
+void RHIGraphicCommandList::SetStreamSource(uint32_t streamIndex, RHIBuffer* vertexBuffer, uint32_t offset)
 {
-    AddCommand<RHICommandSetStreamSource>(streamIndex, std::move(VertexBuffer), Offset);
+    AddCommand<RHICommandSetStreamSource>(streamIndex, std::move(vertexBuffer), offset);
 }
 
 void RHIGraphicCommandList::SetGraphicPipelineState(RHIGraphicsPipelineState* pipelineState)

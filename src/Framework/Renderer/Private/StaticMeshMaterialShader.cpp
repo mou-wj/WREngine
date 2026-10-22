@@ -260,33 +260,33 @@ namespace Renderer
         RHI::RHIVertexDescStateDesc Desc;
 
         // 一个 Vertex Buffer
-        Desc.bindings.push_back({
-            .binding = 0,
-            .stride = sizeof(float) * 3,
-            .inputRate = ERHIInputRate::PerVertex
+        Desc.Bindings.push_back({
+            .Binding = 0,
+            .Stride = sizeof(float) * 3,
+            .InputRate = ERHIInputRate::PerVertex
             });
 
         // Position
-        Desc.attributes.push_back({
-            .location = 0,
-            .binding = 0,
-            .offset = 0,
-            .format = ERHIFormat::R32G32B32_Float
+        Desc.Attributes.push_back({
+            .Location = 0,
+            .Binding = 0,
+            .Offset = 0,
+            .Format = ERHIFormat::R32G32B32_Float
             });
         if (useIntance) {
             // 一个 Vertex Buffer
-            Desc.bindings.push_back({
-                .binding = 1,
-                .stride = sizeof(uint32_t),
-                .inputRate = ERHIInputRate::PerInstance
+            Desc.Bindings.push_back({
+                .Binding = 1,
+                .Stride = sizeof(uint32_t),
+                .InputRate = ERHIInputRate::PerInstance
                 });
 
             // Position
-            Desc.attributes.push_back({
-                .location = 1,
-                .binding = 1,
-                .offset = 0,
-                .format = ERHIFormat::R32_UInt
+            Desc.Attributes.push_back({
+                .Location = 1,
+                .Binding = 1,
+                .Offset = 0,
+                .Format = ERHIFormat::R32_UInt
                 });
 
 

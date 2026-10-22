@@ -10,7 +10,7 @@ namespace RHIOpenGL
     OpenGLSyncPoint::OpenGLSyncPoint(bool isSwapchainFence, RHI::EQueueType queueType)
         : bIsSwapchainFence(isSwapchainFence)
     {
-        Type = queueType;
+        _type = queueType;
     }
 
     OpenGLSyncPoint::~OpenGLSyncPoint() = default;

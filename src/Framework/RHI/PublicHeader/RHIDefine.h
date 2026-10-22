@@ -184,7 +184,7 @@ enum class ERHIShaderFrequency
 
     //定义color结构体
     struct RHI_API RHIColor{
-        float r, g, b, a;
+        float R, G, B, A;
     };
 
     struct RHI_API RHIRect
@@ -192,8 +192,8 @@ enum class ERHIShaderFrequency
         int32_t X, Y;
         uint32_t Width, Height;
 
-        RHIRect(int32_t InX = 0, int32_t InY = 0, uint32_t InWidth = 0, uint32_t InHeight = 0)
-            : X(InX), Y(InY), Width(InWidth), Height(InHeight) {}
+        RHIRect(int32_t inX = 0, int32_t inY = 0, uint32_t inWidth = 0, uint32_t inHeight = 0)
+            : X(inX), Y(inY), Width(inWidth), Height(inHeight) {}
 
         // 可扩展其他方法，如计算面积、中心点等
     };
@@ -326,17 +326,17 @@ enum class ERHIShaderFrequency
     //采样器相关描述
     struct RHI_API RHISamplerDesc
     {
-        ERHIFilter filter = ERHIFilter::Linear;
-        ERHIAddressMode addressU = ERHIAddressMode::Repeat;
-        ERHIAddressMode addressV = ERHIAddressMode::Repeat;
-        ERHIAddressMode addressW = ERHIAddressMode::Repeat;
-        float mipLodBias = 0.0f;
-        float minLod = 0.0f;
-        float maxLod = 1000.0f;
-        bool anisotropyEnable = false;
-        float maxAnisotropy = 1.0f;
+        ERHIFilter Filter = ERHIFilter::Linear;
+        ERHIAddressMode AddressU = ERHIAddressMode::Repeat;
+        ERHIAddressMode AddressV = ERHIAddressMode::Repeat;
+        ERHIAddressMode AddressW = ERHIAddressMode::Repeat;
+        float MipLodBias = 0.0f;
+        float MinLod = 0.0f;
+        float MaxLod = 1000.0f;
+        bool bAnisotropyEnable = false;
+        float MaxAnisotropy = 1.0f;
         // 可扩展border color、compare op等
-        bool CompareEnable = false;
+        bool bCompareEnable = false;
 
         ERHICompareOp CompareOp = ERHICompareOp::LessOrEqual;
 
@@ -349,23 +349,23 @@ enum class ERHIShaderFrequency
 
     struct RHI_API RHIVertexBindingDesc
     {
-        uint32_t binding = 0;
-        uint32_t stride = 0;
-        ERHIInputRate inputRate = ERHIInputRate::PerVertex;
+        uint32_t Binding = 0;
+        uint32_t Stride = 0;
+        ERHIInputRate InputRate = ERHIInputRate::PerVertex;
     };
 
     struct RHI_API RHIVertexAttributeDesc
     {
-        uint32_t location = 0;
-        uint32_t binding = 0;       
-        uint32_t offset = 0;
-        ERHIFormat format = ERHIFormat::Unknown; // 可用ERHIFormat或自定义格式
+        uint32_t Location = 0;
+        uint32_t Binding = 0;
+        uint32_t Offset = 0;
+        ERHIFormat Format = ERHIFormat::Unknown; // 可用ERHIFormat或自定义格式
     };
 
     struct RHI_API RHIVertexDescStateDesc
     {
-        std::vector<RHIVertexBindingDesc> bindings;
-        std::vector<RHIVertexAttributeDesc> attributes;
+        std::vector<RHIVertexBindingDesc> Bindings;
+        std::vector<RHIVertexAttributeDesc> Attributes;
     };
 
     enum class ERHIPolygonMode { Fill, Line, Point };
@@ -374,31 +374,31 @@ enum class ERHIShaderFrequency
 
     struct RHI_API RHIRasterizerStateDesc
     {
-        bool depthClampEnable = false;
-        bool rasterizerDiscardEnable = false;
-        ERHIPolygonMode polygonMode = ERHIPolygonMode::Fill;
-        ERHICullMode cullMode = ERHICullMode::Back;
-        ERHIFrontFace frontFace = ERHIFrontFace::CounterClockwise;
-        bool depthBiasEnable = false;
-        float depthBiasConstantFactor = 0.0f;
-        float depthBiasClamp = 0.0f;
-        float depthBiasSlopeFactor = 0.0f;
-        float lineWidth = 1.0f;
+        bool bDepthClampEnable = false;
+        bool bRasterizerDiscardEnable = false;
+        ERHIPolygonMode PolygonMode = ERHIPolygonMode::Fill;
+        ERHICullMode CullMode = ERHICullMode::Back;
+        ERHIFrontFace FrontFace = ERHIFrontFace::CounterClockwise;
+        bool bDepthBiasEnable = false;
+        float DepthBiasConstantFactor = 0.0f;
+        float DepthBiasClamp = 0.0f;
+        float DepthBiasSlopeFactor = 0.0f;
+        float LineWidth = 1.0f;
     };
 
 
     struct RHI_API RHIColorBlendAttachmentDesc
     {
-        bool blendEnable = false;
-        uint32_t colorWriteMask = 0xF; // RGBA
+        bool bBlendEnable = false;
+        uint32_t ColorWriteMask = 0xF; // RGBA
         // 可扩展BlendFactor/BlendOp等
     };
 
     struct RHI_API RHIColorBlendStateDesc
     {
-        bool logicOpEnable = false;
-        std::vector<RHIColorBlendAttachmentDesc> attachments;
-        float blendConstants[4] = {0, 0, 0, 0};
+        bool bLogicOpEnable = false;
+        std::vector<RHIColorBlendAttachmentDesc> Attachments;
+        float BlendConstants[4] = {0, 0, 0, 0};
         // 可扩展logicOp
     };
 
@@ -406,14 +406,14 @@ enum class ERHIShaderFrequency
 
     struct RHI_API RHIDepthStencilStateDesc
     {
-        bool depthTestEnable = false;
-        bool depthWriteEnable = false;
-        ERHICompareOp depthCompareOp = ERHICompareOp::Less;
-        bool depthBoundsTestEnable = false;
-        bool stencilTestEnable = false;
+        bool bDepthTestEnable = false;
+        bool bDepthWriteEnable = false;
+        ERHICompareOp DepthCompareOp = ERHICompareOp::Less;
+        bool bDepthBoundsTestEnable = false;
+        bool bStencilTestEnable = false;
         // 可扩展stencilOpState等
-        uint32_t stencilReadMask = 0;
-        uint32_t stencilWriteMask = 0;
+        uint32_t StencilReadMask = 0;
+        uint32_t StencilWriteMask = 0;
         
     };
 
@@ -469,45 +469,45 @@ enum class ERHIShaderFrequency
 
     struct RHI_API RHIViewportDesc
     {
-		float x = 0.0f; // 左上角X坐标
-		float y = 0.0f; // 左上角Y坐标
-		float width = 800.0f; // 视口宽度
-		float height = 600.0f; // 视口高度
-		float minDepth = 0.0f; // 最小深度
-		float maxDepth = 1.0f; // 最大深度
-        uint32_t imageCount = 2; // swapchain image数量
+		float X = 0.0f; // 左上角X坐标
+		float Y = 0.0f; // 左上角Y坐标
+		float Width = 800.0f; // 视口宽度
+		float Height = 600.0f; // 视口高度
+		float MinDepth = 0.0f; // 最小深度
+		float MaxDepth = 1.0f; // 最大深度
+        uint32_t ImageCount = 2; // swapchain image数量
         // 可扩展像素格式、VSync等
     };
 
     struct RHI_API RHIUpdateTextureRegion{
-        uint32_t mipLevel = 0; // Mip级别
-        uint32_t arraySlice = 0; // 数组切片
-        uint32_t numMipLevels = 1; // 更新区域Mip级别数量
-        uint32_t numArraySlices = 1; // 更新区域数组切片数量
-        uint32_t xOffset = 0; // X偏移
-        uint32_t yOffset = 0; // Y偏移
-        uint32_t zOffset = 0; // Z偏移
-        uint32_t width = 0; // 更新区域宽度
-        uint32_t height = 0; // 更新区域高度
-        uint32_t depth = 1; // 更新区域深度（3D纹理）
-        static RHIUpdateTextureRegion Create2DRegion(uint32_t InWidth,uint32_t InHeight) {
+        uint32_t MipLevel = 0; // Mip级别
+        uint32_t ArraySlice = 0; // 数组切片
+        uint32_t NumMipLevels = 1; // 更新区域Mip级别数量
+        uint32_t NumArraySlices = 1; // 更新区域数组切片数量
+        uint32_t XOffset = 0; // X偏移
+        uint32_t YOffset = 0; // Y偏移
+        uint32_t ZOffset = 0; // Z偏移
+        uint32_t Width = 0; // 更新区域宽度
+        uint32_t Height = 0; // 更新区域高度
+        uint32_t Depth = 1; // 更新区域深度（3D纹理）
+        static RHIUpdateTextureRegion Create2DRegion(uint32_t inWidth,uint32_t inHeight) {
             RHIUpdateTextureRegion region;
-			region.mipLevel = 0;
-			region.arraySlice = 0;
-			region.numMipLevels = 1;
-			region.numArraySlices = 1;
-			region.xOffset = 0;
-			region.yOffset = 0;
-			region.zOffset = 0;
-			region.width = InWidth;
-			region.height = InHeight;
-			region.depth = 1;
+			region.MipLevel = 0;
+			region.ArraySlice = 0;
+			region.NumMipLevels = 1;
+			region.NumArraySlices = 1;
+			region.XOffset = 0;
+			region.YOffset = 0;
+			region.ZOffset = 0;
+			region.Width = inWidth;
+			region.Height = inHeight;
+			region.Depth = 1;
 			return region;
         }
     };
     struct RHI_API RHIUpdateBufferRegion {
-        uint32_t offset = 0; // 偏移
-        uint32_t size = 0; // 大小
+        uint32_t Offset = 0; // 偏移
+        uint32_t Size = 0; // 大小
     };
     //
     struct RHI_API RHIReadTextureInfo {
@@ -516,8 +516,8 @@ enum class ERHIShaderFrequency
         uint32_t ArrayCount = 1;
     };
     struct RHI_API RHIReadBufferInfo {
-        uint64_t offset = 0; // 偏移
-        uint64_t size = 0; // 大小};
+        uint64_t Offset = 0; // 偏移
+        uint64_t Size = 0; // 大小};
     };
 
     // ---------------------------
@@ -706,10 +706,10 @@ enum class ERHIShaderFrequency
         RHITextureRegion() = default;
 
 
-        RHITextureRegion(int32_t InSrcX, int32_t InSrcY, int32_t InSrcZ,
-            uint32_t InWidth, uint32_t InHeight, uint32_t InDepth)
-            : OffsetX(InSrcX), OffsetY(InSrcY), OffsetZ(InSrcZ),
-            Width(InWidth), Height(InHeight), Depth(InDepth)
+        RHITextureRegion(int32_t inSrcX, int32_t inSrcY, int32_t inSrcZ,
+            uint32_t inWidth, uint32_t inHeight, uint32_t inDepth)
+            : OffsetX(inSrcX), OffsetY(inSrcY), OffsetZ(inSrcZ),
+            Width(inWidth), Height(inHeight), Depth(inDepth)
         {
         }
     };
@@ -788,39 +788,39 @@ enum class ERHIShaderFrequency
 
     struct RHI_API RHISubresourceRange
     {
-        static const uint32_t kDepthPlaneSlice = 0;
-        static const uint32_t kStencilPlaneSlice = 1;
-        static const uint32_t kAllSubresources = 0xFFFFFFFF;
+        static const uint32_t KDepthPlaneSlice = 0;
+        static const uint32_t KStencilPlaneSlice = 1;
+        static const uint32_t KAllSubresources = 0xFFFFFFFF;
 
-        uint32_t MipIndex = kAllSubresources;
-        uint32_t ArraySlice = kAllSubresources;
-        uint32_t PlaneSlice = kAllSubresources;
+        uint32_t MipIndex = KAllSubresources;
+        uint32_t ArraySlice = KAllSubresources;
+        uint32_t PlaneSlice = KAllSubresources;
 
         RHISubresourceRange() = default;
 
         RHISubresourceRange(
-            uint32_t InMipIndex,
-            uint32_t InArraySlice,
-            uint32_t InPlaneSlice)
-            : MipIndex(InMipIndex)
-            , ArraySlice(InArraySlice)
-            , PlaneSlice(InPlaneSlice)
+            uint32_t inMipIndex,
+            uint32_t inArraySlice,
+            uint32_t inPlaneSlice)
+            : MipIndex(inMipIndex)
+            , ArraySlice(inArraySlice)
+            , PlaneSlice(inPlaneSlice)
         {
         }
 
         inline bool IsAllMips() const
         {
-            return MipIndex == kAllSubresources;
+            return MipIndex == KAllSubresources;
         }
 
         inline bool IsAllArraySlices() const
         {
-            return ArraySlice == kAllSubresources;
+            return ArraySlice == KAllSubresources;
         }
 
         inline bool IsAllPlaneSlices() const
         {
-            return PlaneSlice == kAllSubresources;
+            return PlaneSlice == KAllSubresources;
         }
 
         inline bool IsWholeResource() const
@@ -830,24 +830,24 @@ enum class ERHIShaderFrequency
 
         inline bool IgnoreDepthPlane() const
         {
-            return PlaneSlice == kStencilPlaneSlice;
+            return PlaneSlice == KStencilPlaneSlice;
         }
 
         inline bool IgnoreStencilPlane() const
         {
-            return PlaneSlice == kDepthPlaneSlice;
+            return PlaneSlice == KDepthPlaneSlice;
         }
 
-        inline bool operator == (RHISubresourceRange const& RHS) const
+        inline bool operator == (RHISubresourceRange const& rhs) const
         {
-            return MipIndex == RHS.MipIndex
-                && ArraySlice == RHS.ArraySlice
-                && PlaneSlice == RHS.PlaneSlice;
+            return MipIndex == rhs.MipIndex
+                && ArraySlice == rhs.ArraySlice
+                && PlaneSlice == rhs.PlaneSlice;
         }
 
-        inline bool operator != (RHISubresourceRange const& RHS) const
+        inline bool operator != (RHISubresourceRange const& rhs) const
         {
-            return !(*this == RHS);
+            return !(*this == rhs);
         }
     };
 }

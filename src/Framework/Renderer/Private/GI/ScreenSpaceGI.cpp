@@ -36,7 +36,7 @@ namespace Renderer {
         }
 
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.computeShader = computeShader;
+        computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
 
         auto InputCopy = Input;

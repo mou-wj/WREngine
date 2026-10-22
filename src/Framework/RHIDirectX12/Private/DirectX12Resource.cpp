@@ -81,7 +81,7 @@ namespace RHIDirectX12
             uint64_t(desc.VertexCount) * desc.VertexStride > vertex->GetDesc().Size ||
             uint64_t(desc.IndexCount) * index->GetDesc().Stride > index->GetDesc().Size)
             throw std::runtime_error("Invalid DXR indexed triangle geometry");
-        GeometryDesc = desc;
+        _geometryDesc = desc;
         Geometry = {};
         Geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
         Geometry.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
@@ -96,15 +96,15 @@ namespace RHIDirectX12
         Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
         Inputs.NumDescs = 1;
         Inputs.pGeometryDescs = &Geometry;
-        Inputs.Flags = ToRayTracingBuildFlags(desc.AllowUpdate, desc.AllowCompaction);
-        Allocate(SizeInfo);
+        Inputs.Flags = ToRayTracingBuildFlags(desc.bAllowUpdate, desc.bAllowCompaction);
+        Allocate(_sizeInfo);
     }
     DirectX12RayTracingInstance::DirectX12RayTracingInstance(DirectX12Device* device, const RHI::RHIRayTracingInstancesDesc& desc)
     { Device = device; SetInstancesDesc(desc); }
     void DirectX12RayTracingInstance::SetInstancesDesc(const RHI::RHIRayTracingInstancesDesc& desc)
     {
         if (desc.Instances.empty()) throw std::runtime_error("DXR TLAS requires instances");
-        Instances = desc;
+        _instances = desc;
         ReferencedResults.clear();
         std::vector<D3D12_RAYTRACING_INSTANCE_DESC> native(desc.Instances.size());
         for (size_t i = 0; i < native.size(); ++i)
@@ -133,15 +133,15 @@ namespace RHIDirectX12
         Inputs.NumDescs = static_cast<UINT>(native.size());
         Inputs.InstanceDescs = InstanceUpload->GetGPUVirtualAddress();
         Inputs.Flags = ToRayTracingBuildFlags(true, false);
-        Allocate(SizeInfo);
+        Allocate(_sizeInfo);
     }
 
     void DirectX12Texture::EnsureStorageTarget()
     {
-        if (!EnumHasAnyFlags(Desc.Usage, RHI::ERHITextureCreateFlag::Presentable) || StorageTarget) return;
+        if (!EnumHasAnyFlags(_desc.Usage, RHI::ERHITextureCreateFlag::Presentable) || StorageTarget) return;
         // DXGI images remain native presentation targets; only UAV views use this internal image.
-        RHI::RHITextureDesc storageDesc = Desc;
-        storageDesc.Format = ToStorageImageFormat(Desc.Format);
+        RHI::RHITextureDesc storageDesc = _desc;
+        storageDesc.Format = ToStorageImageFormat(_desc.Format);
         storageDesc.Usage = RHI::ERHITextureCreateFlag::UAV | RHI::ERHITextureCreateFlag::ShaderResource;
         StorageTarget = std::make_shared<DirectX12Texture>(Device, storageDesc);
     }
@@ -926,15 +926,15 @@ namespace RHIDirectX12
         if (!Device->AllocateSamplerDescriptor(CpuHandle))
             throw std::runtime_error("Sampler heap exhausted");
         D3D12_SAMPLER_DESC sampler{};
-        sampler.Filter = ToFilter(desc.filter, desc.anisotropyEnable, desc.CompareEnable);
-        sampler.AddressU = ToAddressMode(desc.addressU);
-        sampler.AddressV = ToAddressMode(desc.addressV);
-        sampler.AddressW = ToAddressMode(desc.addressW);
-        sampler.MipLODBias = desc.mipLodBias;
-        sampler.MinLOD = desc.minLod;
-        sampler.MaxLOD = desc.maxLod;
-        sampler.MaxAnisotropy = std::clamp<UINT>(static_cast<UINT>(desc.maxAnisotropy), 1, 16);
-        sampler.ComparisonFunc = desc.CompareEnable ? ToComparisonFunc(desc.CompareOp) : D3D12_COMPARISON_FUNC_NEVER;
+        sampler.Filter = ToFilter(desc.Filter, desc.bAnisotropyEnable, desc.bCompareEnable);
+        sampler.AddressU = ToAddressMode(desc.AddressU);
+        sampler.AddressV = ToAddressMode(desc.AddressV);
+        sampler.AddressW = ToAddressMode(desc.AddressW);
+        sampler.MipLODBias = desc.MipLodBias;
+        sampler.MinLOD = desc.MinLod;
+        sampler.MaxLOD = desc.MaxLod;
+        sampler.MaxAnisotropy = std::clamp<UINT>(static_cast<UINT>(desc.MaxAnisotropy), 1, 16);
+        sampler.ComparisonFunc = desc.bCompareEnable ? ToComparisonFunc(desc.CompareOp) : D3D12_COMPARISON_FUNC_NEVER;
         Device->GetNativeDevice()->CreateSampler(&sampler, CpuHandle);
     }
     DirectX12Sampler::~DirectX12Sampler()

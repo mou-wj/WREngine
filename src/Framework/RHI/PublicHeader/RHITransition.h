@@ -35,69 +35,69 @@ struct RHI_API RHITransitionInfo : public RHISubresourceRange
 	RHITransitionInfo() = default;
 
 	RHITransitionInfo(
-		class RHITexture* InTexture,
-		ERHIResourceAccess InPreviousState,
-		ERHIResourceAccess InNewState,
-		EQueueType InQueueTypeBefore = EQueueType::Graphics,
-		EQueueType InQueueTypeAfter = EQueueType::Graphics,
-		EResourceTransitionFlags InFlags = EResourceTransitionFlags::None,
-		uint32_t InMipIndex = kAllSubresources,
-		uint32_t InArraySlice = kAllSubresources,
-		uint32_t InPlaneSlice = kAllSubresources)
-		: RHISubresourceRange(InMipIndex, InArraySlice, InPlaneSlice)
-		, Texture(InTexture)
+		class RHITexture* inTexture,
+		ERHIResourceAccess inPreviousState,
+		ERHIResourceAccess inNewState,
+		EQueueType inQueueTypeBefore = EQueueType::Graphics,
+		EQueueType inQueueTypeAfter = EQueueType::Graphics,
+		EResourceTransitionFlags inFlags = EResourceTransitionFlags::None,
+		uint32_t inMipIndex = KAllSubresources,
+		uint32_t inArraySlice = KAllSubresources,
+		uint32_t inPlaneSlice = KAllSubresources)
+		: RHISubresourceRange(inMipIndex, inArraySlice, inPlaneSlice)
+		, Texture(inTexture)
 		, Type(EType::Texture)
-		, AccessBefore(InPreviousState)
-		, AccessAfter(InNewState)
-		, QueueTypeBefore(InQueueTypeBefore)
-        , QueueTypeAfter(InQueueTypeAfter)
-		, Flags(InFlags)
+		, AccessBefore(inPreviousState)
+		, AccessAfter(inNewState)
+		, QueueTypeBefore(inQueueTypeBefore)
+        , QueueTypeAfter(inQueueTypeAfter)
+		, Flags(inFlags)
 	{}
 
-	RHITransitionInfo(class RHIUnorderedAccessView* InUAV, ERHIResourceAccess InPreviousState, ERHIResourceAccess InNewState, EQueueType InQueueTypeBefore = EQueueType::Graphics,EQueueType InQueueTypeAfter = EQueueType::Graphics, EResourceTransitionFlags InFlags = EResourceTransitionFlags::None)
-		: UAV(InUAV)
+	RHITransitionInfo(class RHIUnorderedAccessView* inUav, ERHIResourceAccess inPreviousState, ERHIResourceAccess inNewState, EQueueType inQueueTypeBefore = EQueueType::Graphics,EQueueType inQueueTypeAfter = EQueueType::Graphics, EResourceTransitionFlags inFlags = EResourceTransitionFlags::None)
+		: UAV(inUav)
 		, Type(EType::UAV)
-		, AccessBefore(InPreviousState)
-		, AccessAfter(InNewState)
-		, QueueTypeBefore(InQueueTypeBefore)
-		, QueueTypeAfter(InQueueTypeAfter)
-		, Flags(InFlags)
+		, AccessBefore(inPreviousState)
+		, AccessAfter(inNewState)
+		, QueueTypeBefore(inQueueTypeBefore)
+		, QueueTypeAfter(inQueueTypeAfter)
+		, Flags(inFlags)
 	{}
 
-	RHITransitionInfo(class RHIBuffer* InRHIBuffer, ERHIResourceAccess InPreviousState, ERHIResourceAccess InNewState, EQueueType InQueueTypeBefore = EQueueType::Graphics, EQueueType InQueueTypeAfter = EQueueType::Graphics, EResourceTransitionFlags InFlags = EResourceTransitionFlags::None)
-		: Buffer(InRHIBuffer)
+	RHITransitionInfo(class RHIBuffer* inRhiBuffer, ERHIResourceAccess inPreviousState, ERHIResourceAccess inNewState, EQueueType inQueueTypeBefore = EQueueType::Graphics, EQueueType inQueueTypeAfter = EQueueType::Graphics, EResourceTransitionFlags inFlags = EResourceTransitionFlags::None)
+		: Buffer(inRhiBuffer)
 		, Type(EType::Buffer)
-		, AccessBefore(InPreviousState)
-		, AccessAfter(InNewState)
-		, QueueTypeBefore(InQueueTypeBefore)
-		, QueueTypeAfter(InQueueTypeAfter)
-		, Flags(InFlags)
+		, AccessBefore(inPreviousState)
+		, AccessAfter(inNewState)
+		, QueueTypeBefore(inQueueTypeBefore)
+		, QueueTypeAfter(inQueueTypeAfter)
+		, Flags(inFlags)
 	{}
 
-	RHITransitionInfo(class RHIRayTracingAccelerationStructure* InBVH, ERHIResourceAccess InPreviousState, ERHIResourceAccess InNewState, EQueueType InQueueTypeBefore = EQueueType::Graphics, EQueueType InQueueTypeAfter = EQueueType::Graphics, EResourceTransitionFlags InFlags = EResourceTransitionFlags::None)
-		: BVH(InBVH)
+	RHITransitionInfo(class RHIRayTracingAccelerationStructure* inBvh, ERHIResourceAccess inPreviousState, ERHIResourceAccess inNewState, EQueueType inQueueTypeBefore = EQueueType::Graphics, EQueueType inQueueTypeAfter = EQueueType::Graphics, EResourceTransitionFlags inFlags = EResourceTransitionFlags::None)
+		: BVH(inBvh)
 		, Type(EType::BVH)
-		, AccessBefore(InPreviousState)
-		, AccessAfter(InNewState)
-		, QueueTypeBefore(InQueueTypeBefore)
-		, QueueTypeAfter(InQueueTypeAfter)
-		, Flags(InFlags)
+		, AccessBefore(inPreviousState)
+		, AccessAfter(inNewState)
+		, QueueTypeBefore(inQueueTypeBefore)
+		, QueueTypeAfter(inQueueTypeAfter)
+		, Flags(inFlags)
 	{}
 
 
-	inline bool operator == (RHITransitionInfo const& RHS) const
+	inline bool operator == (RHITransitionInfo const& rhs) const
 	{
-		return Resource == RHS.Resource
-			&& Type == RHS.Type
-			&& AccessBefore == RHS.AccessBefore
-			&& AccessAfter == RHS.AccessAfter
-			&& Flags == RHS.Flags
-			&& RHISubresourceRange::operator==(RHS);
+		return Resource == rhs.Resource
+			&& Type == rhs.Type
+			&& AccessBefore == rhs.AccessBefore
+			&& AccessAfter == rhs.AccessAfter
+			&& Flags == rhs.Flags
+			&& RHISubresourceRange::operator==(rhs);
 	}
 
-	inline bool operator != (RHITransitionInfo const& RHS) const
+	inline bool operator != (RHITransitionInfo const& rhs) const
 	{
-		return !(*this == RHS);
+		return !(*this == rhs);
 	}
 
 };
@@ -106,57 +106,57 @@ struct RHI_API RHITransitionInfo : public RHISubresourceRange
 struct RHI_API RHITransitionCreateInfo
 {
 	RHITransitionCreateInfo(
-		ERHITransitionCreateFlags InFlags = ERHITransitionCreateFlags::None,
-		std::vector<RHITransitionInfo> InTransitionInfos = {})
-		: Flags(InFlags)
-		, TransitionInfos(std::move(InTransitionInfos))
+		ERHITransitionCreateFlags inFlags = ERHITransitionCreateFlags::None,
+		std::vector<RHITransitionInfo> inTransitionInfos = {})
+		: Flags(inFlags)
+		, TransitionInfos(std::move(inTransitionInfos))
 	{}
 
 	ERHITransitionCreateFlags Flags = ERHITransitionCreateFlags::None;
 	std::vector<RHITransitionInfo> TransitionInfos;
 };
 
-// ȫ�ֱ������� RHI �ڳ�ʼ��ʱ���
+// 由 RHI 初始化时设置的转换对象总大小与后端数据偏移。
 extern RHI_API uint32_t G_RHITransition_TotalSize;
 extern RHI_API uint32_t G_RHITransition_PrivateDataOffset;
 
 struct RHI_API RHITransition
 {
 public:
-	// ��ֹ�������ƶ�
+	// 禁用拷贝构造与赋值。
 	RHITransition(const RHITransition&) = delete;
 	RHITransition& operator=(const RHITransition&) = delete;
 
-	// ֻ���ض��� Factory (RHI/RDG) �ܵ��ù���
+	// 初始化单次 Begin/End 触发标记。
 	RHITransition()
-		: bPendingBegin(true)
-		, bPendingEnd(true)
+		: m_bPendingBegin(true)
+		, m_bPendingEnd(true)
 	{
 	}
 
-	// ��ȡ˽�����ݵ�Ψһ��ȫ���
+	// 获取后端私有转换数据。
 	template <typename T>
 	inline T* GetPrivateData() const
 	{
-		// ֱ�Ӹ��ݳ�ʼ��ʱ����õ�ƫ������ת���������
+		// 根据初始化时设置的偏移定位后端数据。
 		return reinterpret_cast<T*>(reinterpret_cast<uintptr_t>(this) + G_RHITransition_PrivateDataOffset);
 	}
 
-	// ���� true ��ʾ��ǰ�߳��Ǹý׶����һ������ģ����𴥷����� Barrier
+	// 首次标记返回 true，调用方据此提交该阶段的屏障。
 	inline bool MarkBegin() const
 	{
-		return bPendingBegin.exchange(false, std::memory_order_acq_rel);
+		return m_bPendingBegin.exchange(false, std::memory_order_acq_rel);
 	}
 
 	inline bool MarkEnd() const
 	{
-		return bPendingEnd.exchange(false, std::memory_order_acq_rel);
+		return m_bPendingEnd.exchange(false, std::memory_order_acq_rel);
 	}
 
 private:
 	// 单次 Begin/End 触发标记
-	mutable std::atomic<bool> bPendingBegin;
-	mutable std::atomic<bool> bPendingEnd;
+	mutable std::atomic<bool> m_bPendingBegin;
+	mutable std::atomic<bool> m_bPendingEnd;
 };
 
 } // namespace RHI

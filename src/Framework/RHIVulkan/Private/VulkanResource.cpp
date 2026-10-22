@@ -87,8 +87,8 @@ VulkanTexture::VulkanTexture(VulkanDevice* device, const RHITextureDesc& desc, b
 
 #ifdef DEBUG_INFO
     std::string debugName;
-    if (Desc.DebugName) {
-        debugName = Desc.DebugName;
+    if (_desc.DebugName) {
+        debugName = _desc.DebugName;
     }
     else {
         char buf[64];
@@ -122,8 +122,8 @@ VulkanTexture::VulkanTexture(VulkanDevice* device, const RHITextureDesc& desc, V
     );
 #ifdef DEBUG_INFO
     std::string debugName;
-    if (Desc.DebugName) {
-        debugName = Desc.DebugName;
+    if (_desc.DebugName) {
+        debugName = _desc.DebugName;
     }
     else {
         char buf[64];
@@ -154,18 +154,18 @@ VulkanTexture::~VulkanTexture() {
 
 void VulkanTexture::CreateDefaultView()
 {
-    auto usage = TransformTextureUsageFlagsFrom(Desc.Usage);
+    auto usage = TransformTextureUsageFlagsFrom(_desc.Usage);
     // Create VkImageView
     bool viewSuccess = DefaltView.Create(
         Device,                                // fvulkan_device& device
         Image,                                 // VkImage
-        TransformViewTypeFrom(Desc.Type),      // VkImageViewType
-        GetImageAspectFlags(TransformFormatFrom(Desc.Format)), // VkImageAspectFlags
-        TransformFormatFrom(Desc.Format),       // VkFormat
+        TransformViewTypeFrom(_desc.Type),      // VkImageViewType
+        GetImageAspectFlags(TransformFormatFrom(_desc.Format)), // VkImageAspectFlags
+        TransformFormatFrom(_desc.Format),       // VkFormat
         0,                                      // first mip level
-        Desc.MipLevels,                         // number of mips
+        _desc.MipLevels,                         // number of mips
         0,                                      // base array layer
-        Desc.ArraySize,                          // number of array layers
+        _desc.ArraySize,                          // number of array layers
         true,                                   // use identity swizzle
         usage
     );
@@ -304,9 +304,9 @@ VulkanBuffer::VulkanBuffer(VulkanDevice* device, const RHIBufferDesc& desc, bool
     // Create VkBuffer
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    Size = Desc.Size;
-    bufferInfo.size = Desc.Size;
-	auto usageFlags = TransformBufferUsageFlagsFrom(Desc.Usage);
+    Size = _desc.Size;
+    bufferInfo.size = _desc.Size;
+	auto usageFlags = TransformBufferUsageFlagsFrom(_desc.Usage);
     bufferInfo.usage = usageFlags; // TODO: Support other usages
     std::vector<uint32_t> queueFamilyIndices;
     VulkanQueue* initialQueue = ResolveInitialQueue(Device, desc.InitialQueueType);
@@ -335,8 +335,8 @@ VulkanBuffer::VulkanBuffer(VulkanDevice* device, const RHIBufferDesc& desc, bool
 
 #ifdef DEBUG_INFO
     std::string debugName;
-    if (Desc.DebugName) {
-        debugName = Desc.DebugName;
+    if (_desc.DebugName) {
+        debugName = _desc.DebugName;
     } else {
         char buf[64];
         snprintf(buf, sizeof(buf), "VulkanBuffer:0x%llx", (unsigned long long)Buffer);
@@ -468,17 +468,17 @@ void VulkanRayTracingGeometry::DestroyStorageBuffer()
 
 void VulkanRayTracingGeometry::SetGeometryDesc(const RHIRayTracingGeometryDesc& Desc)
 {
-    GeometryDesc = Desc;
+    _geometryDesc = Desc;
     DestroyAccelerationStructure();
 
-    if (!Device || !GeometryDesc.VertexBuffer || !GeometryDesc.IndexBuffer)
+    if (!Device || !_geometryDesc.VertexBuffer || !_geometryDesc.IndexBuffer)
     {
         return;
     }
 
-    VulkanBuffer* vertexBuffer = static_cast<VulkanBuffer*>(GeometryDesc.VertexBuffer);
-    VulkanBuffer* indexBuffer = static_cast<VulkanBuffer*>(GeometryDesc.IndexBuffer);
-    if (!vertexBuffer || !indexBuffer || GeometryDesc.IndexCount < 3 || GeometryDesc.VertexCount == 0)
+    VulkanBuffer* vertexBuffer = static_cast<VulkanBuffer*>(_geometryDesc.VertexBuffer);
+    VulkanBuffer* indexBuffer = static_cast<VulkanBuffer*>(_geometryDesc.IndexBuffer);
+    if (!vertexBuffer || !indexBuffer || _geometryDesc.IndexCount < 3 || _geometryDesc.VertexCount == 0)
     {
         return;
     }
@@ -495,8 +495,8 @@ void VulkanRayTracingGeometry::SetGeometryDesc(const RHIRayTracingGeometryDesc& 
     trianglesData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
     trianglesData.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
     trianglesData.vertexData.deviceAddress = VKFunc::GetBufferDeviceAddress(Device->GetHandle(), &vertexAddressInfo);
-    trianglesData.vertexStride = GeometryDesc.VertexStride;
-    trianglesData.maxVertex = GeometryDesc.VertexCount - 1;
+    trianglesData.vertexStride = _geometryDesc.VertexStride;
+    trianglesData.maxVertex = _geometryDesc.VertexCount - 1;
     trianglesData.indexType = indexBuffer->GetDesc().Stride == 4 ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
     trianglesData.indexData.deviceAddress = VKFunc::GetBufferDeviceAddress(Device->GetHandle(), &indexAddressInfo);
     trianglesData.transformData.deviceAddress = 0;
@@ -507,7 +507,7 @@ void VulkanRayTracingGeometry::SetGeometryDesc(const RHIRayTracingGeometryDesc& 
     GeometryInfo.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
     GeometryInfo.geometry.triangles = trianglesData;
 
-    const uint32_t primitiveCount = GeometryDesc.IndexCount / 3;
+    const uint32_t primitiveCount = _geometryDesc.IndexCount / 3;
     BuildRangeInfo = {};
     BuildRangeInfo.primitiveCount = primitiveCount;
     BuildRangeInfo.primitiveOffset = 0;
@@ -515,11 +515,11 @@ void VulkanRayTracingGeometry::SetGeometryDesc(const RHIRayTracingGeometryDesc& 
     BuildRangeInfo.transformOffset = 0;
 
     VkBuildAccelerationStructureFlagsKHR buildFlags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-    if (GeometryDesc.AllowUpdate)
+    if (_geometryDesc.bAllowUpdate)
     {
         buildFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
     }
-    if (GeometryDesc.AllowCompaction)
+    if (_geometryDesc.bAllowCompaction)
     {
         buildFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
     }
@@ -542,13 +542,13 @@ void VulkanRayTracingGeometry::SetGeometryDesc(const RHIRayTracingGeometryDesc& 
         &primitiveCount,
         &sizeInfo);
 
-    SizeInfo.ResultSize = sizeInfo.accelerationStructureSize;
-    SizeInfo.BuildScratchSize = sizeInfo.buildScratchSize;
-    SizeInfo.UpdateScratchSize = sizeInfo.updateScratchSize;
+    _sizeInfo.ResultSize = sizeInfo.accelerationStructureSize;
+    _sizeInfo.BuildScratchSize = sizeInfo.buildScratchSize;
+    _sizeInfo.UpdateScratchSize = sizeInfo.updateScratchSize;
 
     if (!CreateRawBuffer(
         Device,
-        SizeInfo.ResultSize,
+        _sizeInfo.ResultSize,
         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
@@ -564,7 +564,7 @@ void VulkanRayTracingGeometry::SetGeometryDesc(const RHIRayTracingGeometryDesc& 
     createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
     createInfo.buffer = StorageBuffer;
     createInfo.offset = 0;
-    createInfo.size = SizeInfo.ResultSize;
+    createInfo.size = _sizeInfo.ResultSize;
     createInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 
     if (!VKFunc::CreateAccelerationStructureKHR(Device->GetHandle(), &createInfo, &AccelerationStructure))
@@ -645,7 +645,7 @@ void VulkanRayTracingInstance::DestroyInstanceBuffer()
 void VulkanRayTracingInstance::SetInstancesDesc(const RHIRayTracingInstancesDesc& Desc)
 {
 
-    this->Instances = Desc;
+    this->_instances = Desc;
     const auto& Instances = Desc.Instances;
     DestroyAccelerationStructure();
 
@@ -734,13 +734,13 @@ void VulkanRayTracingInstance::SetInstancesDesc(const RHIRayTracingInstancesDesc
         &primitiveCount,
         &sizeInfo);
 
-    SizeInfo.ResultSize = sizeInfo.accelerationStructureSize;
-    SizeInfo.BuildScratchSize = sizeInfo.buildScratchSize;
-    SizeInfo.UpdateScratchSize = sizeInfo.updateScratchSize;
+    _sizeInfo.ResultSize = sizeInfo.accelerationStructureSize;
+    _sizeInfo.BuildScratchSize = sizeInfo.buildScratchSize;
+    _sizeInfo.UpdateScratchSize = sizeInfo.updateScratchSize;
 
     if (!CreateRawBuffer(
         Device,
-        SizeInfo.ResultSize,
+        _sizeInfo.ResultSize,
         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
@@ -757,7 +757,7 @@ void VulkanRayTracingInstance::SetInstancesDesc(const RHIRayTracingInstancesDesc
     createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
     createInfo.buffer = StorageBuffer;
     createInfo.offset = 0;
-    createInfo.size = SizeInfo.ResultSize;
+    createInfo.size = _sizeInfo.ResultSize;
     createInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
 
     if (!VKFunc::CreateAccelerationStructureKHR(Device->GetHandle(), &createInfo, &AccelerationStructure))
@@ -1271,22 +1271,22 @@ VulkanVertexDescState::VulkanVertexDescState(VulkanDevice* device, const RHIVert
 {
     // Initialize vertex input state
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(desc.bindings.size());
-    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(desc.attributes.size());
-    bindingDescriptions.resize(desc.bindings.size());
-    attributeDescriptions.resize(desc.attributes.size());
-    for (size_t i = 0; i < desc.bindings.size(); ++i) {
-        const auto& bindingDesc = desc.bindings[i];
-        bindingDescriptions[i].binding = bindingDesc.binding;
-        bindingDescriptions[i].stride = bindingDesc.stride;
-        bindingDescriptions[i].inputRate = (bindingDesc.inputRate == ERHIInputRate::PerVertex) ? VK_VERTEX_INPUT_RATE_VERTEX : VK_VERTEX_INPUT_RATE_INSTANCE;
+    vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(desc.Bindings.size());
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(desc.Attributes.size());
+    bindingDescriptions.resize(desc.Bindings.size());
+    attributeDescriptions.resize(desc.Attributes.size());
+    for (size_t i = 0; i < desc.Bindings.size(); ++i) {
+        const auto& bindingDesc = desc.Bindings[i];
+        bindingDescriptions[i].binding = bindingDesc.Binding;
+        bindingDescriptions[i].stride = bindingDesc.Stride;
+        bindingDescriptions[i].inputRate = (bindingDesc.InputRate == ERHIInputRate::PerVertex) ? VK_VERTEX_INPUT_RATE_VERTEX : VK_VERTEX_INPUT_RATE_INSTANCE;
     }
-    for (size_t i = 0; i < desc.attributes.size(); ++i) {
-        const auto& attributeDesc = desc.attributes[i];
-        attributeDescriptions[i].location = attributeDesc.location;
-        attributeDescriptions[i].binding = attributeDesc.binding;  // 必须
-        attributeDescriptions[i].format = TransformFormatFrom(attributeDesc.format);
-        attributeDescriptions[i].offset = attributeDesc.offset;   // 必须
+    for (size_t i = 0; i < desc.Attributes.size(); ++i) {
+        const auto& attributeDesc = desc.Attributes[i];
+        attributeDescriptions[i].location = attributeDesc.Location;
+        attributeDescriptions[i].binding = attributeDesc.Binding;  // 必须
+        attributeDescriptions[i].format = TransformFormatFrom(attributeDesc.Format);
+        attributeDescriptions[i].offset = attributeDesc.Offset;   // 必须
     }
     vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
     vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
@@ -1305,10 +1305,10 @@ VulkanRasterizerState::VulkanRasterizerState(VulkanDevice* device, const RHIRast
 {
     VkDevice vkDevice = Device->GetHandle();
     rasterizerInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterizerInfo.depthClampEnable = desc.depthClampEnable;
-    rasterizerInfo.rasterizerDiscardEnable = desc.rasterizerDiscardEnable;
+    rasterizerInfo.depthClampEnable = desc.bDepthClampEnable;
+    rasterizerInfo.rasterizerDiscardEnable = desc.bRasterizerDiscardEnable;
 
-    switch (desc.polygonMode) {
+    switch (desc.PolygonMode) {
     case ERHIPolygonMode::Fill:
         rasterizerInfo.polygonMode = VK_POLYGON_MODE_FILL;
         break;
@@ -1323,7 +1323,7 @@ VulkanRasterizerState::VulkanRasterizerState(VulkanDevice* device, const RHIRast
         break;
     }
 
-    switch (desc.cullMode) {
+    switch (desc.CullMode) {
     case ERHICullMode::None:
         rasterizerInfo.cullMode = VK_CULL_MODE_NONE;
         break;
@@ -1341,7 +1341,7 @@ VulkanRasterizerState::VulkanRasterizerState(VulkanDevice* device, const RHIRast
         break;
     }
 
-    switch (desc.frontFace) {
+    switch (desc.FrontFace) {
     case ERHIFrontFace::CounterClockwise:
         rasterizerInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         break;
@@ -1353,11 +1353,11 @@ VulkanRasterizerState::VulkanRasterizerState(VulkanDevice* device, const RHIRast
         break;
     }
 
-    rasterizerInfo.depthBiasEnable = desc.depthBiasEnable;
-    rasterizerInfo.depthBiasConstantFactor = desc.depthBiasConstantFactor;
-    rasterizerInfo.depthBiasClamp = desc.depthBiasClamp;
-    rasterizerInfo.depthBiasSlopeFactor = desc.depthBiasSlopeFactor;
-    rasterizerInfo.lineWidth = desc.lineWidth;
+    rasterizerInfo.depthBiasEnable = desc.bDepthBiasEnable;
+    rasterizerInfo.depthBiasConstantFactor = desc.DepthBiasConstantFactor;
+    rasterizerInfo.depthBiasClamp = desc.DepthBiasClamp;
+    rasterizerInfo.depthBiasSlopeFactor = desc.DepthBiasSlopeFactor;
+    rasterizerInfo.lineWidth = desc.LineWidth;
 }
 
 VulkanRasterizerState::~VulkanRasterizerState()
@@ -1371,25 +1371,25 @@ VulkanColorBlendState::VulkanColorBlendState(VulkanDevice* device, const RHIColo
 {
     VkDevice vkDevice = Device->GetHandle();
     colorBlendInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    colorBlendInfo.logicOpEnable = desc.logicOpEnable;
+    colorBlendInfo.logicOpEnable = desc.bLogicOpEnable;
     colorBlendInfo.logicOp = VK_LOGIC_OP_COPY; // TODO: Support other logic ops
-    colorBlendInfo.attachmentCount = static_cast<uint32_t>(desc.attachments.size());
-    attachmentStates.resize(desc.attachments.size());
+    colorBlendInfo.attachmentCount = static_cast<uint32_t>(desc.Attachments.size());
+    attachmentStates.resize(desc.Attachments.size());
 
-    for (size_t i = 0; i < desc.attachments.size(); ++i) {
-        auto& attachmentDesc = desc.attachments[i];
+    for (size_t i = 0; i < desc.Attachments.size(); ++i) {
+        auto& attachmentDesc = desc.Attachments[i];
         auto& attachmentState = attachmentStates[i];
 
-        attachmentState.blendEnable = attachmentDesc.blendEnable;
-        attachmentState.colorWriteMask = attachmentDesc.colorWriteMask; // TODO: Support other write masks
+        attachmentState.blendEnable = attachmentDesc.bBlendEnable;
+        attachmentState.colorWriteMask = attachmentDesc.ColorWriteMask; // TODO: Support other write masks
         // TODO: Support other blend factors and operations
     }
 
     colorBlendInfo.pAttachments = attachmentStates.data();
-    colorBlendInfo.blendConstants[0] = desc.blendConstants[0];
-    colorBlendInfo.blendConstants[1] = desc.blendConstants[1];
-    colorBlendInfo.blendConstants[2] = desc.blendConstants[2];
-    colorBlendInfo.blendConstants[3] = desc.blendConstants[3];
+    colorBlendInfo.blendConstants[0] = desc.BlendConstants[0];
+    colorBlendInfo.blendConstants[1] = desc.BlendConstants[1];
+    colorBlendInfo.blendConstants[2] = desc.BlendConstants[2];
+    colorBlendInfo.blendConstants[3] = desc.BlendConstants[3];
 }
 
 VulkanColorBlendState::~VulkanColorBlendState()
@@ -1403,10 +1403,10 @@ VulkanDepthStencilState::VulkanDepthStencilState(VulkanDevice* device, const RHI
 {
     VkDevice vkDevice = Device->GetHandle();
     depthStencilInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencilInfo.depthTestEnable = desc.depthTestEnable;
-    depthStencilInfo.depthWriteEnable = desc.depthWriteEnable;
+    depthStencilInfo.depthTestEnable = desc.bDepthTestEnable;
+    depthStencilInfo.depthWriteEnable = desc.bDepthWriteEnable;
     // TODO: map compare operation
-    depthStencilInfo.depthCompareOp = TransformCompareOp(desc.depthCompareOp);
+    depthStencilInfo.depthCompareOp = TransformCompareOp(desc.DepthCompareOp);
     depthStencilInfo.depthBoundsTestEnable = VK_FALSE;
     depthStencilInfo.stencilTestEnable = VK_FALSE;
 }
@@ -1529,43 +1529,43 @@ VulkanSampler::VulkanSampler(VulkanDevice* device, const RHISamplerDesc& desc) :
     // Filtering
     // =========================================
 
-    info.magFilter = TransformFilter(desc.filter);
-    info.minFilter = TransformFilter(desc.filter);
+    info.magFilter = TransformFilter(desc.Filter);
+    info.minFilter = TransformFilter(desc.Filter);
 
-    info.mipmapMode = GetMipmapMode(desc.filter);
+    info.mipmapMode = GetMipmapMode(desc.Filter);
 
     // =========================================
     // Address Modes
     // =========================================
 
-    info.addressModeU = TransformAddressMode(desc.addressU);
-    info.addressModeV = TransformAddressMode(desc.addressV);
-    info.addressModeW = TransformAddressMode(desc.addressW);
+    info.addressModeU = TransformAddressMode(desc.AddressU);
+    info.addressModeV = TransformAddressMode(desc.AddressV);
+    info.addressModeW = TransformAddressMode(desc.AddressW);
 
     // =========================================
     // LOD
     // =========================================
 
-    info.mipLodBias = desc.mipLodBias;
+    info.mipLodBias = desc.MipLodBias;
 
-    info.minLod = desc.minLod;
-    info.maxLod = desc.maxLod;
+    info.minLod = desc.MinLod;
+    info.maxLod = desc.MaxLod;
 
     // =========================================
     // Anisotropy
     // =========================================
 
     info.anisotropyEnable =
-        desc.anisotropyEnable ? VK_TRUE : VK_FALSE;
+        desc.bAnisotropyEnable ? VK_TRUE : VK_FALSE;
 
-    info.maxAnisotropy = desc.maxAnisotropy;
+    info.maxAnisotropy = desc.MaxAnisotropy;
 
     // =========================================
     // Depth Compare
     // =========================================
 
     info.compareEnable =
-        desc.CompareEnable ? VK_TRUE : VK_FALSE;
+        desc.bCompareEnable ? VK_TRUE : VK_FALSE;
 
     info.compareOp =
         TransformCompareOp(desc.CompareOp);

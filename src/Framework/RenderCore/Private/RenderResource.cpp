@@ -59,11 +59,11 @@ void RenderTexture::ReleaseRHIResource() {
 }
 void RenderTexture::UploadData(const void* data, uint32_t mipIndex, uint32_t arraySlice, uint32_t planeSlice) {
 	RHI::RHIUpdateTextureRegion updateRegion;
-	updateRegion.arraySlice = arraySlice;
-	updateRegion.mipLevel = mipIndex;
-	updateRegion.width = Desc.Width >> mipIndex;
-	updateRegion.height = Desc.Height >> mipIndex;
-	updateRegion.depth = Desc.Depth >> mipIndex;
+	updateRegion.ArraySlice = arraySlice;
+	updateRegion.MipLevel = mipIndex;
+	updateRegion.Width = Desc.Width >> mipIndex;
+	updateRegion.Height = Desc.Height >> mipIndex;
+	updateRegion.Depth = Desc.Depth >> mipIndex;
 	UploadData(data, updateRegion);
 }
 void RenderTexture::UploadData(const void* data, const RHI::RHIUpdateTextureRegion& updateRegion) {
@@ -74,16 +74,16 @@ void RenderTexture::UploadData(const void* data, const RHI::RHIUpdateTextureRegi
 	cmd.SetImmediate(true);
 	cmd.Begin();
 	RHI::RHISubresourceRange range;
-	range.ArraySlice = updateRegion.arraySlice;
-	range.MipIndex = updateRegion.mipLevel;
+	range.ArraySlice = updateRegion.ArraySlice;
+	range.MipIndex = updateRegion.MipLevel;
 	range.PlaneSlice = 0;
 	if (range.MipIndex == 0 && Desc.MipLevels == 1) {
-        range.MipIndex = RHISubresourceRange::kAllSubresources;
+        range.MipIndex = RHISubresourceRange::KAllSubresources;
 	}
     if (range.ArraySlice == 0 && Desc.ArraySize == 1) {
-		range.ArraySlice = RHISubresourceRange::kAllSubresources;
+		range.ArraySlice = RHISubresourceRange::KAllSubresources;
     }
-	range.PlaneSlice = RHISubresourceRange::kAllSubresources;
+	range.PlaneSlice = RHISubresourceRange::KAllSubresources;
 	auto lastAccess = GetTracker().GetSubresourceAccess(range);
 	if (lastAccess != ERHIResourceAccess::TransferDest) {
 		std::vector<RHI::RHITransitionInfo> infos;
@@ -438,8 +438,8 @@ void RenderBuffer::UploadData(const void* data, uint32_t size, uint32_t offset) 
 		delete[] transitionMem;
 	}
 	RHIUpdateBufferRegion region;
-	region.offset = offset;
-	region.size = size;
+	region.Offset = offset;
+	region.Size = size;
 
 	GRHIApi->UpdateBuffer(cmd, Buffer.get(),data, region);
 	cmd.End();
@@ -544,7 +544,7 @@ bool InitGlobalRenderResource() {
 	RHI::RHISamplerDesc samplerDesc{};
 	GlobalSampler = RHI::GRHIApi->CreateSampler(samplerDesc);
 	RHI::RHISamplerDesc nearestSamplerDesc{};
-	nearestSamplerDesc.filter = ERHIFilter::Nearest;
+	nearestSamplerDesc.Filter = ERHIFilter::Nearest;
 	GlobalNearestSampler = RHI::GRHIApi->CreateSampler(nearestSamplerDesc);
 	RHIBufferDesc desc;
 	desc.Usage = ERHIBufferUsageFlag::ShaderResource;

@@ -248,12 +248,12 @@ namespace Engine
         const DistanceFieldAllocation& allocation,
         const float* data) {
         RHI::RHIUpdateTextureRegion uploadReion;
-        uploadReion.xOffset = allocation.X;
-        uploadReion.yOffset = allocation.Y;
-        uploadReion.zOffset = allocation.Z;
-        uploadReion.width = allocation.SizeX;
-		uploadReion.height = allocation.SizeY;
-        uploadReion.depth = allocation.SizeZ;
+        uploadReion.XOffset = allocation.X;
+        uploadReion.YOffset = allocation.Y;
+        uploadReion.ZOffset = allocation.Z;
+        uploadReion.Width = allocation.SizeX;
+		uploadReion.Height = allocation.SizeY;
+        uploadReion.Depth = allocation.SizeZ;
         m_AtlasTexture->UploadData(data, uploadReion);
     }
 

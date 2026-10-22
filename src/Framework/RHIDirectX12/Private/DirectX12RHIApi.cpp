@@ -46,7 +46,7 @@ namespace RHIDirectX12
 
         RHI::GShaderPlatform = RHI::ERHIShaderPlatform::D3D12;
         PlatformInfo.DepthRange = RHI::EDepthRange::ZeroToOne;
-        PlatformInfo.EnableRayTracing = false;
+        PlatformInfo.bEnableRayTracing = false;
 
         const uint32_t headerSize = static_cast<uint32_t>(sizeof(RHI::RHITransition));
         const uint32_t alignment = static_cast<uint32_t>(alignof(std::max_align_t));
@@ -63,7 +63,7 @@ namespace RHIDirectX12
         }
 
 #if defined(_WIN32)
-        PlatformInfo.EnableRayTracing = Device->SupportsRayTracing();
+        PlatformInfo.bEnableRayTracing = Device->SupportsRayTracing();
 
         GraphicsQueue = std::make_unique<DirectX12Queue>(RHI::EQueueType::Graphics, Device.get(),
                                                          Device->GetGraphicsCommandQueue());
@@ -132,34 +132,34 @@ namespace RHIDirectX12
     {
         auto* dx = dynamic_cast<DirectX12Texture*>(texture);
         auto* context = dynamic_cast<DirectX12CommandContext*>(cmdList.GetContext());
-        if (!dx || !context || !data || !region.width || !region.height || !region.depth)
+        if (!dx || !context || !data || !region.Width || !region.Height || !region.Depth)
             throw std::runtime_error("Invalid texture upload");
-        if (region.numMipLevels != 1 || region.numArraySlices != 1)
+        if (region.NumMipLevels != 1 || region.NumArraySlices != 1)
             throw std::runtime_error("UpdateTexture accepts one subresource per call");
         const UINT pixelSize = RHI::GFormatInfoMap.at(texture->GetDesc().Format).BytesPerPixel;
-        const UINT srcPitch = region.width * pixelSize, rowPitch = (srcPitch + 255) & ~255u;
-        const UINT bytes = rowPitch * region.height * region.depth;
+        const UINT srcPitch = region.Width * pixelSize, rowPitch = (srcPitch + 255) & ~255u;
+        const UINT bytes = rowPitch * region.Height * region.Depth;
         auto upload = std::make_shared<DirectX12StagingBuffer>(Device.get(), bytes);
         auto* mapped = static_cast<uint8_t*>(upload->Map(0, bytes));
-        for (UINT z = 0; z < region.depth; ++z)
-            for (UINT y = 0; y < region.height; ++y)
-                std::memcpy(mapped + (z * region.height + y) * rowPitch,
-                            static_cast<const uint8_t*>(data) + (z * region.height + y) * srcPitch, srcPitch);
+        for (UINT z = 0; z < region.Depth; ++z)
+            for (UINT y = 0; y < region.Height; ++y)
+                std::memcpy(mapped + (z * region.Height + y) * rowPitch,
+                            static_cast<const uint8_t*>(data) + (z * region.Height + y) * srcPitch, srcPitch);
         cmdList.AddCommand<DirectX12LambdaCommand>(
             [dx, texture, upload, region, rowPitch](RHI::RHICommandListBase& list) {
                 auto* context = dynamic_cast<DirectX12CommandContext*>(list.GetContext());
                 D3D12_TEXTURE_COPY_LOCATION from{}, to{};
                 from.pResource = upload->GetNativeResource();
                 from.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-                from.PlacedFootprint.Footprint = {ToDxgiFormat(texture->GetDesc().Format), region.width, region.height,
-                                                  region.depth, rowPitch};
+                from.PlacedFootprint.Footprint = {ToDxgiFormat(texture->GetDesc().Format), region.Width, region.Height,
+                                                  region.Depth, rowPitch};
                 to.pResource = dx->GetNativeResource();
                 to.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-                to.SubresourceIndex = region.mipLevel + region.arraySlice * texture->GetDesc().MipLevels;
+                to.SubresourceIndex = region.MipLevel + region.ArraySlice * texture->GetDesc().MipLevels;
                 if (!dx->DeclaredAccess.empty())
                     context->RequireAccess(texture, RHI::ERHIResourceAccess::TransferDest, to.SubresourceIndex);
                 context->TransitionResource(texture, D3D12_RESOURCE_STATE_COPY_DEST, to.SubresourceIndex);
-                context->GetNativeCommandList()->CopyTextureRegion(&to, region.xOffset, region.yOffset, region.zOffset,
+                context->GetNativeCommandList()->CopyTextureRegion(&to, region.XOffset, region.YOffset, region.ZOffset,
                                                                    &from, nullptr);
                 context->RetainResource(upload->GetNativeResource());
             });
@@ -169,10 +169,10 @@ namespace RHIDirectX12
     {
         auto* dx = dynamic_cast<DirectX12Buffer*>(buffer);
         auto* context = dynamic_cast<DirectX12CommandContext*>(cmdList.GetContext());
-        if (!dx || !context || !data || region.offset > buffer->GetDesc().Size)
+        if (!dx || !context || !data || region.Offset > buffer->GetDesc().Size)
             throw std::runtime_error("Invalid buffer upload");
-        const UINT64 bytes = region.size ? region.size : buffer->GetDesc().Size - region.offset;
-        if (!bytes || bytes > buffer->GetDesc().Size - region.offset || bytes > UINT_MAX)
+        const UINT64 bytes = region.Size ? region.Size : buffer->GetDesc().Size - region.Offset;
+        if (!bytes || bytes > buffer->GetDesc().Size - region.Offset || bytes > UINT_MAX)
             throw std::out_of_range("Buffer upload region");
         if (dx->UploadHeap)
         {
@@ -189,8 +189,8 @@ namespace RHIDirectX12
                 void* mapped = nullptr;
                 D3D12_RANGE read{0, 0};
                 CheckDX12(dx->GetNativeResource()->Map(0, &read, &mapped), "Map CPU-visible buffer");
-                std::memcpy(static_cast<uint8_t*>(mapped) + region.offset, copied->data(), copied->size());
-                D3D12_RANGE written{region.offset, region.offset + copied->size()};
+                std::memcpy(static_cast<uint8_t*>(mapped) + region.Offset, copied->data(), copied->size());
+                D3D12_RANGE written{region.Offset, region.Offset + copied->size()};
                 dx->GetNativeResource()->Unmap(0, &written);
             });
             return;
@@ -202,7 +202,7 @@ namespace RHIDirectX12
             if (!dx->DeclaredAccess.empty())
                 context->RequireAccess(buffer, RHI::ERHIResourceAccess::TransferDest);
             context->TransitionResource(buffer, D3D12_RESOURCE_STATE_COPY_DEST);
-            context->GetNativeCommandList()->CopyBufferRegion(dx->GetNativeResource(), region.offset,
+            context->GetNativeCommandList()->CopyBufferRegion(dx->GetNativeResource(), region.Offset,
                                                               upload->GetNativeResource(), 0, bytes);
             context->RetainResource(upload->GetNativeResource());
         });
@@ -267,10 +267,10 @@ namespace RHIDirectX12
     {
         auto* dx = dynamic_cast<DirectX12Buffer*>(buffer);
         auto* context = dynamic_cast<DirectX12CommandContext*>(cmdList.GetContext());
-        if (!dx || !context || info.offset > buffer->GetDesc().Size)
+        if (!dx || !context || info.Offset > buffer->GetDesc().Size)
             throw std::runtime_error("Invalid buffer readback");
-        const auto size = info.size ? info.size : buffer->GetDesc().Size - info.offset;
-        if (!size || size > UINT_MAX || size > buffer->GetDesc().Size - info.offset)
+        const auto size = info.Size ? info.Size : buffer->GetDesc().Size - info.Offset;
+        if (!size || size > UINT_MAX || size > buffer->GetDesc().Size - info.Offset)
             throw std::out_of_range("Buffer readback region");
         auto readback =
             std::make_shared<DirectX12StagingBuffer>(Device.get(), static_cast<UINT>(size), D3D12_HEAP_TYPE_READBACK);
@@ -279,7 +279,7 @@ namespace RHIDirectX12
             const auto oldState = dx->States[0];
             context->TransitionResource(buffer, D3D12_RESOURCE_STATE_COPY_SOURCE);
             context->GetNativeCommandList()->CopyBufferRegion(readback->GetNativeResource(), 0, dx->GetNativeResource(),
-                                                              info.offset, size);
+                                                              info.Offset, size);
             context->TransitionResource(buffer, oldState);
             context->RetainResource(readback->GetNativeResource());
         });
@@ -512,7 +512,7 @@ namespace RHIDirectX12
             throw std::invalid_argument("Unsupported transition creation flags");
         for (const auto& info : CreateInfo.TransitionInfos)
         {
-            if (info.Type == RHI::RHITransitionInfo::EType::BVH && !PlatformInfo.EnableRayTracing)
+            if (info.Type == RHI::RHITransitionInfo::EType::BVH && !PlatformInfo.bEnableRayTracing)
                 throw std::runtime_error("The selected DirectX12 adapter does not support DXR");
             if (info.Flags != RHI::EResourceTransitionFlags::None)
                 throw std::runtime_error("DirectX12 transition discard/compression flags are not implemented");

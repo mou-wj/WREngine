@@ -265,14 +265,14 @@ VulkanRHISyncPoint::VulkanRHISyncPoint(VulkanDevice* device, RHI::EQueueType que
 {
     semaphore_ = new VulkanSemaphore(device_, isBinary,initialValue);
     ownSemaphore_ = true;
-    Type = queueType;
+    _type = queueType;
 }
 
 VulkanRHISyncPoint::VulkanRHISyncPoint(VulkanDevice* device, RHI::EQueueType queueType, VulkanSemaphore* semaphore)
 {
     ownSemaphore_ = false;
     semaphore_ = semaphore;
-    Type = queueType;
+    _type = queueType;
 }
 
 VulkanRHISyncPoint::~VulkanRHISyncPoint() {

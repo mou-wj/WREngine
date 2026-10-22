@@ -41,10 +41,10 @@ namespace RHI
         struct Block
         {
             uint64_t Offset, Size;
-            bool Used;
+            bool bUsed;
         };
-        std::vector<Block> Blocks;
-        mutable std::mutex Mutex;
+        std::vector<Block> m_Blocks;
+        mutable std::mutex m_Mutex;
     };
 
     struct RHI_API RHITransientAllocation
@@ -67,11 +67,11 @@ namespace RHI
         ERHITransientResourceType GetResourceType() const;
         uint32_t GetBeginIndex() const
         {
-            return BeginIndex;
+            return m_BeginIndex;
         }
         uint32_t GetEndIndex() const
         {
-            return EndIndex;
+            return m_EndIndex;
         }
 
     protected:
@@ -79,10 +79,10 @@ namespace RHI
 
     private:
         friend class RHITransientResourceManager;
-        ERHITransientResourceType ResourceType;
-        bool bAcquired = false;
-        std::string Name;
-        uint32_t BeginIndex = 0, EndIndex = 0;
+        ERHITransientResourceType m_ResourceType;
+        bool m_bAcquired = false;
+        std::string m_Name;
+        uint32_t m_BeginIndex = 0, m_EndIndex = 0;
     };
 
     class RHI_API RHITransientTexture : public RHITransientResource
@@ -92,7 +92,7 @@ namespace RHI
         std::shared_ptr<RHITexture> GetTexture() const;
 
     private:
-        std::shared_ptr<RHITexture> Texture;
+        std::shared_ptr<RHITexture> m_Texture;
     };
     using RHITransientTextureSP = std::shared_ptr<RHITransientTexture>;
 
@@ -103,7 +103,7 @@ namespace RHI
         std::shared_ptr<RHIBuffer> GetBuffer() const;
 
     private:
-        std::shared_ptr<RHIBuffer> Buffer;
+        std::shared_ptr<RHIBuffer> m_Buffer;
     };
     using RHITransientBufferSP = std::shared_ptr<RHITransientBuffer>;
 
@@ -147,7 +147,7 @@ namespace RHI
     private:
         void Acquire(RHITransientResource& resource, const char* name, uint32_t begin, uint32_t end);
         struct State;
-        std::unique_ptr<State> Data;
+        std::unique_ptr<State> m_Data;
     };
     using RHITransientResourceManagerSP = std::shared_ptr<RHITransientResourceManager>;
 } // namespace RHI

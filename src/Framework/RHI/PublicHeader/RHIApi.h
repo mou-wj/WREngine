@@ -21,7 +21,7 @@ enum class EDepthRange {
 };
 struct RHIPlatformInfo {
     EDepthRange DepthRange;
-    bool EnableRayTracing;
+    bool bEnableRayTracing;
 };
 
 class RHI_API RHIApi
@@ -41,21 +41,21 @@ public:
     virtual void* MapReadBuffer(RHICommandListBase& cmdList, RHIBuffer* buffer, const RHIReadBufferInfo& info) = 0;
     virtual void Unmap(void* mappedData) = 0;
     virtual RHIShaderResourceViewSP CreateTextureShaderResourceView(
-        RHITexture* Texture, const RHITexSRVCreateInfo& Desc) = 0;
+        RHITexture* texture, const RHITexSRVCreateInfo& desc) = 0;
 
     virtual RHIUnorderedAccessViewSP CreateTextureUnorderedAccessView(
-        RHITexture* Texture, const RHITexUAVCreateInfo& Desc) = 0;
+        RHITexture* texture, const RHITexUAVCreateInfo& desc) = 0;
 
     virtual RHIShaderResourceViewSP CreateBufferShaderResourceView(
-        RHIBuffer* Buffer, const RHIBufferSRVCreateInfo& Desc) = 0;
+        RHIBuffer* buffer, const RHIBufferSRVCreateInfo& desc) = 0;
 
     virtual RHIUnorderedAccessViewSP CreateBufferUnorderedAccessView(
-        RHIBuffer* Buffer, const RHIBufferUAVCreateInfo& Desc) = 0;
+        RHIBuffer* buffer, const RHIBufferUAVCreateInfo& desc) = 0;
     virtual RHIRayTracingGeometrySP CreateRayTracingGeometry(const RHIRayTracingGeometryDesc& desc) = 0;
     virtual RHIRayTracingInstanceSP CreateRayTracingInstance(const RHIRayTracingInstancesDesc& desc) = 0;
         
 
-    // ���� StagingBuffer
+    // 创建用于数据传输的暂存缓冲区。
     virtual RHIStagingBufferSP CreateStagingBuffer(uint32_t size) = 0;
 
     virtual RHIGraphicsPipelineStateSP CreateGraphicsPipelineState(const RHIGraphicsPipelineStateDesc& desc) = 0;
@@ -85,11 +85,11 @@ public:
     virtual RHISwapchainSP CreateSwapchain(void* inWindowHandle,uint32_t w,uint32_t h,ERHIFormat format) = 0;
     virtual RHISamplerSP CreateSampler(const RHISamplerDesc& desc) = 0;
 
-    virtual RHIQueue* GetQueue(EQueueType Type) = 0;
+    virtual RHIQueue* GetQueue(EQueueType type) = 0;
     virtual RHIPresentExecutor* GetPresentExecutor() = 0;
 
-    virtual void RHICreateTransition(RHITransition* Transition, const RHITransitionCreateInfo& CreateInfo) = 0;
-    virtual void RHIReleaseTransition(RHITransition* Transition) = 0;
+    virtual void RHICreateTransition(RHITransition* transition, const RHITransitionCreateInfo& createInfo) = 0;
+    virtual void RHIReleaseTransition(RHITransition* transition) = 0;
 
     virtual RHITransientResourceManagerSP CreateTransientResourceManager() = 0;
     

@@ -58,7 +58,7 @@ namespace Renderer {
         pyramidMipUAV = GraphBuilder.CreateTextureUAV("DepthPyramidGenerateUAV", mipUAVDesc);
 
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.computeShader = computeShader;
+        computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
 
         auto InputCopy = Input;

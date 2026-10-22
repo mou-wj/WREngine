@@ -99,7 +99,7 @@ private:
 	VkPhysicalDevice PhysicalDevice = nullptr;
     // Keep the exported class layout identical in DLL and client builds.
     VkDebugUtilsMessengerEXT DebugMessenger = VK_NULL_HANDLE;
-    RHI::RHIPlatformInfo PlatformInfo{ .DepthRange = RHI::EDepthRange::ZeroToOne, .EnableRayTracing = false };
+    RHI::RHIPlatformInfo PlatformInfo{ .DepthRange = RHI::EDepthRange::ZeroToOne, .bEnableRayTracing = false };
     bool ValidFlag = false;
 };
 

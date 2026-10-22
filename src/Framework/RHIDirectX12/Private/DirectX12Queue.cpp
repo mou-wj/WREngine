@@ -12,7 +12,7 @@ namespace RHIDirectX12
     DirectX12SyncPoint::DirectX12SyncPoint(RHI::EQueueType type, DirectX12Device* device, ID3D12CommandQueue* queue)
         : Device(device), Queue(queue)
     {
-        Type = type;
+        _type = type;
         CheckDX12(Device->GetNativeDevice()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&Fence)),
                   "Create queue fence");
         FenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);

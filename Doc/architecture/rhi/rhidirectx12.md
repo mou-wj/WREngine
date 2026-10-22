@@ -199,7 +199,7 @@ RHI 到原生 API 的枚举转换集中在 `Private/DirectX12RHIUtils.h/.cpp`：
 
 当前已覆盖基础图形 / 计算、显式资源状态转换、上传读回和单层二维纹理缩放 / 格式转换。以下能力仍有限制：
 
-- 光线追踪关闭，上层应检查 `EnableRayTracing`。
+- 光线追踪关闭，上层应检查 `bEnableRayTracing`。
 - 无独立异步计算、拆分屏障或 heap aliasing。
 - 不支持非零 register space、无界描述符数组及常量缓冲区数组。
 - 单个录制上下文的描述符容量为 4096 个资源描述符和 256 个采样器。

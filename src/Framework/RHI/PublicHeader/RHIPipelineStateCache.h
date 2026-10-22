@@ -39,19 +39,19 @@ private:
     static size_t HashColorBlendState(const RHIColorBlendStateDesc& desc);
     static size_t HashDepthStencilState(const RHIDepthStencilStateDesc& desc);
 
-    static ::std::unordered_map<size_t, RHIGraphicsPipelineStateSP> s_graphicsCache;
-    static std::unordered_map<size_t, RHIComputePipelineStateSP> s_computeCache;
-    static std::unordered_map<size_t, RHIVertexDescStateSP> s_vertexDescCache;
-    static std::unordered_map<size_t, RHIRasterizerStateSP> s_rasterizerCache;
-    static std::unordered_map<size_t, RHIColorBlendStateSP> s_colorBlendCache;
-    static std::unordered_map<size_t, RHIDepthStencilStateSP> s_depthStencilCache;
+    static ::std::unordered_map<size_t, RHIGraphicsPipelineStateSP> m_GraphicsCache;
+    static std::unordered_map<size_t, RHIComputePipelineStateSP> m_ComputeCache;
+    static std::unordered_map<size_t, RHIVertexDescStateSP> m_VertexDescCache;
+    static std::unordered_map<size_t, RHIRasterizerStateSP> m_RasterizerCache;
+    static std::unordered_map<size_t, RHIColorBlendStateSP> m_ColorBlendCache;
+    static std::unordered_map<size_t, RHIDepthStencilStateSP> m_DepthStencilCache;
     
-    static std::mutex s_graphicsMutex;
-    static std::mutex s_computeMutex;
-    static std::mutex s_vertexDescMutex;
-    static std::mutex s_rasterizerMutex;
-    static std::mutex s_colorBlendMutex;
-    static std::mutex s_depthStencilMutex;
+    static std::mutex m_GraphicsMutex;
+    static std::mutex m_ComputeMutex;
+    static std::mutex m_VertexDescMutex;
+    static std::mutex m_RasterizerMutex;
+    static std::mutex m_ColorBlendMutex;
+    static std::mutex m_DepthStencilMutex;
 
 };
 

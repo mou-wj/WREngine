@@ -17,7 +17,7 @@ namespace RHIOpenGL
     {
         RHI::GShaderPlatform = RHI::ERHIShaderPlatform::OpenGL;
         PlatformInfo.DepthRange = RHI::EDepthRange::ZeroToOne;
-        PlatformInfo.EnableRayTracing = false;
+        PlatformInfo.bEnableRayTracing = false;
         RHI::GShaderPlatform = RHI::ERHIShaderPlatform::OpenGL;
 
         // 3. ����ƫ���� (���� Header ֮��ĵ�ַ)
@@ -68,16 +68,16 @@ namespace RHIOpenGL
     {
         (void)cmdList;
         auto* glTexture = dynamic_cast<OpenGLTexture*>(texture);
-        if (!glTexture || !data || region.width == 0 || region.height == 0 || region.depth == 0)
+        if (!glTexture || !data || region.Width == 0 || region.Height == 0 || region.Depth == 0)
         {
             return;
         }
 
         const auto& desc = glTexture->GetDesc();
-        if (region.mipLevel >= desc.MipLevels ||
-            region.xOffset + region.width > desc.Width ||
-            region.yOffset + region.height > desc.Height ||
-            region.zOffset != 0 || region.depth != 1)
+        if (region.MipLevel >= desc.MipLevels ||
+            region.XOffset + region.Width > desc.Width ||
+            region.YOffset + region.Height > desc.Height ||
+            region.ZOffset != 0 || region.Depth != 1)
         {
             return;
         }
@@ -91,11 +91,11 @@ namespace RHIOpenGL
         {
             glBindTexture(GL_TEXTURE_2D, textureHandle);
             glTexSubImage2D(GL_TEXTURE_2D,
-                static_cast<GLint>(region.mipLevel),
-                static_cast<GLint>(region.xOffset),
-                static_cast<GLint>(region.yOffset),
-                static_cast<GLsizei>(region.width),
-                static_cast<GLsizei>(region.height),
+                static_cast<GLint>(region.MipLevel),
+                static_cast<GLint>(region.XOffset),
+                static_cast<GLint>(region.YOffset),
+                static_cast<GLsizei>(region.Width),
+                static_cast<GLsizei>(region.Height),
                 glFormat,
                 glType,
                 data);
@@ -107,8 +107,8 @@ namespace RHIOpenGL
     {
         (void)cmdList;
         auto* glBuffer = dynamic_cast<OpenGLBuffer*>(buffer);
-        if (!glBuffer || !data || region.size == 0 ||
-            static_cast<uint64_t>(region.offset) + region.size > glBuffer->GetDesc().Size)
+        if (!glBuffer || !data || region.Size == 0 ||
+            static_cast<uint64_t>(region.Offset) + region.Size > glBuffer->GetDesc().Size)
         {
             return;
         }
@@ -119,8 +119,8 @@ namespace RHIOpenGL
         {
             glBindBuffer(GL_ARRAY_BUFFER, bufferHandle);
             glBufferSubData(GL_ARRAY_BUFFER,
-                static_cast<GLintptr>(region.offset),
-                static_cast<GLsizeiptr>(region.size),
+                static_cast<GLintptr>(region.Offset),
+                static_cast<GLsizeiptr>(region.Size),
                 data);
             glBindBuffer(GL_ARRAY_BUFFER, 0);
         });
@@ -174,13 +174,13 @@ namespace RHIOpenGL
     {
         (void)cmdList;
         auto* glBuffer = dynamic_cast<OpenGLBuffer*>(buffer);
-        if (!glBuffer || info.offset > glBuffer->GetDesc().Size)
+        if (!glBuffer || info.Offset > glBuffer->GetDesc().Size)
         {
             return nullptr;
         }
 
-        const uint64_t availableSize = glBuffer->GetDesc().Size - info.offset;
-        const uint64_t readSize = info.size == 0 ? availableSize : info.size;
+        const uint64_t availableSize = glBuffer->GetDesc().Size - info.Offset;
+        const uint64_t readSize = info.Size == 0 ? availableSize : info.Size;
         if (readSize == 0 || readSize > availableSize)
         {
             return nullptr;
@@ -197,7 +197,7 @@ namespace RHIOpenGL
         EnqueueTaskAndWait([bufferHandle, &info, readSize, mappedData]()
         {
             glBindBuffer(GL_ARRAY_BUFFER, bufferHandle);
-            glGetBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(info.offset),
+            glGetBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(info.Offset),
                 static_cast<GLsizeiptr>(readSize), mappedData);
             glBindBuffer(GL_ARRAY_BUFFER, 0);
         });

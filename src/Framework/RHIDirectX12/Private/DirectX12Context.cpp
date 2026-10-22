@@ -444,7 +444,7 @@ namespace RHIDirectX12
             auto* pipeline = dynamic_cast<DirectX12GraphicsPipelineState*>(CurrentGraphicsPipeline);
             CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
             CommandList->SetPipelineState(pipeline->GetPipelineState());
-            CommandList->IASetPrimitiveTopology(ToPrimitiveTopology(pipeline->GetDesc().primitiveTopology));
+            CommandList->IASetPrimitiveTopology(ToPrimitiveTopology(pipeline->GetDesc().PrimitiveTopology));
             for (const auto& binding : VertexBuffers)
                 CommandList->IASetVertexBuffers(binding.first, 1, &binding.second);
             if (CurrentViewport)
@@ -763,10 +763,10 @@ namespace RHIDirectX12
 
         const auto& bufferDesc = dxBuffer->GetDesc();
         uint32_t stride = bufferDesc.Stride;
-        if (CurrentGraphicsPipeline && CurrentGraphicsPipeline->GetDesc().vertexDescState)
-            for (const auto& binding : CurrentGraphicsPipeline->GetDesc().vertexDescState->GetDesc().bindings)
-                if (binding.binding == streamIndex)
-                    stride = binding.stride;
+        if (CurrentGraphicsPipeline && CurrentGraphicsPipeline->GetDesc().VertexDescState)
+            for (const auto& binding : CurrentGraphicsPipeline->GetDesc().VertexDescState->GetDesc().Bindings)
+                if (binding.Binding == streamIndex)
+                    stride = binding.Stride;
         RequireAccess(vertexBuffer, RHI::ERHIResourceAccess::VertexOrIndexBuffer);
         if (stride == 0 || offset >= bufferDesc.Size)
         {
@@ -800,7 +800,7 @@ namespace RHIDirectX12
         GraphicsReadOnlyStorage.clear();
         CommandList->SetGraphicsRootSignature(dxPipeline->GetRootSignature());
         CommandList->SetPipelineState(dxPipeline->GetPipelineState());
-        CommandList->IASetPrimitiveTopology(ToPrimitiveTopology(dxPipeline->GetDesc().primitiveTopology));
+        CommandList->IASetPrimitiveTopology(ToPrimitiveTopology(dxPipeline->GetDesc().PrimitiveTopology));
 #else
         (void)pipelineState;
 #endif

@@ -49,7 +49,7 @@ namespace RHIVulkan {
     VulkanRenderTargetLayout::VulkanRenderTargetLayout(const RHIGraphicAttachmentDesc& desc)
     {
         resetAttachments();
-        numColorAttachments = desc.colorAttachmentCount;
+        numColorAttachments = desc.ColorAttachmentCount;
 
         parseColorAttachments(desc);
         parseResolveAttachments(desc);
@@ -62,17 +62,17 @@ namespace RHIVulkan {
     // ----------------------------
     void VulkanRenderTargetLayout::parseColorAttachments(const RHIGraphicAttachmentDesc& desc)
     {
-        for (uint32_t i = 0; i < desc.colorAttachmentCount; ++i)
+        for (uint32_t i = 0; i < desc.ColorAttachmentCount; ++i)
         {
-            const auto& src = desc.colorAttachments[i];
+            const auto& src = desc.ColorAttachments[i];
             VkAttachmentDescription& dst = attachmentDescs[attachmentDescCount];
 
             dst.flags = 0;
-            dst.format =  TransformFormatFrom(src.format); 
-            dst.samples = TransformSampleCountFrom(src.sampleCount);
+            dst.format =  TransformFormatFrom(src.Format);
+            dst.samples = TransformSampleCountFrom(src.SampleCount);
 
-            dst.loadOp = RTActionToLoadOp(src.actions);
-            dst.storeOp = RTActionToStoreOp(src.actions);
+            dst.loadOp = RTActionToLoadOp(src.Actions);
+            dst.storeOp = RTActionToStoreOp(src.Actions);
 
             dst.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             dst.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -92,15 +92,15 @@ namespace RHIVulkan {
     // ----------------------------
     void VulkanRenderTargetLayout::parseResolveAttachments(const RHIGraphicAttachmentDesc& desc)
     {
-        for (uint32_t i = 0; i < desc.colorAttachmentCount; ++i)
+        for (uint32_t i = 0; i < desc.ColorAttachmentCount; ++i)
         {
-            const auto& src = desc.colorAttachments[i];
-            if (src.enableResolve)
+            const auto& src = desc.ColorAttachments[i];
+            if (src.bEnableResolve)
             {
                 VkAttachmentDescription& dst = attachmentDescs[attachmentDescCount];
 
                 dst.flags = 0;
-                dst.format = static_cast<VkFormat>(src.format); // ����Ϊ resolve Ŀ���ʽ
+                dst.format = static_cast<VkFormat>(src.Format); // ����Ϊ resolve Ŀ���ʽ
                 dst.samples = VK_SAMPLE_COUNT_1_BIT;
                 dst.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 dst.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -127,19 +127,19 @@ namespace RHIVulkan {
     // ----------------------------
     void VulkanRenderTargetLayout::parseDepthAttachment(const RHIGraphicAttachmentDesc& desc)
     {
-        if (desc.enableDepth || desc.enableStencil)
+        if (desc.bEnableDepth || desc.bEnableStencil)
         {
             VkAttachmentDescription& dst = attachmentDescs[attachmentDescCount];
 
             dst.flags = 0;
-            dst.format = TransformFormatFrom(desc.depthStencilFormat);
-            dst.samples = TransformSampleCountFrom(desc.numSamples);
+            dst.format = TransformFormatFrom(desc.DepthStencilFormat);
+            dst.samples = TransformSampleCountFrom(desc.NumSamples);
 
-            dst.loadOp = RTActionToLoadOp(desc.depthActions);
-            dst.storeOp = RTActionToStoreOp(desc.depthActions);
+            dst.loadOp = RTActionToLoadOp(desc.DepthActions);
+            dst.storeOp = RTActionToStoreOp(desc.DepthActions);
 
-            dst.stencilLoadOp = RTActionToLoadOp(desc.stencilActions);
-            dst.stencilStoreOp = RTActionToStoreOp(desc.stencilActions);
+            dst.stencilLoadOp = RTActionToLoadOp(desc.StencilActions);
+            dst.stencilStoreOp = RTActionToStoreOp(desc.StencilActions);
 
             dst.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             dst.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -161,11 +161,11 @@ namespace RHIVulkan {
         size_t hash = 14695981039346656037ull;
         hash ^= static_cast<uint64_t>(numColorAttachments); hash *= 1099511628211ull;
         for (uint32_t i = 0; i < numColorAttachments; ++i)
-            hash ^= RHIColorAttachmentDesc::CalculateHash(desc.colorAttachments[i]), hash *= 1099511628211ull;
+            hash ^= RHIColorAttachmentDesc::CalculateHash(desc.ColorAttachments[i]), hash *= 1099511628211ull;
 
         hash ^= static_cast<uint64_t>(hasDepthStencil); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(desc.depthStencilFormat); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(desc.numSamples); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.DepthStencilFormat); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.NumSamples); hash *= 1099511628211ull;
 
         renderPassCompatibleHash = hash;
 
@@ -173,13 +173,13 @@ namespace RHIVulkan {
         hash = 14695981039346656037ull;
         hash ^= static_cast<uint64_t>(numColorAttachments); hash *= 1099511628211ull;
         for (uint32_t i = 0; i < numColorAttachments; ++i)
-            hash ^= RHIColorAttachmentDesc::CalculateHash(desc.colorAttachments[i]), hash *= 1099511628211ull;
+            hash ^= RHIColorAttachmentDesc::CalculateHash(desc.ColorAttachments[i]), hash *= 1099511628211ull;
 
         hash ^= static_cast<uint64_t>(hasDepthStencil); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(desc.depthActions); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(desc.stencilActions); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(desc.depthStencilFormat); hash *= 1099511628211ull;
-        hash ^= static_cast<uint64_t>(desc.numSamples); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.DepthActions); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.StencilActions); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.DepthStencilFormat); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(desc.NumSamples); hash *= 1099511628211ull;
 
         renderPassFullHash = hash;
     }
@@ -406,7 +406,7 @@ namespace RHIVulkan {
         // ==========================================
     // 1. 填充 Color Attachments 信息
     // ==========================================
-        desc.colorAttachmentCount = renderTargets.NumColorAttachments;
+        desc.ColorAttachmentCount = renderTargets.NumColorAttachments;
 
         // 用于记录整个 Pass 的全局 MSAA 采样数
         uint32_t commonSampleCount = 1;
@@ -419,8 +419,8 @@ namespace RHIVulkan {
             if (srcAtt.Texture != nullptr)
             {
                 // 从物理纹理资源中提取静态属性
-                desc.colorAttachments[i].format = srcAtt.Texture->GetDesc().Format;
-                desc.colorAttachments[i].actions = srcAtt.Actions;
+                desc.ColorAttachments[i].Format = srcAtt.Texture->GetDesc().Format;
+                desc.ColorAttachments[i].Actions = srcAtt.Actions;
 
                 // 记录并追踪第一个有效纹理的采样数
                 if (!bSampleCountSet)
@@ -437,8 +437,8 @@ namespace RHIVulkan {
             }
             else
             {
-                desc.colorAttachments[i].format = ERHIFormat::Unknown;
-                desc.colorAttachments[i].actions = ERenderTargetActions::Load_Store; // 默认安全回滚
+                desc.ColorAttachments[i].Format = ERHIFormat::Unknown;
+                desc.ColorAttachments[i].Actions = ERenderTargetActions::Load_Store; // 默认安全回滚
             }
         }
 
@@ -449,18 +449,18 @@ namespace RHIVulkan {
 
         if (srcDepth.Texture != nullptr)
         {
-            desc.enableDepth = true;
+            desc.bEnableDepth = true;
 
             // 根据格式特征自动判断是否包含 Stencil（例如包含 D24S8 或 D32S8 元素）
             ERHIFormat depthFormat = srcDepth.Texture->GetDesc().Format;
-            desc.depthStencilFormat = depthFormat;
+            desc.DepthStencilFormat = depthFormat;
 
             // 常见的带模板的深度格式检测（请根据你实际的 ERHIFormat 枚举名调整）
-            desc.enableStencil = (depthFormat == ERHIFormat::D24_UNorm_S8_UInt);
+            desc.bEnableStencil = (depthFormat == ERHIFormat::D24_UNorm_S8_UInt);
 
-            desc.depthActions = srcDepth.Actions;
+            desc.DepthActions = srcDepth.Actions;
             // 如果开启了 Stencil，保持与 Depth 一致的动作，或者默认 Load_Store
-            desc.stencilActions = desc.enableStencil ? srcDepth.Actions : ERenderTargetActions::Load_Store;
+            desc.StencilActions = desc.bEnableStencil ? srcDepth.Actions : ERenderTargetActions::Load_Store;
 
             // 采样率处理与对齐
             if (!bSampleCountSet)
@@ -479,18 +479,18 @@ namespace RHIVulkan {
         else
         {
             // 明确未绑定深度的情况
-            desc.enableDepth = false;
-            desc.enableStencil = false;
-            desc.depthStencilFormat = ERHIFormat::Unknown;
-            desc.depthActions = ERenderTargetActions::Load_Store;
-            desc.stencilActions = ERenderTargetActions::Load_Store;
+            desc.bEnableDepth = false;
+            desc.bEnableStencil = false;
+            desc.DepthStencilFormat = ERHIFormat::Unknown;
+            desc.DepthActions = ERenderTargetActions::Load_Store;
+            desc.StencilActions = ERenderTargetActions::Load_Store;
         }
 
         // ==========================================
         // 3. 全局/管线级状态填充
         // ==========================================
-        desc.numSamples = commonSampleCount;
-        desc.subpassIndex = 0; // 默认初始子通道索引为 0
+        desc.NumSamples = commonSampleCount;
+        desc.SubpassIndex = 0; // 默认初始子通道索引为 0
 
 
         return desc;

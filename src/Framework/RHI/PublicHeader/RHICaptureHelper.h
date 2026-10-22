@@ -25,14 +25,14 @@ private:
 	void Load();
 	RHICaptureHelper();
 	
-	bool loaded = false;
-	bool inited = false;
-	std::string captureOutPath;
-	void* devicePointer = nullptr;
-	void* windowPointer = nullptr;
-	void* rdoc_api = nullptr; // RenderDoc API 指针，实际类型在cpp中处理
-	uint32_t numCaptures = 1;
-	void* libHandle = nullptr;
+	bool m_bLoaded = false;
+	bool m_bInited = false;
+	std::string m_CaptureOutPath;
+	void* m_DevicePointer = nullptr;
+	void* m_WindowPointer = nullptr;
+	void* m_RdocApi = nullptr; // RenderDoc API 指针，实际类型在cpp中处理
+	uint32_t m_NumCaptures = 1;
+	void* m_LibHandle = nullptr;
 };
 
 } // namespace RHI
