@@ -58,10 +58,10 @@ namespace ImGUISlate {
     ImSlateRenderer::ImSlateRenderer(SlateCore::Window* window)
     {
         IMGUI_CHECKVERSION();
-        Context = ImGui::CreateContext();
-        ImGui::SetCurrentContext(Context);
+        m_Context = ImGui::CreateContext();
+        ImGui::SetCurrentContext(m_Context);
         ImGui::StyleColorsDark();
-        Window = window;
+        m_Window = window;
         //ImGuiIO& io = ImGui::GetIO();
         //unsigned char* fontPixels = nullptr;
         //int fontWidth = 0;
@@ -73,26 +73,26 @@ namespace ImGUISlate {
 
     ImSlateRenderer::~ImSlateRenderer()
     {
-        if (bOpenGLBackendInitialized)
+        if (m_bOpenGLBackendInitialized)
         {
-            ImGui::SetCurrentContext(Context);
+            ImGui::SetCurrentContext(m_Context);
             ImGui_ImplOpenGL3_Shutdown();
-            bOpenGLBackendInitialized = false;
+            m_bOpenGLBackendInitialized = false;
         }
 
         DestroyOpenGLContexts();
 
-        if (Context)
+        if (m_Context)
         {
-            ImGui::SetCurrentContext(Context);
-            ImGui::DestroyContext(Context);
-            Context = nullptr;
+            ImGui::SetCurrentContext(m_Context);
+            ImGui::DestroyContext(m_Context);
+            m_Context = nullptr;
         }
     }
 
     bool ImSlateRenderer::EnsureOpenGLContext()
     {
-        SlateCore::Window* window = Window;
+        SlateCore::Window* window = m_Window;
         if (!window)
         {
             return false;
@@ -151,44 +151,44 @@ namespace ImGUISlate {
             return false;
         }
 
-        DeviceContext = hdc;
-        GLContext = glrc;
+        m_DeviceContext = hdc;
+        m_GLContext = glrc;
 
-        if (!bOpenGLBackendInitialized)
+        if (!m_bOpenGLBackendInitialized)
         {
-            ImGui::SetCurrentContext(Context);
-            bOpenGLBackendInitialized = ImGui_ImplOpenGL3_Init("#version 330");
+            ImGui::SetCurrentContext(m_Context);
+            m_bOpenGLBackendInitialized = ImGui_ImplOpenGL3_Init("#version 330");
         }
 
-        return bOpenGLBackendInitialized;
+        return m_bOpenGLBackendInitialized;
 #endif
     }
 
     void ImSlateRenderer::DestroyOpenGLContexts()
     {
-        if (GLContext)
+        if (m_GLContext)
         {
             wglMakeCurrent(nullptr, nullptr);
 
             wglDeleteContext(
-                (HGLRC)GLContext);
+                (HGLRC)m_GLContext);
 
-            GLContext = nullptr;
+            m_GLContext = nullptr;
         }
 
-        if (DeviceContext)
+        if (m_DeviceContext)
         {
             ReleaseDC(
-                (HWND)Window->GetNativeHandle(),
-                (HDC)DeviceContext);
+                (HWND)m_Window->GetNativeHandle(),
+                (HDC)m_DeviceContext);
 
-            DeviceContext = nullptr;
+            m_DeviceContext = nullptr;
         }
     }
 
     void ImSlateRenderer::Render()
     {
-        if (!Window || !Context)
+        if (!m_Window || !m_Context)
         {
             return;
         }
@@ -202,7 +202,7 @@ namespace ImGUISlate {
         // Draw Widgets
         //-------------------------------------
 
-        for (ImWidget* widget : Widgets)
+        for (ImWidget* widget : m_Widgets)
         {
             if (widget)
             {
@@ -240,7 +240,7 @@ namespace ImGUISlate {
             ImGui::GetDrawData());
 
         SwapBuffers(
-            static_cast<HDC>(DeviceContext));
+            static_cast<HDC>(m_DeviceContext));
 
 #endif
     }
@@ -248,11 +248,11 @@ namespace ImGUISlate {
     void ImSlateRenderer::RegisterWidget(ImWidget* widget)
     {
         
-        if (!Window)
+        if (!m_Window)
         {
             return;
         }
-        Widgets.push_back(widget);
+        m_Widgets.push_back(widget);
     }
 
     void ImSlateRenderer::UpdateDisplaySize()
@@ -261,7 +261,7 @@ namespace ImGUISlate {
             ImGui::GetIO();
 
         const auto& geometry =
-            Window
+            m_Window
             ->GetFramebufferSize();
 
         io.DisplaySize =
@@ -283,7 +283,7 @@ namespace ImGUISlate {
     bool ImSlateRenderer::OnMouseMove(
         const SlateCore::MouseMoveEvent& event)
     {
-        ImGui::SetCurrentContext(Context);
+        ImGui::SetCurrentContext(m_Context);
 
         ImGuiIO& io = ImGui::GetIO();
 
@@ -296,7 +296,7 @@ namespace ImGUISlate {
     bool ImSlateRenderer::OnMouseButton(
         const SlateCore::MouseButtonEvent& event)
     {
-        ImGui::SetCurrentContext(Context);
+        ImGui::SetCurrentContext(m_Context);
 
         ImGuiIO& io = ImGui::GetIO();
 
@@ -313,7 +313,7 @@ namespace ImGUISlate {
     bool ImSlateRenderer::OnMouseWheel(
         const SlateCore::MouseWheelEvent& event)
     {
-        ImGui::SetCurrentContext(Context);
+        ImGui::SetCurrentContext(m_Context);
 
         ImGuiIO& io = ImGui::GetIO();
 
@@ -330,7 +330,7 @@ namespace ImGUISlate {
     bool ImSlateRenderer::OnKeyDown(
         const SlateCore::KeyEvent& event)
     {
-        ImGui::SetCurrentContext(Context);
+        ImGui::SetCurrentContext(m_Context);
 
         ImGuiIO& io = ImGui::GetIO();
 
@@ -358,7 +358,7 @@ namespace ImGUISlate {
     bool ImSlateRenderer::OnKeyUp(
         const SlateCore::KeyEvent& event)
     {
-        ImGui::SetCurrentContext(Context);
+        ImGui::SetCurrentContext(m_Context);
 
         ImGuiIO& io = ImGui::GetIO();
 
@@ -385,7 +385,7 @@ namespace ImGUISlate {
     }
     bool ImSlateRenderer::OnFocusReceived()
     {
-        ImGui::SetCurrentContext(Context);
+        ImGui::SetCurrentContext(m_Context);
 
         ImGui::GetIO().AddFocusEvent(true);
 
@@ -393,7 +393,7 @@ namespace ImGUISlate {
     }
     bool ImSlateRenderer::OnFocusLost()
     {
-        ImGui::SetCurrentContext(Context);
+        ImGui::SetCurrentContext(m_Context);
 
         ImGui::GetIO().AddFocusEvent(false);
 
@@ -403,7 +403,7 @@ namespace ImGUISlate {
         uint32_t width,
         uint32_t height)
     {
-        ImGui::SetCurrentContext(Context);
+        ImGui::SetCurrentContext(m_Context);
 
         ImGuiIO& io = ImGui::GetIO();
 

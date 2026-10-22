@@ -19,29 +19,29 @@ namespace ImGUISlate
 
     void ImMainWindow::Draw()
     {
-        Renderer->Render();
+        m_Renderer->Render();
     }
 
     bool ImMainWindow::Initialize()
     {
         bool res = Window::Initialize();
-        Renderer = std::make_unique<ImSlateRenderer>(this);
-        Layout = std::make_unique<HorizontalLayout>();
+        m_Renderer = std::make_unique<ImSlateRenderer>(this);
+        m_Layout = std::make_unique<HorizontalLayout>();
         return res;
     }
 
     ImSlateRenderer* ImMainWindow::GetRenderer() const
     {
-        return Renderer.get();
+        return m_Renderer.get();
     }
 
     void ImMainWindow::AddWidget(SlateCore::Widget* widget,const LayoutParams& params)
     {
-        Layout->AddWidget(widget, params);
-        Layout->Layout(_width,_height);
+        m_Layout->AddWidget(widget, params);
+        m_Layout->Layout(_width,_height);
         if (widget->IsA<ImWidget>()) {
             ImWidget* imWidget = widget->Cast<ImWidget>();
-            Renderer->RegisterWidget(imWidget);
+            m_Renderer->RegisterWidget(imWidget);
         }
     }
 
@@ -49,9 +49,9 @@ namespace ImGUISlate
     {
         bool handled = false;
 
-        if (Renderer)
+        if (m_Renderer)
         {
-            handled |= Renderer->OnFocusReceived();
+            handled |= m_Renderer->OnFocusReceived();
         }
 
         handled |= Window::OnFocusReceived();
@@ -63,9 +63,9 @@ namespace ImGUISlate
     {
         bool handled = false;
 
-        if (Renderer)
+        if (m_Renderer)
         {
-            handled |= Renderer->OnFocusLost();
+            handled |= m_Renderer->OnFocusLost();
         }
 
         handled |= Window::OnFocusLost();
@@ -78,7 +78,7 @@ namespace ImGUISlate
     {
         _width = static_cast<int>(width);
         _height = static_cast<int>(height);
-        Layout->Layout(_width, _height);
+        m_Layout->Layout(_width, _height);
 
         return true;
     }
@@ -87,9 +87,9 @@ namespace ImGUISlate
     {
         bool handled = false;
 
-        if (Renderer)
+        if (m_Renderer)
         {
-            handled |= Renderer->OnMouseMove(event);
+            handled |= m_Renderer->OnMouseMove(event);
         }
 
         if (!handled)
@@ -105,9 +105,9 @@ namespace ImGUISlate
     {
         bool handled = false;
 
-        if (Renderer)
+        if (m_Renderer)
         {
-            handled |= Renderer->OnMouseButton(event);
+            handled |= m_Renderer->OnMouseButton(event);
         }
 
         if (!handled)
@@ -123,9 +123,9 @@ namespace ImGUISlate
     {
         bool handled = false;
 
-        if (Renderer)
+        if (m_Renderer)
         {
-            handled |= Renderer->OnMouseWheel(event);
+            handled |= m_Renderer->OnMouseWheel(event);
         }
 
         if (!handled)
@@ -141,9 +141,9 @@ namespace ImGUISlate
     {
         bool handled = false;
 
-        if (Renderer)
+        if (m_Renderer)
         {
-            handled |= Renderer->OnKeyDown(event);
+            handled |= m_Renderer->OnKeyDown(event);
         }
 
         if (!handled)
@@ -159,9 +159,9 @@ namespace ImGUISlate
     {
         bool handled = false;
 
-        if (Renderer)
+        if (m_Renderer)
         {
-            handled |= Renderer->OnKeyUp(event);
+            handled |= m_Renderer->OnKeyUp(event);
         }
 
         if (!handled)

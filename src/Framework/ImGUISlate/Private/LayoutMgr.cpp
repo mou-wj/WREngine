@@ -10,7 +10,7 @@ void LayoutManager::AddWidget(
     SlateCore::Widget* widget,
     const LayoutParams& params)
 {
-    Elements.push_back(
+    _elements.push_back(
         {
             widget,
             params
@@ -20,15 +20,15 @@ void LayoutManager::AddWidget(
 
 inline void LayoutManager::RemoveWidget(SlateCore::Widget* widget)
 {
-    Elements.erase(
+    _elements.erase(
         std::remove_if(
-            Elements.begin(),
-            Elements.end(),
+            _elements.begin(),
+            _elements.end(),
             [&](auto& e)
             {
                 return e.WidgetPtr == widget;
             }),
-        Elements.end());
+        _elements.end());
 }
 
 
@@ -43,7 +43,7 @@ inline void VerticalLayout::Layout(float width, float height)
     float totalWeight = 0;
 
 
-    for (auto& e : Elements)
+    for (auto& e : _elements)
     {
         if (e.Params.Weight > 0)
         {
@@ -61,7 +61,7 @@ inline void VerticalLayout::Layout(float width, float height)
     float y = 0;
 
 
-    for (auto& e : Elements)
+    for (auto& e : _elements)
     {
         float h;
 
@@ -103,7 +103,7 @@ inline void HorizontalLayout::Layout(float width, float height)
     float totalWeight = 0;
 
 
-    for (auto& e : Elements)
+    for (auto& e : _elements)
     {
         if (e.Params.Weight > 0)
         {
@@ -121,7 +121,7 @@ inline void HorizontalLayout::Layout(float width, float height)
     float x = 0;
 
 
-    for (auto& e : Elements)
+    for (auto& e : _elements)
     {
         float w;
 
@@ -160,8 +160,8 @@ inline void HorizontalLayout::Layout(float width, float height)
 
 inline GridLayout::GridLayout(uint32_t rows, uint32_t columns)
     :
-    Rows(rows),
-    Columns(columns)
+    m_Rows(rows),
+    m_Columns(columns)
 {
 }
 
@@ -169,11 +169,11 @@ inline GridLayout::GridLayout(uint32_t rows, uint32_t columns)
 
 inline void GridLayout::Layout(float width, float height)
 {
-    float cellWidth = width / Columns;
-    float cellHeight = height / Rows;
+    float cellWidth = width / m_Columns;
+    float cellHeight = height / m_Rows;
 
 
-    for (auto& e : Elements)
+    for (auto& e : _elements)
     {
         auto& p = e.Params;
         auto& m = p.Margin;

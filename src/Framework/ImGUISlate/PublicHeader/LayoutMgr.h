@@ -74,7 +74,7 @@ public:
 
 protected:
 
-    std::vector<LayoutElement> Elements;
+    std::vector<LayoutElement> _elements;
 };
 
 
@@ -120,8 +120,8 @@ public:
 
 private:
 
-    uint32_t Rows = 1;
+    uint32_t m_Rows = 1;
 
-    uint32_t Columns = 1;
+    uint32_t m_Columns = 1;
 };
 } // namespace ImGUISlate

@@ -70,7 +70,7 @@ namespace ImGUISlate {
         {
             std::filesystem::path Path;
             std::string DisplayName;
-            bool IsDirectory = false;
+            bool bIsDirectory = false;
             std::uintmax_t Size = 0;
         };
 
@@ -95,26 +95,26 @@ namespace ImGUISlate {
         bool IsSelected(const std::filesystem::path& path) const;
         void SyncSelectionText();
 
-        std::string Title = "Select Files";
-        SelectionMode Mode = SelectionMode::SingleFile;
+        std::string m_Title = "Select Files";
+        SelectionMode m_Mode = SelectionMode::SingleFile;
 
-        std::filesystem::path InitialDirectory;
-        std::filesystem::path CurrentDirectory;
+        std::filesystem::path m_InitialDirectory;
+        std::filesystem::path m_CurrentDirectory;
 
-        std::vector<PresetDirectory> PresetDirectories;
-        std::vector<FileEntry> Entries;
-        SelectionList SelectedPaths;
+        std::vector<PresetDirectory> m_PresetDirectories;
+        std::vector<FileEntry> m_Entries;
+        SelectionList m_SelectedPaths;
 
-        std::array<char, 512> SelectionText{};
+        std::array<char, 512> m_SelectionText{};
 
-        std::string LastError;
+        std::string m_LastError;
 
-        ConfirmCallback OnConfirm;
-        CancelCallback OnCancel;
+        ConfirmCallback m_OnConfirm;
+        CancelCallback m_OnCancel;
 
-        bool DialogOpen = true;
-        bool SelectionConfirmed = false;
-        bool EntriesDirty = true;
-        PendingCloseReason CloseReason = PendingCloseReason::None;
+        bool m_bDialogOpen = true;
+        bool m_bSelectionConfirmed = false;
+        bool m_bEntriesDirty = true;
+        PendingCloseReason m_CloseReason = PendingCloseReason::None;
     };
 }

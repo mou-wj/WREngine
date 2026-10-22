@@ -22,39 +22,39 @@ namespace ImGUISlate {
         void RegisterWidget(ImWidget* widget);
 
         virtual bool OnMouseMove(
-            const SlateCore::MouseMoveEvent& Event)override;
+            const SlateCore::MouseMoveEvent& event)override;
 
         virtual bool OnMouseButton(
-            const SlateCore::MouseButtonEvent& Event)override;
+            const SlateCore::MouseButtonEvent& event)override;
 
         virtual bool OnMouseWheel(
-            const SlateCore::MouseWheelEvent& Event)override;
+            const SlateCore::MouseWheelEvent& event)override;
 
         virtual bool OnKeyDown(
-            const SlateCore::KeyEvent& Event)override;
+            const SlateCore::KeyEvent& event)override;
 
         virtual bool OnKeyUp(
-            const SlateCore::KeyEvent& Event)override;
+            const SlateCore::KeyEvent& event)override;
 
         virtual bool OnFocusReceived() override;
 
         virtual bool OnFocusLost()override;
 
         virtual bool OnResize(
-            uint32_t Width,
-            uint32_t Height) override;
+            uint32_t width,
+            uint32_t height) override;
     private:
 
         bool EnsureOpenGLContext();
         void DestroyOpenGLContexts();
         void UpdateDisplaySize();
 
-        ImGuiContext* Context = nullptr;
-        bool bOpenGLBackendInitialized = false;
-        SlateCore::Window* Window = nullptr;
-        void* DeviceContext = nullptr;
-        void* GLContext = nullptr;
-        std::vector<ImWidget*> Widgets;
+        ImGuiContext* m_Context = nullptr;
+        bool m_bOpenGLBackendInitialized = false;
+        SlateCore::Window* m_Window = nullptr;
+        void* m_DeviceContext = nullptr;
+        void* m_GLContext = nullptr;
+        std::vector<ImWidget*> m_Widgets;
     };
 
     IMGUISLATE_API ImSlateRenderer* CreateSlateRenderer(SlateCore::Window* window);

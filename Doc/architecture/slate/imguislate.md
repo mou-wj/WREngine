@@ -114,7 +114,7 @@ virtual bool OnKeyUp(const SlateCore::KeyEvent& event) override;
 
 ```cpp
 using DrawCallback = std::function<void(int x, int y, int w, int h)>;
-DrawCallback DrawHandler;
+DrawCallback _drawHandler;
 ```
 
 这说明每个 ImGui widget 都可以绑定一个自定义绘制回调，用于绘制真正的界面内容。

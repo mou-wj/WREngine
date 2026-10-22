@@ -82,11 +82,11 @@ namespace {
 
     std::string FormatSize(std::uintmax_t size)
     {
-        constexpr const char* Units[] = { "B", "KB", "MB", "GB", "TB" };
+        constexpr const char* units[] = { "B", "KB", "MB", "GB", "TB" };
 
         double value = static_cast<double>(size);
         std::size_t unitIndex = 0;
-        while (value >= 1024.0 && unitIndex + 1 < std::size(Units))
+        while (value >= 1024.0 && unitIndex + 1 < std::size(units))
         {
             value /= 1024.0;
             ++unitIndex;
@@ -95,11 +95,11 @@ namespace {
         char buffer[64] = {};
         if (unitIndex == 0)
         {
-            std::snprintf(buffer, sizeof(buffer), "%llu %s", static_cast<unsigned long long>(size), Units[unitIndex]);
+            std::snprintf(buffer, sizeof(buffer), "%llu %s", static_cast<unsigned long long>(size), units[unitIndex]);
         }
         else
         {
-            std::snprintf(buffer, sizeof(buffer), "%.1f %s", value, Units[unitIndex]);
+            std::snprintf(buffer, sizeof(buffer), "%.1f %s", value, units[unitIndex]);
         }
 
         return buffer;
@@ -128,8 +128,8 @@ namespace ImGUISlate {
         auto workingDirectory = std::filesystem::current_path(errorCode);
         if (!errorCode)
         {
-            InitialDirectory = NormalizePath(workingDirectory);
-            CurrentDirectory = InitialDirectory;
+            m_InitialDirectory = NormalizePath(workingDirectory);
+            m_CurrentDirectory = m_InitialDirectory;
         }
 
         SyncSelectionText();
@@ -137,26 +137,26 @@ namespace ImGUISlate {
 
     void ImFileDialogWidget::Draw()
     {
-        if (_visibility != SlateCore::EVisibility::Visible || !DialogOpen)
+        if (_visibility != SlateCore::EVisibility::Visible || !m_bDialogOpen)
         {
             return;
         }
 
-        if (CurrentDirectory.empty())
+        if (m_CurrentDirectory.empty())
         {
-            NavigateTo(InitialDirectory.empty() ? std::filesystem::current_path() : InitialDirectory, InitialDirectory.empty());
+            NavigateTo(m_InitialDirectory.empty() ? std::filesystem::current_path() : m_InitialDirectory, m_InitialDirectory.empty());
         }
 
-        if (EntriesDirty)
+        if (m_bEntriesDirty)
         {
             RefreshEntries();
         }
 
-        CloseReason = PendingCloseReason::None;
+        m_CloseReason = PendingCloseReason::None;
 
-        bool open = DialogOpen;
+        bool open = m_bDialogOpen;
         ImGui::SetNextWindowSize(ImVec2(960.0f, 640.0f), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin(Title.c_str(), &open))
+        if (ImGui::Begin(m_Title.c_str(), &open))
         {
             DrawPresetPane();
             ImGui::SameLine();
@@ -168,70 +168,70 @@ namespace ImGUISlate {
         }
         ImGui::End();
 
-        if (!open && CloseReason == PendingCloseReason::None)
+        if (!open && m_CloseReason == PendingCloseReason::None)
         {
-            CloseReason = PendingCloseReason::Cancelled;
+            m_CloseReason = PendingCloseReason::Cancelled;
         }
 
-        if (CloseReason == PendingCloseReason::Confirmed)
+        if (m_CloseReason == PendingCloseReason::Confirmed)
         {
-            DialogOpen = false;
+            m_bDialogOpen = false;
         }
-        else if (CloseReason == PendingCloseReason::Cancelled)
+        else if (m_CloseReason == PendingCloseReason::Cancelled)
         {
-            DialogOpen = false;
-            SelectionConfirmed = false;
-            if (OnCancel)
+            m_bDialogOpen = false;
+            m_bSelectionConfirmed = false;
+            if (m_OnCancel)
             {
-                OnCancel();
+                m_OnCancel();
             }
         }
         else
         {
-            DialogOpen = open;
+            m_bDialogOpen = open;
         }
     }
 
     void ImFileDialogWidget::Open()
     {
-        DialogOpen = true;
-        CloseReason = PendingCloseReason::None;
+        m_bDialogOpen = true;
+        m_CloseReason = PendingCloseReason::None;
     }
 
     void ImFileDialogWidget::Close()
     {
-        DialogOpen = false;
+        m_bDialogOpen = false;
     }
 
     bool ImFileDialogWidget::IsOpen() const
     {
-        return DialogOpen;
+        return m_bDialogOpen;
     }
 
     void ImFileDialogWidget::SetTitle(std::string title)
     {
-        Title = std::move(title);
+        m_Title = std::move(title);
     }
 
     const std::string& ImFileDialogWidget::GetTitle() const
     {
-        return Title;
+        return m_Title;
     }
 
     void ImFileDialogWidget::SetSelectionMode(SelectionMode mode)
     {
-        if (Mode == mode)
+        if (m_Mode == mode)
         {
             return;
         }
 
-        Mode = mode;
+        m_Mode = mode;
         ClearSelection();
     }
 
     ImFileDialogWidget::SelectionMode ImFileDialogWidget::GetSelectionMode() const
     {
-        return Mode;
+        return m_Mode;
     }
 
     void ImFileDialogWidget::SetInitialDirectory(const std::filesystem::path& directory)
@@ -246,59 +246,59 @@ namespace ImGUISlate {
 
     const std::filesystem::path& ImFileDialogWidget::GetCurrentDirectory() const
     {
-        return CurrentDirectory;
+        return m_CurrentDirectory;
     }
 
     void ImFileDialogWidget::SetPresetDirectories(std::vector<PresetDirectory> directories)
     {
-        PresetDirectories = std::move(directories);
+        m_PresetDirectories = std::move(directories);
     }
 
     void ImFileDialogWidget::AddPresetDirectory(std::string label, std::filesystem::path path)
     {
-        PresetDirectories.push_back(PresetDirectory{ std::move(label), NormalizePath(path) });
+        m_PresetDirectories.push_back(PresetDirectory{ std::move(label), NormalizePath(path) });
     }
 
     void ImFileDialogWidget::ClearPresetDirectories()
     {
-        PresetDirectories.clear();
+        m_PresetDirectories.clear();
     }
 
     const std::vector<ImFileDialogWidget::PresetDirectory>& ImFileDialogWidget::GetPresetDirectories() const
     {
-        return PresetDirectories;
+        return m_PresetDirectories;
     }
 
     const ImFileDialogWidget::SelectionList& ImFileDialogWidget::GetSelectedPaths() const
     {
-        return SelectedPaths;
+        return m_SelectedPaths;
     }
 
     void ImFileDialogWidget::ClearSelection()
     {
-        SelectedPaths.clear();
-        SelectionConfirmed = false;
+        m_SelectedPaths.clear();
+        m_bSelectionConfirmed = false;
         SyncSelectionText();
     }
 
     bool ImFileDialogWidget::HasConfirmedSelection() const
     {
-        return SelectionConfirmed;
+        return m_bSelectionConfirmed;
     }
 
     void ImFileDialogWidget::ResetConfirmation()
     {
-        SelectionConfirmed = false;
+        m_bSelectionConfirmed = false;
     }
 
     void ImFileDialogWidget::SetOnConfirm(ConfirmCallback callback)
     {
-        OnConfirm = std::move(callback);
+        m_OnConfirm = std::move(callback);
     }
 
     void ImFileDialogWidget::SetOnCancel(CancelCallback callback)
     {
-        OnCancel = std::move(callback);
+        m_OnCancel = std::move(callback);
     }
 
     void ImFileDialogWidget::NavigateTo(const std::filesystem::path& directory, bool updateInitialDirectory)
@@ -319,16 +319,16 @@ namespace ImGUISlate {
             return;
         }
 
-        CurrentDirectory = targetDirectory;
+        m_CurrentDirectory = targetDirectory;
         if (updateInitialDirectory)
         {
-            InitialDirectory = targetDirectory;
+            m_InitialDirectory = targetDirectory;
         }
 
-        EntriesDirty = true;
-        LastError.clear();
+        m_bEntriesDirty = true;
+        m_LastError.clear();
 
-        if (Mode == SelectionMode::Directory)
+        if (m_Mode == SelectionMode::Directory)
         {
             SyncSelectionText();
         }
@@ -340,20 +340,20 @@ namespace ImGUISlate {
 
     void ImFileDialogWidget::RefreshEntries()
     {
-        EntriesDirty = false;
-        Entries.clear();
-        LastError.clear();
+        m_bEntriesDirty = false;
+        m_Entries.clear();
+        m_LastError.clear();
 
-        if (CurrentDirectory.empty())
+        if (m_CurrentDirectory.empty())
         {
             return;
         }
 
         std::error_code errorCode;
-        std::filesystem::directory_iterator iterator(CurrentDirectory, errorCode);
+        std::filesystem::directory_iterator iterator(m_CurrentDirectory, errorCode);
         if (errorCode)
         {
-            LastError = errorCode.message();
+            m_LastError = errorCode.message();
             return;
         }
 
@@ -361,15 +361,15 @@ namespace ImGUISlate {
         {
             FileEntry fileEntry;
             fileEntry.Path = NormalizePath(entry.path());
-            fileEntry.IsDirectory = entry.is_directory(errorCode);
+            fileEntry.bIsDirectory = entry.is_directory(errorCode);
             if (errorCode)
             {
                 errorCode.clear();
-                fileEntry.IsDirectory = false;
+                fileEntry.bIsDirectory = false;
             }
 
             fileEntry.DisplayName = GetDisplayName(fileEntry.Path);
-            if (!fileEntry.IsDirectory)
+            if (!fileEntry.bIsDirectory)
             {
                 fileEntry.Size = entry.file_size(errorCode);
                 if (errorCode)
@@ -379,17 +379,17 @@ namespace ImGUISlate {
                 }
             }
 
-            Entries.push_back(std::move(fileEntry));
+            m_Entries.push_back(std::move(fileEntry));
         }
 
         std::sort(
-            Entries.begin(),
-            Entries.end(),
+            m_Entries.begin(),
+            m_Entries.end(),
             [](const FileEntry& lhs, const FileEntry& rhs)
             {
-                if (lhs.IsDirectory != rhs.IsDirectory)
+                if (lhs.bIsDirectory != rhs.bIsDirectory)
                 {
-                    return lhs.IsDirectory > rhs.IsDirectory;
+                    return lhs.bIsDirectory > rhs.bIsDirectory;
                 }
 
                 std::string leftName = lhs.DisplayName;
@@ -406,15 +406,15 @@ namespace ImGUISlate {
         ImGui::TextUnformatted("Places");
         ImGui::Separator();
 
-        if (!InitialDirectory.empty())
+        if (!m_InitialDirectory.empty())
         {
             if (ImGui::Button("Initial Directory", ImVec2(-1.0f, 0.0f)))
             {
-                NavigateTo(InitialDirectory, false);
+                NavigateTo(m_InitialDirectory, false);
             }
         }
 
-        for (const auto& preset : PresetDirectories)
+        for (const auto& preset : m_PresetDirectories)
         {
             const auto label = preset.Label.empty() ? preset.Path.generic_string() : preset.Label;
             if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f)))
@@ -433,9 +433,9 @@ namespace ImGUISlate {
 
     void ImFileDialogWidget::DrawToolbar()
     {
-        if (ImGui::Button("Up") && !CurrentDirectory.empty())
+        if (ImGui::Button("Up") && !m_CurrentDirectory.empty())
         {
-            const auto parent = CurrentDirectory.parent_path();
+            const auto parent = m_CurrentDirectory.parent_path();
             if (!parent.empty())
             {
                 NavigateTo(parent, false);
@@ -445,20 +445,20 @@ namespace ImGUISlate {
         ImGui::SameLine();
         if (ImGui::Button("Refresh"))
         {
-            EntriesDirty = true;
+            m_bEntriesDirty = true;
         }
 
-        if (!InitialDirectory.empty())
+        if (!m_InitialDirectory.empty())
         {
             ImGui::SameLine();
             if (ImGui::Button("Home"))
             {
-                NavigateTo(InitialDirectory, false);
+                NavigateTo(m_InitialDirectory, false);
             }
         }
 
         ImGui::Separator();
-        ImGui::TextWrapped("%s", CurrentDirectory.generic_string().c_str());
+        ImGui::TextWrapped("%s", m_CurrentDirectory.generic_string().c_str());
         ImGui::Separator();
     }
 
@@ -474,10 +474,10 @@ namespace ImGUISlate {
                 ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 120.0f);
                 ImGui::TableHeadersRow();
 
-                if (!CurrentDirectory.empty())
+                if (!m_CurrentDirectory.empty())
                 {
-                    const auto parent = CurrentDirectory.parent_path();
-                    if (!parent.empty() && parent != CurrentDirectory)
+                    const auto parent = m_CurrentDirectory.parent_path();
+                    if (!parent.empty() && parent != m_CurrentDirectory)
                     {
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
@@ -494,10 +494,10 @@ namespace ImGUISlate {
                     }
                 }
 
-                for (const auto& entry : Entries)
+                for (const auto& entry : m_Entries)
                 {
                     const bool selected = IsSelected(entry.Path);
-                    const std::string entryLabel = entry.IsDirectory ? "[DIR] " + entry.DisplayName : entry.DisplayName;
+                    const std::string entryLabel = entry.bIsDirectory ? "[DIR] " + entry.DisplayName : entry.DisplayName;
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
@@ -507,10 +507,10 @@ namespace ImGUISlate {
                         ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick);
 
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::TextUnformatted(entry.IsDirectory ? "Folder" : "File");
+                    ImGui::TextUnformatted(entry.bIsDirectory ? "Folder" : "File");
 
                     ImGui::TableSetColumnIndex(2);
-                    if (entry.IsDirectory)
+                    if (entry.bIsDirectory)
                     {
                         ImGui::TextUnformatted("-");
                     }
@@ -525,25 +525,25 @@ namespace ImGUISlate {
                         continue;
                     }
 
-                    if (entry.IsDirectory)
+                    if (entry.bIsDirectory)
                     {
                         NavigateTo(entry.Path, false);
                         continue;
                     }
 
-                    if (Mode == SelectionMode::Directory)
+                    if (m_Mode == SelectionMode::Directory)
                     {
                         continue;
                     }
 
-                    const bool toggleSelection = Mode == SelectionMode::MultipleFiles;
+                    const bool toggleSelection = m_Mode == SelectionMode::MultipleFiles;
                     SelectFile(entry.Path, toggleSelection);
 
-                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && Mode == SelectionMode::SingleFile)
+                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && m_Mode == SelectionMode::SingleFile)
                     {
                         if (ConfirmSelection())
                         {
-                            CloseReason = PendingCloseReason::Confirmed;
+                            m_CloseReason = PendingCloseReason::Confirmed;
                         }
                     }
                 }
@@ -556,35 +556,35 @@ namespace ImGUISlate {
 
     void ImFileDialogWidget::DrawFooter()
     {
-        if (!LastError.empty())
+        if (!m_LastError.empty())
         {
-            ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), "%s", LastError.c_str());
+            ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), "%s", m_LastError.c_str());
         }
 
-        const char* label = Mode == SelectionMode::Directory ? "Directory" : "File name";
-        const bool readOnly = Mode != SelectionMode::SingleFile;
+        const char* label = m_Mode == SelectionMode::Directory ? "Directory" : "File name";
+        const bool readOnly = m_Mode != SelectionMode::SingleFile;
         ImGuiInputTextFlags flags = readOnly ? ImGuiInputTextFlags_ReadOnly : ImGuiInputTextFlags_None;
-        ImGui::InputText(label, SelectionText.data(), SelectionText.size(), flags);
+        ImGui::InputText(label, m_SelectionText.data(), m_SelectionText.size(), flags);
 
-        if (Mode == SelectionMode::MultipleFiles)
+        if (m_Mode == SelectionMode::MultipleFiles)
         {
-            ImGui::Text("%d item(s) selected", static_cast<int>(SelectedPaths.size()));
+            ImGui::Text("%d item(s) selected", static_cast<int>(m_SelectedPaths.size()));
         }
-        else if (Mode == SelectionMode::Directory)
+        else if (m_Mode == SelectionMode::Directory)
         {
-            ImGui::TextWrapped("Current folder: %s", CurrentDirectory.generic_string().c_str());
+            ImGui::TextWrapped("Current folder: %s", m_CurrentDirectory.generic_string().c_str());
         }
 
         ImGui::Separator();
 
         if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)))
         {
-            CloseReason = PendingCloseReason::Cancelled;
+            m_CloseReason = PendingCloseReason::Cancelled;
         }
 
         ImGui::SameLine();
 
-        const char* confirmText = Mode == SelectionMode::Directory ? "Select Folder" : "Open";
+        const char* confirmText = m_Mode == SelectionMode::Directory ? "Select Folder" : "Open";
         if (!CanConfirmSelection())
         {
             ImGui::BeginDisabled();
@@ -594,7 +594,7 @@ namespace ImGUISlate {
         {
             if (ConfirmSelection())
             {
-                CloseReason = PendingCloseReason::Confirmed;
+                m_CloseReason = PendingCloseReason::Confirmed;
             }
         }
 
@@ -606,11 +606,11 @@ namespace ImGUISlate {
 
     void ImFileDialogWidget::SelectFile(const std::filesystem::path& path, bool toggleSelection)
     {
-        SelectionConfirmed = false;
+        m_bSelectionConfirmed = false;
 
         if (!toggleSelection)
         {
-            SelectedPaths = { NormalizePath(path) };
+            m_SelectedPaths = { NormalizePath(path) };
             SyncSelectionText();
             return;
         }
@@ -618,20 +618,20 @@ namespace ImGUISlate {
         const auto normalizedPath = NormalizePath(path);
         const auto normalizedKey = NormalizeForCompare(normalizedPath);
         auto it = std::find_if(
-            SelectedPaths.begin(),
-            SelectedPaths.end(),
+            m_SelectedPaths.begin(),
+            m_SelectedPaths.end(),
             [&normalizedKey](const std::filesystem::path& selectedPath)
             {
                 return NormalizeForCompare(selectedPath) == normalizedKey;
             });
 
-        if (it != SelectedPaths.end())
+        if (it != m_SelectedPaths.end())
         {
-            SelectedPaths.erase(it);
+            m_SelectedPaths.erase(it);
         }
         else
         {
-            SelectedPaths.push_back(normalizedPath);
+            m_SelectedPaths.push_back(normalizedPath);
         }
 
         SyncSelectionText();
@@ -645,13 +645,13 @@ namespace ImGUISlate {
             return false;
         }
 
-        SelectedPaths = confirmedSelection;
-        SelectionConfirmed = true;
+        m_SelectedPaths = confirmedSelection;
+        m_bSelectionConfirmed = true;
         SyncSelectionText();
 
-        if (OnConfirm)
+        if (m_OnConfirm)
         {
-            OnConfirm(SelectedPaths);
+            m_OnConfirm(m_SelectedPaths);
         }
 
         return true;
@@ -664,22 +664,22 @@ namespace ImGUISlate {
 
     ImFileDialogWidget::SelectionList ImFileDialogWidget::BuildConfirmedSelection() const
     {
-        if (Mode == SelectionMode::Directory)
+        if (m_Mode == SelectionMode::Directory)
         {
-            return IsDirectory(CurrentDirectory) ? SelectionList{ CurrentDirectory } : SelectionList{};
+            return IsDirectory(m_CurrentDirectory) ? SelectionList{ m_CurrentDirectory } : SelectionList{};
         }
 
-        if (!SelectedPaths.empty())
+        if (!m_SelectedPaths.empty())
         {
-            return SelectedPaths;
+            return m_SelectedPaths;
         }
 
-        if (Mode != SelectionMode::SingleFile)
+        if (m_Mode != SelectionMode::SingleFile)
         {
             return {};
         }
 
-        const std::string typedValue(SelectionText.data());
+        const std::string typedValue(m_SelectionText.data());
         if (typedValue.empty())
         {
             return {};
@@ -688,7 +688,7 @@ namespace ImGUISlate {
         std::filesystem::path candidate = typedValue;
         if (!candidate.is_absolute())
         {
-            candidate = CurrentDirectory / candidate;
+            candidate = m_CurrentDirectory / candidate;
         }
 
         candidate = NormalizePath(candidate);
@@ -704,8 +704,8 @@ namespace ImGUISlate {
     {
         const auto normalizedKey = NormalizeForCompare(path);
         return std::any_of(
-            SelectedPaths.begin(),
-            SelectedPaths.end(),
+            m_SelectedPaths.begin(),
+            m_SelectedPaths.end(),
             [&normalizedKey](const std::filesystem::path& selectedPath)
             {
                 return NormalizeForCompare(selectedPath) == normalizedKey;
@@ -714,35 +714,35 @@ namespace ImGUISlate {
 
     void ImFileDialogWidget::SyncSelectionText()
     {
-        if (Mode == SelectionMode::Directory)
+        if (m_Mode == SelectionMode::Directory)
         {
-            CopyStringToBuffer(CurrentDirectory.generic_string(), SelectionText);
+            CopyStringToBuffer(m_CurrentDirectory.generic_string(), m_SelectionText);
             return;
         }
 
-        if (SelectedPaths.empty())
+        if (m_SelectedPaths.empty())
         {
-            CopyStringToBuffer({}, SelectionText);
+            CopyStringToBuffer({}, m_SelectionText);
             return;
         }
 
-        if (Mode == SelectionMode::SingleFile)
+        if (m_Mode == SelectionMode::SingleFile)
         {
-            CopyStringToBuffer(GetDisplayName(SelectedPaths.front()), SelectionText);
+            CopyStringToBuffer(GetDisplayName(m_SelectedPaths.front()), m_SelectionText);
             return;
         }
 
         std::string joinedSelection;
-        for (std::size_t index = 0; index < SelectedPaths.size(); ++index)
+        for (std::size_t index = 0; index < m_SelectedPaths.size(); ++index)
         {
             if (index > 0)
             {
                 joinedSelection += "; ";
             }
 
-            joinedSelection += GetDisplayName(SelectedPaths[index]);
+            joinedSelection += GetDisplayName(m_SelectedPaths[index]);
         }
 
-        CopyStringToBuffer(joinedSelection, SelectionText);
+        CopyStringToBuffer(joinedSelection, m_SelectionText);
     }
 }

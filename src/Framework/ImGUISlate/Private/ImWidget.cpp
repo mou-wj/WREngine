@@ -72,13 +72,13 @@ namespace {
 namespace ImGUISlate {
 
     ImWidgetBase::ImWidgetBase(DrawCallback callback)
-        : DrawHandler(std::move(callback))
+        : _drawHandler(std::move(callback))
     {
     }
 
     void ImWidgetBase::SetDrawCallback(DrawCallback callback)
     {
-        DrawHandler = std::move(callback);
+        _drawHandler = std::move(callback);
     }
 
 
@@ -160,9 +160,9 @@ namespace ImGUISlate {
             return;
         }
 
-        if (DrawHandler)
+        if (_drawHandler)
         {
-            DrawHandler(_geometry.X, _geometry.Y, _geometry.Width, _geometry.Height);
+            _drawHandler(_geometry.X, _geometry.Y, _geometry.Width, _geometry.Height);
         }
     }
     bool ImWidget::OnResize(uint32_t width, uint32_t height)
@@ -181,9 +181,9 @@ namespace ImGUISlate {
             return;
         }
 
-        if (DrawHandler)
+        if (_drawHandler)
         {
-            DrawHandler(_geometry.X, _geometry.Y, _geometry.Width, _geometry.Height);
+            _drawHandler(_geometry.X, _geometry.Y, _geometry.Width, _geometry.Height);
         }
     }
     bool PopupImWidget::OnResize(uint32_t width, uint32_t height)

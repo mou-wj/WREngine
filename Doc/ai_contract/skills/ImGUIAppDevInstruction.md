@@ -85,7 +85,7 @@ ImWidgetBase 应当只保留“和 ImGUI 相关的通用接口”。
   - OnFocusReceived
   - OnFocusLost
 - 通用状态：
-  - DrawHandler
+  - _drawHandler
   - 可能的 focus / enabled / hovered / active 状态
 
 原则：
@@ -116,7 +116,7 @@ public:
     virtual bool OnFocusLost() override;
 
 protected:
-    DrawCallback DrawHandler;
+    DrawCallback _drawHandler;
 };
 ```
 

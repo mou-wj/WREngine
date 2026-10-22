@@ -20,7 +20,7 @@ namespace ImGUISlate
     public:
         ImSlateRenderer* GetRenderer() const;
         void AddWidget(SlateCore::Widget* widget, const LayoutParams& params);
-        //ÅÉÉúÀà²»ÔÚÖ»ÓĞÒ»¸örootwidget£¬ËùÒÔÉ¾³ı
+        //æ´¾ç”Ÿç±»ä¸åœ¨åªæœ‰ä¸€ä¸ªrootwidgetï¼Œæ‰€ä»¥åˆ é™¤
         void SetRootWidget(SlateCore::Widget* widget) = delete;
         SlateCore::Widget* GetRootWidgets() const = delete;
     public:
@@ -45,7 +45,7 @@ namespace ImGUISlate
             const SlateCore::KeyEvent& event) override;
 
     private:
-        std::unique_ptr<LayoutManager> Layout;
-        std::unique_ptr<ImSlateRenderer> Renderer;
+        std::unique_ptr<LayoutManager> m_Layout;
+        std::unique_ptr<ImSlateRenderer> m_Renderer;
     };
 }

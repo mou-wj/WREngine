@@ -27,7 +27,7 @@ namespace ImGUISlate {
 
 
     protected:
-        DrawCallback DrawHandler;
+        DrawCallback _drawHandler;
     };
 
     class IMGUISLATE_API ImWidget :  public SlateCore::Widget, public ImWidgetBase {
