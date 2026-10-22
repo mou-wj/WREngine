@@ -23,9 +23,9 @@ void Loop::Init() {
 void Loop::Run() {
 	while (!ApplicationBase::GetApplication()->RequestExit()) {
 		float deltaTime = Core::Timer::GetGlobalInstance().GetDelta();
-		//tick引擎，更新场景等
+		//tick寮曟搸锛屾洿鏂板満鏅瓑
 		Engine::GetEngineInstance()->Tick(deltaTime);
-		//tick应用，更新UI等，tick该应用的绘制逻辑
+		//tick搴旂敤锛屾洿鏂癠I绛夛紝tick璇ュ簲鐢ㄧ殑缁樺埗閫昏緫
 		ApplicationBase::GetApplication()->TickFrame();
 	}
 }
