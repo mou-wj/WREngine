@@ -17,8 +17,8 @@ struct RENDERCORE_API RenderCommand
     std::string Name;
     std::function<void()> Execute;
 
-    RenderCommand(const std::string& InName, std::function<void()> InFunc)
-        : Name(InName), Execute(std::move(InFunc)) {}
+    RenderCommand(const std::string& inName, std::function<void()> inFunc)
+        : Name(inName), Execute(std::move(inFunc)) {}
 };
 
 RENDERCORE_API bool StartRenderThread();
@@ -51,18 +51,18 @@ public:
 
     void ExecuteSync(const RenderCommand& cmd);
 
-    bool IsRunning() const { return bRunning.load(); }
+    bool IsRunning() const { return m_bRunning.load(); }
 
 
 private:
     void ThreadFunc();
 
-    std::thread WorkerThread;
-    std::atomic<bool> bRunning{ false };
-    std::queue<RenderCommand> CommandQueue;
-    std::mutex QueueMutex;
-    std::condition_variable QueueCV;
-    std::condition_variable CmdFinishCV;
+    std::thread m_WorkerThread;
+    std::atomic<bool> m_bRunning{ false };
+    std::queue<RenderCommand> m_CommandQueue;
+    std::mutex m_QueueMutex;
+    std::condition_variable m_QueueCV;
+    std::condition_variable m_CmdFinishCV;
 };
 
 

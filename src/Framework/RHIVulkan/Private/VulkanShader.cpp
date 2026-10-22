@@ -19,10 +19,10 @@ bool VulkanRHIShader::Initialize(const std::vector<char>& packedCode)
 {
 	RenderCore::SPIRVCompiledBinaryResultPacker packer;
 	packer.Depack(packedCode);
-	_reflection = packer.DepackedData.header;
-    _entryPoint = packer.DepackedData.header.EntryPoint;
+	_reflection = packer.DepackedData.Header;
+    _entryPoint = packer.DepackedData.Header.EntryPoint;
     auto spirvCode = packer.DepackedData.SpirvCode;
-    _shaderStage = TransformShaderStageFrom(packer.DepackedData.header.Frequency);
+    _shaderStage = TransformShaderStageFrom(packer.DepackedData.Header.Frequency);
     VkShaderModuleCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = spirvCode.size() * sizeof(uint32_t);

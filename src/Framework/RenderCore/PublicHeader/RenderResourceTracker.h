@@ -22,9 +22,9 @@ class TextureSubresourceStateContainer
 public:
     void SetWhole(TState state)
     {
-        bUseSubresource = false;
-        WholeState = state;
-        SubStates.clear();
+        m_bUseSubresource = false;
+        m_WholeState = state;
+        m_SubStates.clear();
     }
 
     void SetSubresource(const RHI::RHISubresourceRange& range, const TState& state)
@@ -35,7 +35,7 @@ public:
             return;
         }
 
-        bUseSubresource = true;
+        m_bUseSubresource = true;
 
         SubresourceKey key{
             range.MipIndex,
@@ -43,14 +43,14 @@ public:
             range.PlaneSlice
         };
 
-        SubStates[key] = state;
+        m_SubStates[key] = state;
     }
 
     TState Get(const RHI::RHISubresourceRange& range) const
     {
-        if (!bUseSubresource || range.IsWholeResource())
+        if (!m_bUseSubresource || range.IsWholeResource())
         {
-            return WholeState;
+            return m_WholeState;
         }
 
         SubresourceKey key{
@@ -59,13 +59,13 @@ public:
             range.PlaneSlice
         };
 
-        auto it = SubStates.find(key);
-        return (it != SubStates.end()) ? it->second : WholeState;
+        auto it = m_SubStates.find(key);
+        return (it != m_SubStates.end()) ? it->second : m_WholeState;
     }
 
     bool IsWholeStateOnly() const
     {
-        return !bUseSubresource;
+        return !m_bUseSubresource;
     }
 
 private:
@@ -86,10 +86,10 @@ private:
         }
     };
 
-    bool bUseSubresource = false;
+    bool m_bUseSubresource = false;
 
-    TState WholeState{};
-    std::unordered_map<SubresourceKey, TState, Hasher> SubStates;
+    TState m_WholeState{};
+    std::unordered_map<SubresourceKey, TState, Hasher> m_SubStates;
 };
 
 namespace RenderCore {
@@ -100,37 +100,37 @@ class RenderResourceTrackerBase {
 public:
     virtual ~RenderResourceTrackerBase() = default;
     // 追踪和更新最后的访问Fence
-    void UpdateLastAccessFence(const RHI::RHIFence& fence) { LastAccessFence = fence; }
-    const RHI::RHIFence& GetLastAccessFence() const { return LastAccessFence; }
+    void UpdateLastAccessFence(const RHI::RHIFence& fence) { _lastAccessFence = fence; }
+    const RHI::RHIFence& GetLastAccessFence() const { return _lastAccessFence; }
 protected:
-    RHI::RHIFence LastAccessFence;
+    RHI::RHIFence _lastAccessFence;
 };
 
 // 纹理资源追踪
 class RenderTextureTracker : public RenderResourceTrackerBase {
 public:
     void Initialize(uint32_t numLayer, uint32_t numMip, uint32_t numPlane) {
-		NumLayer = numLayer;
-		NumMip = numMip;
-		NumPlane = numPlane;
-		SubresourceAccess.SetWhole(RHI::ERHIResourceAccess::Unknown);
+		m_NumLayer = numLayer;
+		m_NumMip = numMip;
+		m_NumPlane = numPlane;
+		m_SubresourceAccess.SetWhole(RHI::ERHIResourceAccess::Unknown);
     }
     struct NeededTransientSubInfo {
-        RHI::RHISubresourceRange range;
-        RHI::ERHIResourceAccess currenAccess;
+        RHI::RHISubresourceRange Range;
+        RHI::ERHIResourceAccess CurrenAccess;
     };
     std::vector<NeededTransientSubInfo> GetNeededTransientSubInfo(RHI::ERHIResourceAccess dstAccess,uint32_t firstLayer, uint32_t numLayer, uint32_t firstMip, uint32_t numMip, uint32_t firstPlane = 0, uint32_t numPlane = 1) {
         std::vector<NeededTransientSubInfo> results;
 
         const bool isWholeResource = firstLayer == 0
-            && numLayer == NumLayer
+            && numLayer == m_NumLayer
             && firstMip == 0
-            && numMip == NumMip
+            && numMip == m_NumMip
             && firstPlane == 0
-            && numPlane == NumPlane;
+            && numPlane == m_NumPlane;
 
-        if (isWholeResource && SubresourceAccess.IsWholeStateOnly()) {
-            const RHI::ERHIResourceAccess currentAccess = SubresourceAccess.Get(RHI::RHISubresourceRange{});
+        if (isWholeResource && m_SubresourceAccess.IsWholeStateOnly()) {
+            const RHI::ERHIResourceAccess currentAccess = m_SubresourceAccess.Get(RHI::RHISubresourceRange{});
             if (currentAccess != dstAccess) {
                 results.push_back({ RHI::RHISubresourceRange{}, currentAccess });
             }
@@ -141,7 +141,7 @@ public:
             for (uint32_t layer = firstLayer; layer < firstLayer + numLayer; ++layer) {
                 for (uint32_t mip = firstMip; mip < firstMip + numMip; ++mip) {
                     RHI::RHISubresourceRange range(mip, layer, plane);
-                    const RHI::ERHIResourceAccess currentAccess = SubresourceAccess.Get(range);
+                    const RHI::ERHIResourceAccess currentAccess = m_SubresourceAccess.Get(range);
                     if (currentAccess != dstAccess) {
                         results.push_back({ range, currentAccess });
                     }
@@ -155,31 +155,31 @@ public:
     // 更新子资源访问控制
     void UpdateSubresourceAccess(const RHI::RHISubresourceRange& range, RHI::ERHIResourceAccess access) {
         if (range.ArraySlice == 0 && range.MipIndex == 0 && range.PlaneSlice == 0
-			&& NumLayer == 1 && NumMip == 1 && NumPlane == 1
+			&& m_NumLayer == 1 && m_NumMip == 1 && m_NumPlane == 1
             ) {
-            SubresourceAccess.SetWhole(access);
+            m_SubresourceAccess.SetWhole(access);
             return;
         }
-        SubresourceAccess.SetSubresource(range, access);
+        m_SubresourceAccess.SetSubresource(range, access);
     }
     // 获取子资源访问控制
     RHI::ERHIResourceAccess GetSubresourceAccess(const RHI::RHISubresourceRange& range) const {
-		return SubresourceAccess.Get(range);
+		return m_SubresourceAccess.Get(range);
     }
 private:
-    TextureSubresourceStateContainer<RHI::ERHIResourceAccess> SubresourceAccess;
-    uint32_t NumLayer = 1;
-    uint32_t NumMip = 1;
-	uint32_t NumPlane = 1;
+    TextureSubresourceStateContainer<RHI::ERHIResourceAccess> m_SubresourceAccess;
+    uint32_t m_NumLayer = 1;
+    uint32_t m_NumMip = 1;
+	uint32_t m_NumPlane = 1;
 };
 
 // 缓冲区资源追踪
 class RenderBufferTracker : public RenderResourceTrackerBase {
 public:
-    void UpdateAccess(RHI::ERHIResourceAccess access) { BufferAccess = access; }
-    RHI::ERHIResourceAccess GetLastAccess() const { return BufferAccess; }
+    void UpdateAccess(RHI::ERHIResourceAccess access) { m_BufferAccess = access; }
+    RHI::ERHIResourceAccess GetLastAccess() const { return m_BufferAccess; }
 private:
-    RHI::ERHIResourceAccess BufferAccess = RHI::ERHIResourceAccess::Unknown;
+    RHI::ERHIResourceAccess m_BufferAccess = RHI::ERHIResourceAccess::Unknown;
 };
 
 inline void TransitionResource(

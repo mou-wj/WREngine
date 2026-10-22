@@ -10,26 +10,26 @@ namespace RenderCore {
     public:
         using ShaderCompiledInitializer = ShaderCompiledInitializer;
         GlobalShaderType(
-            const std::string& InName,
-            const std::string& InSourceFile,
-            const std::string& InEntryPoint,
-            RHI::ERHIShaderFrequency InFrequency,
-            ModifyCompilationEnvironmentFuncType InModifyCompilationEnvironment,
-            ShouldCompilePermutationFuncType InShouldCompilePermutation,
-            ConstructCompiledFuncType InConstructCompiled,
-            int32_t InTotalPermutationCount = 1,
-            const ShaderParametersMetadata* InRootParametersMetadata = nullptr
+            const std::string& inName,
+            const std::string& inSourceFile,
+            const std::string& inEntryPoint,
+            RHI::ERHIShaderFrequency inFrequency,
+            ModifyCompilationEnvironmentFuncType inModifyCompilationEnvironment,
+            ShouldCompilePermutationFuncType inShouldCompilePermutation,
+            ConstructCompiledFuncType inConstructCompiled,
+            int32_t inTotalPermutationCount = 1,
+            const ShaderParametersMetadata* inRootParametersMetadata = nullptr
         )
             : ShaderType(
-                InName,
-                InSourceFile,
-                InEntryPoint,
-                InFrequency,
-                InModifyCompilationEnvironment,
-                InShouldCompilePermutation,
-                InConstructCompiled,
-                InTotalPermutationCount,
-                InRootParametersMetadata,
+                inName,
+                inSourceFile,
+                inEntryPoint,
+                inFrequency,
+                inModifyCompilationEnvironment,
+                inShouldCompilePermutation,
+                inConstructCompiled,
+                inTotalPermutationCount,
+                inRootParametersMetadata,
                 EShaderTypeFlag::Global
             )
         {
@@ -58,41 +58,41 @@ class RENDERCORE_API GlobalShader : public Shader
 public:
     using ShaderMetaType = GlobalShaderType;
 public:
-    // ¼Ì³Ğ¸¸ÀàµÄ¹¹Ôìº¯Êı
-    GlobalShader(const GlobalShaderType::ShaderCompiledInitializer& Initializer)
-        : Shader(Initializer)
+    // ç»§æ‰¿çˆ¶ç±»çš„æ„é€ å‡½æ•°
+    GlobalShader(const GlobalShaderType::ShaderCompiledInitializer& initializer)
+        : Shader(initializer)
     {
     }
 
-    // Global Shader Í¨³£²»ĞèÒª VertexFactory
-    static bool ShouldCompilePermutation(const ShaderPermutationParameters&Parameters)
+    // Global Shader é€šå¸¸ä¸éœ€è¦ VertexFactory
+    static bool ShouldCompilePermutation(const ShaderPermutationParameters&parameters)
     {
         return true;
     }
 };
 class RENDERCORE_API GlobalShaderMap {
 public:
-    // »ñÈ¡Ò»¸öÒÑ±àÒëµÄ Shader ÊµÀı
+    // è·å–ä¸€ä¸ªå·²ç¼–è¯‘çš„ Shader å®ä¾‹
     Shader* GetShader(ShaderType* shaderType, ShaderPermutationId id);
 
-    // »ñÈ¡Ò»¸öÒÑ±àÒëµÄ Shader ÊµÀı
+    // è·å–ä¸€ä¸ªå·²ç¼–è¯‘çš„ Shader å®ä¾‹
     template<typename ShaderClass>
     Shader* GetShader(ShaderPermutationId id) {
         return GetShader(ShaderClass::GetStaticType(), id);
     }
 
     /**
-     * ³õÊ¼»¯£º±éÀúËùÓĞ×¢²áÎª Global µÄ ShaderType£¬²¢´¥·¢±àÒë/¼ÓÔØ
-     * ½¨ÒéÔÚÒıÇæ³õÊ¼»¯ RHI ºóµ÷ÓÃ
+     * åˆå§‹åŒ–ï¼šéå†æ‰€æœ‰æ³¨å†Œä¸º Global çš„ ShaderTypeï¼Œå¹¶è§¦å‘ç¼–è¯‘/åŠ è½½
+     * å»ºè®®åœ¨å¼•æ“åˆå§‹åŒ– RHI åè°ƒç”¨
      */
     bool Initialize();
 
 	void Clear();
 
 private:
-    bool IsInitialized = false;
-    // ´æ´¢½á¹¹£ºShaderType -> PermutationID -> ShaderInstance
-    std::unordered_map<ShaderType*, std::unordered_map<ShaderPermutationId, ShaderSP>> ShaderMap;
+    bool m_bIsInitialized = false;
+    // å­˜å‚¨ç»“æ„ï¼šShaderType -> PermutationID -> ShaderInstance
+    std::unordered_map<ShaderType*, std::unordered_map<ShaderPermutationId, ShaderSP>> m_ShaderMap;
 };
 extern RENDERCORE_API GlobalShaderMap GShaderMap;
 

@@ -335,7 +335,7 @@ private:
         ShaderCompilationOutput vsOutput;
         vsOutput = compiler.Compile(vsInput);
 
-        if (!vsOutput.Success)
+        if (!vsOutput.bSuccess)
         {
             return;
         }
@@ -362,7 +362,7 @@ private:
         ShaderCompilationOutput psOutput;
         psOutput = compiler.Compile(psInput);
 
-        if (!psOutput.Success)
+        if (!psOutput.bSuccess)
         {
             
             return;

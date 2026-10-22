@@ -36,25 +36,25 @@ public:
     RenderGraphResource(const std::string& name, RenderGraphResourceType type);
     virtual ~RenderGraphResource();
 
-    RenderGraphResourceType GetType() const { return Type; }
+    RenderGraphResourceType GetType() const { return _type; }
 
     // Accessors
-    const std::string& GetName() const { return Name; }
+    const std::string& GetName() const { return _name; }
 
     // RHI Resource Management
-    virtual RHI::RHIResource* GetRHIResource() const { return Resource; } // Returns the underlying RHI resource
+    virtual RHI::RHIResource* GetRHIResource() const { return _resource; } // Returns the underlying RHI resource
     virtual void SetRHIResource(RHI::RHIResource* resource);
 
 
 protected:
     // Resource Name (for debugging and identification)
-    std::string Name;
-    RenderGraphResourceType Type;
+    std::string _name;
+    RenderGraphResourceType _type;
     // Flags to track resource state
-    bool bImported = false;  // True if the resource was imported from outside the render graph
-    bool bCreated = false;   // True if the resource has been created by the render graph
+    bool _bImported = false;  // True if the resource was imported from outside the render graph
+    bool _bCreated = false;   // True if the resource has been created by the render graph
 
-    RHI::RHIResource* Resource = nullptr; // Pointer to the underlying RHI resource
+    RHI::RHIResource* _resource = nullptr; // Pointer to the underlying RHI resource
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -71,14 +71,14 @@ public:
     RenderGraphTexture(const std::string& name, const RenderGraphTextureDesc& desc);
     ~RenderGraphTexture() override;
 
-    const RenderGraphTextureDesc& GetDesc() const { return desc; }
-    RHI::RHITexture* GetRHITexture() const { return dynamic_cast<RHI::RHITexture*>(Resource); } // Returns the underlying RHI texture
-    RenderTextureTracker& GetTracker() { return tracker; }
+    const RenderGraphTextureDesc& GetDesc() const { return m_Desc; }
+    RHI::RHITexture* GetRHITexture() const { return dynamic_cast<RHI::RHITexture*>(_resource); } // Returns the underlying RHI texture
+    RenderTextureTracker& GetTracker() { return m_Tracker; }
 private:
-    RenderTextureTracker tracker;
+    RenderTextureTracker m_Tracker;
     friend class RenderGraphBuilder;
-    RenderGraphTextureDesc desc;
-    bool IsExternal = false;
+    RenderGraphTextureDesc m_Desc;
+    bool m_bIsExternal = false;
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -94,14 +94,14 @@ class RENDERCORE_API RenderGraphBuffer : public RenderGraphResource
 public:
     RenderGraphBuffer(const std::string& name, const RenderGraphBufferDesc& desc);
     ~RenderGraphBuffer() override;
-    RHI::RHIBuffer* GetRHIBuffer() const { return dynamic_cast<RHI::RHIBuffer*>(Resource); }
-    const RenderGraphBufferDesc& GetDesc() const { return desc; }
-    RenderBufferTracker& GetTracker() { return tracker; }
+    RHI::RHIBuffer* GetRHIBuffer() const { return dynamic_cast<RHI::RHIBuffer*>(_resource); }
+    const RenderGraphBufferDesc& GetDesc() const { return m_Desc; }
+    RenderBufferTracker& GetTracker() { return m_Tracker; }
 private:
-    RenderBufferTracker tracker;
+    RenderBufferTracker m_Tracker;
     friend class RenderGraphBuilder;
-    RenderGraphBufferDesc desc;
-    bool IsExternal = false;
+    RenderGraphBufferDesc m_Desc;
+    bool m_bIsExternal = false;
 
 };
 
@@ -113,19 +113,19 @@ using RenderGraphBufferRef = RenderGraphBuffer*;
 class RENDERCORE_API RenderGraphView : public RenderGraphResource
 {
 public:
-    RenderGraphView(const std::string& name,RenderGraphResourceType Type);
+    RenderGraphView(const std::string& name,RenderGraphResourceType type);
     virtual ~RenderGraphView();
 
 protected:
     friend class RenderGraphBuilder;
-    std::string Name;
+    std::string _name;
 };
 
 class RENDERCORE_API RenderGraphSRV : public RenderGraphView{
 public:
-    RenderGraphSRV(const std::string& name, RenderGraphResourceType Type);
+    RenderGraphSRV(const std::string& name, RenderGraphResourceType type);
     ~RenderGraphSRV() override;
-    RHI::RHIShaderResourceView* GetRHIShaderResourceView() const { return dynamic_cast<RHI::RHIShaderResourceView*>(Resource); }
+    RHI::RHIShaderResourceView* GetRHIShaderResourceView() const { return dynamic_cast<RHI::RHIShaderResourceView*>(_resource); }
 protected:
     friend class RenderGraphBuilder;
 
@@ -133,9 +133,9 @@ protected:
 
 class RENDERCORE_API RenderGraphUAV : public RenderGraphView{
 public:
-    RenderGraphUAV(const std::string& name, RenderGraphResourceType Type);
+    RenderGraphUAV(const std::string& name, RenderGraphResourceType type);
     ~RenderGraphUAV() override;
-    RHI::RHIUnorderedAccessView* GetRHIShaderResourceView() const { return dynamic_cast<RHI::RHIUnorderedAccessView*>(Resource); }
+    RHI::RHIUnorderedAccessView* GetRHIShaderResourceView() const { return dynamic_cast<RHI::RHIUnorderedAccessView*>(_resource); }
 protected:
     friend class RenderGraphBuilder;
 
@@ -156,10 +156,10 @@ class RENDERCORE_API RenderGraphTextureSRV : public RenderGraphSRV
 public:
     RenderGraphTextureSRV(const std::string& name,const RenderGraphTextureSRVDesc& desc);
     ~RenderGraphTextureSRV() override;
-    const RenderGraphTextureSRVDesc& GetDesc() const { return Desc; }
+    const RenderGraphTextureSRVDesc& GetDesc() const { return m_Desc; }
 private:
     friend class RenderGraphBuilder;
-    RenderGraphTextureSRVDesc Desc;
+    RenderGraphTextureSRVDesc m_Desc;
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -177,10 +177,10 @@ class RENDERCORE_API RenderGraphTextureUAV : public RenderGraphUAV
 public:
     RenderGraphTextureUAV(const std::string& name, const RenderGraphTextureUAVDesc& desc);
     ~RenderGraphTextureUAV() override;
-    const RenderGraphTextureUAVDesc& GetDesc() const { return Desc; }
+    const RenderGraphTextureUAVDesc& GetDesc() const { return m_Desc; }
 private:
     friend class RenderGraphBuilder;
-    RenderGraphTextureUAVDesc Desc;
+    RenderGraphTextureUAVDesc m_Desc;
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -197,10 +197,10 @@ class RENDERCORE_API RenderGraphBufferSRV : public RenderGraphSRV
 public:
     RenderGraphBufferSRV(const std::string& name, const RenderGraphBufferSRVDesc& desc);
     ~RenderGraphBufferSRV() override;
-    const RenderGraphBufferSRVDesc& GetDesc() const { return Desc; }
+    const RenderGraphBufferSRVDesc& GetDesc() const { return m_Desc; }
 private:
     friend class RenderGraphBuilder;
-    RenderGraphBufferSRVDesc Desc;
+    RenderGraphBufferSRVDesc m_Desc;
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -217,10 +217,10 @@ class RENDERCORE_API RenderGraphBufferUAV : public RenderGraphUAV
 public:
     RenderGraphBufferUAV(const std::string& name, const RenderGraphBufferUAVDesc& desc);
     ~RenderGraphBufferUAV() override;
-	const RenderGraphBufferUAVDesc& GetDesc() const { return Desc; }
+	const RenderGraphBufferUAVDesc& GetDesc() const { return m_Desc; }
 private:
     friend class RenderGraphBuilder;
-    RenderGraphBufferUAVDesc Desc;
+    RenderGraphBufferUAVDesc m_Desc;
 
 };
 

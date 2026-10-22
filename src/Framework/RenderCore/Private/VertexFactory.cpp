@@ -6,97 +6,97 @@ using namespace RHI;
 namespace RenderCore {
 	RHI::RHIVertexDescState* VertexFactory::GetRHIVertexDescState() const
 	{
-		return RHIVertexDescState;
+		return _rhiVertexDescState;
 	}
 
-    void VertexFactory::Bind(RHI::RHIGraphicCommandList& RHICmdList) const
+    void VertexFactory::Bind(RHI::RHIGraphicCommandList& rhiCmdList) const
     {
-        for (int i = 0; i < Streams.size(); i++) {
-            if( Streams[i].Buffer)
-            RHICmdList.SetStreamSource(Streams[i].Binding, Streams[i].Buffer, Streams[i].Offset);
+        for (int i = 0; i < _streams.size(); i++) {
+            if( _streams[i].Buffer)
+            rhiCmdList.SetStreamSource(_streams[i].Binding, _streams[i].Buffer, _streams[i].Offset);
         }
     }
 
-	VertexFactory::VertexElement VertexFactory::AccessStreamComponent(const VertexStreamComponent& Component, uint32_t AttributeIndex)
+	VertexFactory::VertexElement VertexFactory::AccessStreamComponent(const VertexStreamComponent& component, uint32_t attributeIndex)
 	{
-        for (const auto& Stream : Streams)
+        for (const auto& stream : _streams)
         {
             bool bMatch =
-                Stream.Buffer == Component.Buffer &&
-                Stream.Stride == Component.Stride &&
-                Stream.InputRate == Component.InputRate &&
-                Stream.Offset == 0;
+                stream.Buffer == component.Buffer &&
+                stream.Stride == component.Stride &&
+                stream.InputRate == component.InputRate &&
+                stream.Offset == 0;
 
             if (bMatch)
             {
                 return VertexElement
                 {
-                    .Binding = Stream.Binding,
-                    .Location = AttributeIndex,
-                    .ElementOffset = Component.ComponentOffset,
-                    .Format = Component.Format
+                    .Binding = stream.Binding,
+                    .Location = attributeIndex,
+                    .ElementOffset = component.ComponentOffset,
+                    .Format = component.Format
                 };
             }
         }
 
-        uint32_t NewBinding = (uint32_t)Streams.size();
+        uint32_t newBinding = (uint32_t)_streams.size();
 
-        VertexStream NewStream;
-        NewStream.Buffer = Component.Buffer;
-        NewStream.Stride = Component.Stride;
-        NewStream.Offset = 0;
-        NewStream.Binding = NewBinding;
-        NewStream.InputRate = Component.InputRate;
+        VertexStream newStream;
+        newStream.Buffer = component.Buffer;
+        newStream.Stride = component.Stride;
+        newStream.Offset = 0;
+        newStream.Binding = newBinding;
+        newStream.InputRate = component.InputRate;
 
-        Streams.push_back(NewStream);
+        _streams.push_back(newStream);
 
         return VertexElement
         {
-            .Binding = NewBinding,
-            .Location = AttributeIndex,
-            .ElementOffset = Component.ComponentOffset,
-            .Format = Component.Format
+            .Binding = newBinding,
+            .Location = attributeIndex,
+            .ElementOffset = component.ComponentOffset,
+            .Format = component.Format
         };
 	}
 
-	void VertexFactory::InitDeclaration(const std::vector<VertexElement>& Elements, RHI::RHIVertexDescState** OutVertexDescState)
+	void VertexFactory::InitDeclaration(const std::vector<VertexElement>& elements, RHI::RHIVertexDescState** outVertexDescState)
 	{
-        RHI::RHIVertexDescStateDesc Desc;
+        RHI::RHIVertexDescStateDesc desc;
 
         //
-        // ´´½¨ Binding Descriptions
+        // åˆ›å»º Binding Descriptions
         //
-        for (uint32_t i = 0; i < Streams.size(); ++i)
+        for (uint32_t i = 0; i < _streams.size(); ++i)
         {
-            const VertexStream& Stream = Streams[i];
+            const VertexStream& stream = _streams[i];
 
-            RHI::RHIVertexBindingDesc BindingDesc;
-            BindingDesc.Binding = Stream.Binding;
-            BindingDesc.Stride = Stream.Stride;
-            BindingDesc.InputRate = Stream.InputRate;
+            RHI::RHIVertexBindingDesc bindingDesc;
+            bindingDesc.Binding = stream.Binding;
+            bindingDesc.Stride = stream.Stride;
+            bindingDesc.InputRate = stream.InputRate;
 
-            Desc.Bindings.push_back(BindingDesc);
+            desc.Bindings.push_back(bindingDesc);
         }
 
         //
-        // ´´½¨ Attribute Descriptions
+        // åˆ›å»º Attribute Descriptions
         //
-        for (const VertexElement& Element : Elements)
+        for (const VertexElement& element : elements)
         {
-            RHI::RHIVertexAttributeDesc AttrDesc;
+            RHI::RHIVertexAttributeDesc attrDesc;
 
-            AttrDesc.Location = Element.Location;
-            AttrDesc.Binding = Element.Binding;
-            AttrDesc.Offset = Element.ElementOffset;
-            AttrDesc.Format = Element.Format;
+            attrDesc.Location = element.Location;
+            attrDesc.Binding = element.Binding;
+            attrDesc.Offset = element.ElementOffset;
+            attrDesc.Format = element.Format;
 
-            Desc.Attributes.push_back(AttrDesc);
+            desc.Attributes.push_back(attrDesc);
         }
 
         //
-        // ´´½¨×îÖÕ VertexInputState
+        // åˆ›å»ºæœ€ç»ˆ VertexInputState
         //
-        *OutVertexDescState = RHIPipelineStateCache::GetOrCreateVertexDescState(Desc);
+        *outVertexDescState = RHIPipelineStateCache::GetOrCreateVertexDescState(desc);
 
 	}
 

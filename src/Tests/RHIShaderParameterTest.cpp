@@ -437,7 +437,7 @@ private:
         )";
 
         ShaderCompilationOutput csOutput = compiler.Compile(csInput);
-        if (!csOutput.Success)
+        if (!csOutput.bSuccess)
             return;
 
         ParameterMap = csOutput.ParameterMap;

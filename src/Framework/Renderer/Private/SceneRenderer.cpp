@@ -646,11 +646,11 @@ namespace Renderer {
 		}
         auto splitBufferUpload = graphBuilder.RegisterExternalBuffer("SplitBuffer", SplitBuffer.get());
 		RenderGraphBuilder::UploadBufferDesc uploadDesc;
-        uploadDesc.buffer = directLightBufferUpload;
+        uploadDesc.Buffer = directLightBufferUpload;
         uploadDesc.Data = directionalLightShadowViewInfos.data();
 		uploadDesc.Size = directionalLightShadowViewInfos.size() * sizeof(DirectionalLightCascadeShadowViewInfo);
         RenderGraphBuilder::UploadBufferDesc uploadDescSplit;
-        uploadDescSplit.buffer = splitBufferUpload;
+        uploadDescSplit.Buffer = splitBufferUpload;
         uploadDescSplit.Data = (void*)view.SplitDepths.data();
         uploadDescSplit.Size = view.SplitDepths.size() * sizeof(float);
 		Core::Float4 test = directionalLightShadowViewInfos[0].ViewProj * Core::Float4(3, 3, 3, 1).Data;

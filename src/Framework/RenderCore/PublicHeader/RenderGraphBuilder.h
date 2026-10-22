@@ -12,86 +12,86 @@ namespace RenderCore {
 
 
 /**
- * ���Է�������ÿ֡ͳһ���䣬ͳһ����
+ * Frame allocator with page reuse and explicit object destruction.
  */
 class RenderGraphAllocator {
 public:
-    RenderGraphAllocator(size_t InPageSize = 64 * 1024)
-        : PageSize(InPageSize), CurrentPage(-1), CurrentOffset(0) {
+    RenderGraphAllocator(size_t inPageSize = 64 * 1024)
+        : m_PageSize(inPageSize), m_CurrentPage(-1), m_CurrentOffset(0) {
     }
 
     ~RenderGraphAllocator() {
-        // ����ʱ���볹���ͷ����������ڴ�
+        // Destroy allocated objects and release every retained page.
         Reset();
-        for (void* Page : Pages) {
-            free(Page);
+        for (void* page : m_Pages) {
+            free(page);
         }
     }
 
     /**
-     * ����ĵķ���ӿ�
+     * Allocate and construct an object in the graph arena.
      */
     template<typename T, typename... Args>
     T* Allocate(Args&&... args) {
-        std::lock_guard<std::recursive_mutex> lock(Mutex_);
-        // 1. ����ռ�
-        void* RawMem = AllocateRaw(sizeof(T), alignof(T));
+        std::lock_guard<std::recursive_mutex> lock(m_Mutex);
+        // Allocate aligned storage.
+        void* rawMem = AllocateRaw(sizeof(T), alignof(T));
 
-        // 2. ������� (Placement New)
-        T* Object = new (RawMem) T(std::forward<Args>(args)...);
+        // Construct the object with placement new.
+        T* object = new (rawMem) T(std::forward<Args>(args)...);
 
-        // 3. ��������ǡ�ƽ���������ģ����纬�� std::string������¼������������
+        // Record a destructor for non-trivially destructible objects.
         if constexpr (!std::is_trivially_destructible_v<T>) {
-            DestructionStack.push_back({
-                Object,
-                [](void* Ptr) { static_cast<T*>(Ptr)->~T(); }
+            m_DestructionStack.push_back({
+                object,
+                [](void* ptr) { static_cast<T*>(ptr)->~T(); }
                 });
         }
-        return Object;
+        return object;
     }
 
-    void* AllocateBytes(size_t Size, size_t Alignment = alignof(std::max_align_t))
+    void* AllocateBytes(size_t size, size_t alignment = alignof(std::max_align_t))
     {
-        return AllocateRaw(Size, Alignment);
+        return AllocateRaw(size, alignment);
     }
 
     /**
-     * ÿһ֡����ʱ����
+     * Reset objects and cursors at the end of the frame.
      */
     void Reset() {
-        // 1. ������˳��ķ��������������
-        for (auto it = DestructionStack.rbegin(); it != DestructionStack.rend(); ++it) {
+        // Destroy objects in reverse construction order.
+        for (auto it = m_DestructionStack.rbegin(); it != m_DestructionStack.rend(); ++it) {
             it->Deleter(it->Ptr);
         }
-        DestructionStack.clear();
+        m_DestructionStack.clear();
 
-        // 2. ����ָ�룬�����ͷ�����ҳ�ڴ棬������һ֡����
-        CurrentPage = 0;
-        CurrentOffset = 0;
+        // Reuse retained pages in the next frame.
+        m_CurrentPage = 0;
+        m_CurrentOffset = 0;
     }
 
 private:
-    void* AllocateRaw(size_t Size, size_t Alignment) {
-        std::lock_guard<std::recursive_mutex> lock(Mutex_);
-        // ����Ķ����߼�ȷ��ָ����� CPU Ҫ��
-        size_t Padding = (Alignment - (CurrentOffset % Alignment)) % Alignment;
+    void* AllocateRaw(size_t size, size_t alignment) {
+        std::lock_guard<std::recursive_mutex> lock(m_Mutex);
+        // Calculate padding for the requested CPU alignment.
+        size_t padding = (alignment - (m_CurrentOffset % alignment)) % alignment;
 
-        if (CurrentPage == -1 || CurrentOffset + Padding + Size > PageSize) {
+        if (m_CurrentPage == -1 || m_CurrentOffset + padding + size > m_PageSize) {
             MoveToNextPage();
-            Padding = 0; // ��ҳͨ������Ȼ�����
+            padding = 0; // Start at the beginning of a fresh page.
         }
 
-        void* Result = (uint8_t*)Pages[CurrentPage] + CurrentOffset + Padding;
-        CurrentOffset += (Padding + Size);
-        return Result;
+        void* result = (uint8_t*)m_Pages[m_CurrentPage] + m_CurrentOffset + padding;
+        m_CurrentOffset += (padding + size);
+        return result;
     }
 
     void MoveToNextPage() {
-        CurrentPage++;
-        if (CurrentPage >= Pages.size()) {
-            Pages.push_back(malloc(PageSize));
+        m_CurrentPage++;
+        if (m_CurrentPage >= m_Pages.size()) {
+            m_Pages.push_back(malloc(m_PageSize));
         }
-        CurrentOffset = 0;
+        m_CurrentOffset = 0;
     }
 
     struct DestructionItem {
@@ -99,12 +99,12 @@ private:
         void (*Deleter)(void*);
     };
 
-    size_t PageSize;
-    int32_t CurrentPage;
-    size_t CurrentOffset;
-    std::recursive_mutex Mutex_;
-    std::vector<void*> Pages;                // ����ҳ��
-    std::vector<DestructionItem> DestructionStack; // ������������
+    size_t m_PageSize;
+    int32_t m_CurrentPage;
+    size_t m_CurrentOffset;
+    std::recursive_mutex m_Mutex;
+    std::vector<void*> m_Pages;                // Retained allocation pages.
+    std::vector<DestructionItem> m_DestructionStack; // Object destruction callbacks.
 };
 
 
@@ -120,34 +120,34 @@ public:
 
     // Pass Management
     /**
-     * �Ľ���� AddPass ģ��
+     * Construct a typed render graph pass.
      */
     template <typename TParameterStruct, typename TExecuteLambda>
     RenderGraphPassRef AddPass(
-        const std::string& InName,
-        const ShaderParametersMetadata* InMetadata,
-        TParameterStruct* InParameters, // �� AllocateParameter ����Ĳ���ָ��
-        EPassFlag InPassFlags,
-        TExecuteLambda&& InExecuteLambda)
+        const std::string& inName,
+        const ShaderParametersMetadata* inMetadata,
+        TParameterStruct* inParameters, // Parameters allocated by AllocateParameter.
+        EPassFlag inPassFlags,
+        TExecuteLambda&& inExecuteLambda)
     {
-        // 1. ���û����� TParameterStruct ��װ�� RenderGraphParameterStruct
-        RenderGraphParameterStruct ParameterStruct(InParameters, InMetadata);
+        // Wrap the parameter data and metadata.
+        RenderGraphParameterStruct parameterStruct(inParameters, inMetadata);
 
-        // 2. ���������� Pass ʵ�� (����֮ǰ����� RenderGraphLambdaPass)
-        auto Pass = new RenderGraphLambdaPass<TParameterStruct, TExecuteLambda>(
-            InName,
-            InPassFlags,
-            ParameterStruct,
-            std::forward<TExecuteLambda>(InExecuteLambda)
+        // Create the lambda pass instance.
+        auto pass = new RenderGraphLambdaPass<TParameterStruct, TExecuteLambda>(
+            inName,
+            inPassFlags,
+            parameterStruct,
+            std::forward<TExecuteLambda>(inExecuteLambda)
         );
 
-        // 3. ���ģ����� TParameterStruct �е���Դ���ã����� DAG ����
-        // �� UE �У��������� SetupPass(Pass) ��������Դ Read/Write ״̬
-        SetupPassInternal(Pass, InMetadata, InParameters);
+        // Inspect parameter resource references to build graph dependencies.
+        // SetupPassInternal records the pass resource access requirements.
+        SetupPassInternal(pass, inMetadata, inParameters);
 
-        // 4. ����ִ�ж���
-        Passes.push_back(Pass);
-        return Pass;
+        // Append the pass to the execution list.
+        m_Passes.push_back(pass);
+        return pass;
     }
     void AddPassDependency(RenderGraphPass* pass, RenderGraphPass* passConsumer);
     enum class EUploadPolicy {
@@ -155,7 +155,7 @@ public:
 		Deferred   // 延迟插入upload pass，直到 Execute() 被调用是收集所有的upload buffer，然后统一插入upload pass
     };
     struct UploadBufferDesc {
-        RenderGraphBufferRef buffer;
+        RenderGraphBufferRef Buffer;
         void* Data;
 		size_t Size;
     };
@@ -186,7 +186,7 @@ public:
 	BufferViewCache* GetExternalBufferViewCache(RenderGraphBufferRef buf);
     template<typename T>
     T* AllocateParameter(){
-        return Allocator.Allocate<T>();
+        return m_Allocator.Allocate<T>();
     }
 
 
@@ -197,9 +197,9 @@ protected:
     void AnalyzePasses(); // Analyzes passes and groups them for execution
     void AllocateResources();
     void SetupPassInternal(
-        RenderGraphPass* Pass,
-        const ShaderParametersMetadata* Metadata,
-        const void* Parameters);
+        RenderGraphPass* pass,
+        const ShaderParametersMetadata* metadata,
+        const void* parameters);
     void ApplyFinalStates();
     void ExecutaPasses();
 private:
@@ -210,15 +210,15 @@ private:
 
     using PassList = std::list<RenderGraphPass*>; // Using std::list for pass management
     using PassListGroup = std::list<PassList>; // Group of passes for execution
-    PassList Passes; // List of passes to execute (using std::list)
-    PassListGroup ParallelPasses; // Group of passes to execute in parallel (using std::list)
+    PassList m_Passes; // List of passes to execute (using std::list)
+    PassListGroup m_ParallelPasses; // Group of passes to execute in parallel (using std::list)
     // Resource Cache
-    std::unordered_map<std::string, RenderGraphTextureRef> TextureCache; // Cache for textures
-    std::unordered_map<std::string, RenderGraphBufferRef> BufferCache;   // Cache for buffers
-    std::unordered_map<std::string, RenderGraphTextureSRVRef> TextureSRVCache; // Cache for texture SRVs
-    std::unordered_map<std::string, RenderGraphBufferSRVRef> BufferSRVCache;   // Cache for buffer SRVs
-	std::unordered_map<std::string, RenderGraphTextureUAVRef> TextureUAVCache; // Cache for texture UAVs
-    std::unordered_map<std::string, RenderGraphBufferUAVRef> BufferUAVCache;   // Cache for buffer UAVs
+    std::unordered_map<std::string, RenderGraphTextureRef> m_TextureCache; // Cache for textures
+    std::unordered_map<std::string, RenderGraphBufferRef> m_BufferCache;   // Cache for buffers
+    std::unordered_map<std::string, RenderGraphTextureSRVRef> m_TextureSRVCache; // Cache for texture SRVs
+    std::unordered_map<std::string, RenderGraphBufferSRVRef> m_BufferSRVCache;   // Cache for buffer SRVs
+	std::unordered_map<std::string, RenderGraphTextureUAVRef> m_TextureUAVCache; // Cache for texture UAVs
+    std::unordered_map<std::string, RenderGraphBufferUAVRef> m_BufferUAVCache;   // Cache for buffer UAVs
 
     // 新增：Builder 内部状态缓存
     struct TextureKey
@@ -262,9 +262,9 @@ private:
             return h;
         }
     };
-    std::unordered_map<TextureKey, RHI::ERHIResourceAccess, TextureKeyHasher> FinalTextureStates;
+    std::unordered_map<TextureKey, RHI::ERHIResourceAccess, TextureKeyHasher> m_FinalTextureStates;
 
-    std::unordered_map<BufferKey, RHI::ERHIResourceAccess, BufferKeyHasher>   FinalBufferStates;
+    std::unordered_map<BufferKey, RHI::ERHIResourceAccess, BufferKeyHasher>   m_FinalBufferStates;
 
     //
 // Texture
@@ -276,7 +276,7 @@ private:
 		RHI::RHITexture* RHITexture = nullptr;
     };
 
-    std::unordered_map<RHI::RHITexture*, ExternalTextureEntry> ExternalTextures;
+    std::unordered_map<RHI::RHITexture*, ExternalTextureEntry> m_ExternalTextures;
 
 
     // Buffer
@@ -288,16 +288,16 @@ private:
 		RHI::RHIBuffer* RHIBuffer = nullptr;
     };
 
-    std::unordered_map<RHI::RHIBuffer*, ExternalBufferEntry> ExternalBuffers;
+    std::unordered_map<RHI::RHIBuffer*, ExternalBufferEntry> m_ExternalBuffers;
 
     //
-    std::unordered_map<RenderGraphTexture*, RHI::RHITexture*> RDGToRHITexture;
-    std::unordered_map<RenderGraphBuffer*, RHI::RHIBuffer*>  RDGToRHIBuffer;
+    std::unordered_map<RenderGraphTexture*, RHI::RHITexture*> m_RDGToRHITexture;
+    std::unordered_map<RenderGraphBuffer*, RHI::RHIBuffer*>  m_RDGToRHIBuffer;
 
-    std::unordered_map<RHI::RHITexture*, PooledTransientRenderTarget*> RHITextureToTransientTarget;
-    std::unordered_map<RHI::RHIBuffer*, PooledTransientBuffer*>  RHIBufferTransientBuffer;
-    RenderGraphAllocator Allocator;
-    TransientResourceAllocator* TransientAllocator;
+    std::unordered_map<RHI::RHITexture*, PooledTransientRenderTarget*> m_RHITextureToTransientTarget;
+    std::unordered_map<RHI::RHIBuffer*, PooledTransientBuffer*>  m_RHIBufferTransientBuffer;
+    RenderGraphAllocator m_Allocator;
+    TransientResourceAllocator* m_TransientAllocator;
 
     struct ResourceLifetime
     {
@@ -308,8 +308,8 @@ private:
         uint32_t EndPassIndex = 0;
     };
 
-    std::unordered_map<RenderGraphResource*, ResourceLifetime> ResourceLifetimes;
-    std::unordered_map<RenderGraphPass*, std::vector<RenderGraphResource*>> PassLastUseResources;
+    std::unordered_map<RenderGraphResource*, ResourceLifetime> m_ResourceLifetimes;
+    std::unordered_map<RenderGraphPass*, std::vector<RenderGraphResource*>> m_PassLastUseResources;
 
 	struct PendingBufferUpload
 	{
@@ -318,7 +318,7 @@ private:
 		size_t Size;
         RHI::EQueueType QueueType;
 	};
-    std::vector<PendingBufferUpload> PendingBufferUploads;
+    std::vector<PendingBufferUpload> m_PendingBufferUploads;
 };
 
 } // namespace WR::RenderCore

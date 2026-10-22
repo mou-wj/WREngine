@@ -7,144 +7,144 @@ namespace RenderCore {
     class RENDERCORE_API ShaderParameterReader
     {
     public:
-        // ����ʱֱ�Ӵ��� C++ �ṹ��ʵ����ָ��
-        ShaderParameterReader(const void* InData, uint32_t InSize)
-            : Data(reinterpret_cast<const uint8_t*>(InData))
-            , DataSize(InSize)
+        // Read values from the supplied C++ parameter structure.
+        ShaderParameterReader(const void* inData, uint32_t inSize)
+            : m_Data(reinterpret_cast<const uint8_t*>(inData))
+            , m_DataSize(inSize)
         {
         }
 
         /**
-         * ���ģ�����һ��ӳ��õ� Binding ��Ϣ��ֱ�Ӵ��ڴ�����г�����
+         * Read the value described by a resolved binding from the parameter memory.
          */
         template<typename T>
-        const T& Read(const ShaderParameterBindingInfo::ShaderUniformBinding& Binding) const
+        const T& Read(const ShaderParameterBindingInfo::ShaderUniformBinding& binding) const
         {
-            // ��ȫ��飺ȷ����ȡ��ΧûԽ��
-            // ����� Binding.Offset �Ǹó�Ա�� C++ �ṹ���е�ƫ��
-            assert(Binding.Offset + sizeof(T) <= DataSize);
+            // Check that the requested value fits in the parameter structure.
+            // Binding.Offset is the byte offset in the C++ structure.
+            assert(binding.Offset + sizeof(T) <= m_DataSize);
 
-            return *reinterpret_cast<const T*>(Data + Binding.Offset);
+            return *reinterpret_cast<const T*>(m_Data + binding.Offset);
         }
 
-        // ��ȡԭʼָ�룬���� memcpy �������
-        const void* GetRawPointer(uint32_t Offset) const
+        // Return a pointer for bulk data copies.
+        const void* GetRawPointer(uint32_t offset) const
         {
-            assert(Offset <= DataSize);
-            return Data + Offset;
+            assert(offset <= m_DataSize);
+            return m_Data + offset;
         }
 
     private:
-        const uint8_t* Data;
-        const uint32_t DataSize;
+        const uint8_t* m_Data;
+        const uint32_t m_DataSize;
     };
 
 
     void SetShaderParameters(
         RHI::RHICommandListBase& cmdList,
         const Shader* shader,
-        const ShaderParametersMetadata* ParametersMetaData,
-        void* ParametersData) {
-        if (!shader || !ParametersData) return;
+        const ShaderParametersMetadata* parametersMetaData,
+        void* parametersData) {
+        if (!shader || !parametersData) return;
 
-        if (!shader || !ParametersData) return;
+        if (!shader || !parametersData) return;
 
-        // 1. ��ʼ�� Reader (�������ģʽ)
-        // ע�⣺����� DataSize ʹ�� Metadata ����Ĵ�С
-        ShaderParameterReader Reader(ParametersData, ParametersMetaData->GetSize());
+        // Create a reader for the supplied parameter structure.
+        // Use the size recorded by the parameter metadata.
+        ShaderParameterReader reader(parametersData, parametersMetaData->GetSize());
 
-        // 2. ׼�� RHI ����������
-        RHI::RHIBatchedShaderParameters BatchedParams;
+        // Prepare the batched RHI parameter container.
+        RHI::RHIBatchedShaderParameters batchedParams;
 
-        // 3. ���� Shader �� Bindings �б� (�� Shader ������ȡ)
-        // ������֮ǰ���Ĳ�ͬ�����ǲ��ٵ��� Metadata�����ǵ��� Shader ������������
-        const ShaderParameterBindingInfo& BindingInfo = shader->GetParameterBindings();
+        // Visit the bindings resolved for this shader.
+        // Iterate shader bindings rather than every metadata member.
+        const ShaderParameterBindingInfo& bindingInfo = shader->GetParameterBindings();
 
-        // --- ������ֵ�� (Uniforms) ---
+        // Collect uniform values.
         size_t uniformDataOffset = 0;
-        for (const auto& Pair : BindingInfo.UniformBindings)
+        for (const auto& pair : bindingInfo.UniformBindings)
         {
-            const std::string& Name = Pair.first;
-            const auto& Binding = Pair.second;
+            const std::string& name = pair.first;
+            const auto& binding = pair.second;
 
             // 组装Uniform参数描述
             RHI::RHIShaderUniformParameter param;
-            param.BufferIndex = Binding.BufferIndex; // 若有多UBO可扩展
-            param.BaseIndex = Binding.BaseIndex; // 这里用Offset或BindSlot视RHI实现
+            param.BufferIndex = binding.BufferIndex; // 若有多UBO可扩展
+            param.BaseIndex = binding.BaseIndex; // 这里用Offset或BindSlot视RHI实现
             param.Offset = uniformDataOffset;
-            param.Size = Binding.Size;
-            BatchedParams.UniformParameters.push_back(param);
+            param.Size = binding.Size;
+            batchedParams.UniformParameters.push_back(param);
 
             // 拷贝数据到Data
-            const uint8_t* src = reinterpret_cast<const uint8_t*>(Reader.GetRawPointer(Binding.Offset));
-            BatchedParams.Data.insert(BatchedParams.Data.end(), src, src + Binding.Size);
-            uniformDataOffset += Binding.Size;
+            const uint8_t* src = reinterpret_cast<const uint8_t*>(reader.GetRawPointer(binding.Offset));
+            batchedParams.Data.insert(batchedParams.Data.end(), src, src + binding.Size);
+            uniformDataOffset += binding.Size;
         }
 
         // --- 资源参数组装 ---
-        for (const auto& Pair : BindingInfo.ResourceBindings)
+        for (const auto& pair : bindingInfo.ResourceBindings)
         {
-            const std::string& Name = Pair.first;
-            const auto& Binding = Pair.second;
-            const void* ResourcePtrLocation = Reader.GetRawPointer(Binding.Offset);
-            RHI::RHIResource* Resource = nullptr;
-            auto rdgr = *(RenderGraphResource**)ResourcePtrLocation;
+            const std::string& name = pair.first;
+            const auto& binding = pair.second;
+            const void* resourcePtrLocation = reader.GetRawPointer(binding.Offset);
+            RHI::RHIResource* resource = nullptr;
+            auto rdgr = *(RenderGraphResource**)resourcePtrLocation;
             RHI::RHIShaderResourceParameter param;
             
             std::vector<const void*> resourcePtrs;
             std::vector<uint32_t> arrayIndexs;
-            if (Binding.ArraySize > 1) {
-                auto* Array = reinterpret_cast<const ShaderParameterElementAccessor*>(ResourcePtrLocation);
-                resourcePtrs.resize(Array->GetElementCount());
-                for (uint32_t i = 0; i < Array->GetElementCount(); ++i) {
-                    resourcePtrs[i] = Array->GetElementOffset(i);
+            if (binding.ArraySize > 1) {
+                auto* array = reinterpret_cast<const ShaderParameterElementAccessor*>(resourcePtrLocation);
+                resourcePtrs.resize(array->GetElementCount());
+                for (uint32_t i = 0; i < array->GetElementCount(); ++i) {
+                    resourcePtrs[i] = array->GetElementOffset(i);
                     arrayIndexs.push_back(i);
                     
                 }
             }
             else {
-                resourcePtrs.push_back(ResourcePtrLocation);
+                resourcePtrs.push_back(resourcePtrLocation);
                 arrayIndexs.push_back(0);
             }
             uint32_t innerIndex = 0;
-            for (auto ResourcePtrLocation : resourcePtrs) {
-                param.Index = Binding.BindSlot;
+            for (auto resourcePtrLocation : resourcePtrs) {
+                param.Index = binding.BindSlot;
                 param.ArrayIndex = arrayIndexs[innerIndex];
                 innerIndex++;
                 // 根据BaseType类型组装参数
-                switch (Binding.BaseType)
+                switch (binding.BaseType)
                 {
                 case EShaderParameterBaseType::RDGTexture:
                     if (rdgr == nullptr) continue;
                     param.Type = RHI::RHIShaderResourceParameter::EType::Texture;
-                    Resource = (*(RenderGraphResource**)ResourcePtrLocation)->GetRHIResource();
+                    resource = (*(RenderGraphResource**)resourcePtrLocation)->GetRHIResource();
                     break;
                 case EShaderParameterBaseType::RDGTexture_UAV:
                 case EShaderParameterBaseType::RDGBuffer_UAV:
                     if (rdgr == nullptr) continue;
                     param.Type = RHI::RHIShaderResourceParameter::EType::UAV;
-                    Resource = (*(RenderGraphResource**)ResourcePtrLocation)->GetRHIResource();
+                    resource = (*(RenderGraphResource**)resourcePtrLocation)->GetRHIResource();
                     break;
                 case EShaderParameterBaseType::RDGBuffer_SRV:
                     if (rdgr == nullptr) continue;
                     param.Type = RHI::RHIShaderResourceParameter::EType::SRV;
-                    Resource = (*(RenderGraphResource**)ResourcePtrLocation)->GetRHIResource();
+                    resource = (*(RenderGraphResource**)resourcePtrLocation)->GetRHIResource();
                     break;
                 case EShaderParameterBaseType::RHISampler:
                     param.Type = RHI::RHIShaderResourceParameter::EType::Sampler;
-                    Resource = *(RHIResource**)ResourcePtrLocation;
+                    resource = *(RHIResource**)resourcePtrLocation;
                     break;
                 case EShaderParameterBaseType::RHITexture:
                     param.Type = RHI::RHIShaderResourceParameter::EType::Texture;
-                    Resource = *(RHIResource**)ResourcePtrLocation;
+                    resource = *(RHIResource**)resourcePtrLocation;
                     break;
                 case EShaderParameterBaseType::RHI_SRV:
                     param.Type = RHI::RHIShaderResourceParameter::EType::SRV;
-                    Resource = *(RHIResource**)ResourcePtrLocation;
+                    resource = *(RHIResource**)resourcePtrLocation;
                     break;
                 case EShaderParameterBaseType::RHI_UAV:
                     param.Type = RHI::RHIShaderResourceParameter::EType::UAV;
-                    Resource = *(RHIResource**)ResourcePtrLocation;
+                    resource = *(RHIResource**)resourcePtrLocation;
                     break;
                 case EShaderParameterBaseType::StructNested:
                     param.Type = RHI::RHIShaderResourceParameter::EType::UniformBuffer;
@@ -153,20 +153,20 @@ namespace RenderCore {
                     assert(false);
                     break;
                 }
-                param.Resource = Resource;
-                BatchedParams.ResourceParameters.push_back(param);
+                param.Resource = resource;
+                batchedParams.ResourceParameters.push_back(param);
             }
             
         }
 
-        // 4. �ύ��ָ����
+        // Submit the batched parameters to the command list.
         const auto shaderFrequency = shader->GetShaderFrequency();
         if (shaderFrequency == ERHIShaderFrequency::Compute)
         {
-            auto& ComputeCmdList = static_cast<RHI::RHIComputeCommandList&>(cmdList);
-            ComputeCmdList.SetBatchedShaderParameters(
+            auto& computeCmdList = static_cast<RHI::RHIComputeCommandList&>(cmdList);
+            computeCmdList.SetBatchedShaderParameters(
                 static_cast<RHI::RHIComputeShader*>(shader->GetRHIShader()),
-                BatchedParams
+                batchedParams
             );
         }
         else if (
@@ -177,18 +177,18 @@ namespace RenderCore {
             shaderFrequency == ERHIShaderFrequency::Intersection ||
             shaderFrequency == ERHIShaderFrequency::Callable)
         {
-            auto& GraphicCmdList = static_cast<RHI::RHIGraphicCommandList&>(cmdList);
-            GraphicCmdList.SetBatchedShaderParameters(
+            auto& graphicCmdList = static_cast<RHI::RHIGraphicCommandList&>(cmdList);
+            graphicCmdList.SetBatchedShaderParameters(
                 static_cast<RHI::RHIRayTracingShader*>(shader->GetRHIShader()),
-                BatchedParams
+                batchedParams
             );
         }
         else
         {
-            auto& GraphicCmdList = static_cast<RHI::RHIGraphicCommandList&>(cmdList);
-            GraphicCmdList.SetBatchedShaderParameters(
+            auto& graphicCmdList = static_cast<RHI::RHIGraphicCommandList&>(cmdList);
+            graphicCmdList.SetBatchedShaderParameters(
                 static_cast<RHI::RHIGraphicShader*>(shader->GetRHIShader()),
-                BatchedParams
+                batchedParams
             );
         }
 

@@ -22,7 +22,7 @@ namespace Engine
         //
         // Clear the existing vertex streams.
         //
-        Streams.clear();
+        _streams.clear();
 
         //
         // Build vertex elements from the available streams.
@@ -71,8 +71,8 @@ namespace Engine
         //
         // Initialize the regular vertex input declaration.
         //
-        InitDeclaration(elements,&RHIVertexDescState);
-        VertexFactoryFlags = flags.PackedFlags;
+        InitDeclaration(elements,&_rhiVertexDescState);
+        _vertexFactoryFlags = flags.PackedFlags;
         //
         // Instance ID -> location 5
         //
@@ -98,8 +98,8 @@ namespace Engine
     }
     void LocalVertexFactory::BindInstanceBuffer(RHI::RHIGraphicCommandList& cmdList, RHI::RHIBuffer* instanceBuffer, uint32_t offset) const
     {
-        if (m_InstanceLocation < Streams.size())
-            cmdList.SetStreamSource(Streams[m_InstanceLocation].Binding, instanceBuffer, offset);
+        if (m_InstanceLocation < _streams.size())
+            cmdList.SetStreamSource(_streams[m_InstanceLocation].Binding, instanceBuffer, offset);
     }
     //
     // Shader Permutation

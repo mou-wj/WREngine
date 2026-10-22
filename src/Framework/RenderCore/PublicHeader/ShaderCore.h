@@ -21,7 +21,7 @@ namespace RenderCore {
         std::vector<std::string> IncludePaths;
 
 
-        bool FullPrecisionInPS = false;
+        bool bFullPrecisionInPS = false;
 
         void Merge(const ShaderCompilerEnvironment& other)
         {
@@ -35,14 +35,14 @@ namespace RenderCore {
                     VirtualIncludes[it.first] = it.second;
             }
             IncludePaths.insert(IncludePaths.end(), other.IncludePaths.begin(), other.IncludePaths.end());
-            FullPrecisionInPS |= other.FullPrecisionInPS;
+            bFullPrecisionInPS |= other.bFullPrecisionInPS;
         }
         bool operator==(const ShaderCompilerEnvironment& other) const
         {
             return Definitions == other.Definitions &&
                 VirtualIncludes == other.VirtualIncludes &&
                 IncludePaths == other.IncludePaths &&
-                FullPrecisionInPS == other.FullPrecisionInPS;
+                bFullPrecisionInPS == other.bFullPrecisionInPS;
         }
         void SetDefine(const std::string& name, const std::string& value) { Definitions[name] = value; }
         void SetDefine(const std::string& name, int32_t value) { Definitions[name] = std::to_string(value); }
@@ -51,11 +51,11 @@ namespace RenderCore {
         void SetDefine(const std::string& name, float value) { Definitions[name] = std::to_string(value); }
     };
 
-    // ËùÓĞ Shader Í¨ÓÃµÄ×îĞ¡²ÎÊı
+    // æ‰€æœ‰ Shader é€šç”¨çš„æœ€å°å‚æ•°
     struct ShaderPermutationParameters
     {
         uint32_t Platform;        // Vulkan / DX12 / Metal ...
-        uint32_t PermutationId;   // Bitmask£¨¹¦ÄÜ×éºÏ£©
+        uint32_t PermutationId;   // Bitmaskï¼ˆåŠŸèƒ½ç»„åˆï¼‰
         size_t GetHash() const {
             size_t hash = std::hash<uint32_t>()(Platform);
             hash ^= std::hash<uint32_t>()(PermutationId) << 1;
@@ -66,16 +66,16 @@ namespace RenderCore {
     using ShaderPermutationId = size_t;
 
 
-    // »ù´¡²¼¶ûÎ¬¶È
+    // åŸºç¡€å¸ƒå°”ç»´åº¦
     template<const char* MacroName>
     struct FPermutationDimensionBool
     {
         static constexpr const char* Name = MacroName;
-        static constexpr uint32_t Count = 2; // ¹Ì¶¨Îª 0 ºÍ 1
-        uint32_t Value = 0; // ÄÚ²¿Í³Ò»ÓÃ uint32 ´æ´¢
+        static constexpr uint32_t Count = 2; // å›ºå®šä¸º 0 å’Œ 1
+        uint32_t Value = 0; // å†…éƒ¨ç»Ÿä¸€ç”¨ uint32 å­˜å‚¨
     };
 
-    // »ù´¡Ã¶¾Ù/ÕûÊıÎ¬¶È
+    // åŸºç¡€æšä¸¾/æ•´æ•°ç»´åº¦
     template<const char* MacroName, uint32_t InCount>
     struct FPermutationDimensionEnum
     {
@@ -83,53 +83,53 @@ namespace RenderCore {
         static constexpr uint32_t Count = InCount;
         uint32_t Value = 0;
     };
-   // ------------------- ÔöÇ¿ĞÍ ShaderPermutationDomain -------------------
+   // ------------------- å¢å¼ºå‹ ShaderPermutationDomain -------------------
     template<typename... Dimensions>
     class ShaderPermutationDomain
     {
     public:
-        // 1. ±àÒëÆÚ¼ÆËã×Ü±äÌåÊıÁ¿ (ËùÓĞÎ¬¶È Count µÄ³Ë»ı)
+        // 1. ç¼–è¯‘æœŸè®¡ç®—æ€»å˜ä½“æ•°é‡ (æ‰€æœ‰ç»´åº¦ Count çš„ä¹˜ç§¯)
         static constexpr uint32_t TotalCount = (Dimensions::Count * ... * 1);
 
         std::tuple<Dimensions...> DimensionValues;
 
         ShaderPermutationDomain() = default;
 
-        // --- ºËĞÄ½Ó¿Ú 1: ´Ó PermutationId »¹Ô­ËùÓĞÎ¬¶ÈµÄ×´Ì¬ ---
-        void SetFromId(uint32_t Id)
+        // --- æ ¸å¿ƒæ¥å£ 1: ä» PermutationId è¿˜åŸæ‰€æœ‰ç»´åº¦çš„çŠ¶æ€ ---
+        void SetFromId(uint32_t id)
         {
-            SetFromIdImpl(Id, std::make_index_sequence<sizeof...(Dimensions)>{});
+            SetFromIdImpl(id, std::make_index_sequence<sizeof...(Dimensions)>{});
         }
 
-        // --- ºËĞÄ½Ó¿Ú 2: ½«µ±Ç°Î¬¶È×´Ì¬´ò°üÎªµ¥Ò» ID ---
+        // --- æ ¸å¿ƒæ¥å£ 2: å°†å½“å‰ç»´åº¦çŠ¶æ€æ‰“åŒ…ä¸ºå•ä¸€ ID ---
         uint32_t GetPermutationId() const
         {
             return GetPermutationIdImpl(std::make_index_sequence<sizeof...(Dimensions)>{});
         }
 
-        // --- ºËĞÄ½Ó¿Ú 3: ×¢Èëµ½±àÒë»·¾³ ---
-        void ModifyCompilationEnvironment(ShaderCompilerEnvironment& OutEnv) const
+        // --- æ ¸å¿ƒæ¥å£ 3: æ³¨å…¥åˆ°ç¼–è¯‘ç¯å¢ƒ ---
+        void ModifyCompilationEnvironment(ShaderCompilerEnvironment& outEnv) const
         {
-            ModifyEnvImpl(OutEnv, std::make_index_sequence<sizeof...(Dimensions)>{});
+            ModifyEnvImpl(outEnv, std::make_index_sequence<sizeof...(Dimensions)>{});
         }
 
-        // --- ¸¨Öú½Ó¿Ú: »ñÈ¡ÌØ¶¨Î¬¶ÈµÄÖµ ---
+        // --- è¾…åŠ©æ¥å£: è·å–ç‰¹å®šç»´åº¦çš„å€¼ ---
         template<typename T>
         uint32_t GetFieldValue() const
         {
             return std::get<T>(DimensionValues).Value;
         }
 
-        // --- ¸¨Öú½Ó¿Ú: ÉèÖÃÌØ¶¨Î¬¶ÈµÄÖµ ---
+        // --- è¾…åŠ©æ¥å£: è®¾ç½®ç‰¹å®šç»´åº¦çš„å€¼ ---
         template<typename T>
-        void SetFieldValue(uint32_t InValue)
+        void SetFieldValue(uint32_t inValue)
         {
-            std::get<T>(DimensionValues).Value = InValue;
+            std::get<T>(DimensionValues).Value = inValue;
         }
 
     private:
-        // ¸¨Öú¹¤¾ß£º¼ÆËãµÚ I ¸öÎ¬¶ÈÖ®Ç°µÄ¡°½øÖÆÈ¨ÖØ¡±
-        // ÀıÈç£ºÎ¬¶ÈÎª [Count=3, Count=2, Count=4]£¬ÔòÈ¨ÖØ·Ö±ğÎª [1, 3, 6]
+        // è¾…åŠ©å·¥å…·ï¼šè®¡ç®—ç¬¬ I ä¸ªç»´åº¦ä¹‹å‰çš„â€œè¿›åˆ¶æƒé‡â€
+        // ä¾‹å¦‚ï¼šç»´åº¦ä¸º [Count=3, Count=2, Count=4]ï¼Œåˆ™æƒé‡åˆ†åˆ«ä¸º [1, 3, 6]
         template<std::size_t I>
         static constexpr uint32_t GetDimensionMultiplier()
         {
@@ -139,40 +139,40 @@ namespace RenderCore {
         template<std::size_t I, std::size_t... J>
         static constexpr uint32_t GetMultiplierImpl(std::index_sequence<J...>)
         {
-            // Õ¹¿ª¼ÆËãÇ°ÃæµÄ Dimensions::Count ³Ë»ı
-            uint32_t Res = 1;
-            auto Helper = [&Res](uint32_t Count) { Res *= Count; };
+            // å±•å¼€è®¡ç®—å‰é¢çš„ Dimensions::Count ä¹˜ç§¯
+            uint32_t res = 1;
+            auto helper = [&res](uint32_t count) { res *= count; };
 
-            // ÕâÀïµÄ¼¼ÇÉÊÇÀûÓÃ tuple_element ÄÃµ½Ç°ÃæÎ¬¶ÈµÄ Count
+            // è¿™é‡Œçš„æŠ€å·§æ˜¯åˆ©ç”¨ tuple_element æ‹¿åˆ°å‰é¢ç»´åº¦çš„ Count
             using TDimensions = std::tuple<Dimensions...>;
-            (Helper(std::tuple_element_t<J, TDimensions>::Count), ...);
+            (helper(std::tuple_element_t<J, TDimensions>::Count), ...);
 
-            return Res;
+            return res;
         }
 
-        // --- ½âÂëÊµÏÖ (Id -> Values) ---
+        // --- è§£ç å®ç° (Id -> Values) ---
         template<std::size_t... I>
-        void SetFromIdImpl(uint32_t Id, std::index_sequence<I...>)
+        void SetFromIdImpl(uint32_t id, std::index_sequence<I...>)
         {
-            // ¹«Ê½£ºValue = (Id / Multiplier) % Count
-            ((std::get<I>(DimensionValues).Value = (Id / GetDimensionMultiplier<I>()) % std::get<I>(DimensionValues).Count), ...);
+            // å…¬å¼ï¼šValue = (Id / Multiplier) % Count
+            ((std::get<I>(DimensionValues).Value = (id / GetDimensionMultiplier<I>()) % std::get<I>(DimensionValues).Count), ...);
         }
 
-        // --- ±àÂëÊµÏÖ (Values -> Id) ---
+        // --- ç¼–ç å®ç° (Values -> Id) ---
         template<std::size_t... I>
         uint32_t GetPermutationIdImpl(std::index_sequence<I...>) const
         {
-            // ¹«Ê½£ºId = Sum(Value * Multiplier)
-            uint32_t Id = 0;
-            ((Id += std::get<I>(DimensionValues).Value * GetDimensionMultiplier<I>()), ...);
-            return Id;
+            // å…¬å¼ï¼šId = Sum(Value * Multiplier)
+            uint32_t id = 0;
+            ((id += std::get<I>(DimensionValues).Value * GetDimensionMultiplier<I>()), ...);
+            return id;
         }
 
-        // --- ×¢ÈëºêÊµÏÖ ---
+        // --- æ³¨å…¥å®å®ç° ---
         template<std::size_t... I>
-        void ModifyEnvImpl(ShaderCompilerEnvironment& OutEnv, std::index_sequence<I...>) const
+        void ModifyEnvImpl(ShaderCompilerEnvironment& outEnv, std::index_sequence<I...>) const
         {
-            ((OutEnv.SetDefine(Dimensions::Name, (int32_t)std::get<I>(DimensionValues).Value)), ...);
+            ((outEnv.SetDefine(Dimensions::Name, (int32_t)std::get<I>(DimensionValues).Value)), ...);
         }
     };
 
@@ -183,12 +183,12 @@ namespace RenderCore {
         Int32,
         UInt32,
         Bool,
-        StructNested,//½á¹¹ÌåÀàĞÍ£¬ÄÚ²¿¿ÉÒÔº¬ÓĞÆäËûÀàĞÍÊı¾İ
+        StructNested,//ç»“æ„ä½“ç±»å‹ï¼Œå†…éƒ¨å¯ä»¥å«æœ‰å…¶ä»–ç±»å‹æ•°æ®
         StructInclude,
-        StructReference,//½á¹¹ÌåÒıÓÃ£¬ÔÚmetadataÖĞ²»Õ¹¿ª
+        StructReference,//ç»“æ„ä½“å¼•ç”¨ï¼Œåœ¨metadataä¸­ä¸å±•å¼€
 
         RenderTargetSlots,
-        // ¿É¸ù¾İĞèÒªÀ©Õ¹¸ü¶àÀàĞÍ
+        // å¯æ ¹æ®éœ€è¦æ‰©å±•æ›´å¤šç±»å‹
         RDGTexture,
         RDGTexture_SRV,
         RDGTexture_UAV,

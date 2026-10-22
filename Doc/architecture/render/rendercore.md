@@ -80,16 +80,16 @@ public:
 
 它通过以下机制表达 pass 的语义：
 
-- `Name`：pass 名称
-- `PassFlag`：图形 pass 或计算 pass
-- `TextureIntents`：资源访问意图
-- `BufferStates`：缓冲区访问意图
-- `PassProducers` / `PassConsumers`：依赖前后关系
+- `_name`：pass 名称
+- `_passFlag`：图形 pass 或计算 pass
+- `_textureIntents`：资源访问意图
+- `_bufferStates`：缓冲区访问意图
+- `_passProducers` / `_passConsumers`：依赖前后关系
 
 `RenderGraphLambdaPass` 是一个模板实现，它允许把渲染逻辑直接写成 lambda：
 
 ```cpp
-auto Pass = new RenderGraphLambdaPass<TParam, TLambda>(...);
+auto pass = new RenderGraphLambdaPass<TParam, TLambda>(...);
 ```
 
 这意味着 `RenderCore` 支持非常轻量的 pass 描述方式，方便 `Renderer` 层使用。
@@ -158,9 +158,9 @@ RenderResource
 它内部持有：
 
 ```cpp
-RHI::RHITextureSP Texture;
-TextureViewCache ViewCache;
-RenderTextureTracker Tracker;
+RHI::RHITextureSP m_Texture;
+TextureViewCache m_ViewCache;
+RenderTextureTracker m_Tracker;
 ```
 
 这说明真实纹理资源是对底层 `RHITexture` 的进一步封装，并附带视图缓存和状态跟踪。
@@ -216,7 +216,7 @@ public:
 它负责：
 
 - 创建渲染线程
-- 维护 `CommandQueue`
+- 维护 `m_CommandQueue`
 - 执行后台渲染命令
 - 管理同步和回调
 

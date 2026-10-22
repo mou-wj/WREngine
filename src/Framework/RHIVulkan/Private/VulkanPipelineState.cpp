@@ -116,7 +116,7 @@ PipelineLayoutInfo VulkanGraphicsPipelineState::BuildPipelineLayoutInfo(const RH
             }
            
 
-            if (header.HasPushConstant)
+            if (header.bHasPushConstant)
             {
                 layoutInfo.bHasPushConstant = true;
 
@@ -315,7 +315,7 @@ PipelineLayoutInfo VulkanComputePipelineState::BuildPipelineLayoutInfo(const RHI
         freqInfo.UniformBufferLayouts.push_back(ubLayout);
     }
 
-    if (header.HasPushConstant)
+    if (header.bHasPushConstant)
     {
         layoutInfo.bHasPushConstant = true;
 
@@ -450,7 +450,7 @@ PipelineLayoutInfo VulkanRayTracingPipeline::BuildPipelineLayoutInfo(const RHIRa
                 freqInfo.UniformBufferLayouts.push_back(ubLayout);
             }
 
-            if (header.HasPushConstant)
+            if (header.bHasPushConstant)
             {
                 layoutInfo.bHasPushConstant = true;
                 layoutInfo.PushConstant.offset = 0;

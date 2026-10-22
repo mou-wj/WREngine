@@ -4,7 +4,7 @@
 namespace RenderCore {
 
     RenderGraphPass::RenderGraphPass(const std::string& name, EPassFlag passFlag, const RenderGraphParameterStruct& parameter)
-        : Name(name),PassFlag(passFlag), ParameterStruct(parameter)
+        : _name(name),_passFlag(passFlag), _parameterStruct(parameter)
     {
 
     }
@@ -12,10 +12,10 @@ namespace RenderCore {
 
     void BarrierBatchBegin::Process()
     {
-        for (size_t i = 0; i < transitions.size(); ++i)
+        for (size_t i = 0; i < m_Transitions.size(); ++i)
         {
-            auto& t = transitions[i];
-            auto* res = resources[i];
+            auto& t = m_Transitions[i];
+            auto* res = m_Resources[i];
 
             if (!res)
                 continue;
@@ -48,10 +48,10 @@ namespace RenderCore {
 
     void BarrierBatchEnd::Process()
     {
-        for (size_t i = 0; i < transitions.size(); ++i)
+        for (size_t i = 0; i < m_Transitions.size(); ++i)
         {
-            auto& t = transitions[i];
-            auto* res = resources[i];
+            auto& t = m_Transitions[i];
+            auto* res = m_Resources[i];
 
             if (!res)
                 continue;

@@ -45,7 +45,7 @@ namespace RenderCore{
 
     struct RENDERCORE_API ShaderCompileInput
     {
-        // ԭʼ�ļ�·����������־/���ԣ�
+        // Virtual source path used for source lookup and diagnostics.
         std::string VirtualSourceFilePath;
 
         std::string EntryPoint = "main";
@@ -53,13 +53,13 @@ namespace RenderCore{
         RHI::ERHIShaderFrequency Frequency;
         RHI::ERHIShaderPlatform Platform;
 
-        // �����궨�� / include ����·�� / ���� include
+        // Macro definitions, include paths and virtual includes.
         ShaderCompilerEnvironment Environment;
 
-        std::string TargetProfile;     // vs_6_6 / ps_6_6 ��
+        std::string TargetProfile;     // Target profile, such as vs_6_6 or ps_6_6.
         EShaderCompileFlags Flags = EShaderCompileFlags::DebugInfo | EShaderCompileFlags::DisableOptimize;
 
-        // �Ƿ����� shader pipeline����ѡ��
+        // Whether this compile belongs to a shader pipeline.
         bool bCompilingForPipeline = false;
 
         bool operator==(const ShaderCompileInput& other) const
@@ -130,7 +130,7 @@ namespace RenderCore
     {
         RHI::ERHIShaderPlatform Platform;
 
-        bool Success = false;
+        bool bSuccess = false;
         std::string ErrorMessage;
 
         std::vector<char> PackedBinaryData;
@@ -140,7 +140,7 @@ namespace RenderCore
         std::string PreprocessedSource;
 #endif
 
-        // �����ļ������������أ�
+        // Source dependencies recorded for caching and diagnostics.
         std::vector<std::string> IncludedFiles;
     };
 
@@ -154,7 +154,7 @@ namespace RenderCore
             ShaderCompiler();
             ~ShaderCompiler();
 
-            // ʹ�� ShaderCompileInput ������������
+            // Compile the shader described by ShaderCompileInput.
             static ShaderCompilationOutput Compile(const ShaderCompileInput& input);
 
             /**
@@ -169,7 +169,7 @@ namespace RenderCore
              */
             static std::string GenerateOrGetShaderPrameterMetaDataSF(const ShaderParametersMetadata& root);
 
-            static std::optional<std::string> GetFileContent(const std::string& Path);
+            static std::optional<std::string> GetFileContent(const std::string& path);
         private:
         static bool LoadShaderSource(
             const ShaderCompileInput& input,
@@ -226,8 +226,8 @@ namespace RenderCore
             spirv_cross::Compiler* compiler,
             ShaderParameterAllocationMap& out);
 
-        static std::string ShaderSourceDirectory;
-        int MaxIncludeDepth = 10;
+        static std::string m_ShaderSourceDirectory;
+        int m_MaxIncludeDepth = 10;
     };
 
 

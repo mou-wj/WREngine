@@ -15,21 +15,21 @@ using namespace RHI;
 namespace RenderCore {
 
 
-    RenderGraphBuilder::RenderGraphBuilder() : TransientAllocator(&GTransientResourceAllocator)
+    RenderGraphBuilder::RenderGraphBuilder() : m_TransientAllocator(&GTransientResourceAllocator)
     {
     }
 
     RenderGraphBuilder::~RenderGraphBuilder()
     {
         // Clean up passes
-        Passes.clear();
+        m_Passes.clear();
     }
 
 
     void RenderGraphBuilder::AddPassDependency(RenderGraphPass* pass, RenderGraphPass* passConsumer)
     {
-        pass->PassConsumers.push_back(passConsumer);
-        passConsumer->PassProducers.push_back(pass);
+        pass->_passConsumers.push_back(passConsumer);
+        passConsumer->_passProducers.push_back(pass);
     }
 
     void RenderGraphBuilder::AddUploadBuffers(const std::vector<UploadBufferDesc>& desc, EUploadPolicy policy)
@@ -38,13 +38,13 @@ namespace RenderCore {
         std::vector<PendingBufferUpload> graphicUploads;
         std::vector<PendingBufferUpload> computeUploads;
         for (auto& buf : desc) {
-            if (buf.buffer->IsExternal) {
-                queueType = ExternalBuffers[buf.buffer->GetRHIBuffer()].Tracker->GetLastAccessFence().QueueType;
+            if (buf.Buffer->m_bIsExternal) {
+                queueType = m_ExternalBuffers[buf.Buffer->GetRHIBuffer()].Tracker->GetLastAccessFence().QueueType;
             }
-            auto mem = Allocator.AllocateBytes(buf.Size, 16);
+            auto mem = m_Allocator.AllocateBytes(buf.Size, 16);
             memcpy(mem, buf.Data, buf.Size);
             PendingBufferUpload bufferUpload;
-            bufferUpload.Buffer = buf.buffer;
+            bufferUpload.Buffer = buf.Buffer;
             bufferUpload.Data = mem;
             bufferUpload.Size = buf.Size;
             bufferUpload.QueueType = queueType;
@@ -59,14 +59,14 @@ namespace RenderCore {
             AddUploadPass(std::move(graphicUploads), queueType);
             AddUploadPass(std::move(computeUploads), queueType);
         }
-		PendingBufferUploads.insert(PendingBufferUploads.end(), graphicUploads.begin(), graphicUploads.end());
-        PendingBufferUploads.insert(PendingBufferUploads.end(), computeUploads.begin(), computeUploads.end());
+		m_PendingBufferUploads.insert(m_PendingBufferUploads.end(), graphicUploads.begin(), graphicUploads.end());
+        m_PendingBufferUploads.insert(m_PendingBufferUploads.end(), computeUploads.begin(), computeUploads.end());
     }
 
     void RenderGraphBuilder::AddUploadBuffer(RenderGraphBufferRef buffer, const void* data, size_t size,EUploadPolicy policy)
     {
         UploadBufferDesc desc;
-        desc.buffer = buffer;
+        desc.Buffer = buffer;
         desc.Data = (void*)data;
         desc.Size = size;
 		AddUploadBuffers({ desc }, policy);
@@ -74,87 +74,87 @@ namespace RenderCore {
 
     RenderGraphTextureRef RenderGraphBuilder::CreateTexture(const std::string& name, const RenderGraphTextureDesc& desc)
     {
-        auto it = TextureCache.find(name);
-        if (it != TextureCache.end())
+        auto it = m_TextureCache.find(name);
+        if (it != m_TextureCache.end())
         {
             return it->second;
         }
 
         // 用 Allocator
-        auto texture = Allocator.Allocate<RenderGraphTexture>(name, desc);
+        auto texture = m_Allocator.Allocate<RenderGraphTexture>(name, desc);
 
-        TextureCache[name] = texture;
+        m_TextureCache[name] = texture;
         return texture;
     }
 
     RenderGraphBufferRef RenderGraphBuilder::CreateBuffer(const std::string& name, const RenderGraphBufferDesc& desc)
     {
-        auto it = BufferCache.find(name);
-        if (it != BufferCache.end())
+        auto it = m_BufferCache.find(name);
+        if (it != m_BufferCache.end())
         {
             return it->second;
         }
 
-        auto buffer = Allocator.Allocate<RenderGraphBuffer>(name, desc);
+        auto buffer = m_Allocator.Allocate<RenderGraphBuffer>(name, desc);
 
 
-        BufferCache[name] = buffer;
+        m_BufferCache[name] = buffer;
         return buffer;
     }
 
     RenderGraphTextureSRVRef RenderGraphBuilder::CreateTextureSRV(const std::string& name, const RenderGraphTextureSRVDesc& desc)
     {
-        auto it = TextureSRVCache.find(name);
-        if (it != TextureSRVCache.end())
+        auto it = m_TextureSRVCache.find(name);
+        if (it != m_TextureSRVCache.end())
         {
             return it->second;
         }
 
-        auto srv = Allocator.Allocate<RenderGraphTextureSRV>(name, desc);
+        auto srv = m_Allocator.Allocate<RenderGraphTextureSRV>(name, desc);
 
-        TextureSRVCache[name] = srv;
+        m_TextureSRVCache[name] = srv;
         return srv;
     }
     
     RenderGraphBufferSRVRef RenderGraphBuilder::CreateBufferSRV(const std::string& name, const RenderGraphBufferSRVDesc& desc)
     {
-        auto it = BufferSRVCache.find(name);
-        if (it != BufferSRVCache.end())
+        auto it = m_BufferSRVCache.find(name);
+        if (it != m_BufferSRVCache.end())
         {
             return it->second;
         }
 
-        auto srv = Allocator.Allocate<RenderGraphBufferSRV>(name, desc);
+        auto srv = m_Allocator.Allocate<RenderGraphBufferSRV>(name, desc);
 
-        BufferSRVCache[name] = srv;
+        m_BufferSRVCache[name] = srv;
         return srv;
     }
 
     RenderGraphTextureUAVRef RenderGraphBuilder::CreateTextureUAV(const std::string& name, const RenderGraphTextureUAVDesc& desc)
     {
-        auto it = TextureUAVCache.find(name);
-        if (it != TextureUAVCache.end())
+        auto it = m_TextureUAVCache.find(name);
+        if (it != m_TextureUAVCache.end())
         {
             return it->second;
         }
 
-        auto uav = Allocator.Allocate<RenderGraphTextureUAV>(name, desc);
+        auto uav = m_Allocator.Allocate<RenderGraphTextureUAV>(name, desc);
 
-        TextureUAVCache[name] = uav;
+        m_TextureUAVCache[name] = uav;
         return uav;
     }
 
     RenderGraphBufferUAVRef RenderGraphBuilder::CreateBufferUAV(const std::string& name, const RenderGraphBufferUAVDesc& desc)
     {
-        auto it = BufferUAVCache.find(name);
-        if (it != BufferUAVCache.end())
+        auto it = m_BufferUAVCache.find(name);
+        if (it != m_BufferUAVCache.end())
         {
             return it->second;
         }
 
-        auto uav = Allocator.Allocate<RenderGraphBufferUAV>(name, desc);
+        auto uav = m_Allocator.Allocate<RenderGraphBufferUAV>(name, desc);
 
-        BufferUAVCache[name] = uav;
+        m_BufferUAVCache[name] = uav;
         return uav;
     }
     RenderGraphTextureRef RenderGraphBuilder::RegisterExternalTexture(const std::string& name, PooledRenderTarget* target)
@@ -165,8 +165,8 @@ namespace RenderCore {
         RHI::RHITexture* rhiTex = target->GetRHI();
 
         // 👉 已注册（按 RHI 去重）
-        auto it = ExternalTextures.find(rhiTex);
-        if (it != ExternalTextures.end())
+        auto it = m_ExternalTextures.find(rhiTex);
+        if (it != m_ExternalTextures.end())
         {
             return it->second.RDGTexture;
         }
@@ -177,11 +177,11 @@ namespace RenderCore {
 
         auto rdgTex = CreateTexture(name, desc);
 
-        rdgTex->Resource = rhiTex;
-        rdgTex->IsExternal = true;
+        rdgTex->_resource = rhiTex;
+        rdgTex->m_bIsExternal = true;
 
         // 👉 建立映射
-        RDGToRHITexture[rdgTex] = rhiTex;
+        m_RDGToRHITexture[rdgTex] = rhiTex;
 
         ExternalTextureEntry entry;
         entry.RDGTexture = rdgTex;
@@ -189,7 +189,7 @@ namespace RenderCore {
         entry.ViewCache = &target->GetViewCache();
         entry.RHITexture = rhiTex;
 
-        ExternalTextures[rhiTex] = entry;
+        m_ExternalTextures[rhiTex] = entry;
         return rdgTex;
     }
     RenderGraphTextureRef RenderGraphBuilder::RegisterExternalTexture(const std::string& name, RenderTexture* texture)
@@ -199,8 +199,8 @@ namespace RenderCore {
 
         RHI::RHITexture* rhiTex = texture->GetRHI();
 
-        auto it = ExternalTextures.find(rhiTex);
-        if (it != ExternalTextures.end())
+        auto it = m_ExternalTextures.find(rhiTex);
+        if (it != m_ExternalTextures.end())
         {
             return it->second.RDGTexture;
         }
@@ -211,10 +211,10 @@ namespace RenderCore {
         
         auto rdgTex = CreateTexture(name, desc);
 
-        rdgTex->Resource = rhiTex;
-        rdgTex->IsExternal = true;
+        rdgTex->_resource = rhiTex;
+        rdgTex->m_bIsExternal = true;
 
-        RDGToRHITexture[rdgTex] = rhiTex;
+        m_RDGToRHITexture[rdgTex] = rhiTex;
 
         ExternalTextureEntry entry;
         entry.RDGTexture = rdgTex;
@@ -222,7 +222,7 @@ namespace RenderCore {
         entry.RHITexture = rhiTex;
         entry.ViewCache = &texture->GetViewCache();
 
-        ExternalTextures[rhiTex] = entry;
+        m_ExternalTextures[rhiTex] = entry;
 
         return rdgTex;
     }
@@ -233,8 +233,8 @@ namespace RenderCore {
 
         RHI::RHIBuffer* rhiBuf = buffer->GetRHI();
 
-        auto it = ExternalBuffers.find(rhiBuf);
-        if (it != ExternalBuffers.end())
+        auto it = m_ExternalBuffers.find(rhiBuf);
+        if (it != m_ExternalBuffers.end())
         {
             return it->second.RDGBuffer;
         }
@@ -245,10 +245,10 @@ namespace RenderCore {
 
         auto rdgBuf = CreateBuffer(name, desc);
 
-        rdgBuf->Resource = rhiBuf;
-        rdgBuf->IsExternal = true;
+        rdgBuf->_resource = rhiBuf;
+        rdgBuf->m_bIsExternal = true;
 
-        RDGToRHIBuffer[rdgBuf] = rhiBuf;
+        m_RDGToRHIBuffer[rdgBuf] = rhiBuf;
 
         ExternalBufferEntry entry;
         entry.RDGBuffer = rdgBuf;
@@ -256,7 +256,7 @@ namespace RenderCore {
         entry.RHIBuffer = rhiBuf;
         entry.ViewCache = &buffer->GetViewCache();
 
-        ExternalBuffers[rhiBuf] = entry;
+        m_ExternalBuffers[rhiBuf] = entry;
 
         return rdgBuf;
     }
@@ -282,18 +282,18 @@ namespace RenderCore {
 
     RenderGraphTextureRef RenderGraphBuilder::GetTexture(const std::string& name)
     {
-        return TextureCache[name];
+        return m_TextureCache[name];
     }
 
     RenderGraphBufferRef RenderGraphBuilder::GetBuffer(const std::string& name)
     {
-        return BufferCache[name];
+        return m_BufferCache[name];
     }
 
     TextureViewCache* RenderGraphBuilder::GetExternalTextureViewCache(RenderGraphTextureRef tex)
     {
-        auto it = ExternalTextures.find(tex->GetRHITexture());
-		if (it != ExternalTextures.end())
+        auto it = m_ExternalTextures.find(tex->GetRHITexture());
+		if (it != m_ExternalTextures.end())
 		{
 			return it->second.ViewCache;
 		}
@@ -302,8 +302,8 @@ namespace RenderCore {
 
     BufferViewCache* RenderGraphBuilder::GetExternalBufferViewCache(RenderGraphBufferRef buf)
     {
-        auto it = ExternalBuffers.find(buf->GetRHIBuffer());
-        if (it != ExternalBuffers.end())
+        auto it = m_ExternalBuffers.find(buf->GetRHIBuffer());
+        if (it != m_ExternalBuffers.end())
         {
         	return it->second.ViewCache;
         }
@@ -317,7 +317,7 @@ namespace RenderCore {
         AllocateResources();
         ExecutaPasses();
         ApplyFinalStates();
-        TransientAllocator->GarbageCollect();
+        m_TransientAllocator->GarbageCollect();
     }
 
     void RenderGraphBuilder::AnalyzePasses()
@@ -325,40 +325,40 @@ namespace RenderCore {
         // =========================================
             // 清理旧数据
             // =========================================
-        ParallelPasses.clear();
-        FinalTextureStates.clear();
-        FinalBufferStates.clear();
-        ResourceLifetimes.clear();
-        PassLastUseResources.clear();
+        m_ParallelPasses.clear();
+        m_FinalTextureStates.clear();
+        m_FinalBufferStates.clear();
+        m_ResourceLifetimes.clear();
+        m_PassLastUseResources.clear();
 
         // =========================================
         // 工具函数
         // =========================================
-        auto IsWrite = [](ERHIResourceAccess A)
+        auto isWrite = [](ERHIResourceAccess a)
             {
-                return EnumHasAnyFlags(A, ERHIResourceAccess::WritableMask);
+                return EnumHasAnyFlags(a, ERHIResourceAccess::WritableMask);
             };
 
-        auto IsUAV = [](ERHIResourceAccess A)
+        auto isUav = [](ERHIResourceAccess a)
             {
-                return EnumHasAnyFlags(A, ERHIResourceAccess::UAV);
+                return EnumHasAnyFlags(a, ERHIResourceAccess::UAV);
             };
 
-        auto NeedBarrier = [&](ERHIResourceAccess Before, ERHIResourceAccess After)
+        auto needBarrier = [&](ERHIResourceAccess before, ERHIResourceAccess after)
             {
-                if (Before == ERHIResourceAccess::Unknown && After != ERHIResourceAccess::Unknown) {
+                if (before == ERHIResourceAccess::Unknown && after != ERHIResourceAccess::Unknown) {
                     return true;
                 }
-                const bool BeforeWrite = IsWrite(Before);
-                const bool AfterWrite = IsWrite(After);
+                const bool beforeWrite = isWrite(before);
+                const bool afterWrite = isWrite(after);
 
-                if (IsUAV(Before) && IsUAV(After))
+                if (isUav(before) && isUav(after))
                     return true;
 
-                if (!BeforeWrite && !AfterWrite)
+                if (!beforeWrite && !afterWrite)
                     return false;
 
-                return Before != After;
+                return before != after;
             };
 
         // =========================================
@@ -378,36 +378,36 @@ namespace RenderCore {
             bool bInitialized = false;
         };
 
-        std::unordered_map<TextureKey, TextureState, TextureKeyHasher> TextureStates;
-        std::unordered_map<BufferKey, BufferState, BufferKeyHasher>  BufferStates;
+        std::unordered_map<TextureKey, TextureState, TextureKeyHasher> textureStates;
+        std::unordered_map<BufferKey, BufferState, BufferKeyHasher>  bufferStates;
 
         // =========================================
         // Pass index（用于 lifetime）
         // =========================================
-        std::unordered_map<RenderGraphPass*, uint32_t> PassIndex;
+        std::unordered_map<RenderGraphPass*, uint32_t> passIndex;
         uint32_t passOrder = 0;
 
-        for (auto* p : Passes)
+        for (auto* p : m_Passes)
         {
-            PassIndex[p] = passOrder++;
+            passIndex[p] = passOrder++;
         }
 
         // =========================================
         // 初始状态获取
         // =========================================
-        auto GetInitialTextureAccess = [&](RHI::RHITexture* texture,const RHI::RHISubresourceRange& range)
+        auto getInitialTextureAccess = [&](RHI::RHITexture* texture,const RHI::RHISubresourceRange& range)
             {
-                auto it = ExternalTextures.find(texture);
-                if (it != ExternalTextures.end())
+                auto it = m_ExternalTextures.find(texture);
+                if (it != m_ExternalTextures.end())
                     return it->second.Tracker->GetSubresourceAccess(range);
 
                 return ERHIResourceAccess::Unknown;
             };
 
-        auto GetInitialBufferAccess = [&](RHI::RHIBuffer* buffer)
+        auto getInitialBufferAccess = [&](RHI::RHIBuffer* buffer)
             {
-                auto it = ExternalBuffers.find(buffer);
-                if (it != ExternalBuffers.end())
+                auto it = m_ExternalBuffers.find(buffer);
+                if (it != m_ExternalBuffers.end())
                     return it->second.Tracker->GetLastAccess();
                 return ERHIResourceAccess::Unknown;
             };
@@ -415,113 +415,113 @@ namespace RenderCore {
         // =========================================
         // Phase 1: Barrier + DAG + Lifetime
         // =========================================
-        for (auto* Pass : Passes)
+        for (auto* pass : m_Passes)
         {
             // =========================
             // Texture
             // =========================
-            for (const auto& Intent : Pass->TextureIntents)
+            for (const auto& intent : pass->_textureIntents)
             {
-                TextureKey Key{ Intent.Texture, Intent.SubresourceRange };
-                auto& State = TextureStates[Key];
+                TextureKey key{ intent.Texture, intent.SubresourceRange };
+                auto& state = textureStates[key];
 
-                if (!State.bInitialized)
+                if (!state.bInitialized)
                 {
-                    State.LastAccess = GetInitialTextureAccess(Intent.Texture->GetRHITexture(),Intent.SubresourceRange);
-                    State.bInitialized = true;
+                    state.LastAccess = getInitialTextureAccess(intent.Texture->GetRHITexture(),intent.SubresourceRange);
+                    state.bInitialized = true;
                 }
 
                 // ===== Lifetime =====
                 {
-                    auto* Res = Intent.Texture;
-                    auto& LT = ResourceLifetimes[Res];
+                    auto* res = intent.Texture;
+                    auto& lt = m_ResourceLifetimes[res];
 
-                    if (!LT.FirstPass)
-                        LT.FirstPass = Pass;
+                    if (!lt.FirstPass)
+                        lt.FirstPass = pass;
 
-                    LT.LastPass = Pass;
+                    lt.LastPass = pass;
 
-                    uint32_t idx = PassIndex[Pass];
-                    LT.BeginPassIndex = std::min(LT.BeginPassIndex, idx);
-                    LT.EndPassIndex = std::max(LT.EndPassIndex, idx);
+                    uint32_t idx = passIndex[pass];
+                    lt.BeginPassIndex = std::min(lt.BeginPassIndex, idx);
+                    lt.EndPassIndex = std::max(lt.EndPassIndex, idx);
                 }
 
                 // ===== Barrier =====
-                if (NeedBarrier(State.LastAccess, Intent.RequiredAccess))
+                if (needBarrier(state.LastAccess, intent.RequiredAccess))
                 {
-                    RHI::RHITransitionInfo Transition{};
-                    Transition.Type = RHI::RHITransitionInfo::EType::Texture;
-                    Transition.AccessBefore = State.LastAccess;
-                    Transition.AccessAfter = Intent.RequiredAccess;
+                    RHI::RHITransitionInfo transition{};
+                    transition.Type = RHI::RHITransitionInfo::EType::Texture;
+                    transition.AccessBefore = state.LastAccess;
+                    transition.AccessAfter = intent.RequiredAccess;
 
                     // ✅ RDG层信息
-                    static_cast<RHI::RHISubresourceRange>(Transition) = Intent.SubresourceRange;
+                    static_cast<RHI::RHISubresourceRange>(transition) = intent.SubresourceRange;
 
-                    Pass->BeginBarrier.AddTransition(Intent.Texture, Transition);
+                    pass->_beginBarrier.AddTransition(intent.Texture, transition);
 
 
                 }
-                if (State.LastVisitor && State.LastVisitor != Pass)
+                if (state.LastVisitor && state.LastVisitor != pass)
                 {
-                    State.LastVisitor->PassConsumers.push_back(Pass);
-                    Pass->PassProducers.push_back(State.LastVisitor);
+                    state.LastVisitor->_passConsumers.push_back(pass);
+                    pass->_passProducers.push_back(state.LastVisitor);
                 }
 
-                State.LastVisitor = Pass;
-                State.LastAccess = Intent.RequiredAccess;
+                state.LastVisitor = pass;
+                state.LastAccess = intent.RequiredAccess;
 
-                FinalTextureStates[Key] = Intent.RequiredAccess;
+                m_FinalTextureStates[key] = intent.RequiredAccess;
             }
 
             // =========================
             // Buffer
             // =========================
-            for (const auto& Intent : Pass->BufferStates)
+            for (const auto& intent : pass->_bufferStates)
             {
-                BufferKey Key{ Intent.Buffer };
-                auto& State = BufferStates[Key];
+                BufferKey key{ intent.Buffer };
+                auto& state = bufferStates[key];
 
-                if (!State.bInitialized)
+                if (!state.bInitialized)
                 {
-                    State.LastAccess = GetInitialBufferAccess(Intent.Buffer->GetRHIBuffer());
-                    State.bInitialized = true;
+                    state.LastAccess = getInitialBufferAccess(intent.Buffer->GetRHIBuffer());
+                    state.bInitialized = true;
                 }
 
                 // ===== Lifetime =====
                 {
-                    auto* Res = Intent.Buffer;
-                    auto& LT = ResourceLifetimes[Res];
+                    auto* res = intent.Buffer;
+                    auto& lt = m_ResourceLifetimes[res];
 
-                    if (!LT.FirstPass)
-                        LT.FirstPass = Pass;
+                    if (!lt.FirstPass)
+                        lt.FirstPass = pass;
 
-                    LT.LastPass = Pass;
+                    lt.LastPass = pass;
 
-                    uint32_t idx = PassIndex[Pass];
-                    LT.BeginPassIndex = std::min(LT.BeginPassIndex, idx);
-                    LT.EndPassIndex = std::max(LT.EndPassIndex, idx);
+                    uint32_t idx = passIndex[pass];
+                    lt.BeginPassIndex = std::min(lt.BeginPassIndex, idx);
+                    lt.EndPassIndex = std::max(lt.EndPassIndex, idx);
                 }
 
                 // ===== Barrier =====
-                if (NeedBarrier(State.LastAccess, Intent.RequiredAccess))
+                if (needBarrier(state.LastAccess, intent.RequiredAccess))
                 {
-                    RHI::RHITransitionInfo Transition{};
-                    Transition.Type = RHI::RHITransitionInfo::EType::Buffer;
-                    Transition.AccessBefore = State.LastAccess;
-                    Transition.AccessAfter = Intent.RequiredAccess;
+                    RHI::RHITransitionInfo transition{};
+                    transition.Type = RHI::RHITransitionInfo::EType::Buffer;
+                    transition.AccessBefore = state.LastAccess;
+                    transition.AccessAfter = intent.RequiredAccess;
 
-                    Pass->BeginBarrier.AddTransition(Intent.Buffer, Transition);
+                    pass->_beginBarrier.AddTransition(intent.Buffer, transition);
                 }
-                if (State.LastVisitor && State.LastVisitor != Pass)
+                if (state.LastVisitor && state.LastVisitor != pass)
                 {
-                    State.LastVisitor->PassConsumers.push_back(Pass);
-                    Pass->PassProducers.push_back(State.LastVisitor);
+                    state.LastVisitor->_passConsumers.push_back(pass);
+                    pass->_passProducers.push_back(state.LastVisitor);
                 }
 
-                State.LastVisitor = Pass;
-                State.LastAccess = Intent.RequiredAccess;
+                state.LastVisitor = pass;
+                state.LastAccess = intent.RequiredAccess;
 
-                FinalBufferStates[Key] = Intent.RequiredAccess;
+                m_FinalBufferStates[key] = intent.RequiredAccess;
             }
         }
 
@@ -531,10 +531,10 @@ namespace RenderCore {
         std::unordered_map<RenderGraphPass*, size_t> indegree;
         std::unordered_set<RenderGraphPass*> allNodes;
 
-        for (auto* pass : Passes)
+        for (auto* pass : m_Passes)
         {
             allNodes.insert(pass);
-            indegree[pass] = pass->PassProducers.size();
+            indegree[pass] = pass->_passProducers.size();
         }
 
         std::queue<RenderGraphPass*> zeroQueue;
@@ -580,7 +580,7 @@ namespace RenderCore {
 
             for (auto* node : currentSet)
             {
-                for (auto* consumer : node->PassConsumers)
+                for (auto* consumer : node->_passConsumers)
                 {
                     if (--indegree[consumer] == 0)
                         zeroQueue.push(consumer);
@@ -588,79 +588,79 @@ namespace RenderCore {
             }
 
             if (!group.empty())
-                ParallelPasses.push_back(group);
+                m_ParallelPasses.push_back(group);
         }
 
         // fallback
-        for (auto* pass : Passes)
+        for (auto* pass : m_Passes)
         {
             if (!processed.count(pass))
             {
                 PassList single;
                 single.push_back(pass);
-                ParallelPasses.push_back(single);
+                m_ParallelPasses.push_back(single);
             }
         }
 
         //last use resource
-        for (auto& [res, lifetime] : ResourceLifetimes)
+        for (auto& [res, lifetime] : m_ResourceLifetimes)
         {
             if (lifetime.LastPass)
             {
-                PassLastUseResources[lifetime.LastPass].push_back(res);
+                m_PassLastUseResources[lifetime.LastPass].push_back(res);
             }
         }
     }
 
     void RenderGraphBuilder::AllocateResources()
     {
-        std::unordered_map<RHI::RHITexture*, TextureViewCache*> InternalTextureViewCaches;
-        std::unordered_map<RHI::RHIBuffer*, BufferViewCache*> InternalBufferViewCaches;
+        std::unordered_map<RHI::RHITexture*, TextureViewCache*> internalTextureViewCaches;
+        std::unordered_map<RHI::RHIBuffer*, BufferViewCache*> internalBufferViewCaches;
         // =========================
             // Texture
             // =========================
-        for (auto& [name, tex] : TextureCache)
+        for (auto& [name, tex] : m_TextureCache)
         {
             if (!tex) continue;
 
             // 外部资源跳过
-            if (tex->IsExternal)
+            if (tex->m_bIsExternal)
                 continue;
 			
 
             // =========================================
             // 👉 关键改动：读取 lifetime
             // =========================================
-            auto it = ResourceLifetimes.find(tex);
-            if (it == ResourceLifetimes.end())
+            auto it = m_ResourceLifetimes.find(tex);
+            if (it == m_ResourceLifetimes.end())
                 continue; // 没有被 graph 使用的资源不创建
 
-            const ResourceLifetime& LT = it->second;
+            const ResourceLifetime& lt = it->second;
 
             // =========================================
             // 创建 transient texture（带生命周期）
             // =========================================
-            PoolRenderTargetDesc Desc =
+            PoolRenderTargetDesc desc =
                 PoolRenderTargetDesc::ConvertFromRHITextureDesc(tex->GetDesc());
 
-            auto rhiTex = TransientAllocator->AllocateRenderTarget(
-                Desc,
-                LT.BeginPassIndex,
-                LT.EndPassIndex
+            auto rhiTex = m_TransientAllocator->AllocateRenderTarget(
+                desc,
+                lt.BeginPassIndex,
+                lt.EndPassIndex
             );
-            InternalTextureViewCaches[rhiTex->GetRHI()] = &rhiTex->GetViewCache(); // 内部资源创建独立 view cache
-            tex->Resource = rhiTex->GetRHI();
-            RHITextureToTransientTarget[tex->GetRHITexture()] = rhiTex.get();
+            internalTextureViewCaches[rhiTex->GetRHI()] = &rhiTex->GetViewCache(); // 内部资源创建独立 view cache
+            tex->_resource = rhiTex->GetRHI();
+            m_RHITextureToTransientTarget[tex->GetRHITexture()] = rhiTex.get();
         }
 
         // =========================
         // Buffer
         // =========================
-        for (auto& [name, buf] : BufferCache)
+        for (auto& [name, buf] : m_BufferCache)
         {
             if (!buf) continue;
 
-            if (buf->IsExternal)
+            if (buf->m_bIsExternal)
                 continue;
 
             if (buf->GetRHIBuffer())
@@ -669,349 +669,349 @@ namespace RenderCore {
             // =========================================
             // 👉 lifetime driven
             // =========================================
-            auto it = ResourceLifetimes.find(buf);
-            if (it == ResourceLifetimes.end())
+            auto it = m_ResourceLifetimes.find(buf);
+            if (it == m_ResourceLifetimes.end())
                 continue;
 
-            const ResourceLifetime& LT = it->second;
+            const ResourceLifetime& lt = it->second;
 
-            auto rhiBuf = TransientAllocator->AllocateBuffer(
+            auto rhiBuf = m_TransientAllocator->AllocateBuffer(
                 TransientBufferDesc::ConvertFromRHIBufferDesc(buf->GetDesc()),
-                LT.BeginPassIndex,
-                LT.EndPassIndex
+                lt.BeginPassIndex,
+                lt.EndPassIndex
             );
-            InternalBufferViewCaches[rhiBuf->GetRHI()] = &rhiBuf->GetViewCache();
-            buf->Resource = rhiBuf->GetRHI();
-            RHIBufferTransientBuffer[buf->GetRHIBuffer()] = rhiBuf.get();
+            internalBufferViewCaches[rhiBuf->GetRHI()] = &rhiBuf->GetViewCache();
+            buf->_resource = rhiBuf->GetRHI();
+            m_RHIBufferTransientBuffer[buf->GetRHIBuffer()] = rhiBuf.get();
         }
 
         //view
             // =========================
             // Texture SRV
             // =========================
-        for (auto& [name, srv] : TextureSRVCache)
+        for (auto& [name, srv] : m_TextureSRVCache)
         {
             if (!srv) continue;
-            if (srv->Resource) continue;
-            RenderGraphTexture* parent = srv->Desc.Texture;
+            if (srv->_resource) continue;
+            RenderGraphTexture* parent = srv->m_Desc.Texture;
             RHI::RHITexture* parentRHI = parent->GetRHITexture();
             TextureViewCache* viewCache = nullptr;
-            if (!parent->IsExternal) {
-                viewCache = InternalTextureViewCaches[parentRHI];
+            if (!parent->m_bIsExternal) {
+                viewCache = internalTextureViewCaches[parentRHI];
             }
             else {
-                viewCache = ExternalTextures[parentRHI].ViewCache;
+                viewCache = m_ExternalTextures[parentRHI].ViewCache;
             }
-            RHI::RHITexSRVCreateInfo info = static_cast<RHI::RHITexSRVCreateInfo>(srv->Desc);
+            RHI::RHITexSRVCreateInfo info = static_cast<RHI::RHITexSRVCreateInfo>(srv->m_Desc);
             auto rhi = viewCache->GetOrCreateSRV(parentRHI, info);
-            srv->Resource = rhi;
+            srv->_resource = rhi;
         }
 
         // =========================
         // Texture UAV
         // =========================
-        for (auto& [name, uav] : TextureUAVCache)
+        for (auto& [name, uav] : m_TextureUAVCache)
         {
             if (!uav) continue;
-            if (uav->Resource) continue;
-            RenderGraphTexture* parent = uav->Desc.Texture;
+            if (uav->_resource) continue;
+            RenderGraphTexture* parent = uav->m_Desc.Texture;
             RHI::RHITexture* parentRHI = parent->GetRHITexture();
             TextureViewCache* viewCache = nullptr;
-            if (!parent->IsExternal) {
-                viewCache = InternalTextureViewCaches[parentRHI];
+            if (!parent->m_bIsExternal) {
+                viewCache = internalTextureViewCaches[parentRHI];
             }
             else {
-                viewCache = ExternalTextures[parentRHI].ViewCache;
+                viewCache = m_ExternalTextures[parentRHI].ViewCache;
             }
-            RHI::RHITexUAVCreateInfo info = static_cast<RHI::RHITexUAVCreateInfo>(uav->Desc);
+            RHI::RHITexUAVCreateInfo info = static_cast<RHI::RHITexUAVCreateInfo>(uav->m_Desc);
             auto rhi = viewCache->GetOrCreateUAV(parentRHI, info);
-            uav->Resource = rhi;
+            uav->_resource = rhi;
         }
 
         // =========================
         // Buffer SRV
         // =========================
-        for (auto& [name, srv] : BufferSRVCache)
+        for (auto& [name, srv] : m_BufferSRVCache)
         {
             if (!srv) continue;
-            if (srv->Resource) continue;
-            RenderGraphBuffer* parent = srv->Desc.Buffer;
+            if (srv->_resource) continue;
+            RenderGraphBuffer* parent = srv->m_Desc.Buffer;
             RHI::RHIBuffer* parentRHI = parent->GetRHIBuffer();
             BufferViewCache* viewCache = nullptr;
-            if (!parent->IsExternal) {
-                viewCache = InternalBufferViewCaches[parentRHI];
+            if (!parent->m_bIsExternal) {
+                viewCache = internalBufferViewCaches[parentRHI];
             }
             else {
-                viewCache = ExternalBuffers[parentRHI].ViewCache;
+                viewCache = m_ExternalBuffers[parentRHI].ViewCache;
             }
-            RHI::RHIBufferSRVCreateInfo info = static_cast<RHI::RHIBufferSRVCreateInfo>(srv->Desc);
+            RHI::RHIBufferSRVCreateInfo info = static_cast<RHI::RHIBufferSRVCreateInfo>(srv->m_Desc);
             auto rhi = viewCache->GetOrCreateSRV(parentRHI, info);
-            srv->Resource = rhi;
+            srv->_resource = rhi;
         }
 
         // =========================
         // Buffer UAV
         // =========================
-        for (auto& [name, uav] : BufferUAVCache)
+        for (auto& [name, uav] : m_BufferUAVCache)
         {
             if (!uav) continue;
-            if (uav->Resource) continue;
-            RenderGraphBuffer* parent = uav->Desc.Buffer;
+            if (uav->_resource) continue;
+            RenderGraphBuffer* parent = uav->m_Desc.Buffer;
             RHI::RHIBuffer* parentRHI = parent->GetRHIBuffer();
             BufferViewCache* viewCache = nullptr;
-            if (!parent->IsExternal) {
-                viewCache = InternalBufferViewCaches[parentRHI];
+            if (!parent->m_bIsExternal) {
+                viewCache = internalBufferViewCaches[parentRHI];
             }
             else {
-                viewCache = ExternalBuffers[parentRHI].ViewCache;
+                viewCache = m_ExternalBuffers[parentRHI].ViewCache;
             }
-            RHI::RHIBufferUAVCreateInfo info = static_cast<RHI::RHIBufferUAVCreateInfo>(uav->Desc);
+            RHI::RHIBufferUAVCreateInfo info = static_cast<RHI::RHIBufferUAVCreateInfo>(uav->m_Desc);
             auto rhi = viewCache->GetOrCreateUAV(parentRHI, info);
-            uav->Resource = rhi;
+            uav->_resource = rhi;
         }
 
     }
 
     void RenderGraphBuilder::SetupPassInternal(
-        RenderGraphPass* Pass,
-        const ShaderParametersMetadata* Metadata,
-        const void* Parameters)
+        RenderGraphPass* pass,
+        const ShaderParametersMetadata* metadata,
+        const void* parameters)
     {
-        const uint8_t* BaseDataPtr = reinterpret_cast<const uint8_t*>(Parameters);
+        const uint8_t* baseDataPtr = reinterpret_cast<const uint8_t*>(parameters);
 
-        for (const auto& Member : Metadata->GetMembers())
+        for (const auto& member : metadata->GetMembers())
         {
-            const uint8_t* MemberAddr = BaseDataPtr + Member.Offset;
+            const uint8_t* memberAddr = baseDataPtr + member.Offset;
 
-            if (Member.IsResource())
+            if (member.IsResource())
             {
-                std::vector<const uint8_t*> ResourcePtrs;
-                if (Member.IsArray()) {
-                    auto* Array =
-                        reinterpret_cast<const ShaderParameterElementAccessor*>(MemberAddr);
-                    ResourcePtrs.resize(Array->GetElementCount());
-                    for (uint32_t i = 0; i < Array->GetElementCount(); ++i) {
-                        ResourcePtrs[i] = Array->GetElementOffset(i);
+                std::vector<const uint8_t*> resourcePtrs;
+                if (member.IsArray()) {
+                    auto* array =
+                        reinterpret_cast<const ShaderParameterElementAccessor*>(memberAddr);
+                    resourcePtrs.resize(array->GetElementCount());
+                    for (uint32_t i = 0; i < array->GetElementCount(); ++i) {
+                        resourcePtrs[i] = array->GetElementOffset(i);
                     }
                 }
                 else {
-                    ResourcePtrs.push_back(MemberAddr);
+                    resourcePtrs.push_back(memberAddr);
                 }
-                for (uint32_t i = 0; i < ResourcePtrs.size(); ++i) {
+                for (uint32_t i = 0; i < resourcePtrs.size(); ++i) {
 
-                    const uint8_t* MemberAddr = ResourcePtrs[i];
+                    const uint8_t* memberAddr = resourcePtrs[i];
                     // ============================
                     // Texture SRV
                     // ============================
-                    if (Member.BaseType == EShaderParameterBaseType::RDGTexture_SRV)
+                    if (member.BaseType == EShaderParameterBaseType::RDGTexture_SRV)
                     {
-                        auto SRV = *reinterpret_cast<RenderGraphTextureSRV* const*>(MemberAddr);
+                        auto srv = *reinterpret_cast<RenderGraphTextureSRV* const*>(memberAddr);
 
-                        if (SRV)
+                        if (srv)
                         {
-                            auto* Tex = static_cast<RenderGraphTexture*>(SRV->Desc.Texture);
-                            const auto& TexDesc = SRV->Desc.Texture->GetDesc();
-                            const auto& Desc = SRV->Desc;
+                            auto* tex = static_cast<RenderGraphTexture*>(srv->m_Desc.Texture);
+                            const auto& texDesc = srv->m_Desc.Texture->GetDesc();
+                            const auto& desc = srv->m_Desc;
 
-                            RenderGraphPass::RenderGraphTextureIntent Intent;
-                            Intent.Texture = Tex;
-                            uint32_t mipSlice = Desc.FirstMipSlice;
-                            if (Desc.MipCount == TexDesc.MipLevels && Desc.FirstMipSlice == 0) {
+                            RenderGraphPass::RenderGraphTextureIntent intent;
+                            intent.Texture = tex;
+                            uint32_t mipSlice = desc.FirstMipSlice;
+                            if (desc.MipCount == texDesc.MipLevels && desc.FirstMipSlice == 0) {
                                 mipSlice = RHISubresourceRange::KAllSubresources;
                             }
-                            uint32_t arraySlice = Desc.FirstArraySlice;
-                            if (Desc.ArraySize ==  TexDesc.ArraySize && Desc.FirstArraySlice == 0) {
+                            uint32_t arraySlice = desc.FirstArraySlice;
+                            if (desc.ArraySize ==  texDesc.ArraySize && desc.FirstArraySlice == 0) {
                                 arraySlice = RHISubresourceRange::KAllSubresources;
                             }
 
-                            Intent.SubresourceRange = RHISubresourceRange(
+                            intent.SubresourceRange = RHISubresourceRange(
                                 mipSlice,
                                 arraySlice,
                                 RHISubresourceRange::KAllSubresources
                             );
 
                             // SRV → ReadOnly
-                            Intent.RequiredAccess = ERHIResourceAccess::SRV;
+                            intent.RequiredAccess = ERHIResourceAccess::SRV;
 
-                            Pass->AddTextureIntent(Intent);
+                            pass->AddTextureIntent(intent);
                         }
                     }
                     // ============================
                     // Texture UAV
                     // ============================
-                    else if (Member.BaseType == EShaderParameterBaseType::RDGTexture_UAV)
+                    else if (member.BaseType == EShaderParameterBaseType::RDGTexture_UAV)
                     {
-                        auto UAV = *reinterpret_cast<RenderGraphTextureUAV* const*>(MemberAddr);
+                        auto uav = *reinterpret_cast<RenderGraphTextureUAV* const*>(memberAddr);
 
-                        if (UAV)
+                        if (uav)
                         {
-                            auto* Tex = static_cast<RenderGraphTexture*>(UAV->Desc.Texture);
-                            const auto& TexDesc = UAV->Desc.Texture->GetDesc();
-                            const auto& Desc = UAV->Desc;
+                            auto* tex = static_cast<RenderGraphTexture*>(uav->m_Desc.Texture);
+                            const auto& texDesc = uav->m_Desc.Texture->GetDesc();
+                            const auto& desc = uav->m_Desc;
 
-                            RenderGraphPass::RenderGraphTextureIntent Intent;
-                            Intent.Texture = Tex;
-                            uint32_t mipSlice = Desc.FirstMipSlice;
-                            if (Desc.MipCount == TexDesc.MipLevels && Desc.FirstMipSlice == 0) {
+                            RenderGraphPass::RenderGraphTextureIntent intent;
+                            intent.Texture = tex;
+                            uint32_t mipSlice = desc.FirstMipSlice;
+                            if (desc.MipCount == texDesc.MipLevels && desc.FirstMipSlice == 0) {
                                 mipSlice = RHISubresourceRange::KAllSubresources;
                             }
-                            uint32_t arraySlice = Desc.FirstArraySlice;
-                            if (Desc.ArraySize == TexDesc.ArraySize && Desc.FirstArraySlice == 0) {
+                            uint32_t arraySlice = desc.FirstArraySlice;
+                            if (desc.ArraySize == texDesc.ArraySize && desc.FirstArraySlice == 0) {
                                 arraySlice = RHISubresourceRange::KAllSubresources;
                             }
-                            Intent.SubresourceRange = RHISubresourceRange(
+                            intent.SubresourceRange = RHISubresourceRange(
                                 mipSlice,
                                 arraySlice,
                                 RHISubresourceRange::KAllSubresources
                             );
 
                             // UAV → ReadWrite
-                            Intent.RequiredAccess = ERHIResourceAccess::UAV;
+                            intent.RequiredAccess = ERHIResourceAccess::UAV;
 
-                            Pass->AddTextureIntent(Intent);
+                            pass->AddTextureIntent(intent);
                         }
                     }
                     // ============================
                     // Texture (裸Texture，极少用)
                     // ============================
-                    else if (Member.BaseType == EShaderParameterBaseType::RDGTexture)
+                    else if (member.BaseType == EShaderParameterBaseType::RDGTexture)
                     {
-                        auto Tex = *reinterpret_cast<RenderGraphTexture* const*>(MemberAddr);
+                        auto tex = *reinterpret_cast<RenderGraphTexture* const*>(memberAddr);
 
-                        if (Tex)
+                        if (tex)
                         {
-                            RenderGraphPass::RenderGraphTextureIntent Intent;
-                            Intent.Texture = Tex;
-                            Intent.SubresourceRange = RHISubresourceRange(); // whole
+                            RenderGraphPass::RenderGraphTextureIntent intent;
+                            intent.Texture = tex;
+                            intent.SubresourceRange = RHISubresourceRange(); // whole
 
-                            Intent.RequiredAccess = ERHIResourceAccess::SRV;
+                            intent.RequiredAccess = ERHIResourceAccess::SRV;
 
-                            Pass->AddTextureIntent(Intent);
+                            pass->AddTextureIntent(intent);
                         }
                     }
 
                     // ============================
                     // Buffer SRV
                     // ============================
-                    else if (Member.BaseType == EShaderParameterBaseType::RDGBuffer_SRV)
+                    else if (member.BaseType == EShaderParameterBaseType::RDGBuffer_SRV)
                     {
-                        auto SRV = *reinterpret_cast<RenderGraphBufferSRV* const*>(MemberAddr);
+                        auto srv = *reinterpret_cast<RenderGraphBufferSRV* const*>(memberAddr);
                         
-                        if (SRV)
+                        if (srv)
                         {
-                            auto vDesc = SRV->Desc;
-                            auto* Buf = static_cast<RenderGraphBuffer*>(SRV->Desc.Buffer);
+                            auto vDesc = srv->m_Desc;
+                            auto* buf = static_cast<RenderGraphBuffer*>(srv->m_Desc.Buffer);
 
-                            RenderGraphPass::RenderGraphBufferIntent Intent;
-                            Intent.Buffer = Buf;
+                            RenderGraphPass::RenderGraphBufferIntent intent;
+                            intent.Buffer = buf;
 
-                            Intent.RequiredAccess = ERHIResourceAccess::SRV;
+                            intent.RequiredAccess = ERHIResourceAccess::SRV;
 
-                            Pass->AddBufferIntent(Intent);
+                            pass->AddBufferIntent(intent);
                         }
                     }
 
                     // ============================
                     // Buffer UAV
                     // ============================
-                    else if (Member.BaseType == EShaderParameterBaseType::RDGBuffer_UAV)
+                    else if (member.BaseType == EShaderParameterBaseType::RDGBuffer_UAV)
                     {
-                        auto UAV = *reinterpret_cast<RenderGraphBufferUAV* const*>(MemberAddr);
-                        auto uavDesc = UAV->Desc;
-                        if (UAV)
+                        auto uav = *reinterpret_cast<RenderGraphBufferUAV* const*>(memberAddr);
+                        auto uavDesc = uav->m_Desc;
+                        if (uav)
                         {
-                            auto* Buf = static_cast<RenderGraphBuffer*>(UAV->Desc.Buffer);
+                            auto* buf = static_cast<RenderGraphBuffer*>(uav->m_Desc.Buffer);
 
-                            RenderGraphPass::RenderGraphBufferIntent Intent;
-                            Intent.Buffer = Buf;
+                            RenderGraphPass::RenderGraphBufferIntent intent;
+                            intent.Buffer = buf;
 
-                            Intent.RequiredAccess = ERHIResourceAccess::UAV;
+                            intent.RequiredAccess = ERHIResourceAccess::UAV;
 
-                            Pass->AddBufferIntent(Intent);
+                            pass->AddBufferIntent(intent);
                         }
                     }
 
                     // ============================
                     // Buffer（裸）
                     // ============================
-                    else if (Member.BaseType == EShaderParameterBaseType::RDGBuffer)
+                    else if (member.BaseType == EShaderParameterBaseType::RDGBuffer)
                     {
-                        auto Buf = *reinterpret_cast<RenderGraphBuffer* const*>(MemberAddr);
+                        auto buf = *reinterpret_cast<RenderGraphBuffer* const*>(memberAddr);
 
-                        if (Buf)
+                        if (buf)
                         {
-                            RenderGraphPass::RenderGraphBufferIntent Intent;
-                            Intent.Buffer = Buf;
+                            RenderGraphPass::RenderGraphBufferIntent intent;
+                            intent.Buffer = buf;
 
-                            Intent.RequiredAccess = ERHIResourceAccess::SRV;
+                            intent.RequiredAccess = ERHIResourceAccess::SRV;
 
-                            Pass->AddBufferIntent(Intent);
+                            pass->AddBufferIntent(intent);
                         }
                     }
 
 
                 }
             }
-            else if (Member.IsReferenceStruct() || Member.IsIncludeStruct())
+            else if (member.IsReferenceStruct() || member.IsIncludeStruct())
             {
-                SetupPassInternal(Pass, Member.StructMetadata, MemberAddr);
+                SetupPassInternal(pass, member.StructMetadata, memberAddr);
             }
-            else if (Member.IsRenderTargetSlots()) {
-                const RenderTargetBindingSlots* src = reinterpret_cast<const RenderTargetBindingSlots*>(MemberAddr);
-                auto& RTSlots = *src;
-                auto checkColorBinding = [this, Pass](const RenderTargetBinding& binding) {
+            else if (member.IsRenderTargetSlots()) {
+                const RenderTargetBindingSlots* src = reinterpret_cast<const RenderTargetBindingSlots*>(memberAddr);
+                auto& rtSlots = *src;
+                auto checkColorBinding = [this, pass](const RenderTargetBinding& binding) {
                     if (binding.IsValid()) {
-                        RenderGraphPass::RenderGraphTextureIntent Intent;
-                        Intent.Texture = binding.Texture;
-                        auto Desc = binding.Texture->GetDesc();
+                        RenderGraphPass::RenderGraphTextureIntent intent;
+                        intent.Texture = binding.Texture;
+                        auto desc = binding.Texture->GetDesc();
                         uint32_t mipSlice = binding.MipIndex;
-                        if (Desc.MipLevels == 1 && mipSlice == 0) {
+                        if (desc.MipLevels == 1 && mipSlice == 0) {
                             mipSlice = RHISubresourceRange::KAllSubresources;
                         }
                         uint32_t arraySlice = binding.ArraySlice;
-                        if (Desc.ArraySize == 1 && arraySlice == 0) {
+                        if (desc.ArraySize == 1 && arraySlice == 0) {
                             arraySlice = RHISubresourceRange::KAllSubresources;
                         }
-                        Intent.SubresourceRange = RHISubresourceRange(
+                        intent.SubresourceRange = RHISubresourceRange(
                             mipSlice,
                             arraySlice,
                             RHISubresourceRange::KAllSubresources
                         );
 
-                        Intent.SubresourceRange = RHISubresourceRange(); // whole
+                        intent.SubresourceRange = RHISubresourceRange(); // whole
 
-                        Intent.RequiredAccess = ERHIResourceAccess::RenderTargetView;
+                        intent.RequiredAccess = ERHIResourceAccess::RenderTargetView;
 
-                        Pass->AddTextureIntent(Intent);
+                        pass->AddTextureIntent(intent);
                     }
                     
                     };
-                for (int i = 0; i < RTSlots.MaxRenderTargets; ++i) {
-                    checkColorBinding(RTSlots.ColorRenderTargets[i]);
+                for (int i = 0; i < rtSlots.MaxRenderTargets; ++i) {
+                    checkColorBinding(rtSlots.ColorRenderTargets[i]);
                 }
-                if (RTSlots.DepthStencil.IsValid()) {
-                    RenderGraphPass::RenderGraphTextureIntent Intent;
-                    Intent.Texture = RTSlots.DepthStencil.Texture;
-                    auto Desc = RTSlots.DepthStencil.Texture->GetDesc();
-                    uint32_t mipSlice = RTSlots.DepthStencil.MipIndex;
-                    if (Desc.MipLevels == 1 && mipSlice == 0) {
+                if (rtSlots.DepthStencil.IsValid()) {
+                    RenderGraphPass::RenderGraphTextureIntent intent;
+                    intent.Texture = rtSlots.DepthStencil.Texture;
+                    auto desc = rtSlots.DepthStencil.Texture->GetDesc();
+                    uint32_t mipSlice = rtSlots.DepthStencil.MipIndex;
+                    if (desc.MipLevels == 1 && mipSlice == 0) {
                         mipSlice = RHISubresourceRange::KAllSubresources;
                     }
-                    uint32_t arraySlice = RTSlots.DepthStencil.ArraySlice;
-                    if (Desc.ArraySize == 1 && arraySlice == 0) {
+                    uint32_t arraySlice = rtSlots.DepthStencil.ArraySlice;
+                    if (desc.ArraySize == 1 && arraySlice == 0) {
                         arraySlice = RHISubresourceRange::KAllSubresources;
                     }
-                    Intent.SubresourceRange = RHISubresourceRange(
+                    intent.SubresourceRange = RHISubresourceRange(
                         mipSlice,
                         arraySlice,
                         RHISubresourceRange::KAllSubresources
                     );
 
-                    Intent.SubresourceRange = RHISubresourceRange(); // whole
+                    intent.SubresourceRange = RHISubresourceRange(); // whole
 
-                    Intent.RequiredAccess = RTSlots.DepthStencil.bWriteDepth ? ERHIResourceAccess::DSVWrite : ERHIResourceAccess::DSVRead;
+                    intent.RequiredAccess = rtSlots.DepthStencil.bWriteDepth ? ERHIResourceAccess::DSVWrite : ERHIResourceAccess::DSVRead;
 
-                    Pass->AddTextureIntent(Intent);
+                    pass->AddTextureIntent(intent);
                 }
 
             }
@@ -1024,18 +1024,18 @@ namespace RenderCore {
         // =========================
     // Texture
     // =========================
-        for (auto& [Key, Access] : FinalTextureStates)
+        for (auto& [Key, Access] : m_FinalTextureStates)
         {
             auto* tex = Key.Texture;
-            if (!tex || !tex->IsExternal)
+            if (!tex || !tex->m_bIsExternal)
                 continue;
 
             RHI::RHITexture* rhiTex = tex->GetRHITexture();
             if (!rhiTex)
                 continue;
 
-            auto it = ExternalTextures.find(rhiTex);
-            if (it == ExternalTextures.end())
+            auto it = m_ExternalTextures.find(rhiTex);
+            if (it == m_ExternalTextures.end())
                 continue;
 
             ExternalTextureEntry& entry = it->second;
@@ -1051,18 +1051,18 @@ namespace RenderCore {
         // =========================
         // Buffer
         // =========================
-        for (auto& [Key, Access] : FinalBufferStates)
+        for (auto& [Key, Access] : m_FinalBufferStates)
         {
             auto* buf = Key.Buffer;
-            if (!buf || !buf->IsExternal)
+            if (!buf || !buf->m_bIsExternal)
                 continue;
 
             RHI::RHIBuffer* rhiBuf = buf->GetRHIBuffer();
             if (!rhiBuf)
                 continue;
 
-            auto it = ExternalBuffers.find(rhiBuf);
-            if (it == ExternalBuffers.end())
+            auto it = m_ExternalBuffers.find(rhiBuf);
+            if (it == m_ExternalBuffers.end())
                 continue;
 
             ExternalBufferEntry& entry = it->second;
@@ -1090,7 +1090,7 @@ namespace RenderCore {
             std::unordered_map<RHI::EQueueType, RHI::RHIContextBase*> CmdContexts;
         };
 
-        std::vector<RecordedGroup> RecordedGroups(ParallelPasses.size());
+        std::vector<RecordedGroup> recordedGroups(m_ParallelPasses.size());
         std::vector<Core::TaskHandle> handles;
 
         RHI::RHIApi* api = GRHIApi;
@@ -1100,13 +1100,13 @@ namespace RenderCore {
         // 1️⃣ 并行录制
         // =========================
         int i = 0;
-        for (auto iter = ParallelPasses.begin(); iter != ParallelPasses.end(); ++iter, ++i)
+        for (auto iter = m_ParallelPasses.begin(); iter != m_ParallelPasses.end(); ++iter, ++i)
         {
             auto group = *iter;
 
-            handles.push_back(taskPool.AddTask([this, api, group, &RecordedGroups, i]()
+            handles.push_back(taskPool.AddTask([this, api, group, &recordedGroups, i]()
                 {
-                    auto& outGroup = RecordedGroups[i];
+                    auto& outGroup = recordedGroups[i];
                     auto& cmdLists = outGroup.CmdLists;
                     auto& cmdContexts = outGroup.CmdContexts;
 
@@ -1120,9 +1120,9 @@ namespace RenderCore {
                             RHI::RHICommandListBase* cmd = nullptr;
 
                             if (q == RHI::EQueueType::Graphics)
-                                cmd = Allocator.Allocate<RHI::RHIGraphicCommandList>(dynamic_cast<RHI::RHIGraphicContex*>(ctx));
+                                cmd = m_Allocator.Allocate<RHI::RHIGraphicCommandList>(dynamic_cast<RHI::RHIGraphicContex*>(ctx));
                             else if (q == RHI::EQueueType::Compute)
-                                cmd = Allocator.Allocate <RHI::RHIComputeCommandList>(dynamic_cast<RHI::RHIComputeContex*>(ctx));
+                                cmd = m_Allocator.Allocate <RHI::RHIComputeCommandList>(dynamic_cast<RHI::RHIComputeContex*>(ctx));
                             cmd->SetImmediate(false);
                             cmd->Begin();
                             cmdLists[q] = cmd;
@@ -1134,8 +1134,8 @@ namespace RenderCore {
                     for (auto* pass : group)
                     {
                         auto q = (RHI::EQueueType)pass->GetPassFlag();
-                        pass->BeginBarrier.Process();
-                        for (auto& t : pass->BeginBarrier.GetTransitions())
+                        pass->_beginBarrier.Process();
+                        for (auto& t : pass->_beginBarrier.GetTransitions())
                         {
                             outGroup.BeginBarriers[q].push_back(t);
                         }
@@ -1148,7 +1148,7 @@ namespace RenderCore {
 
                         if (!transitions.empty())
                         {
-                            void* mem = Allocator.AllocateBytes(RHI::G_RHITransition_TotalSize);
+                            void* mem = m_Allocator.AllocateBytes(RHI::G_RHITransition_TotalSize);
                             RHI::RHITransition* transitionObj = new(mem) RHI::RHITransition();
                             RHI::RHITransitionCreateInfo createInfo;
                             createInfo.Flags = RHI::ERHITransitionCreateFlags::None;
@@ -1180,11 +1180,11 @@ namespace RenderCore {
         // =========================
         // 2️⃣ 顺序提交（带必要同步）
         // =========================
-        std::unordered_map<RHI::EQueueType, uint64_t> Timeline;
-        auto passGroupIter = ParallelPasses.begin();
-        for (int i = 0; i < RecordedGroups.size(); ++i, passGroupIter++)
+        std::unordered_map<RHI::EQueueType, uint64_t> timeline;
+        auto passGroupIter = m_ParallelPasses.begin();
+        for (int i = 0; i < recordedGroups.size(); ++i, passGroupIter++)
         {
-            auto& group = RecordedGroups[i];
+            auto& group = recordedGroups[i];
 
             for (auto& [q, cmd] : group.CmdLists)
             {
@@ -1193,7 +1193,7 @@ namespace RenderCore {
                 }
                 auto* queue = api->GetQueue(q);
                 std::vector<RHI::RHIWaitInfo> waitInfos;
-                for (auto& [otherQ, value] : Timeline)
+                for (auto& [otherQ, value] : timeline)
                 {
                     if (otherQ == q) continue;
 
@@ -1209,13 +1209,13 @@ namespace RenderCore {
                 RHI::RHIFence fence;
                 fence.QueueType = queue->GetType();
                 fence.Value = queue->ExecuteContext({ group.CmdContexts[q] }, waitInfos);
-                Timeline[q] = fence.Value;
+                timeline[q] = fence.Value;
 
                 // 👉 关键：更新 fence
                 for (auto* pass : *passGroupIter)
                 {
-                    auto it = PassLastUseResources.find(pass);
-                    if (it == PassLastUseResources.end())
+                    auto it = m_PassLastUseResources.find(pass);
+                    if (it == m_PassLastUseResources.end())
                         continue;
 
                     for (auto* res : it->second)
@@ -1224,8 +1224,8 @@ namespace RenderCore {
                         {
                             if (tex->GetRHITexture())
                             {
-                                if (!tex->IsExternal) {
-                                    auto transientTarget = RHITextureToTransientTarget[tex->GetRHITexture()];
+                                if (!tex->m_bIsExternal) {
+                                    auto transientTarget = m_RHITextureToTransientTarget[tex->GetRHITexture()];
                                     transientTarget->GetTracker().UpdateLastAccessFence(fence);
                                 }
                                 else {
@@ -1239,8 +1239,8 @@ namespace RenderCore {
                             
                             if (buf->GetRHIBuffer())
                             {
-                                if (!buf->IsExternal) {
-                                    auto transientBuffer = RHIBufferTransientBuffer[buf->GetRHIBuffer()];
+                                if (!buf->m_bIsExternal) {
+                                    auto transientBuffer = m_RHIBufferTransientBuffer[buf->GetRHIBuffer()];
                                     transientBuffer->GetTracker().UpdateLastAccessFence(fence);
                                 }
                                 else {
@@ -1262,18 +1262,18 @@ namespace RenderCore {
         // 收集各 Queue 的 Upload
         //------------------------------------------------------------
 
-        std::vector<PendingBufferUpload> GraphicUploads;
-        std::vector<PendingBufferUpload> ComputeUploads;
+        std::vector<PendingBufferUpload> graphicUploads;
+        std::vector<PendingBufferUpload> computeUploads;
 
-        for (const auto& upload : PendingBufferUploads)
+        for (const auto& upload : m_PendingBufferUploads)
         {
             switch (upload.QueueType)
             {
             case EQueueType::Graphics:
-                GraphicUploads.push_back(upload);
+                graphicUploads.push_back(upload);
                 break;
             case EQueueType::Compute:
-                ComputeUploads.push_back(upload);
+                computeUploads.push_back(upload);
                 break;
 
             default:
@@ -1281,7 +1281,7 @@ namespace RenderCore {
             }
         }
 
-        PendingBufferUploads.clear();
+        m_PendingBufferUploads.clear();
 
         //------------------------------------------------------------
         // Graphic Upload Pass
@@ -1289,14 +1289,14 @@ namespace RenderCore {
 		struct UploadPassParameters
 		{
 		};
-        if (!GraphicUploads.empty())
+        if (!graphicUploads.empty())
         {
-            AddUploadPass(std::move(GraphicUploads), EQueueType::Graphics);
+            AddUploadPass(std::move(graphicUploads), EQueueType::Graphics);
 
         }
-        if (!ComputeUploads.empty())
+        if (!computeUploads.empty())
         {
-            AddUploadPass(std::move(ComputeUploads), EQueueType::Compute);
+            AddUploadPass(std::move(computeUploads), EQueueType::Compute);
         }
     }
     void RenderGraphBuilder::AddUploadPass(std::vector<PendingBufferUpload>&& uploadInfo, EQueueType queueType)
@@ -1314,10 +1314,10 @@ namespace RenderCore {
 			passFlag = EPassFlag::Compute;
 			passName = "ComputeBufferUpload";
 		}
-        RenderGraphParameterStruct ParameterStruct(nullptr, nullptr);
+        RenderGraphParameterStruct parameterStruct(nullptr, nullptr);
 
         auto uploadLamba = [uploads = std::move(uploadInfo)]
-        (RHI::RHICommandListBase& RHICmdList)
+        (RHI::RHICommandListBase& rhiCmdList)
             {
                 for (const auto& upload : uploads)
                 {
@@ -1330,23 +1330,23 @@ namespace RenderCore {
                     region.Offset = 0;
                     region.Size = upload.Size;
                     GRHIApi->UpdateBuffer(
-                        RHICmdList,
+                        rhiCmdList,
                         upload.Buffer->GetRHIBuffer(),
                         upload.Data,
                         region);
                 }
             };
 
-        // 2. ���������� Pass ʵ�� (����֮ǰ����� RenderGraphLambdaPass)
-        auto Pass = new RenderGraphLambdaPass<UploadPassParameters, decltype(uploadLamba)>(
+        // Create the upload pass instance.
+        auto pass = new RenderGraphLambdaPass<UploadPassParameters, decltype(uploadLamba)>(
             passName,
             passFlag,
-            ParameterStruct,
+            parameterStruct,
             std::move(uploadLamba)
         );
         for (auto& upload : uploadInfo) {
-            Pass->AddBufferIntent({ upload.Buffer, ERHIResourceAccess::TransferDest });
+            pass->AddBufferIntent({ upload.Buffer, ERHIResourceAccess::TransferDest });
         }
-        Passes.insert(Passes.begin(), Pass);
+        m_Passes.insert(m_Passes.begin(), pass);
     }
 } // namespace RenderCore

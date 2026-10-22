@@ -36,11 +36,11 @@ namespace RenderCore {
 
         ShaderParameterAllocation() = default;
 
-        ShaderParameterAllocation(uint16_t InBufferIndex, uint16_t InBaseIndex, uint16_t InSize, EShaderParameterType InType)
-            : BufferIndex(InBufferIndex)
-            , BaseIndex(InBaseIndex)
-            , Size(InSize)
-            , Type(InType)
+        ShaderParameterAllocation(uint16_t inBufferIndex, uint16_t inBaseIndex, uint16_t inSize, EShaderParameterType inType)
+            : BufferIndex(inBufferIndex)
+            , BaseIndex(inBaseIndex)
+            , Size(inSize)
+            , Type(inType)
         {
         }
     };
@@ -52,59 +52,59 @@ namespace RenderCore {
         ShaderParameterAllocationMap() = default;
 
         // 查找参数
-        std::optional<ShaderParameterAllocation> FindParameterAllocation(const std::string& Name) const
+        std::optional<ShaderParameterAllocation> FindParameterAllocation(const std::string& name) const
         {
-            auto it = ParameterMap.find(Name);
-            if (it != ParameterMap.end())
+            auto it = m_ParameterMap.find(name);
+            if (it != m_ParameterMap.end())
                 return it->second;
             return std::nullopt;
         }
 
         // 添加参数
-        void AddParameterAllocation(const std::string& Name, uint16_t BufferIndex, uint16_t BaseIndex, uint16_t Size, EShaderParameterType Type)
+        void AddParameterAllocation(const std::string& name, uint16_t bufferIndex, uint16_t baseIndex, uint16_t size, EShaderParameterType type)
         {
-            ParameterMap[Name] = ShaderParameterAllocation(BufferIndex, BaseIndex, Size, Type);
+            m_ParameterMap[name] = ShaderParameterAllocation(bufferIndex, baseIndex, size, type);
         }
 
         // 移除参数
-        void RemoveParameterAllocation(const std::string& Name)
+        void RemoveParameterAllocation(const std::string& name)
         {
-            ParameterMap.erase(Name);
+            m_ParameterMap.erase(name);
         }
 
         // 判断参数是否存在
-        bool ContainsParameterAllocation(const std::string& Name) const
+        bool ContainsParameterAllocation(const std::string& name) const
         {
-            return ParameterMap.find(Name) != ParameterMap.end();
+            return m_ParameterMap.find(name) != m_ParameterMap.end();
         }
 
         // 获取同类型参数列表
-        std::vector<std::string> GetAllParameterNamesOfType(EShaderParameterType Type) const
+        std::vector<std::string> GetAllParameterNamesOfType(EShaderParameterType type) const
         {
-            std::vector<std::string> Names;
-            for (const auto& kv : ParameterMap)
+            std::vector<std::string> names;
+            for (const auto& kv : m_ParameterMap)
             {
-                if (kv.second.Type == Type)
-                    Names.push_back(kv.first);
+                if (kv.second.Type == type)
+                    names.push_back(kv.first);
             }
-            return Names;
+            return names;
         }
 
         // 获取所有参数名
         std::vector<std::string> GetAllParameterNames() const
         {
-            std::vector<std::string> Names;
-            for (const auto& kv : ParameterMap)
-                Names.push_back(kv.first);
-            return Names;
+            std::vector<std::string> names;
+            for (const auto& kv : m_ParameterMap)
+                names.push_back(kv.first);
+            return names;
         }
 
         const std::unordered_map<std::string, ShaderParameterAllocation>& GetParameterMap() const {
-            return ParameterMap;
+            return m_ParameterMap;
         }
 
     private:
-        std::unordered_map<std::string, ShaderParameterAllocation> ParameterMap;
+        std::unordered_map<std::string, ShaderParameterAllocation> m_ParameterMap;
     };
 
 
@@ -178,13 +178,13 @@ namespace RenderCore {
         const std::vector<char>& Code;
         const ShaderParameterAllocationMap& ParameterMap;
         uint32_t PermutationId;
-        ShaderCompiledInitializer(const ShaderType* Type,
-            const std::vector<char>& Code,
-            const ShaderParameterAllocationMap& ParameterMap,
-            uint32_t PermutationId):Type(Type) , Code(Code), ParameterMap(ParameterMap), PermutationId(PermutationId) {}
+        ShaderCompiledInitializer(const ShaderType* type,
+            const std::vector<char>& code,
+            const ShaderParameterAllocationMap& parameterMap,
+            uint32_t permutationId):Type(type) , Code(code), ParameterMap(parameterMap), PermutationId(permutationId) {}
     };
 
-    // ShaderType ��
+    // Shader type description and registration.
     struct RENDERCORE_API ShaderType
     {
 public:
@@ -209,28 +209,28 @@ public:
     EShaderTypeFlag Flag = EShaderTypeFlag::Global;
 
     ShaderType(
-        const std::string& InName,
-        const std::string& InSourceFile,
-        const std::string& InEntryPoint,
-        RHI::ERHIShaderFrequency InFrequency,
-        ModifyCompilationEnvironmentFuncType InModifyCompilationEnvironment,
-        ShouldCompilePermutationFuncType InShouldCompilePermutation,
-        ConstructCompiledFuncType InConstructCompiled,
-        int32_t InTotalPermutationCount,
-        const ShaderParametersMetadata* InRootParametersMetadata,
-        EShaderTypeFlag InFlag
+        const std::string& inName,
+        const std::string& inSourceFile,
+        const std::string& inEntryPoint,
+        RHI::ERHIShaderFrequency inFrequency,
+        ModifyCompilationEnvironmentFuncType inModifyCompilationEnvironment,
+        ShouldCompilePermutationFuncType inShouldCompilePermutation,
+        ConstructCompiledFuncType inConstructCompiled,
+        int32_t inTotalPermutationCount,
+        const ShaderParametersMetadata* inRootParametersMetadata,
+        EShaderTypeFlag inFlag
     )
         :
-        Name(InName),
-        SourceFile(InSourceFile),
-        EntryPoint(InEntryPoint),
-        Frequency(InFrequency),
-        ModifyCompilationEnvironment(InModifyCompilationEnvironment),
-        ShouldCompilePermutation(InShouldCompilePermutation),
-        ConstructCompiled(InConstructCompiled),
-        TotalPermutationCount(InTotalPermutationCount),
-		RootParametersMetadata(InRootParametersMetadata),
-        Flag(InFlag)
+        Name(inName),
+        SourceFile(inSourceFile),
+        EntryPoint(inEntryPoint),
+        Frequency(inFrequency),
+        ModifyCompilationEnvironment(inModifyCompilationEnvironment),
+        ShouldCompilePermutation(inShouldCompilePermutation),
+        ConstructCompiled(inConstructCompiled),
+        TotalPermutationCount(inTotalPermutationCount),
+		RootParametersMetadata(inRootParametersMetadata),
+        Flag(inFlag)
     {
         Register(this);
     }
@@ -238,8 +238,8 @@ public:
     // 全局注册表相关静态方法
     // flag -> (name -> ShaderType*)
     static std::unordered_map<EShaderTypeFlag, std::unordered_map<std::string, ShaderType*>>& GetRegisterMap() {
-        static std::unordered_map<EShaderTypeFlag, std::unordered_map<std::string, ShaderType*>> Map;
-        return Map;
+        static std::unordered_map<EShaderTypeFlag, std::unordered_map<std::string, ShaderType*>> map;
+        return map;
     }
     // 注册到指定 flag 分组
     static void Register(const std::string& name, ShaderType* type, EShaderTypeFlag flag) {
@@ -270,9 +270,9 @@ public:
         return result;
     }
     private:
-        static void Register(ShaderType* Type)
+        static void Register(ShaderType* type)
         {
-            GetRegisterMap()[Type->Flag][Type->Name] = Type;
+            GetRegisterMap()[type->Flag][type->Name] = type;
         }
 };
 
@@ -282,32 +282,32 @@ public:
     // ShaderKey
     struct RENDERCORE_API ShaderKey
     {
-        // Shader ����ָ��
+        // Shader type used by this key.
         ShaderType* ShaderTypeP;
 
-        // Shader ����ƽ̨
+        // Target shader platform.
         RHI::ERHIShaderPlatform Platform;
 
-        // Shader permutation ID�������/���Ա��壩
+        // Shader permutation identifier.
         ShaderPermutationId PermutationId;
 
-        // VertexFactory ����ָ�루�� VertexShader �� MeshShader ��Ч��
+        // Vertex factory type for mesh material shaders.
         VertexFactoryType* VFType = nullptr;
 
-        // ���캯��
+        // Construct a shader lookup key.
         ShaderKey(
-            ShaderType* ShaderType,
+            ShaderType* shaderType,
             RHI::ERHIShaderPlatform platform,
             ShaderPermutationId permId,
             VertexFactoryType* vfType = nullptr)
-            : ShaderTypeP(ShaderType)
+            : ShaderTypeP(shaderType)
             , Platform(platform)
             , PermutationId(permId)
             , VFType(vfType)
         {
         }
 
-        // �Ƚ������������ map / set ����
+        // Compare complete keys for map and set lookup.
         bool operator==(const ShaderKey& other) const
         {
             return ShaderTypeP == other.ShaderTypeP &&
@@ -316,7 +316,7 @@ public:
                 VFType == other.VFType;
         }
 
-        // ���ɹ�ϣֵ������ unordered_map / unordered_set
+        // Hash the key for unordered containers.
         size_t GetHash() const
         {
             size_t hash = std::hash<int>()(static_cast<int>(Platform));
@@ -340,9 +340,9 @@ public:
     virtual ~Shader();
 
     // Accessors
-    const std::string& GetName() const { return Name; }
-    const std::vector<char>& GetShaderSourceCode() const { return ShaderSourceCode; }
-    ERHIShaderFrequency GetShaderFrequency() const { return ShaderType; }
+    const std::string& GetName() const { return _name; }
+    const std::vector<char>& GetShaderSourceCode() const { return _shaderSourceCode; }
+    ERHIShaderFrequency GetShaderFrequency() const { return _shaderType; }
 
     template<typename T>
     const T* CastGetRHIShader() const
@@ -350,44 +350,44 @@ public:
         return static_cast<const T*>(GetRHIShader());
     }
     // RHI Resource
-    RHIShader* GetRHIShader() const { return RHIShader.get(); }
-    void SetRHIShader(RHIShaderSP shader) { RHIShader = shader; }
+    RHIShader* GetRHIShader() const { return _rhiShader.get(); }
+    void SetRHIShader(RHIShaderSP shader) { _rhiShader = shader; }
 
     // Compilation (Called by the RenderGraphBuilder)
     bool Compile();
 
 
 
-    static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters& ,ShaderCompilerEnvironment& Env) {}
+    static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters& ,ShaderCompilerEnvironment& env) {}
 
     static bool ShouldCompilePermutation(const ShaderPermutationParameters& param) { return true; }
 
-    const ShaderParameterBindingInfo& GetParameterBindings() const { return Bindings; }
+    const ShaderParameterBindingInfo& GetParameterBindings() const { return _bindings; }
 
 protected:
-    void InitShaderBindings(const ShaderParametersMetadata* Metadata,
-        const ShaderParameterAllocationMap& InParameterMap);
+    void InitShaderBindings(const ShaderParametersMetadata* metadata,
+        const ShaderParameterAllocationMap& inParameterMap);
     void ProcessMetadataRecursive(
-        const ShaderParametersMetadata& Metadata,
-        const std::string& Prefix,
-        const ShaderParameterAllocationMap& ParameterMap,
-        const uint64_t MetadataOffset,
-        ShaderParameterBindingInfo& OutBindings);
+        const ShaderParametersMetadata& metadata,
+        const std::string& prefix,
+        const ShaderParameterAllocationMap& parameterMap,
+        const uint64_t metadataOffset,
+        ShaderParameterBindingInfo& outBindings);
 
     void InitShaderRHI(ERHIShaderFrequency frequency, const std::vector<char>& shaderSourceCode);
     // Shader Name (for debugging and identification)
-    std::string Name;
+    std::string _name;
 
     // Shader Source Code
-    std::vector<char> ShaderSourceCode;
+    std::vector<char> _shaderSourceCode;
 
     // Shader Type (Vertex, Fragment, Compute, etc.)
-    ERHIShaderFrequency ShaderType;
+    ERHIShaderFrequency _shaderType;
 
     // RHI Shader Resource
-    RHIShaderSP RHIShader;
+    RHIShaderSP _rhiShader;
 
-    ShaderParameterBindingInfo Bindings;
+    ShaderParameterBindingInfo _bindings;
 
 public:
 

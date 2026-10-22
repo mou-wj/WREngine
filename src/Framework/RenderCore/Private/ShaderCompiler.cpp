@@ -28,9 +28,9 @@ namespace RenderCore {
 
     namespace
     {
-        std::string GetPathFileNameWithoutSuffix(const std::string& Path)
+        std::string GetPathFileNameWithoutSuffix(const std::string& path)
         {
-            auto fileName = std::filesystem::path(Path).filename().string();
+            auto fileName = std::filesystem::path(path).filename().string();
             auto pos = fileName.find_last_of('.');
 			if (pos != std::string::npos)
 			{
@@ -179,29 +179,29 @@ namespace RenderCore {
     class ShaderVirtualFileSystem {
     public:
         // 1. 注册虚拟文件（例如由 Generator 生成的参数代码）
-        void RegisterVirtualFile(const std::string& VirtualPath, std::string Content) {
-            VirtualFiles[VirtualPath] = std::move(Content);
+        void RegisterVirtualFile(const std::string& virtualPath, std::string content) {
+            m_VirtualFiles[virtualPath] = std::move(content);
         }
 
         // 2. 注册物理路径映射（将 /Engine/ 映射到磁盘实际路径）
-        void RegisterMountPoint(const std::string& VirtualDir, const std::string& PhysicalDir) {
-            MountPoints[VirtualDir] = PhysicalDir;
+        void RegisterMountPoint(const std::string& virtualDir, const std::string& physicalDir) {
+            m_MountPoints[virtualDir] = physicalDir;
         }
 
         // 3. 核心接口：获取文件内容（供编译器后端调用）
-        std::optional<std::string> GetFileContent(const std::string& Path) const {
+        std::optional<std::string> GetFileContent(const std::string& path) const {
             // A. 先检查是否是内存中的虚拟文件
-            auto it = VirtualFiles.find(Path);
-            if (it != VirtualFiles.end()) {
+            auto it = m_VirtualFiles.find(path);
+            if (it != m_VirtualFiles.end()) {
                 return it->second;
             }
 
             // B. 检查物理挂载点
-            for (const auto& [VirtualPrefix, PhysicalBase] : MountPoints) {
-                if (Path.find(VirtualPrefix) == 0) {
-                    std::string RelativePath = Path.substr(VirtualPrefix.length());
-                    std::string FullPhysicalPath = PhysicalBase + "/" + RelativePath;
-                    return ReadPhysicalFile(FullPhysicalPath);
+            for (const auto& [VirtualPrefix, PhysicalBase] : m_MountPoints) {
+                if (path.find(VirtualPrefix) == 0) {
+                    std::string relativePath = path.substr(VirtualPrefix.length());
+                    std::string fullPhysicalPath = PhysicalBase + "/" + relativePath;
+                    return ReadPhysicalFile(fullPhysicalPath);
                 }
             }
 
@@ -210,13 +210,13 @@ namespace RenderCore {
 
 
     private:
-        std::map<std::string, std::string> VirtualFiles;
-        std::map<std::string, std::string> MountPoints;
+        std::map<std::string, std::string> m_VirtualFiles;
+        std::map<std::string, std::string> m_MountPoints;
 
-        std::optional<std::string> ReadPhysicalFile(const std::string& FullPath) const {
-            std::ifstream File(FullPath);
-            if (!File.is_open()) return std::nullopt;
-            return std::string((std::istreambuf_iterator<char>(File)), std::istreambuf_iterator<char>());
+        std::optional<std::string> ReadPhysicalFile(const std::string& fullPath) const {
+            std::ifstream file(fullPath);
+            if (!file.is_open()) return std::nullopt;
+            return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         }
     };
     ShaderVirtualFileSystem GShaderVirtualFileSystem;
@@ -231,29 +231,29 @@ namespace RenderCore {
 
         // 用户调用的接口：只返回字符串
         std::string GenerateOrGetShaderParameterMetaDataSF(const ShaderParametersMetadata& root) {
-            std::string VirtualPath = GetVirtualPath(root);
+            std::string virtualPath = GetVirtualPath(root);
 
-            auto CachedContent = GShaderVirtualFileSystem.GetFileContent(VirtualPath);
-            if (CachedContent.has_value()) {
-                return CachedContent.value();
+            auto cachedContent = GShaderVirtualFileSystem.GetFileContent(virtualPath);
+            if (cachedContent.has_value()) {
+                return cachedContent.value();
             }
 
-            std::stringstream Code;
+            std::stringstream code;
 
-            uint32_t TSlot = 0;
-            uint32_t SSlot = 0;
-            uint32_t USlot = 0;
-            uint32_t BSlot = 0;
+            uint32_t tSlot = 0;
+            uint32_t sSlot = 0;
+            uint32_t uSlot = 0;
+            uint32_t bSlot = 0;
 
-            Code << "// Generated for " << root.GetStructName() << "\n\n";
+            code << "// Generated for " << root.GetStructName() << "\n\n";
 
             EmitIncludes(
                 root,
-                Code);
+                code);
 
             EmitNesteds(
                 root,
-                Code);
+                code);
 
 
             // ================================
@@ -267,59 +267,59 @@ namespace RenderCore {
             EmitUniformMembers(root, "", cbufferCode);
             std::string cbufferMemberResult = cbufferCode.str();
             if (!cbufferMemberResult.empty()) {
-                Code << "cbuffer " << root.GetStructName()
+                code << "cbuffer " << root.GetStructName()
                     << "\n{\n";
-                Code << cbufferMemberResult;
-                Code << "};\n\n";
+                code << cbufferMemberResult;
+                code << "};\n\n";
             }
             // ================================
             // ⭐ 2. 生成 Resource（SRV/UAV/Sampler）
             // ================================
-            EmitResources(root, "", Code);
+            EmitResources(root, "", code);
 
-            std::string Result = Code.str();
+            std::string result = code.str();
 
             //LOG_INFO("%s", Result.c_str());
-            GShaderVirtualFileSystem.RegisterVirtualFile(VirtualPath, Result);
+            GShaderVirtualFileSystem.RegisterVirtualFile(virtualPath, result);
 
-            return Result;
+            return result;
         }
 
 
     private:
         void EmitIncludes(
-            const ShaderParametersMetadata& Root,
-            std::stringstream& OutCode)
+            const ShaderParametersMetadata& root,
+            std::stringstream& outCode)
         {
             std::unordered_set<std::string>
-                IncludedFiles;
-            for (auto& Member : Root.Members)
+                includedFiles;
+            for (auto& member : root.Members)
             {
-                auto* StructMeta =
-                    Member.StructMetadata;
-                if (!StructMeta)
+                auto* structMeta =
+                    member.StructMetadata;
+                if (!structMeta)
                     continue;
-                if (Member.IsIncludeStruct()) {
-                    EmitIncludes(*StructMeta, OutCode);
+                if (member.IsIncludeStruct()) {
+                    EmitIncludes(*structMeta, outCode);
                 }
-                if (!Member.IsReferenceStruct())
+                if (!member.IsReferenceStruct())
                     continue;
 
-                std::string Path =
+                std::string path =
                     GetVirtualPath(
-                        *StructMeta);
+                        *structMeta);
 
-                if (IncludedFiles.contains(
-                    Path))
+                if (includedFiles.contains(
+                    path))
                 {
                     return;
                 }
 
-                IncludedFiles.insert(
-                    Path);
+                includedFiles.insert(
+                    path);
 
                 GenerateOrGetShaderParameterMetaDataSF(
-                    *StructMeta);
+                    *structMeta);
 
                 //OutCode
                 //    << "#include \""
@@ -329,63 +329,63 @@ namespace RenderCore {
             //OutCode << "\n";
         }
         void EmitNesteds(
-            const ShaderParametersMetadata& Root,
-            std::stringstream& OutCode)
+            const ShaderParametersMetadata& root,
+            std::stringstream& outCode)
         {
             std::unordered_set<std::string>
-                EmittedStructs;
+                emittedStructs;
 
             EmitNestedRecursive(
-                Root,
-                OutCode,
-                EmittedStructs);
+                root,
+                outCode,
+                emittedStructs);
 
-            OutCode << "\n";
+            outCode << "\n";
         }
 
         void EmitNestedRecursive(
-            const ShaderParametersMetadata& Root,
-            std::stringstream& OutCode,
+            const ShaderParametersMetadata& root,
+            std::stringstream& outCode,
             std::unordered_set<std::string>&
-            Emitted)
+            emitted)
         {
-            for (const auto& Member :
-                Root.Members)
+            for (const auto& member :
+                root.Members)
             {
-                auto* StructMeta =
-                    Member.StructMetadata;
+                auto* structMeta =
+                    member.StructMetadata;
 
-                if (!StructMeta || Member.IsReferenceStruct())
+                if (!structMeta || member.IsReferenceStruct())
                 {
                     continue;
                 }
 
                 // include 只递归
-                if (Member.IsIncludeStruct())
+                if (member.IsIncludeStruct())
                 {
                     EmitNestedRecursive(
-                        *StructMeta,
-                        OutCode,
-                        Emitted);
+                        *structMeta,
+                        outCode,
+                        emitted);
 
                     continue;
                 }
 
                 // 这里只剩 nested
-                if (!(Member.IsNestedStruct() || Member.BaseType == EShaderParameterBaseType::RDGBuffer_SRV
-                    || Member.BaseType == EShaderParameterBaseType::RHI_SRV || Member.BaseType == EShaderParameterBaseType::RHI_UAV))
+                if (!(member.IsNestedStruct() || member.BaseType == EShaderParameterBaseType::RDGBuffer_SRV
+                    || member.BaseType == EShaderParameterBaseType::RHI_SRV || member.BaseType == EShaderParameterBaseType::RHI_UAV))
                     
                 {
                     continue;
                 }
 
                 const std::string
-                    StructName =
-                    StructMeta
+                    structName =
+                    structMeta
                     ->GetStructName();
 
-                if (Emitted.contains(
-                    StructName))
+                if (emitted.contains(
+                    structName))
                 {
                     continue;
                 }
@@ -394,23 +394,23 @@ namespace RenderCore {
                 // 1. 先展开依赖
                 // ==================
                 EmitNestedRecursive(
-                    *StructMeta,
-                    OutCode,
-                    Emitted);
+                    *structMeta,
+                    outCode,
+                    emitted);
 
                 // ==================
                 // 2. 再输出自己
                 // ==================
-                Emitted.insert(
-                    StructName);
-                OutCode
+                emitted.insert(
+                    structName);
+                outCode
                     << "struct "
-                    << StructName
+                    << structName
                     << "\n{\n";
                 EmitUniformMembers(
-                    *StructMeta,"",
-                    OutCode);
-                OutCode << "};\n\n";
+                    *structMeta,"",
+                    outCode);
+                outCode << "};\n\n";
             }
         }
        
@@ -418,33 +418,33 @@ namespace RenderCore {
    // ⭐ Uniform flatten（核心）
    // ============================================
         void EmitUniformMembers(
-            const ShaderParametersMetadata& Metadata,
-            const std::string& Prefix,
-            std::stringstream& OutCode)
+            const ShaderParametersMetadata& metadata,
+            const std::string& prefix,
+            std::stringstream& outCode)
         {
-            for (const auto& Member : Metadata.GetMembers())
+            for (const auto& member : metadata.GetMembers())
             {
-                if (Member.IsResource())
+                if (member.IsResource())
                     continue;
 
-                std::string Name = Member.Name;
+                std::string name = member.Name;
 
-                if (Member.IsIncludeStruct())
+                if (member.IsIncludeStruct())
                 {
                     // ⭐递归展开 struct
-                    EmitUniformMembers(*Member.StructMetadata, Name, OutCode);
+                    EmitUniformMembers(*member.StructMetadata, name, outCode);
                 }
-                else if(Member.IsUniformDataMember())
+                else if(member.IsUniformDataMember())
                 {
-                    std::string TypeName = MapNumericType(Member);
+                    std::string typeName = MapNumericType(member);
 
-                    std::string ArraySuffix;
-                    if (Member.NumElements > 0)
+                    std::string arraySuffix;
+                    if (member.NumElements > 0)
                     {
-                        ArraySuffix = "[" + std::to_string(Member.NumElements) + "]";
+                        arraySuffix = "[" + std::to_string(member.NumElements) + "]";
                     }
 
-                    OutCode << "    " << TypeName << " " << Name << ArraySuffix << ";\n";
+                    outCode << "    " << typeName << " " << name << arraySuffix << ";\n";
                 }
             }
         }
@@ -453,30 +453,30 @@ namespace RenderCore {
         // ⭐ Resource flatten（SRV/UAV/Sampler）
         // ============================================
         void EmitResources(
-            const ShaderParametersMetadata& Metadata,
-            const std::string& Prefix,
-            std::stringstream& OutCode)
+            const ShaderParametersMetadata& metadata,
+            const std::string& prefix,
+            std::stringstream& outCode)
         {
-            for (const auto& Member : Metadata.GetMembers())
+            for (const auto& member : metadata.GetMembers())
             {
-                std::string Name = Member.Name;
+                std::string name = member.Name;
 
-                if (Member.IsResource())
+                if (member.IsResource())
                 {
 
-                    std::string ArraySuffix;
-                    if (Member.NumElements > 0)
+                    std::string arraySuffix;
+                    if (member.NumElements > 0)
                     {
-                        ArraySuffix = "[" + std::to_string(Member.NumElements) + "]";
+                        arraySuffix = "[" + std::to_string(member.NumElements) + "]";
                     }
-                    OutCode << MapResourceType(Member)
-                        << " " << Name << ArraySuffix
+                    outCode << MapResourceType(member)
+                        << " " << name << arraySuffix
                         << ";\n";
                 }
-                else if (Member.IsIncludeStruct())
+                else if (member.IsIncludeStruct())
                 {
                     // ⭐递归展开资源
-                    EmitResources(*Member.StructMetadata, Name, OutCode);
+                    EmitResources(*member.StructMetadata, name, outCode);
                 }
             }
         }
@@ -507,34 +507,34 @@ namespace RenderCore {
             return std::string("row_major ") + base + std::to_string(member.NumRows) + "x" + std::to_string(member.NumColumns);
         }
 
-        std::string MapResourceType(const ShaderParametersMetadata::Member& Member)
+        std::string MapResourceType(const ShaderParametersMetadata::Member& member)
         {
-            return Member.TypeName;
+            return member.TypeName;
         }
 
     };
 
     ShaderParameterSFGenerator GShaderParameterSFGenerator;
 struct SPIRVPackSource {
-    std::vector<uint32_t> *spirvCode;
-	spirv_cross::Compiler *compiler;
-    ERHIShaderFrequency frequency;
-    std::string entryPoint;
+    std::vector<uint32_t> *SpirvCode;
+	spirv_cross::Compiler *Compiler;
+    ERHIShaderFrequency Frequency;
+    std::string EntryPoint;
 };
 struct GLSLPackSource
 {
     std::string GLSLCode;
-    spirv_cross::CompilerGLSL* compiler = nullptr;
-    RHI::ERHIShaderFrequency frequency = RHI::ERHIShaderFrequency::Unknown;
-    std::string entryPoint;
+    spirv_cross::CompilerGLSL* Compiler = nullptr;
+    RHI::ERHIShaderFrequency Frequency = RHI::ERHIShaderFrequency::Unknown;
+    std::string EntryPoint;
 };
 struct HLSLPackSource
 {
     std::vector<char> DXILCode;
-    RHI::ERHIShaderFrequency frequency = RHI::ERHIShaderFrequency::Unknown;
-    std::string entryPoint;
+    RHI::ERHIShaderFrequency Frequency = RHI::ERHIShaderFrequency::Unknown;
+    std::string EntryPoint;
 };
-std::string ShaderCompiler::ShaderSourceDirectory = "";
+std::string ShaderCompiler::m_ShaderSourceDirectory = "";
 
 ShaderCompiler::ShaderCompiler()
 {
@@ -586,14 +586,14 @@ std::string ShaderCompiler::GenerateOrGetShaderPrameterMetaDataSF(const ShaderPa
 }
 
 
-std::optional<std::string> ShaderCompiler::GetFileContent(const std::string& Path)
+std::optional<std::string> ShaderCompiler::GetFileContent(const std::string& path)
 {
-    return GShaderVirtualFileSystem.GetFileContent(Path);
+    return GShaderVirtualFileSystem.GetFileContent(path);
 }
 
 bool ShaderCompiler::LoadShaderSource(const ShaderCompileInput& input, std::string& outSource)
 {
-    // �ȼ�� Environment.VirtualIncludes
+    // Check virtual includes supplied by the compilation environment first.
     auto it = input.Environment.VirtualIncludes.find(input.VirtualSourceFilePath);
     if (it != input.Environment.VirtualIncludes.end())
     {
@@ -601,7 +601,7 @@ bool ShaderCompiler::LoadShaderSource(const ShaderCompileInput& input, std::stri
         return true;
     }
 
-    // ���Դ� ShaderSourceDirectory + VirtualSourceFilePath ��ȡ
+    // Read the virtual source path relative to the shader source root.
     std::string fullPath = Core::GetShaderFilesRootDir() + input.VirtualSourceFilePath;
     std::ifstream file(fullPath, std::ios::in | std::ios::binary);
     if (!file.is_open())
@@ -616,17 +616,17 @@ bool ShaderCompiler::LoadShaderSource(const ShaderCompileInput& input, std::stri
 bool ShaderCompiler::PreprocessSource(const ShaderCompileInput& input, std::string& outSource, std::vector<std::string>& outIncludedFiles)
 {
     std::string src;
-    // 1. ��ȡ shader Դ
+    // Load the shader source.
     if (!LoadShaderSource(input, src))
         return false;
 
-    // 2. ʹ�� ExpandIncludes չ������ include
-    std::set<std::string> includeStack; // ����ѭ�� include ���
+    // Expand source includes.
+    std::set<std::string> includeStack; // Track the include stack to detect cycles.
     std::set<std::string> includeFiles;
     if (!ExpandIncludes(src, input.Environment, outSource, outIncludedFiles, 16, &includeStack,&includeFiles))
         return false;
 
-    // 3. Ӧ�ú궨��
+    // Apply compile-time macro definitions.
     ApplyMacros(outSource, input.Environment.Definitions);
     //LOG_INFO("Preprocess shader source: %s", outSource.c_str());
     return true;
@@ -752,7 +752,7 @@ void ShaderCompiler::ApplyMacros(std::string& source, const std::map<std::string
 void ShaderCompiler::CompileToSPIRV(const std::string& preprocessedSource, const ShaderCompileInput& input, ShaderCompilationOutput& out)
 {
     out.Platform = ERHIShaderPlatform::Vulkan;
-    out.Success = false;
+    out.bSuccess = false;
     out.PackedBinaryData.clear();
 
     std::string setId = "0";
@@ -777,7 +777,7 @@ void ShaderCompiler::CompileToSPIRV(const std::string& preprocessedSource, const
         return;
     }
 
-    auto HasFlag = [&](EShaderCompileFlags flag)
+    auto hasFlag = [&](EShaderCompileFlags flag)
         {
             return (static_cast<uint32_t>(input.Flags) & static_cast<uint32_t>(flag)) != 0;
         };
@@ -792,21 +792,21 @@ void ShaderCompiler::CompileToSPIRV(const std::string& preprocessedSource, const
     std::vector<std::wstring> argStorage;
     argStorage.reserve(64);
     std::vector<LPCWSTR> dxcArgs;
-    auto AddArg = [&](const std::wstring& arg)
+    auto addArg = [&](const std::wstring& arg)
         {
             argStorage.push_back(arg);
             dxcArgs.push_back(argStorage.back().c_str());
         };
 
-    AddArg(L"-spirv");
-    AddArg(L"-fspv-target-env=vulkan1.3");
-    AddArg(L"-fvk-use-dx-layout");
-    AddArg(L"-fvk-auto-shift-bindings");
-    AddArg(L"-fvk-bind-globals"); AddArg(L"10"); AddArg(ToWide(setId));
-    AddArg(L"-fvk-b-shift"); AddArg(L"100"); AddArg(ToWide(setId));
-    AddArg(L"-fvk-t-shift"); AddArg(L"200"); AddArg(ToWide(setId));
-    AddArg(L"-fvk-s-shift"); AddArg(L"300"); AddArg(ToWide(setId));
-    AddArg(L"-fvk-u-shift"); AddArg(L"400"); AddArg(ToWide(setId));
+    addArg(L"-spirv");
+    addArg(L"-fspv-target-env=vulkan1.3");
+    addArg(L"-fvk-use-dx-layout");
+    addArg(L"-fvk-auto-shift-bindings");
+    addArg(L"-fvk-bind-globals"); addArg(L"10"); addArg(ToWide(setId));
+    addArg(L"-fvk-b-shift"); addArg(L"100"); addArg(ToWide(setId));
+    addArg(L"-fvk-t-shift"); addArg(L"200"); addArg(ToWide(setId));
+    addArg(L"-fvk-s-shift"); addArg(L"300"); addArg(ToWide(setId));
+    addArg(L"-fvk-u-shift"); addArg(L"400"); addArg(ToWide(setId));
 
     std::vector<uint32_t> spirv;
 	CompileHLSLToSPIRV(preprocessedSource, input, argStorage, out, spirv);
@@ -815,19 +815,19 @@ void ShaderCompiler::CompileToSPIRV(const std::string& preprocessedSource, const
     }
 
     spirv_cross::Compiler compiler(spirv);
-    // 6. ʹ�� SPIRV-Cross ������Դ
+    // Reflect resources through SPIRV-Cross.
     ReflectParameterMapFromSPIRV(&compiler, out.ParameterMap);
 
 
-    // 6. ������
+    // Store the compiled SPIR-V binary.
     out.PackedBinaryData.resize(spirv.size() * sizeof(uint32_t));
     memcpy(out.PackedBinaryData.data(), spirv.data(), spirv.size() * sizeof(uint32_t));
 
     SPIRVPackSource packSource;
-    packSource.compiler = &compiler;
-    packSource.spirvCode = &spirv;
-    packSource.frequency = input.Frequency;
-    packSource.entryPoint = input.EntryPoint;
+    packSource.Compiler = &compiler;
+    packSource.SpirvCode = &spirv;
+    packSource.Frequency = input.Frequency;
+    packSource.EntryPoint = input.EntryPoint;
 
     SPIRVCompiledBinaryResultPacker packer;
     std::vector<char> packedData;
@@ -835,14 +835,14 @@ void ShaderCompiler::CompileToSPIRV(const std::string& preprocessedSource, const
     if (packer.Pack(&packSource, packedData))
     {
         out.PackedBinaryData = std::move(packedData);
-        out.Success = true;
+        out.bSuccess = true;
     }
 }
 
 void ShaderCompiler::CompileToDirectX(const std::string& preprocessedSource, const ShaderCompileInput& input, ShaderCompilationOutput& out)
 {
     out.Platform = ERHIShaderPlatform::D3D12;
-    out.Success = false;
+    out.bSuccess = false;
     out.PackedBinaryData.clear();
 
     std::string targetProfile;
@@ -881,7 +881,7 @@ void ShaderCompiler::CompileToDirectX(const std::string& preprocessedSource, con
     std::vector<std::wstring> argStorage;
     argStorage.reserve(64);
     std::vector<LPCWSTR> dxcArgs;
-    auto AddArg = [&](const std::wstring& arg)
+    auto addArg = [&](const std::wstring& arg)
         {
             argStorage.push_back(arg);
             dxcArgs.push_back(argStorage.back().c_str());
@@ -889,34 +889,34 @@ void ShaderCompiler::CompileToDirectX(const std::string& preprocessedSource, con
 
     if (targetProfile.rfind("lib_", 0) != 0)
     {
-        AddArg(L"-E");
-        AddArg(ToWide(input.EntryPoint));
+        addArg(L"-E");
+        addArg(ToWide(input.EntryPoint));
     }
     if (targetProfile.rfind("lib_", 0) == 0)
     {
-        AddArg(L"-auto-binding-space");
-        AddArg(std::to_wstring(static_cast<uint32_t>(input.Frequency)));
+        addArg(L"-auto-binding-space");
+        addArg(std::to_wstring(static_cast<uint32_t>(input.Frequency)));
     }
-    AddArg(L"-T");
-    AddArg(ToWide(targetProfile));
+    addArg(L"-T");
+    addArg(ToWide(targetProfile));
 
-    auto HasFlag = [&](EShaderCompileFlags flag)
+    auto hasFlag = [&](EShaderCompileFlags flag)
         {
             return (static_cast<uint32_t>(input.Flags) & static_cast<uint32_t>(flag)) != 0;
         };
-    if (HasFlag(EShaderCompileFlags::DebugInfo))
+    if (hasFlag(EShaderCompileFlags::DebugInfo))
     {
-        AddArg(L"-Zi");
-        AddArg(L"-Qembed_debug");
+        addArg(L"-Zi");
+        addArg(L"-Qembed_debug");
     }
-    AddArg(HasFlag(EShaderCompileFlags::DisableOptimize) ? L"-Od" : L"-O3");
-    if (HasFlag(EShaderCompileFlags::WarningsAsError))
+    addArg(hasFlag(EShaderCompileFlags::DisableOptimize) ? L"-Od" : L"-O3");
+    if (hasFlag(EShaderCompileFlags::WarningsAsError))
     {
-        AddArg(L"-WX");
+        addArg(L"-WX");
     }
     for (const auto& define : input.Environment.Definitions)
     {
-        AddArg(ToWide("-D" + define.first + "=" + define.second));
+        addArg(ToWide("-D" + define.first + "=" + define.second));
     }
 
     DxcBuffer sourceBuffer{};
@@ -1004,13 +1004,13 @@ void ShaderCompiler::CompileToDirectX(const std::string& preprocessedSource, con
     HLSLPackSource packSource;
     packSource.DXILCode.resize(dxilBlob->GetBufferSize());
     memcpy(packSource.DXILCode.data(), dxilBlob->GetBufferPointer(), dxilBlob->GetBufferSize());
-    packSource.frequency = input.Frequency;
-    packSource.entryPoint = input.EntryPoint;
+    packSource.Frequency = input.Frequency;
+    packSource.EntryPoint = input.EntryPoint;
 
     HLSLCompiledBinaryResultPacker packer;
     if (packer.Pack(&packSource, out.PackedBinaryData))
     {
-        out.Success = true;
+        out.bSuccess = true;
     }
 }
 
@@ -1023,7 +1023,7 @@ void ShaderCompiler::CompileToMetal(const std::string& preprocessedSource, const
 void ShaderCompiler::CompileToOpenGL(const std::string& preprocessedSource, const ShaderCompileInput& input, ShaderCompilationOutput& out)
 {
     out.Platform = ERHIShaderPlatform::OpenGL;
-    out.Success = false;
+    out.bSuccess = false;
     out.PackedBinaryData.clear();
 
     int setId = 0;
@@ -1049,7 +1049,7 @@ void ShaderCompiler::CompileToOpenGL(const std::string& preprocessedSource, cons
         return;
     }
     int shaderBindingOffset = setId * shaderStageMaxBinding;
-    auto HasFlag = [&](EShaderCompileFlags flag)
+    auto hasFlag = [&](EShaderCompileFlags flag)
         {
             return (static_cast<uint32_t>(input.Flags) & static_cast<uint32_t>(flag)) != 0;
         };
@@ -1064,16 +1064,16 @@ void ShaderCompiler::CompileToOpenGL(const std::string& preprocessedSource, cons
     std::vector<std::wstring> argStorage;
     argStorage.reserve(64);
     std::vector<LPCWSTR> dxcArgs;
-    auto AddArg = [&](const std::wstring& arg)
+    auto addArg = [&](const std::wstring& arg)
         {
             argStorage.push_back(arg);
             dxcArgs.push_back(argStorage.back().c_str());
         };
 
-    AddArg(L"-spirv");
-    AddArg(L"-fspv-target-env=vulkan1.3");
-    AddArg(L"-fvk-use-dx-layout");
-    AddArg(L"-fvk-auto-shift-bindings");
+    addArg(L"-spirv");
+    addArg(L"-fspv-target-env=vulkan1.3");
+    addArg(L"-fvk-use-dx-layout");
+    addArg(L"-fvk-auto-shift-bindings");
     //AddArg(L"-fvk-bind-globals"); AddArg(ToWide(std::to_string(shaderBindingOffset + 10))); AddArg(ToWide("0"));
     //AddArg(L"-fvk-b-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 100))); AddArg(ToWide("0"));
     //AddArg(L"-fvk-t-shift"); AddArg(ToWide(std::to_string(shaderBindingOffset + 200))); AddArg(ToWide("0"));
@@ -1085,29 +1085,29 @@ void ShaderCompiler::CompileToOpenGL(const std::string& preprocessedSource, cons
     if (spirv.empty()) {
         return;
     }
-    spirv_cross::CompilerGLSL Compiler(spirv);
-    // 6. ʹ�� SPIRV-Cross ������Դ
-    ReflectParameterMapFromSPIRV(&Compiler, out.ParameterMap);
+    spirv_cross::CompilerGLSL compiler(spirv);
+    // Reflect resources through SPIRV-Cross.
+    ReflectParameterMapFromSPIRV(&compiler, out.ParameterMap);
 
     
-    spirv_cross::CompilerGLSL::Options Options;
-    Options.version = 430;
-    Options.es = false;
+    spirv_cross::CompilerGLSL::Options options;
+    options.version = 430;
+    options.es = false;
 
-    Compiler.set_common_options(Options);
-    Compiler.build_dummy_sampler_for_combined_images();
-    Compiler.build_combined_image_samplers();
-    std::string GLSL = Compiler.compile();
+    compiler.set_common_options(options);
+    compiler.build_dummy_sampler_for_combined_images();
+    compiler.build_combined_image_samplers();
+    std::string glsl = compiler.compile();
     
 
-    // 6. ������
-    out.PackedBinaryData.resize(GLSL.size() * sizeof(char));
-    memcpy(out.PackedBinaryData.data(), GLSL.data(), GLSL.size() * sizeof(char));
+    // Store the generated GLSL source.
+    out.PackedBinaryData.resize(glsl.size() * sizeof(char));
+    memcpy(out.PackedBinaryData.data(), glsl.data(), glsl.size() * sizeof(char));
     GLSLPackSource packSource;
-    packSource.compiler = &Compiler;
-    packSource.GLSLCode = GLSL;
-    packSource.frequency = input.Frequency;
-    packSource.entryPoint = input.EntryPoint;
+    packSource.Compiler = &compiler;
+    packSource.GLSLCode = glsl;
+    packSource.Frequency = input.Frequency;
+    packSource.EntryPoint = input.EntryPoint;
 
     GLSLCompiledBinaryResultPacker packer;
     std::vector<char> packedData;
@@ -1115,14 +1115,14 @@ void ShaderCompiler::CompileToOpenGL(const std::string& preprocessedSource, cons
     if (packer.Pack(&packSource, packedData))
     {
         out.PackedBinaryData = std::move(packedData);
-        out.Success = true;
+        out.bSuccess = true;
     }
 }
 
 
 void ShaderCompiler::ReflectParameterMapFromSPIRV(spirv_cross::Compiler* compilerIn, ShaderParameterAllocationMap& out)
 {
-    // 6. ʹ�� SPIRV-Cross ������Դ
+    // Reflect shader resources through SPIRV-Cross.
     spirv_cross::Compiler &compiler = *compilerIn;
     spirv_cross::ShaderResources resourcesSC = compiler.get_shader_resources();
 
@@ -1284,26 +1284,26 @@ void ShaderCompiler::ReflectParameterMapFromSPIRV(spirv_cross::Compiler* compile
         );
     }
 
-    // ���� Push Constants �ķ����߼�
+    // Reflect push constant blocks.
     for (const auto& pc : resourcesSC.push_constant_buffers)
     {
-        // ��ȡ��� PC ���������Ϣ
+        // Read the push constant block type.
         auto& type = compiler.get_type(pc.base_type_id);
 
-        // �����ڲ���Ա������Щ��������ѡ�е� Loose Data��
+        // Enumerate members as loose data parameters.
         for (uint32_t i = 0; i < type.member_types.size(); i++)
         {
             std::string name = compiler.get_member_name(pc.base_type_id, i);
             uint32_t offset = compiler.type_struct_member_offset(type, i);
             uint32_t size = static_cast<uint32_t>(compiler.get_declared_struct_member_size(type, i));
 
-            // ������� ParameterMap
+            // Add this reflected member to the allocation map.
             out.AddParameterAllocation(
                 name,
-                0,      // BufferIndex �� PC ͨ��û���壬����Ϊ�ض���ʶ
-                static_cast<uint16_t>(offset), // BaseIndex ���� PC �� Offset
+                0,      // Push constants use buffer index zero here.
+                static_cast<uint16_t>(offset), // BaseIndex stores the byte offset in the push constant block.
                 static_cast<uint16_t>(size),
-                EShaderParameterType::LooseData // �������
+                EShaderParameterType::LooseData // Record this member as loose data.
             );
         }
     }
@@ -1361,7 +1361,7 @@ void ShaderCompiler::CompileHLSLToSPIRV(const std::string& preprocessedSource, c
         return;
     }
 
-    auto HasFlag = [&](EShaderCompileFlags flag)
+    auto hasFlag = [&](EShaderCompileFlags flag)
         {
             return (static_cast<uint32_t>(input.Flags) & static_cast<uint32_t>(flag)) != 0;
         };
@@ -1376,46 +1376,46 @@ void ShaderCompiler::CompileHLSLToSPIRV(const std::string& preprocessedSource, c
     std::vector<std::wstring> argStorage;
     argStorage.reserve(64);
     std::vector<LPCWSTR> dxcArgs;
-    auto AddArg = [&](const std::wstring& arg)
+    auto addArg = [&](const std::wstring& arg)
         {
             argStorage.push_back(arg);
             dxcArgs.push_back(argStorage.back().c_str());
         };
 
     for (auto& arg : compileParams) {
-		AddArg(arg);
+		addArg(arg);
     }
 
-    AddArg(L"-E");
-    AddArg(ToWide(input.EntryPoint));
+    addArg(L"-E");
+    addArg(ToWide(input.EntryPoint));
 
-    AddArg(L"-T");
-    AddArg(ToWide(targetProfile));
+    addArg(L"-T");
+    addArg(ToWide(targetProfile));
 
-    if (HasFlag(EShaderCompileFlags::DebugInfo))
+    if (hasFlag(EShaderCompileFlags::DebugInfo))
     {
-        AddArg(L"-Zi");
-        AddArg(L"-Qembed_debug");
+        addArg(L"-Zi");
+        addArg(L"-Qembed_debug");
     }
 
-    if (HasFlag(EShaderCompileFlags::DisableOptimize))
+    if (hasFlag(EShaderCompileFlags::DisableOptimize))
     {
-        AddArg(L"-Od");
+        addArg(L"-Od");
     }
     else
     {
-        AddArg(L"-O3");
+        addArg(L"-O3");
     }
 
-    if (HasFlag(EShaderCompileFlags::WarningsAsError))
+    if (hasFlag(EShaderCompileFlags::WarningsAsError))
     {
-        AddArg(L"-WX");
+        addArg(L"-WX");
     }
 
     for (const auto& define : input.Environment.Definitions)
     {
         std::string macro = "-D" + define.first + "=" + define.second;
-        AddArg(ToWide(macro));
+        addArg(ToWide(macro));
     }
     DxcBuffer sourceBuffer = {};
     sourceBuffer.Ptr = preprocessedSource.data();
@@ -1477,20 +1477,20 @@ void ShaderCompiler::CompileHLSLToSPIRV(const std::string& preprocessedSource, c
     spirvOut.resize(spirvBlob->GetBufferSize() / sizeof(uint32_t));
     memcpy(spirvOut.data(), spirvBlob->GetBufferPointer(), spirvBlob->GetBufferSize());
 
-    const uint32_t OpTypeImage = 25;
-    auto StripImageFormat = [](std::vector<uint32_t>& spirv)
+    const uint32_t opTypeImage = 25;
+    auto stripImageFormat = [](std::vector<uint32_t>& spirv)
         {
             if (spirv.size() <= 5)
                 return;
 
             //
-            const uint32_t OpCapability = 17;
+            const uint32_t opCapability = 17;
 
             // 在 header 后插入（第5个word后）
             size_t insertPos = 5;
 
             std::vector<uint32_t> capInst = {
-                (2 << 16) | OpCapability,
+                (2 << 16) | opCapability,
                 spv::CapabilityStorageImageWriteWithoutFormat // StorageImageWriteWithoutFormat enum
             };
             ;
@@ -1511,7 +1511,7 @@ void ShaderCompiler::CompileHLSLToSPIRV(const std::string& preprocessedSource, c
                 if (i + wc > spirv.size())
                     break;
 
-                if (opcode == OpTypeImage && wc >= 9)
+                if (opcode == opTypeImage && wc >= 9)
                 {
                     if (spirv[i + 7] == 2) {
                         spirv[i + 8] = 0; // Unknown
@@ -1521,8 +1521,8 @@ void ShaderCompiler::CompileHLSLToSPIRV(const std::string& preprocessedSource, c
                 i += wc;
             }
         };
-    StripImageFormat(spirvOut);
-    auto WriteSPIRVToFile = [](const std::string& filePath, const std::vector<uint32_t>& spirvData) {
+    stripImageFormat(spirvOut);
+    auto writeSpirvToFile = [](const std::string& filePath, const std::vector<uint32_t>& spirvData) {
         if (spirvData.empty()) {
             std::cerr << "Error: SPIR-V data is empty." << std::endl;
             return false;
@@ -1551,7 +1551,7 @@ void ShaderCompiler::CompileHLSLToSPIRV(const std::string& preprocessedSource, c
             return false;
         }
         };
-    WriteSPIRVToFile("test.spv", spirvOut);
+    writeSpirvToFile("test.spv", spirvOut);
 
 }
 
@@ -1591,8 +1591,8 @@ bool HLSLCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& p
     if (src->DXILCode.empty()) return false;
 
     DepackedData.DXILCode = src->DXILCode;
-    DepackedData.HeaderData.Frequency = src->frequency;
-    strncpy_s(DepackedData.HeaderData.EntryPoint, src->entryPoint.c_str(), sizeof(DepackedData.HeaderData.EntryPoint) - 1);
+    DepackedData.HeaderData.Frequency = src->Frequency;
+    strncpy_s(DepackedData.HeaderData.EntryPoint, src->EntryPoint.c_str(), sizeof(DepackedData.HeaderData.EntryPoint) - 1);
     DepackedData.HeaderData.ShaderHash = std::hash<std::string>()(std::string(src->DXILCode.begin(), src->DXILCode.end()));
 
     packedResultOut.clear();
@@ -1636,11 +1636,11 @@ void SPIRVCompiledBinaryResultPacker::Depack(const std::vector<char>& packedResu
     // Header basic info
     // =========================
 
-    read(&DepackedData.header.Frequency, sizeof(ERHIShaderFrequency));
+    read(&DepackedData.Header.Frequency, sizeof(ERHIShaderFrequency));
 
-    read(DepackedData.header.EntryPoint, sizeof(DepackedData.header.EntryPoint));
+    read(DepackedData.Header.EntryPoint, sizeof(DepackedData.Header.EntryPoint));
 
-    read(&DepackedData.header.ShaderHash, sizeof(uint64_t));
+    read(&DepackedData.Header.ShaderHash, sizeof(uint64_t));
 
     // =========================
     // Descriptor bindings
@@ -1649,29 +1649,29 @@ void SPIRVCompiledBinaryResultPacker::Depack(const std::vector<char>& packedResu
     uint32_t bindingCount = 0;
     read(&bindingCount, sizeof(uint32_t));
 
-    DepackedData.header.DescriptorBindings.resize(bindingCount);
+    DepackedData.Header.DescriptorBindings.resize(bindingCount);
 
     for (uint32_t i = 0; i < bindingCount; ++i)
     {
-        read(&DepackedData.header.DescriptorBindings[i], sizeof(DescriptorBindingInfo));
+        read(&DepackedData.Header.DescriptorBindings[i], sizeof(DescriptorBindingInfo));
     }
 
     // =========================
     // Push constant
     // =========================
 
-    read(&DepackedData.header.HasPushConstant, sizeof(bool));
+    read(&DepackedData.Header.bHasPushConstant, sizeof(bool));
 
-    if (DepackedData.header.HasPushConstant)
+    if (DepackedData.Header.bHasPushConstant)
     {
-        read(&DepackedData.header.PushConstant, sizeof(PushConstantInfo));
+        read(&DepackedData.Header.PushConstant, sizeof(PushConstantInfo));
     }
     uint32_t uniformBufferCount = 0;
     read(&uniformBufferCount, sizeof(uint32_t));
-    DepackedData.header.UniformBufferBindings.resize(uniformBufferCount);
+    DepackedData.Header.UniformBufferBindings.resize(uniformBufferCount);
     for (uint32_t i = 0; i < uniformBufferCount; ++i)
     {
-        read(&DepackedData.header.UniformBufferBindings[i], sizeof(UniformBufferBindingInfo));
+        read(&DepackedData.Header.UniformBufferBindings[i], sizeof(UniformBufferBindingInfo));
     }
 }
 bool SPIRVCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& packedResultOut)
@@ -1681,19 +1681,19 @@ bool SPIRVCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& 
 
     SPIRVPackSource* src = reinterpret_cast<SPIRVPackSource*>(packSource);
 
-    DepackedData.SpirvCode = *(src->spirvCode);
+    DepackedData.SpirvCode = *(src->SpirvCode);
 
-    spirv_cross::Compiler* compiler = src->compiler;
+    spirv_cross::Compiler* compiler = src->Compiler;
 
-    DepackedData.header.Frequency = src->frequency;
+    DepackedData.Header.Frequency = src->Frequency;
 
     strncpy(
-        DepackedData.header.EntryPoint,
-        src->entryPoint.c_str(),
-        sizeof(DepackedData.header.EntryPoint));
+        DepackedData.Header.EntryPoint,
+        src->EntryPoint.c_str(),
+        sizeof(DepackedData.Header.EntryPoint));
 
-    // �� hash
-    DepackedData.header.ShaderHash =
+    // Compute the shader hash.
+    DepackedData.Header.ShaderHash =
         std::hash<std::string>()(
             std::string(
                 reinterpret_cast<char*>(DepackedData.SpirvCode.data()),
@@ -1701,7 +1701,7 @@ bool SPIRVCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& 
 
     auto resources = compiler->get_shader_resources();
 
-    DepackedData.header.DescriptorBindings.clear();
+    DepackedData.Header.DescriptorBindings.clear();
 
 
     auto addBinding =
@@ -1735,7 +1735,7 @@ bool SPIRVCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& 
                 strncpy(info.Name, name.c_str(), sizeof(info.Name));
             }
             if (type != ESPIRVShaderResourceType::UniformBuffer) {
-                DepackedData.header.DescriptorBindings.push_back(info);
+                DepackedData.Header.DescriptorBindings.push_back(info);
             }
             else {
                 UniformBufferBindingInfo uniBinding;
@@ -1750,7 +1750,7 @@ bool SPIRVCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& 
 
                 uniBinding.Size =
                     (uint32_t)compiler->get_declared_struct_size(type);
-				DepackedData.header.UniformBufferBindings.push_back(uniBinding);
+				DepackedData.Header.UniformBufferBindings.push_back(uniBinding);
             }
 
         };
@@ -1819,7 +1819,7 @@ bool SPIRVCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& 
     // Push constants
     // =========================
 
-    DepackedData.header.HasPushConstant = false;
+    DepackedData.Header.bHasPushConstant = false;
 
     if (!resources.push_constant_buffers.empty())
     {
@@ -1827,18 +1827,18 @@ bool SPIRVCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& 
 
         auto& type = compiler->get_type(pcb.base_type_id);
 
-        DepackedData.header.PushConstant.Size =
+        DepackedData.Header.PushConstant.Size =
             (uint16_t)compiler->get_declared_struct_size(type);
-        DepackedData.header.HasPushConstant = true;
+        DepackedData.Header.bHasPushConstant = true;
     }
 
     // =========================
-    // Descriptor sort���ǳ���Ҫ��
+    // Sort descriptor declarations deterministically.
     // =========================
 
     std::sort(
-        DepackedData.header.DescriptorBindings.begin(),
-        DepackedData.header.DescriptorBindings.end(),
+        DepackedData.Header.DescriptorBindings.begin(),
+        DepackedData.Header.DescriptorBindings.end(),
         [](const DescriptorBindingInfo& a, const DescriptorBindingInfo& b)
         {
             if (a.Set != b.Set)
@@ -1871,38 +1871,38 @@ bool SPIRVCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& 
 
     // Header basic
 
-    write(&DepackedData.header.Frequency, sizeof(ERHIShaderFrequency));
+    write(&DepackedData.Header.Frequency, sizeof(ERHIShaderFrequency));
 
     write(
-        DepackedData.header.EntryPoint,
-        sizeof(DepackedData.header.EntryPoint));
+        DepackedData.Header.EntryPoint,
+        sizeof(DepackedData.Header.EntryPoint));
 
-    write(&DepackedData.header.ShaderHash, sizeof(uint64_t));
+    write(&DepackedData.Header.ShaderHash, sizeof(uint64_t));
 
     // Descriptor bindings
 
     uint32_t bindingCount =
-        (uint32_t)DepackedData.header.DescriptorBindings.size();
+        (uint32_t)DepackedData.Header.DescriptorBindings.size();
 
     write(&bindingCount, sizeof(uint32_t));
 
-    for (auto& b : DepackedData.header.DescriptorBindings)
+    for (auto& b : DepackedData.Header.DescriptorBindings)
     {
         write(&b, sizeof(DescriptorBindingInfo));
     }
 
     // Push constant
 
-    write(&DepackedData.header.HasPushConstant, sizeof(bool));
+    write(&DepackedData.Header.bHasPushConstant, sizeof(bool));
 
-    if (DepackedData.header.HasPushConstant)
+    if (DepackedData.Header.bHasPushConstant)
     {
-        write(&DepackedData.header.PushConstant, sizeof(PushConstantInfo));
+        write(&DepackedData.Header.PushConstant, sizeof(PushConstantInfo));
     }
     uint32_t uniformBufferCount =
-        (uint32_t)DepackedData.header.UniformBufferBindings.size();
+        (uint32_t)DepackedData.Header.UniformBufferBindings.size();
     write(&uniformBufferCount, sizeof(uint32_t));
-    for (auto& b : DepackedData.header.UniformBufferBindings)
+    for (auto& b : DepackedData.Header.UniformBufferBindings)
     {
         write(&b, sizeof(UniformBufferBindingInfo));
     }
@@ -1972,13 +1972,13 @@ void GLSLCompiledBinaryResultPacker::Depack(const std::vector<char>& packedResul
 		}
 	}
 
-    if (!read(&DepackedData.HeaderData.HasPushConstant, sizeof(bool))) return;
+    if (!read(&DepackedData.HeaderData.bHasPushConstant, sizeof(bool))) return;
 
-    if (DepackedData.HeaderData.HasPushConstant)
+    if (DepackedData.HeaderData.bHasPushConstant)
     {
         if (!read(&DepackedData.HeaderData.PushConstant, sizeof(PushConstantInfo)))
         {
-            DepackedData.HeaderData.HasPushConstant = false;
+            DepackedData.HeaderData.bHasPushConstant = false;
             return;
         }
     }
@@ -1988,20 +1988,20 @@ bool GLSLCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& p
     if (!packSource) return false;
 
     GLSLPackSource* src = reinterpret_cast<GLSLPackSource*>(packSource);
-    if (!src->compiler) return false;
+    if (!src->Compiler) return false;
 
-    DepackedData.HeaderData.Frequency = src->frequency;
-    strncpy(DepackedData.HeaderData.EntryPoint, src->entryPoint.c_str(), sizeof(DepackedData.HeaderData.EntryPoint) - 1);
+    DepackedData.HeaderData.Frequency = src->Frequency;
+    strncpy(DepackedData.HeaderData.EntryPoint, src->EntryPoint.c_str(), sizeof(DepackedData.HeaderData.EntryPoint) - 1);
     DepackedData.HeaderData.EntryPoint[sizeof(DepackedData.HeaderData.EntryPoint) - 1] = '\0';
     DepackedData.GLSLCode = src->GLSLCode;
     DepackedData.HeaderData.ShaderHash = std::hash<std::string>()(DepackedData.GLSLCode);
 
-    spirv_cross::Compiler* compiler = src->compiler;
+    spirv_cross::Compiler* compiler = src->Compiler;
     auto resources = compiler->get_shader_resources();
 
     DepackedData.HeaderData.Resources.clear();
     DepackedData.HeaderData.UniformBuffers.clear();
-    DepackedData.HeaderData.HasPushConstant = false;
+    DepackedData.HeaderData.bHasPushConstant = false;
 
     auto addResource = [&](const spirv_cross::Resource& res, EGLSLShaderResourceType resourceType)
         {
@@ -2056,8 +2056,8 @@ bool GLSLCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& p
         addResource(img, EGLSLShaderResourceType::StorageImage);
 
 
-    auto combined_image_samplers = compiler->get_combined_image_samplers();
-    for (const auto& combined : combined_image_samplers) {
+    auto combinedImageSamplers = compiler->get_combined_image_samplers();
+    for (const auto& combined : combinedImageSamplers) {
         CombinedBindingInfo info{};
         info.TextureBinding = compiler->get_decoration(combined.image_id, spv::DecorationBinding); 
         info.SamplerBinding = compiler->get_decoration(combined.sampler_id, spv::DecorationBinding);
@@ -2072,10 +2072,10 @@ bool GLSLCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& p
         auto& pcb = resources.push_constant_buffers[0];
         const auto& type = compiler->get_type(pcb.base_type_id);
 
-        DepackedData.HeaderData.HasPushConstant = true;
+        DepackedData.HeaderData.bHasPushConstant = true;
         DepackedData.HeaderData.PushConstant.Size = static_cast<uint32_t>(compiler->get_declared_struct_size(type));
         DepackedData.HeaderData.PushConstant.Binding = 0;
-        DepackedData.HeaderData.PushConstant.IsMappedToUniformBuffer = false;
+        DepackedData.HeaderData.PushConstant.bIsMappedToUniformBuffer = false;
     }
 
     std::sort(DepackedData.HeaderData.Resources.begin(), DepackedData.HeaderData.Resources.end(), [](const ResourceBindingInfo& a, const ResourceBindingInfo& b) { return a.Binding < b.Binding; });
@@ -2107,8 +2107,8 @@ bool GLSLCompiledBinaryResultPacker::Pack(void* packSource, std::vector<char>& p
     for (const auto& binding : DepackedData.HeaderData.CombinedBindings)
 		write(&binding, sizeof(CombinedBindingInfo));
 
-    write(&DepackedData.HeaderData.HasPushConstant, sizeof(bool));
-    if (DepackedData.HeaderData.HasPushConstant)
+    write(&DepackedData.HeaderData.bHasPushConstant, sizeof(bool));
+    if (DepackedData.HeaderData.bHasPushConstant)
         write(&DepackedData.HeaderData.PushConstant, sizeof(PushConstantInfo));
     return true;
 }

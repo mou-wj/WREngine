@@ -115,7 +115,7 @@ namespace Engine {
 
         ShaderCompilationOutput output = ShaderCompiler::Compile(input);
 
-        if (!output.Success)
+        if (!output.bSuccess)
         {
             // 记录错误并跳过此变体
             // LOG_ERROR("Failed to compile %s (Permutation %d)", st->Name.c_str(), permId);
@@ -224,7 +224,7 @@ namespace Engine {
 
         ShaderCompilationOutput output = ShaderCompiler::Compile(input);
 
-        if (!output.Success)
+        if (!output.bSuccess)
         {
             // 记录错误并跳过此变体
             // LOG_ERROR("Failed to compile %s (Permutation %d)", st->Name.c_str(), permId);

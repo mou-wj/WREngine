@@ -8,7 +8,7 @@ namespace RenderCore {
 //  Render Graph Resource Base Class Implementation
 // -------------------------------------------------------------------------------------------------
 RenderGraphResource::RenderGraphResource(const std::string& name, RenderGraphResourceType type)
-    : Name(name), Type(type), Resource(nullptr)
+    : _name(name), _type(type), _resource(nullptr)
 {
 }
 
@@ -19,16 +19,16 @@ RenderGraphResource::~RenderGraphResource()
 
 void RenderGraphResource::SetRHIResource(RHI::RHIResource* resource)
 {
-    Resource = resource;
+    _resource = resource;
 }
 
 // -------------------------------------------------------------------------------------------------
 //  Render Graph Texture Implementation
 // -------------------------------------------------------------------------------------------------
 RenderGraphTexture::RenderGraphTexture(const std::string& name, const RenderGraphTextureDesc& desc)
-    : RenderGraphResource(name, RenderGraphResourceType::Texture), desc(desc)
+    : RenderGraphResource(name, RenderGraphResourceType::Texture), m_Desc(desc)
 {
-    tracker.Initialize(desc.ArraySize, desc.MipLevels, 1);
+    m_Tracker.Initialize(desc.ArraySize, desc.MipLevels, 1);
 }
 
 RenderGraphTexture::~RenderGraphTexture()
@@ -40,7 +40,7 @@ RenderGraphTexture::~RenderGraphTexture()
 //  Render Graph Buffer Implementation
 // -------------------------------------------------------------------------------------------------
 RenderGraphBuffer::RenderGraphBuffer(const std::string& name, const RenderGraphBufferDesc& desc)
-    : RenderGraphResource(name, RenderGraphResourceType::Buffer), desc(desc)
+    : RenderGraphResource(name, RenderGraphResourceType::Buffer), m_Desc(desc)
 {
 }
 
@@ -50,21 +50,21 @@ RenderGraphBuffer::~RenderGraphBuffer()
 }
 
 
-RenderGraphUAV::RenderGraphUAV(const std::string& name, RenderGraphResourceType Type) : RenderGraphView(name, Type)
+RenderGraphUAV::RenderGraphUAV(const std::string& name, RenderGraphResourceType type) : RenderGraphView(name, type)
 {
 }
 RenderGraphUAV::~RenderGraphUAV()
 {
 }
 
-RenderGraphSRV::RenderGraphSRV(const std::string& name, RenderGraphResourceType Type) : RenderGraphView(name, Type)
+RenderGraphSRV::RenderGraphSRV(const std::string& name, RenderGraphResourceType type) : RenderGraphView(name, type)
 {
 }
 RenderGraphSRV::~RenderGraphSRV()
 {
 }
 
-RenderGraphView::RenderGraphView(const std::string& name, RenderGraphResourceType Type) : RenderGraphResource(name, Type)
+RenderGraphView::RenderGraphView(const std::string& name, RenderGraphResourceType type) : RenderGraphResource(name, type)
 {
 }
 RenderGraphView::~RenderGraphView()
@@ -74,7 +74,7 @@ RenderGraphView::~RenderGraphView()
 
 
 RenderGraphTextureSRV::RenderGraphTextureSRV(const std::string& name, const RenderGraphTextureSRVDesc& desc)   
-    : RenderGraphSRV(name, RenderGraphResourceType::TextureSRV), Desc(desc)
+    : RenderGraphSRV(name, RenderGraphResourceType::TextureSRV), m_Desc(desc)
 {   
 
 }
@@ -85,7 +85,7 @@ RenderGraphTextureSRV::~RenderGraphTextureSRV()
 }
 
 RenderGraphTextureUAV::RenderGraphTextureUAV(const std::string& name, const RenderGraphTextureUAVDesc& desc)
-    : RenderGraphUAV(name, RenderGraphResourceType::TextureUAV), Desc(desc)
+    : RenderGraphUAV(name, RenderGraphResourceType::TextureUAV), m_Desc(desc)
 {   
     // TODO: Implement
 }
@@ -97,7 +97,7 @@ RenderGraphTextureUAV::~RenderGraphTextureUAV()
 }
 
 RenderGraphBufferSRV::RenderGraphBufferSRV(const std::string& name, const RenderGraphBufferSRVDesc& desc)
-    : RenderGraphSRV(name, RenderGraphResourceType::BufferSRV), Desc(desc)
+    : RenderGraphSRV(name, RenderGraphResourceType::BufferSRV), m_Desc(desc)
 {   
     // TODO: Implement
 }
@@ -108,7 +108,7 @@ RenderGraphBufferSRV::~RenderGraphBufferSRV()
 }
 
 RenderGraphBufferUAV::RenderGraphBufferUAV(const std::string& name, const RenderGraphBufferUAVDesc& desc)
-    : RenderGraphUAV(name, RenderGraphResourceType::BufferSRV), Desc(desc)
+    : RenderGraphUAV(name, RenderGraphResourceType::BufferSRV), m_Desc(desc)
 {
     // TODO: Implement
 }

@@ -530,7 +530,7 @@ private:
         ShaderCompilationOutput missOutput = ShaderCompiler::Compile(missInput);
         ShaderCompilationOutput closestHitOutput = ShaderCompiler::Compile(closestHitInput);
 
-        if (!rayGenOutput.Success || !missOutput.Success || !closestHitOutput.Success)
+        if (!rayGenOutput.bSuccess || !missOutput.bSuccess || !closestHitOutput.bSuccess)
         {
             std::cout << "RHIRayTracingTest: ray tracing shader compile failed.\n";
             return;

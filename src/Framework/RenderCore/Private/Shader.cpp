@@ -9,9 +9,9 @@ namespace RenderCore {
 
 Shader::Shader(const ShaderCompiledInitializer& initializer)
 {
-    Name = initializer.Type->Name;
-    ShaderType = initializer.Type->Frequency;
-    ShaderSourceCode = initializer.Code;
+    _name = initializer.Type->Name;
+    _shaderType = initializer.Type->Frequency;
+    _shaderSourceCode = initializer.Code;
     auto metadata = initializer.Type->RootParametersMetadata;
     if (metadata) {
 		InitShaderBindings(metadata, initializer.ParameterMap);
@@ -23,10 +23,10 @@ Shader::Shader(const ShaderCompiledInitializer& initializer)
 Shader::~Shader()
 {
     // Cleanup if necessary
-    if (RHIShader)
+    if (_rhiShader)
 	{
-		RHIShader.reset();
-		RHIShader = nullptr;
+		_rhiShader.reset();
+		_rhiShader = nullptr;
 	}
 }
 
@@ -37,9 +37,9 @@ bool Shader::Compile()
     {
         // Create RHI Shader using RenderGraphBuilder
         //RHIShader = GRHIApi->CreateShader(ShaderSourceCode, ShaderType);
-        if (!RHIShader)
+        if (!_rhiShader)
         {
-            throw std::runtime_error("Failed to create RHI shader for: " + Name);
+            throw std::runtime_error("Failed to create RHI shader for: " + _name);
         }
 
 
@@ -53,44 +53,44 @@ bool Shader::Compile()
 }
 
 void Shader::ProcessMetadataRecursive(
-    const ShaderParametersMetadata& Metadata,
-    const std::string& Prefix,
-    const ShaderParameterAllocationMap& ParameterMap,
-    const uint64_t MetadataOffset,
-    ShaderParameterBindingInfo& OutBindings)
+    const ShaderParametersMetadata& metadata,
+    const std::string& prefix,
+    const ShaderParameterAllocationMap& parameterMap,
+    const uint64_t metadataOffset,
+    ShaderParameterBindingInfo& outBindings)
 {
-    for (const auto& Member : Metadata.GetMembers())
+    for (const auto& member : metadata.GetMembers())
     {
-        std::string Name = Prefix.empty()
-            ? Member.Name
-            : Member.Name;
+        std::string name = prefix.empty()
+            ? member.Name
+            : member.Name;
 
         // =========================
-        // 1. Resource£¨SRV/UAV/Sampler£©
+        // 1. Resourceï¼ˆSRV/UAV/Samplerï¼‰
         // =========================
-        if (Member.IsResource())
+        if (member.IsResource())
         {
-            auto Allocation = ParameterMap.FindParameterAllocation(Name);
-            if (!Allocation.has_value())
-                continue; // shaderÃ»ÓÃµ½
-            ShaderParameterBindingInfo::ShaderResourceBinding Binding;
-            Binding.BaseType = Member.BaseType;
-            Binding.BindSlot = Allocation->BaseIndex;
-            Binding.ArraySize = (Member.NumElements > 0) ? Member.NumElements : 1;
-            Binding.Offset = Member.Offset + MetadataOffset;
-            OutBindings.AddResourceBinding(Name, Binding);
+            auto allocation = parameterMap.FindParameterAllocation(name);
+            if (!allocation.has_value())
+                continue; // shaderæ²¡ç”¨åˆ°
+            ShaderParameterBindingInfo::ShaderResourceBinding binding;
+            binding.BaseType = member.BaseType;
+            binding.BindSlot = allocation->BaseIndex;
+            binding.ArraySize = (member.NumElements > 0) ? member.NumElements : 1;
+            binding.Offset = member.Offset + metadataOffset;
+            outBindings.AddResourceBinding(name, binding);
         }
         // =========================
-        // 2. Struct£¨µÝ¹éÕ¹¿ª£©
+        // 2. Structï¼ˆé€’å½’å±•å¼€ï¼‰
         // =========================
-        else if (Member.IsIncludeStruct() || Member.IsReferenceStruct())
+        else if (member.IsIncludeStruct() || member.IsReferenceStruct())
         {
             ProcessMetadataRecursive(
-                *Member.StructMetadata,
+                *member.StructMetadata,
                 "",
-                ParameterMap,
-                Member.Offset + MetadataOffset,
-                OutBindings);
+                parameterMap,
+                member.Offset + metadataOffset,
+                outBindings);
         }
         //else if (Member.IsNestedStruct())
         //{
@@ -102,50 +102,50 @@ void Shader::ProcessMetadataRecursive(
         //        OutBindings);
         //}
         // =========================
-        // 3. Uniform£¨¹Ø¼ü£©
+        // 3. Uniformï¼ˆå…³é”®ï¼‰
         // =========================
         else
         {
-            // Uniform ÊÇ×ß cbuffer µÄ
+            // Uniform æ˜¯èµ° cbuffer çš„
 
-            auto Allocation = ParameterMap.FindParameterAllocation(Name);
+            auto allocation = parameterMap.FindParameterAllocation(name);
 
-            if (!Allocation.has_value())
-                continue; // shaderÃ»ÓÃµ½
+            if (!allocation.has_value())
+                continue; // shaderæ²¡ç”¨åˆ°
 
-            if (Allocation->Type != EShaderParameterType::LooseData &&
-                Allocation->Type != EShaderParameterType::UniformBuffer)
+            if (allocation->Type != EShaderParameterType::LooseData &&
+                allocation->Type != EShaderParameterType::UniformBuffer)
             {
                 continue;
             }
 
-            ShaderParameterBindingInfo::ShaderUniformBinding Binding;
-            Binding.BaseType = Member.BaseType;
-            Binding.BufferIndex = Allocation->BufferIndex;
-            Binding.BaseIndex = Allocation->BaseIndex;
-            Binding.Offset = Member.Offset + MetadataOffset;
-            Binding.Size = Allocation->Size;
+            ShaderParameterBindingInfo::ShaderUniformBinding binding;
+            binding.BaseType = member.BaseType;
+            binding.BufferIndex = allocation->BufferIndex;
+            binding.BaseIndex = allocation->BaseIndex;
+            binding.Offset = member.Offset + metadataOffset;
+            binding.Size = allocation->Size;
 
-            OutBindings.AddUniformBinding(Name, Binding);
+            outBindings.AddUniformBinding(name, binding);
         }
     }
 }
 
-void Shader::InitShaderBindings(const ShaderParametersMetadata* Metadata, const ShaderParameterAllocationMap& InParameterMap)
+void Shader::InitShaderBindings(const ShaderParametersMetadata* metadata, const ShaderParameterAllocationMap& inParameterMap)
 {
-    if (!Metadata) return;
+    if (!metadata) return;
 
-    Bindings = {}; // Çå¿Õ
+    _bindings = {}; // æ¸…ç©º
 
-    if (!Metadata)
+    if (!metadata)
         return;
 
     ProcessMetadataRecursive(
-        *Metadata,
+        *metadata,
         "",                     // prefix
-        InParameterMap,
+        inParameterMap,
         0,
-        Bindings);
+        _bindings);
 }
 
 void Shader::InitShaderRHI(ERHIShaderFrequency frequency, const std::vector<char>& shaderSourceCode)
@@ -155,46 +155,46 @@ void Shader::InitShaderRHI(ERHIShaderFrequency frequency, const std::vector<char
     case RHI::ERHIShaderFrequency::Unknown:
         break;
     case RHI::ERHIShaderFrequency::Vertex:
-        RHIShader = GRHIApi->CreateVertexShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateVertexShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::Fragment:
-        RHIShader = GRHIApi->CreateFragmentShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateFragmentShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::Geometry:
-        RHIShader = GRHIApi->CreateGeometryShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateGeometryShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::Compute:
-        RHIShader = GRHIApi->CreateComputeShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateComputeShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::TessControl:
-        RHIShader = GRHIApi->CreateTessControlShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateTessControlShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::TessEvaluation:
-        RHIShader = GRHIApi->CreateTessEvalShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateTessEvalShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::Mesh:
-        RHIShader = GRHIApi->CreateMeshShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateMeshShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::Task:
-        RHIShader = GRHIApi->CreateTaskShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateTaskShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::RayGen:
-        RHIShader = GRHIApi->CreateRayGenShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateRayGenShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::ClosestHit:
-        RHIShader = GRHIApi->CreateCloseHitShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateCloseHitShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::Miss:
-        RHIShader = GRHIApi->CreateMissShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateMissShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::AnyHit:
-        RHIShader = GRHIApi->CreateAnyHitShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateAnyHitShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::Intersection:
-        RHIShader = GRHIApi->CreateIntersectionShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateIntersectionShader(shaderSourceCode);
         break;
     case RHI::ERHIShaderFrequency::Callable:
-        RHIShader = GRHIApi->CreateCallableShader(shaderSourceCode);
+        _rhiShader = GRHIApi->CreateCallableShader(shaderSourceCode);
         break;
     default:
         break;

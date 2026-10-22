@@ -23,13 +23,13 @@ namespace RenderCore {
             RHI::RHITexture* texture,
             const RHI::RHITexSRVCreateInfo& desc)
         {
-            auto it = SRVs.find(desc);
-            if (it != SRVs.end())
+            auto it = m_SRVs.find(desc);
+            if (it != m_SRVs.end())
                 return it->second.get
                 ();
 
             auto view = RHI::GRHIApi->CreateTextureShaderResourceView(texture, desc);
-            SRVs.emplace(desc, view);
+            m_SRVs.emplace(desc, view);
             return view.get();
         }
 
@@ -37,24 +37,24 @@ namespace RenderCore {
             RHI::RHITexture* texture,
             const RHI::RHITexUAVCreateInfo& desc)
         {
-            auto it = UAVs.find(desc);
-            if (it != UAVs.end())
+            auto it = m_UAVs.find(desc);
+            if (it != m_UAVs.end())
                 return it->second.get();
 
             auto view = RHI::GRHIApi->CreateTextureUnorderedAccessView(texture, desc);
-            UAVs.emplace(desc, view);
+            m_UAVs.emplace(desc, view);
             return view.get();
         }
 
         void Clear()
         {
-            SRVs.clear();
-            UAVs.clear();
+            m_SRVs.clear();
+            m_UAVs.clear();
         }
 
     private:
-        std::unordered_map<RHI::RHITexSRVCreateInfo, RHI::RHIShaderResourceViewSP> SRVs;
-        std::unordered_map<RHI::RHITexUAVCreateInfo, RHI::RHIUnorderedAccessViewSP> UAVs;
+        std::unordered_map<RHI::RHITexSRVCreateInfo, RHI::RHIShaderResourceViewSP> m_SRVs;
+        std::unordered_map<RHI::RHITexUAVCreateInfo, RHI::RHIUnorderedAccessViewSP> m_UAVs;
     };
 
 
@@ -69,12 +69,12 @@ namespace RenderCore {
             RHI::RHIBuffer* buffer,
             const RHI::RHIBufferSRVCreateInfo& desc)
         {
-            auto it = SRVs.find(desc);
-            if (it != SRVs.end())
+            auto it = m_SRVs.find(desc);
+            if (it != m_SRVs.end())
                 return it->second.get();
 
             auto view = RHI::GRHIApi->CreateBufferShaderResourceView(buffer, desc);
-            SRVs.emplace(desc, view);
+            m_SRVs.emplace(desc, view);
             return view.get();
         }
 
@@ -82,24 +82,24 @@ namespace RenderCore {
             RHI::RHIBuffer* buffer,
             const RHI::RHIBufferUAVCreateInfo& desc)
         {
-            auto it = UAVs.find(desc);
-            if (it != UAVs.end())
+            auto it = m_UAVs.find(desc);
+            if (it != m_UAVs.end())
                 return it->second.get();
 
             auto view = RHI::GRHIApi->CreateBufferUnorderedAccessView(buffer, desc);
-            UAVs.emplace(desc, view);
+            m_UAVs.emplace(desc, view);
             return view.get();
         }
 
         void Clear()
         {
-            SRVs.clear();
-            UAVs.clear();
+            m_SRVs.clear();
+            m_UAVs.clear();
         }
 
     private:
-        std::unordered_map<RHI::RHIBufferSRVCreateInfo, RHI::RHIShaderResourceViewSP> SRVs;
-        std::unordered_map<RHI::RHIBufferUAVCreateInfo, RHI::RHIUnorderedAccessViewSP> UAVs;
+        std::unordered_map<RHI::RHIBufferSRVCreateInfo, RHI::RHIShaderResourceViewSP> m_SRVs;
+        std::unordered_map<RHI::RHIBufferUAVCreateInfo, RHI::RHIUnorderedAccessViewSP> m_UAVs;
     };
 
 // 渲染资源生命周期管理基类
@@ -118,8 +118,8 @@ public:
     bool IsInitialized() const;
 
 protected:
-    std::string Name;
-    std::atomic<bool> bInitialized{ false };
+    std::string _name;
+    std::atomic<bool> _bInitialized{ false };
 };
 
 // 纹理资源
@@ -135,17 +135,17 @@ public:
     void UploadData(const void* data, const RHI::RHIUpdateTextureRegion& updateRegion);
     void ReadData(void* data, uint32_t mipIndex, uint32_t arraySlice, uint32_t planeSlice = 0);
     void GenerateMipMaps();
-    RHI::RHITexture* GetRHI() const { return Texture.get(); }
-    RenderTextureTracker& GetTracker() { return Tracker; }
-    TextureViewCache& GetViewCache() { return ViewCache; }
+    RHI::RHITexture* GetRHI() const { return m_Texture.get(); }
+    RenderTextureTracker& GetTracker() { return m_Tracker; }
+    TextureViewCache& GetViewCache() { return m_ViewCache; }
 
 
 private:
-    TextureViewCache ViewCache;
-    RenderTextureTracker Tracker;
+    TextureViewCache m_ViewCache;
+    RenderTextureTracker m_Tracker;
     // 其他纹理相关接口
-	RHI::RHITextureDesc Desc;
-    RHI::RHITextureSP Texture;
+	RHI::RHITextureDesc m_Desc;
+    RHI::RHITextureSP m_Texture;
 };
 
 
@@ -168,14 +168,14 @@ public:
     void ReleaseRHIResource() override;
 	void UploadData(const void* data, uint32_t size, uint32_t offset = 0);
     // 其他缓冲区相关接口
-	RHI::RHIBuffer* GetRHI() const { return Buffer.get(); }
-    RenderBufferTracker& GetTracker() { return Tracker; }
-	BufferViewCache& GetViewCache() { return ViewCache; }
+	RHI::RHIBuffer* GetRHI() const { return m_Buffer.get(); }
+    RenderBufferTracker& GetTracker() { return m_Tracker; }
+	BufferViewCache& GetViewCache() { return m_ViewCache; }
 private:
-    BufferViewCache ViewCache;
-    RenderBufferTracker Tracker;
-    RHI::RHIBufferDesc Desc;
-    RHI::RHIBufferSP Buffer;
+    BufferViewCache m_ViewCache;
+    RenderBufferTracker m_Tracker;
+    RHI::RHIBufferDesc m_Desc;
+    RHI::RHIBufferSP m_Buffer;
 };
 RENDERCORE_API void TransitionBufferImmediate(
     RHI::RHIApi* api,
@@ -242,37 +242,37 @@ struct RENDERCORE_API PoolRenderTargetDesc
         return ClearValue.Binding == RHI::RHIClearValueBinding::ClearValueBinding::Color;
     }
 
-    static PoolRenderTargetDesc ConvertFromRHITextureDesc(const RHI::RHITextureDesc& InDesc)
+    static PoolRenderTargetDesc ConvertFromRHITextureDesc(const RHI::RHITextureDesc& inDesc)
     {
-        PoolRenderTargetDesc Desc;
+        PoolRenderTargetDesc desc;
 
-        Desc.Width = static_cast<int32_t>(InDesc.Width);
-        Desc.Height =static_cast<int32_t>(InDesc.Height) ;
-        Desc.Depth = static_cast<uint16_t>(InDesc.Depth);
-        Desc.ArraySize = static_cast<uint16_t>(InDesc.ArraySize);
-        Desc.MipLevels = static_cast<uint8_t>(InDesc.MipLevels);
-        Desc.SampleCount = static_cast<uint8_t>(InDesc.SampleCount);
-        Desc.Format = InDesc.Format;  // 假设 ERHIFormat 与 EPixelFormat 可映射
-        Desc.Usage = InDesc.Usage;
+        desc.Width = static_cast<int32_t>(inDesc.Width);
+        desc.Height =static_cast<int32_t>(inDesc.Height) ;
+        desc.Depth = static_cast<uint16_t>(inDesc.Depth);
+        desc.ArraySize = static_cast<uint16_t>(inDesc.ArraySize);
+        desc.MipLevels = static_cast<uint8_t>(inDesc.MipLevels);
+        desc.SampleCount = static_cast<uint8_t>(inDesc.SampleCount);
+        desc.Format = inDesc.Format;  // 假设 ERHIFormat 与 EPixelFormat 可映射
+        desc.Usage = inDesc.Usage;
 
-        Desc.DebugName = InDesc.DebugName ? InDesc.DebugName : "RT_From_RHITextureDesc";
+        desc.DebugName = inDesc.DebugName ? inDesc.DebugName : "RT_From_RHITextureDesc";
 
-        return Desc;
+        return desc;
     }
 
-    static RHI::RHITextureDesc ConvertToRHITextureDesc(const PoolRenderTargetDesc& InDesc) {
-		RHI::RHITextureDesc Desc;
-		Desc.Width = InDesc.Width;
-		Desc.Height = InDesc.Height;
-		Desc.Depth = InDesc.Depth;
-		Desc.ArraySize = InDesc.ArraySize;
-		Desc.MipLevels = InDesc.MipLevels;
-		Desc.SampleCount = InDesc.SampleCount;
-		Desc.Format = InDesc.Format;
-		Desc.Type = InDesc.Type;
-		Desc.Usage = InDesc.Usage;
-		Desc.DebugName = InDesc.DebugName;
-		return Desc;
+    static RHI::RHITextureDesc ConvertToRHITextureDesc(const PoolRenderTargetDesc& inDesc) {
+		RHI::RHITextureDesc desc;
+		desc.Width = inDesc.Width;
+		desc.Height = inDesc.Height;
+		desc.Depth = inDesc.Depth;
+		desc.ArraySize = inDesc.ArraySize;
+		desc.MipLevels = inDesc.MipLevels;
+		desc.SampleCount = inDesc.SampleCount;
+		desc.Format = inDesc.Format;
+		desc.Type = inDesc.Type;
+		desc.Usage = inDesc.Usage;
+		desc.DebugName = inDesc.DebugName;
+		return desc;
     }
     bool Matches(const PoolRenderTargetDesc& rhs) const
     {
@@ -309,11 +309,11 @@ struct RENDERCORE_API IPooledRenderTarget
     // ------------------------
     virtual RHI::RHITexture* GetRHI() { return nullptr; };
 
-    RenderTextureTracker& GetTracker() { return Tracker; }
-    TextureViewCache& GetViewCache() { return ViewCache; }
+    RenderTextureTracker& GetTracker() { return _tracker; }
+    TextureViewCache& GetViewCache() { return _viewCache; }
 protected:
-    TextureViewCache ViewCache;
-    RenderTextureTracker Tracker;
+    TextureViewCache _viewCache;
+    RenderTextureTracker _tracker;
 };
 
 
@@ -321,26 +321,26 @@ class RENDERCORE_API PooledRenderTarget final : public IPooledRenderTarget
 {
 public:
     PooledRenderTarget(
-        const PoolRenderTargetDesc& InDesc,
-        RHI::RHITextureSP InTexture)
-        : Desc(InDesc)
+        const PoolRenderTargetDesc& inDesc,
+        RHI::RHITextureSP inTexture)
+        : m_Desc(inDesc)
     {
-		Tracker.Initialize(InDesc.ArraySize, InDesc.MipLevels, 1);
-        TargetTexture = InTexture;
+		_tracker.Initialize(inDesc.ArraySize, inDesc.MipLevels, 1);
+        m_TargetTexture = inTexture;
     }
 
     virtual const PoolRenderTargetDesc& GetDesc() const override
     {
-        return Desc;
+        return m_Desc;
     }
-    RHI::RHITexture* GetRHI() override { return TargetTexture ? TargetTexture.get() : nullptr ; } ;
+    RHI::RHITexture* GetRHI() override { return m_TargetTexture ? m_TargetTexture.get() : nullptr ; } ;
 
-    void MarkUsed(bool InIsUsed = true) { IsUse = InIsUsed; }
-    bool IsUsed() const { return IsUse; }
+    void MarkUsed(bool inIsUsed = true) { m_bIsUse = inIsUsed; }
+    bool IsUsed() const { return m_bIsUse; }
 private:
-    bool IsUse = false;
-    PoolRenderTargetDesc Desc;
-    RHI::RHITextureSP TargetTexture;
+    bool m_bIsUse = false;
+    PoolRenderTargetDesc m_Desc;
+    RHI::RHITextureSP m_TargetTexture;
 };
 
 // -------------------------------
@@ -354,7 +354,7 @@ public:
 
     // 分配或复用 RenderTarget（重命名）
     std::shared_ptr<PooledRenderTarget> GetFreeRenderTarget(
-        const PoolRenderTargetDesc& Desc);
+        const PoolRenderTargetDesc& desc);
 
     // 可选：清空池
     void Clear();
@@ -363,10 +363,10 @@ private:
     // 垃圾回收：检查所有已分配target，若frame小于当前queue的frame则回收
     void GarbageCollect();
 
-    std::mutex Mutex;
-    std::vector<std::shared_ptr<PooledRenderTarget>> FreeList;
+    std::mutex m_Mutex;
+    std::vector<std::shared_ptr<PooledRenderTarget>> m_FreeList;
     // 记录所有已分配的target，便于垃圾回收
-    std::vector<std::shared_ptr<PooledRenderTarget>> AllocatedList;
+    std::vector<std::shared_ptr<PooledRenderTarget>> m_AllocatedList;
 };
 
 extern RENDERCORE_API RenderTargetPool GRenderTargetPool;
@@ -377,23 +377,23 @@ struct TransientBufferDesc {
     RHI::ERHIBufferUsageFlags Usage = RHI::ERHIBufferUsageFlag::None; // 缓冲区用途
     bool bCPUAccessible = false;         // CPU是否可访问
     RHI::EQueueType InitialQueueType = RHI::EQueueType::Graphics; // 初始所属队列
-    static RHI::RHIBufferDesc ConvertToRHIBufferDesc(const TransientBufferDesc& InDesc) {
-        RHI::RHIBufferDesc Desc;
-        Desc.Size = InDesc.Size;
-        Desc.Stride = InDesc.Stride;
-        Desc.Usage = InDesc.Usage;
-        Desc.bCPUAccessible = InDesc.bCPUAccessible;
-        Desc.InitialQueueType = InDesc.InitialQueueType;
-        return Desc;
+    static RHI::RHIBufferDesc ConvertToRHIBufferDesc(const TransientBufferDesc& inDesc) {
+        RHI::RHIBufferDesc desc;
+        desc.Size = inDesc.Size;
+        desc.Stride = inDesc.Stride;
+        desc.Usage = inDesc.Usage;
+        desc.bCPUAccessible = inDesc.bCPUAccessible;
+        desc.InitialQueueType = inDesc.InitialQueueType;
+        return desc;
     }
-    static TransientBufferDesc ConvertFromRHIBufferDesc(const RHI::RHIBufferDesc& InDesc) {
-        TransientBufferDesc Desc;
-        Desc.Size = InDesc.Size;
-        Desc.Stride = InDesc.Stride;
-        Desc.Usage = InDesc.Usage;
-        Desc.bCPUAccessible = InDesc.bCPUAccessible;
-        Desc.InitialQueueType = InDesc.InitialQueueType;
-        return Desc;
+    static TransientBufferDesc ConvertFromRHIBufferDesc(const RHI::RHIBufferDesc& inDesc) {
+        TransientBufferDesc desc;
+        desc.Size = inDesc.Size;
+        desc.Stride = inDesc.Stride;
+        desc.Usage = inDesc.Usage;
+        desc.bCPUAccessible = inDesc.bCPUAccessible;
+        desc.InitialQueueType = inDesc.InitialQueueType;
+        return desc;
     }
 };
 
@@ -401,28 +401,28 @@ class PooledTransientBuffer
 {
 public:
 	PooledTransientBuffer(
-		const TransientBufferDesc& InDesc,
-		RHI::RHITransientBufferSP InTransientBuffer)
-		: Desc(InDesc)
-		, TransientBuffer(std::move(InTransientBuffer))
+		const TransientBufferDesc& inDesc,
+		RHI::RHITransientBufferSP inTransientBuffer)
+		: m_Desc(inDesc)
+		, m_TransientBuffer(std::move(inTransientBuffer))
 	{
 	}
     ~PooledTransientBuffer()
     {
-        ViewCache.Clear();
-        TransientBuffer.reset();
+        m_ViewCache.Clear();
+        m_TransientBuffer.reset();
     }
-    const TransientBufferDesc& GetDesc() const { return Desc; }
-    RHI::RHIBuffer* GetRHI() const { return TransientBuffer->GetBuffer().get(); }
-    RHI::RHITransientBuffer* GetTransientRHI() const { return TransientBuffer.get(); }
-    RenderBufferTracker& GetTracker() { return Tracker; }
-    BufferViewCache& GetViewCache() { return ViewCache; }
+    const TransientBufferDesc& GetDesc() const { return m_Desc; }
+    RHI::RHIBuffer* GetRHI() const { return m_TransientBuffer->GetBuffer().get(); }
+    RHI::RHITransientBuffer* GetTransientRHI() const { return m_TransientBuffer.get(); }
+    RenderBufferTracker& GetTracker() { return m_Tracker; }
+    BufferViewCache& GetViewCache() { return m_ViewCache; }
 private:
     friend class TransientResourceAllocator;
-    BufferViewCache ViewCache;
-    RenderBufferTracker Tracker;
-    TransientBufferDesc Desc;
-    RHI::RHITransientBufferSP TransientBuffer = nullptr;
+    BufferViewCache m_ViewCache;
+    RenderBufferTracker m_Tracker;
+    TransientBufferDesc m_Desc;
+    RHI::RHITransientBufferSP m_TransientBuffer = nullptr;
 
 
 };
@@ -432,41 +432,41 @@ class RENDERCORE_API PooledTransientRenderTarget final : public IPooledRenderTar
 {
 public:
     PooledTransientRenderTarget(
-        const PoolRenderTargetDesc& InDesc,
-        RHI::RHITransientTextureSP InTransientTexture)
-        : Desc(InDesc)
-        , TransientTexture(std::move(InTransientTexture))
+        const PoolRenderTargetDesc& inDesc,
+        RHI::RHITransientTextureSP inTransientTexture)
+        : m_Desc(inDesc)
+        , m_TransientTexture(std::move(inTransientTexture))
     {
-        Tracker.Initialize(InDesc.ArraySize, InDesc.MipLevels, 1);
+        _tracker.Initialize(inDesc.ArraySize, inDesc.MipLevels, 1);
     }
     ~PooledTransientRenderTarget()
     {
-        ViewCache.Clear();
-        TransientTexture.reset();
+        _viewCache.Clear();
+        m_TransientTexture.reset();
     }
     virtual const PoolRenderTargetDesc& GetDesc() const override
     {
-        return Desc;
+        return m_Desc;
     }
 
     virtual RHI::RHITransientTexture* GetTransientRHI()
     {
-        return TransientTexture.get();
+        return m_TransientTexture.get();
     }
 
     virtual RHI::RHITexture* GetRHI() override
     {
-        return TransientTexture
-            ? TransientTexture->GetTexture().get()
+        return m_TransientTexture
+            ? m_TransientTexture->GetTexture().get()
             : nullptr;
     }
 
 
 private:
     friend class TransientResourceAllocator;
-    PoolRenderTargetDesc Desc;
+    PoolRenderTargetDesc m_Desc;
     // ✅ 改成 shared_ptr（核心）
-    RHI::RHITransientTextureSP TransientTexture;
+    RHI::RHITransientTextureSP m_TransientTexture;
 };
 
 
@@ -488,48 +488,48 @@ public:
     // Allocate
     // -------------------------------
     std::shared_ptr<PooledTransientRenderTarget> AllocateRenderTarget(
-        const PoolRenderTargetDesc& Desc,
+        const PoolRenderTargetDesc& desc,
         uint32_t beginIndex,
         uint32_t endIndex)
     {
         // 👉 直接创建 transient texture（核心）
-        auto transientTex = TransientResourceManager->CreateTransientTexture(
-            PoolRenderTargetDesc::ConvertToRHITextureDesc(Desc),
+        auto transientTex = m_TransientResourceManager->CreateTransientTexture(
+            PoolRenderTargetDesc::ConvertToRHITextureDesc(desc),
             beginIndex,
             endIndex);
 
         // 👉 创建 wrapper（不复用）
         auto target = std::make_shared<PooledTransientRenderTarget>(
-            Desc,
+            desc,
             transientTex);
-        AllocatedTextures.push_back(target);
+        m_AllocatedTextures.push_back(target);
         return target;
     }
     std::shared_ptr<PooledTransientBuffer> AllocateBuffer(
-        const TransientBufferDesc& Desc,
+        const TransientBufferDesc& desc,
         uint32_t beginIndex,
         uint32_t endIndex)
     {
         // 👉 直接创建 transient texture（核心）
-        auto transientBuf = TransientResourceManager->CreateTransientBuffer(
-            TransientBufferDesc::ConvertToRHIBufferDesc(Desc),
+        auto transientBuf = m_TransientResourceManager->CreateTransientBuffer(
+            TransientBufferDesc::ConvertToRHIBufferDesc(desc),
             beginIndex,
             endIndex);
 
         // 👉 创建 wrapper（不复用）
         auto buf = std::make_shared<PooledTransientBuffer>(
-            Desc,
+            desc,
             transientBuf);
-        AllocatedBuffers.push_back(buf);
+        m_AllocatedBuffers.push_back(buf);
         return buf;
     }
 
     void GarbageCollect();
 private:
     
-    std::vector<std::shared_ptr<PooledTransientRenderTarget>> AllocatedTextures;
-    std::vector<std::shared_ptr<PooledTransientBuffer>>      AllocatedBuffers;
-    RHI::RHITransientResourceManagerSP TransientResourceManager;
+    std::vector<std::shared_ptr<PooledTransientRenderTarget>> m_AllocatedTextures;
+    std::vector<std::shared_ptr<PooledTransientBuffer>>      m_AllocatedBuffers;
+    RHI::RHITransientResourceManagerSP m_TransientResourceManager;
 };
 
 extern RENDERCORE_API TransientResourceAllocator GTransientResourceAllocator;
@@ -548,8 +548,8 @@ extern RENDERCORE_API RenderBufferSP GlobalEmptyBuffer;
 RENDERCORE_API bool InitGlobalRenderResource();
 RENDERCORE_API void ReleaseGlobalRenderResource();
 
-RENDERCORE_API RenderTextureSP CreateTexture(const std::string& Path);
-RENDERCORE_API void SaveTexture(RenderTexture* texture,const std::string& Path,uint32_t array,uint32_t mip);
+RENDERCORE_API RenderTextureSP CreateTexture(const std::string& path);
+RENDERCORE_API void SaveTexture(RenderTexture* texture,const std::string& path,uint32_t array,uint32_t mip);
 
 RENDERCORE_API RenderTextureSP Create3DTexture(uint32_t width, uint32_t height, uint32_t depth, RHI::ERHIFormat format, RHI::ERHITextureCreateFlags usage, const char* debugName);
 

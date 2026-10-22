@@ -15,55 +15,55 @@ RenderResource::RenderResource() = default;
 RenderResource::~RenderResource() = default;
 
 void RenderResource::InitRHIResource() {
-    bInitialized = true;
+    _bInitialized = true;
 }
 
 void RenderResource::ReleaseRHIResource() {
-    bInitialized = false;
+    _bInitialized = false;
 }
 
 void RenderResource::SetName(const std::string& name) {
-    Name = name;
+    _name = name;
 }
 
 const std::string& RenderResource::GetName() const {
-    return Name;
+    return _name;
 }
 
 bool RenderResource::IsInitialized() const {
-    return bInitialized.load();
+    return _bInitialized.load();
 }
 
 // RenderTexture
-RenderTexture::RenderTexture(const RHI::RHITextureDesc& inDesc) : Desc(inDesc) {
-	Tracker.Initialize(Desc.ArraySize, Desc.MipLevels, 1);
+RenderTexture::RenderTexture(const RHI::RHITextureDesc& inDesc) : m_Desc(inDesc) {
+	m_Tracker.Initialize(m_Desc.ArraySize, m_Desc.MipLevels, 1);
 }
 RenderTexture::~RenderTexture()
 {
-	if (Texture) {
+	if (m_Texture) {
 		ReleaseRHIResource();
 	}
 }
 
 void RenderTexture::InitRHIResource() {
-	Texture = RHI::GRHIApi->CreateTexture(Desc);
+	m_Texture = RHI::GRHIApi->CreateTexture(m_Desc);
     RenderResource::InitRHIResource();
     // 纹理资源初始化逻辑
 }
 
 void RenderTexture::ReleaseRHIResource() {
     // 纹理资源释放逻辑
-	Texture.reset();
-	Texture = nullptr;
+	m_Texture.reset();
+	m_Texture = nullptr;
     RenderResource::ReleaseRHIResource();
 }
 void RenderTexture::UploadData(const void* data, uint32_t mipIndex, uint32_t arraySlice, uint32_t planeSlice) {
 	RHI::RHIUpdateTextureRegion updateRegion;
 	updateRegion.ArraySlice = arraySlice;
 	updateRegion.MipLevel = mipIndex;
-	updateRegion.Width = Desc.Width >> mipIndex;
-	updateRegion.Height = Desc.Height >> mipIndex;
-	updateRegion.Depth = Desc.Depth >> mipIndex;
+	updateRegion.Width = m_Desc.Width >> mipIndex;
+	updateRegion.Height = m_Desc.Height >> mipIndex;
+	updateRegion.Depth = m_Desc.Depth >> mipIndex;
 	UploadData(data, updateRegion);
 }
 void RenderTexture::UploadData(const void* data, const RHI::RHIUpdateTextureRegion& updateRegion) {
@@ -77,17 +77,17 @@ void RenderTexture::UploadData(const void* data, const RHI::RHIUpdateTextureRegi
 	range.ArraySlice = updateRegion.ArraySlice;
 	range.MipIndex = updateRegion.MipLevel;
 	range.PlaneSlice = 0;
-	if (range.MipIndex == 0 && Desc.MipLevels == 1) {
+	if (range.MipIndex == 0 && m_Desc.MipLevels == 1) {
         range.MipIndex = RHISubresourceRange::KAllSubresources;
 	}
-    if (range.ArraySlice == 0 && Desc.ArraySize == 1) {
+    if (range.ArraySlice == 0 && m_Desc.ArraySize == 1) {
 		range.ArraySlice = RHISubresourceRange::KAllSubresources;
     }
 	range.PlaneSlice = RHISubresourceRange::KAllSubresources;
 	auto lastAccess = GetTracker().GetSubresourceAccess(range);
 	if (lastAccess != ERHIResourceAccess::TransferDest) {
 		std::vector<RHI::RHITransitionInfo> infos;
-		infos.emplace_back(Texture.get(), lastAccess, ERHIResourceAccess::TransferDest, lastQueueType, lastQueueType);
+		infos.emplace_back(m_Texture.get(), lastAccess, ERHIResourceAccess::TransferDest, lastQueueType, lastQueueType);
 		char* transitionMem = new char[RHI::G_RHITransition_TotalSize];
 		auto* transition = new(transitionMem) RHI::RHITransition();
 		GRHIApi->RHICreateTransition(transition, RHI::RHITransitionCreateInfo(RHI::ERHITransitionCreateFlags::None, std::move(infos)));
@@ -100,7 +100,7 @@ void RenderTexture::UploadData(const void* data, const RHI::RHIUpdateTextureRegi
 	}
 
 
-	GRHIApi->UpdateTexture(cmd, Texture.get(), data, updateRegion);
+	GRHIApi->UpdateTexture(cmd, m_Texture.get(), data, updateRegion);
 	cmd.End();
 	RHI::RHIFence fence;
 	fence.QueueType = lastQueueType;
@@ -159,7 +159,7 @@ void RenderTexture::ReadData(void* data, uint32_t mipIndex, uint32_t arraySlice,
 			RHI::RHITransitionInfo> infos;
 
 		infos.emplace_back(
-			Texture.get(),
+			m_Texture.get(),
 			lastAccess,
 			ERHIResourceAccess::
 			TransferSrc, lastQueueType, lastQueueType);
@@ -210,7 +210,7 @@ void RenderTexture::ReadData(void* data, uint32_t mipIndex, uint32_t arraySlice,
 	void* mapped =
 		GRHIApi->MapReadTexture(
 			cmd,
-			Texture.get(),
+			m_Texture.get(),
 			readInfo);
 
 	//---------------------------------
@@ -229,12 +229,12 @@ void RenderTexture::ReadData(void* data, uint32_t mipIndex, uint32_t arraySlice,
 	//---------------------------------
 
 	auto mipSize =
-		Texture->GetMipSize(
+		m_Texture->GetMipSize(
 			mipIndex);
 
 	const uint32_t bpp =
 		RHI::GFormatInfoMap
-		.at(Desc.Format)
+		.at(m_Desc.Format)
 		.BytesPerPixel;
 
 	size_t totalSize =
@@ -396,12 +396,12 @@ void TransitionBufferImmediate(
 }
 
 // RenderBuffer
-RenderBuffer::RenderBuffer(const RHI::RHIBufferDesc& inDesc) : Desc(inDesc) {};RenderBuffer::~RenderBuffer() = default;
+RenderBuffer::RenderBuffer(const RHI::RHIBufferDesc& inDesc) : m_Desc(inDesc) {};RenderBuffer::~RenderBuffer() = default;
 
 void RenderBuffer::InitRHIResource() {
-	Buffer = RHI::GRHIApi->CreateBuffer(Desc);
+	m_Buffer = RHI::GRHIApi->CreateBuffer(m_Desc);
 	RHI::RHIFence fence = {};
-	fence.QueueType = Desc.InitialQueueType;
+	fence.QueueType = m_Desc.InitialQueueType;
 	fence.Value = 0;
     GetTracker().UpdateLastAccessFence(fence);
     RenderResource::InitRHIResource();
@@ -410,8 +410,8 @@ void RenderBuffer::InitRHIResource() {
 
 void RenderBuffer::ReleaseRHIResource() {
     // 缓冲区资源释放逻辑
-	Buffer.reset();
-	Buffer = nullptr;
+	m_Buffer.reset();
+	m_Buffer = nullptr;
     RenderResource::ReleaseRHIResource();
 }
 void RenderBuffer::UploadData(const void* data, uint32_t size, uint32_t offset) {
@@ -424,7 +424,7 @@ void RenderBuffer::UploadData(const void* data, uint32_t size, uint32_t offset) 
 	if (GetTracker().GetLastAccess() != ERHIResourceAccess::TransferDest) {
 		std::vector<RHI::RHITransitionInfo> infos;
 
-		infos.emplace_back(Buffer.get(), GetTracker().GetLastAccess(), ERHIResourceAccess::TransferDest);
+		infos.emplace_back(m_Buffer.get(), GetTracker().GetLastAccess(), ERHIResourceAccess::TransferDest);
 
 
 		char* transitionMem = new char[RHI::G_RHITransition_TotalSize];
@@ -441,7 +441,7 @@ void RenderBuffer::UploadData(const void* data, uint32_t size, uint32_t offset) 
 	region.Offset = offset;
 	region.Size = size;
 
-	GRHIApi->UpdateBuffer(cmd, Buffer.get(),data, region);
+	GRHIApi->UpdateBuffer(cmd, m_Buffer.get(),data, region);
 	cmd.End();
 
 	RHI::RHIFence fence;
@@ -460,34 +460,34 @@ TransientResourceAllocator GTransientResourceAllocator;
 
 // 分配或复用 RenderTarget（重命名GetFreeRenderTarget，增加垃圾回收和分配管理）
 std::shared_ptr<PooledRenderTarget> RenderTargetPool::GetFreeRenderTarget(
-	const PoolRenderTargetDesc& Desc)
+	const PoolRenderTargetDesc& desc)
 {
-	std::lock_guard<std::mutex> Lock(Mutex);
+	std::lock_guard<std::mutex> lock(m_Mutex);
 	GarbageCollect();
 
-	if (!FreeList.empty())
+	if (!m_FreeList.empty())
 	{
-		auto it = FreeList.begin();
+		auto it = m_FreeList.begin();
 		std::shared_ptr<PooledRenderTarget> p = nullptr;
-		for (it = FreeList.begin(); it != FreeList.end(); ++it) {
-			bool match = (*it)->GetDesc().Matches(Desc);
+		for (it = m_FreeList.begin(); it != m_FreeList.end(); ++it) {
+			bool match = (*it)->GetDesc().Matches(desc);
 			if (match) {
 				break;
 			}
 		}		
-		if (it != FreeList.end()) {
+		if (it != m_FreeList.end()) {
 			p = *it;
-			FreeList.erase(it);
-			AllocatedList.push_back(p);
+			m_FreeList.erase(it);
+			m_AllocatedList.push_back(p);
 			return p;
 		}
 	}
-	auto descRHI = PoolRenderTargetDesc::ConvertToRHITextureDesc(Desc);
-	auto Texture = RHI::GRHIApi->CreateTexture(descRHI);
+	auto descRHI = PoolRenderTargetDesc::ConvertToRHITextureDesc(desc);
+	auto texture = RHI::GRHIApi->CreateTexture(descRHI);
 	// 没有可复用的资源，创建新的
-	auto RT = std::make_shared<PooledRenderTarget>(Desc, Texture);
-	AllocatedList.push_back(RT);
-	return RT;
+	auto rt = std::make_shared<PooledRenderTarget>(desc, texture);
+	m_AllocatedList.push_back(rt);
+	return rt;
 }
 // 垃圾回收：遍历AllocatedList，若target的LastUsedFrame小于当前队列的frame则回收
 void RenderTargetPool::GarbageCollect()
@@ -496,8 +496,8 @@ void RenderTargetPool::GarbageCollect()
 	auto computeQueueFrame = RHI::GRHIApi->GetQueue(EQueueType::Compute)->GetCurrentTimelineValue(); // 需RHI支持
 
 	// 一次遍历，按队列类型和frame判断是否回收
-	auto it = AllocatedList.begin();
-	while (it != AllocatedList.end()) {
+	auto it = m_AllocatedList.begin();
+	while (it != m_AllocatedList.end()) {
 		auto& target = *it;
 		auto& tracker = target->GetTracker();
 		EQueueType queueType = tracker.GetLastAccessFence().QueueType;
@@ -514,8 +514,8 @@ void RenderTargetPool::GarbageCollect()
 				break;
 		}
 		if (target && targetFrame < currentFrame && !(target->IsUsed())) {
-			FreeList.push_back(target);
-			it = AllocatedList.erase(it);
+			m_FreeList.push_back(target);
+			it = m_AllocatedList.erase(it);
 		} else {
 			++it;
 		}
@@ -525,9 +525,9 @@ void RenderTargetPool::GarbageCollect()
 // 可选：清空池
 void RenderTargetPool::Clear()
 {
-    std::lock_guard<std::mutex> Lock(Mutex);
-    FreeList.clear();
-	AllocatedList.clear();
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    m_FreeList.clear();
+	m_AllocatedList.clear();
 }
 
 
@@ -563,13 +563,13 @@ bool InitGlobalRenderResource() {
     GlobalEmptyCubeTexture = std::make_shared<RenderTexture>(descCube);
     GlobalEmptyCubeTexture->InitRHIResource();
 
-	RHI::RHITextureDesc Tex2dArray;
-	Tex2dArray.ArraySize = 2;
-	Tex2dArray.Format = ERHIFormat::R8G8B8A8_UNorm;
-	Tex2dArray.Type = ERHITextureType::Texture2DArray;
-	Tex2dArray.Usage = ERHITextureCreateFlag::ShaderResource;
-	Tex2dArray.DebugName = "Empty2DTextureArray";
-	GlobalEmptyTexture2DArray = std::make_shared<RenderTexture>(Tex2dArray);
+	RHI::RHITextureDesc tex2dArray;
+	tex2dArray.ArraySize = 2;
+	tex2dArray.Format = ERHIFormat::R8G8B8A8_UNorm;
+	tex2dArray.Type = ERHITextureType::Texture2DArray;
+	tex2dArray.Usage = ERHITextureCreateFlag::ShaderResource;
+	tex2dArray.DebugName = "Empty2DTextureArray";
+	GlobalEmptyTexture2DArray = std::make_shared<RenderTexture>(tex2dArray);
 	GlobalEmptyTexture2DArray->InitRHIResource();
     return true;
 }
@@ -582,13 +582,13 @@ void ReleaseGlobalRenderResource() {
 	GlobalEmptyTexture2DArray.reset();
 }
 
-RenderTextureSP CreateTexture(const std::string& Path)
+RenderTextureSP CreateTexture(const std::string& path)
 {
 	int width, height, channels;
 
 	// 1. 使用 stb_image 加载数据
 	// 强制加载为 4 通道 (RGBA)，因为大多数 GPU 对 RGBA 的兼容性比 RGB 更好
-	stbi_uc* pixels = stbi_load(Path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
 
 	if (!pixels)
 	{
@@ -618,7 +618,7 @@ RenderTextureSP CreateTexture(const std::string& Path)
 
 
 	desc.InitialData = pixels; // 传入 stbi 的内存指针
-	desc.DebugName = Path.c_str();
+	desc.DebugName = path.c_str();
 
 	RenderCore::RenderTextureSP outTexture = nullptr;
 
@@ -771,15 +771,15 @@ void SaveTexture(RenderTexture* texture,const std::string& path, uint32_t array,
 
 void TransientResourceAllocator::InitRHI() 
 {
-	TransientResourceManager = RHI::GRHIApi->CreateTransientResourceManager();
+	m_TransientResourceManager = RHI::GRHIApi->CreateTransientResourceManager();
 }
 
 void TransientResourceAllocator::ReleaseRHI()
 {
-	AllocatedBuffers.clear();
-	AllocatedTextures.clear();
-	TransientResourceManager.reset();
-	TransientResourceManager = nullptr;
+	m_AllocatedBuffers.clear();
+	m_AllocatedTextures.clear();
+	m_TransientResourceManager.reset();
+	m_TransientResourceManager = nullptr;
 }
 
 void TransientResourceAllocator::GarbageCollect() 
@@ -790,7 +790,7 @@ void TransientResourceAllocator::GarbageCollect()
 	uint64_t gfx = api->GetQueue(RHI::EQueueType::Graphics)->GetCurrentTimelineValue();
 	uint64_t compute = api->GetQueue(RHI::EQueueType::Compute)->GetCurrentTimelineValue();
 
-	auto IsFenceDone = [&](const RHI::RHIFence& f)
+	auto isFenceDone = [&](const RHI::RHIFence& f)
 		{
 			uint64_t current = 0;
 
@@ -807,24 +807,24 @@ void TransientResourceAllocator::GarbageCollect()
 	// =========================
 	// Texture
 	// =========================
-	auto itTex = AllocatedTextures.begin();
-	while (itTex != AllocatedTextures.end())
+	auto itTex = m_AllocatedTextures.begin();
+	while (itTex != m_AllocatedTextures.end())
 	{
 		auto& tex = *itTex;
 
 		if (!tex)
 		{
-			itTex = AllocatedTextures.erase(itTex);
+			itTex = m_AllocatedTextures.erase(itTex);
 			continue;
 		}
 
 		const auto& fence = tex->GetTracker().GetLastAccessFence();
 
-		if (IsFenceDone(fence))
+		if (isFenceDone(fence))
 		{
 			// 👉 这里才真正释放 RHI 资源
-			TransientResourceManager->ReleaseTransientTexture(tex->GetTransientRHI());
-			itTex = AllocatedTextures.erase(itTex);
+			m_TransientResourceManager->ReleaseTransientTexture(tex->GetTransientRHI());
+			itTex = m_AllocatedTextures.erase(itTex);
 		}
 		else
 		{
@@ -835,23 +835,23 @@ void TransientResourceAllocator::GarbageCollect()
 	// =========================
 	// Buffer
 	// =========================
-	auto itBuf = AllocatedBuffers.begin();
-	while (itBuf != AllocatedBuffers.end())
+	auto itBuf = m_AllocatedBuffers.begin();
+	while (itBuf != m_AllocatedBuffers.end())
 	{
 		auto& buf = *itBuf;
 
 		if (!buf)
 		{
-			itBuf = AllocatedBuffers.erase(itBuf);
+			itBuf = m_AllocatedBuffers.erase(itBuf);
 			continue;
 		}
 
 		const auto& fence = buf->GetTracker().GetLastAccessFence();
 
-		if (IsFenceDone(fence))
+		if (isFenceDone(fence))
 		{
-			TransientResourceManager->ReleaseTransientBuffer(buf->GetTransientRHI());
-			itBuf = AllocatedBuffers.erase(itBuf);
+			m_TransientResourceManager->ReleaseTransientBuffer(buf->GetTransientRHI());
+			itBuf = m_AllocatedBuffers.erase(itBuf);
 		}
 		else
 		{

@@ -36,40 +36,40 @@ class RENDERCORE_API VertexFactoryType
 {
 public:
     static std::unordered_map<std::string, VertexFactoryType*>& GetRegisterMap() {
-        static std::unordered_map<std::string, VertexFactoryType*> Map;
-        return Map;
+        static std::unordered_map<std::string, VertexFactoryType*> map;
+        return map;
     }
 
     VertexFactoryType(
-        std::string InName,
-        std::string InShaderPath,
-        uint32_t InPermutationTotalCount,
-        VFShouldCompileFunc InShouldCompile,
-        VFModifyEnvFunc InModifyEnv,
-        const ShaderParametersMetadata* InRootParametersMetadata
+        std::string inName,
+        std::string inShaderPath,
+        uint32_t inPermutationTotalCount,
+        VFShouldCompileFunc inShouldCompile,
+        VFModifyEnvFunc inModifyEnv,
+        const ShaderParametersMetadata* inRootParametersMetadata
     )
-        : Name(std::move(InName))
-        , ShaderPath(std::move(InShaderPath))
-        , PermutationTotalCount (InPermutationTotalCount)
-        , ShouldCompileFunc(std::move(InShouldCompile))
-        , ModifyEnvFunc(std::move(InModifyEnv))
-        , RootParametersMetadata(InRootParametersMetadata)
+        : Name(std::move(inName))
+        , ShaderPath(std::move(inShaderPath))
+        , PermutationTotalCount (inPermutationTotalCount)
+        , ShouldCompileFunc(std::move(inShouldCompile))
+        , ModifyEnvFunc(std::move(inModifyEnv))
+        , RootParametersMetadata(inRootParametersMetadata)
     {
         GetRegisterMap()[Name] = this;
     }
 
     // 暴露给编译器的接口
-    bool ShouldCompile(const VertexFactoryShaderPermutationParameters& Params) const 
+    bool ShouldCompile(const VertexFactoryShaderPermutationParameters& params) const
     {
-        return ShouldCompileFunc(Params);
+        return ShouldCompileFunc(params);
     }
 
-    void ModifyCompilationEnvironment(const VertexFactoryShaderPermutationParameters& Params, ShaderCompilerEnvironment& OutEnv) const
+    void ModifyCompilationEnvironment(const VertexFactoryShaderPermutationParameters& params, ShaderCompilerEnvironment& outEnv) const
     {
 
 		std::string virtualIncludePath = "#include \"" + ShaderPath + "\"";
-        OutEnv.VirtualIncludes["/Generated/VertexFactory.sf"] = virtualIncludePath;
-        ModifyEnvFunc(Params, OutEnv);
+        outEnv.VirtualIncludes["/Generated/VertexFactory.sf"] = virtualIncludePath;
+        ModifyEnvFunc(params, outEnv);
     }
 
     const std::string& GetName() const { return Name; }
@@ -105,15 +105,15 @@ public:
     virtual ~VertexFactory() = default;
     virtual RenderCore::VertexFactoryType* GetType() const { return nullptr; }
     RHI::RHIVertexDescState* GetRHIVertexDescState() const;
-    VertexFactoryFeatureFlags GetVertexFactoryFlags() const { return VertexFactoryFlags; }
-    static bool ShouldCompilePermutation(const VertexFactoryShaderPermutationParameters& Parameters) {
+    VertexFactoryFeatureFlags GetVertexFactoryFlags() const { return _vertexFactoryFlags; }
+    static bool ShouldCompilePermutation(const VertexFactoryShaderPermutationParameters& parameters) {
         return false;
     }
-    static void ModifyCompilationEnvironment(const VertexFactoryShaderPermutationParameters& Parameters, ShaderCompilerEnvironment& OutEnvironment) {
+    static void ModifyCompilationEnvironment(const VertexFactoryShaderPermutationParameters& parameters, ShaderCompilerEnvironment& outEnvironment) {
 
     }
 
-    void Bind(RHI::RHIGraphicCommandList& RHICmdList) const;
+    void Bind(RHI::RHIGraphicCommandList& rhiCmdList) const;
 
 
 protected:
@@ -152,19 +152,19 @@ protected:
     // 自动生成 Binding + Attribute
     //
     VertexElement AccessStreamComponent(
-        const VertexStreamComponent& Component,
-        uint32_t AttributeIndex);
+        const VertexStreamComponent& component,
+        uint32_t attributeIndex);
 
     //
     // 创建最终 VertexInputState
     //
     void InitDeclaration(
-        const std::vector<VertexElement>& Elements, RHI::RHIVertexDescState** OutVertexDescState);
+        const std::vector<VertexElement>& elements, RHI::RHIVertexDescState** outVertexDescState);
 
 
-    std::vector<VertexStream> Streams;
-    RHI::RHIVertexDescState* RHIVertexDescState;
-    VertexFactoryFeatureFlags VertexFactoryFlags;
+    std::vector<VertexStream> _streams;
+    RHI::RHIVertexDescState* _rhiVertexDescState;
+    VertexFactoryFeatureFlags _vertexFactoryFlags;
 };
 
 

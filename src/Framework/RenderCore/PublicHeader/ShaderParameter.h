@@ -85,76 +85,76 @@ namespace RenderCore {
     public:
 
         RenderTargetBinding&
-            operator[](uint32_t Index)
+            operator[](uint32_t index)
         {
-            return ColorRenderTargets[Index];
+            return ColorRenderTargets[index];
         }
 
         const RenderTargetBinding&
-            operator[](uint32_t Index) const
+            operator[](uint32_t index) const
         {
-            return ColorRenderTargets[Index];
+            return ColorRenderTargets[index];
         }
         RHI::RHIBoundRenderTargets GetBoundRenderTarget() const
         {
-            RHI::RHIBoundRenderTargets BoundRTs;
+            RHI::RHIBoundRenderTargets boundRTs;
 
             // 1. 填充颜色附件
             // 外部可能没有紧凑地排列 ColorRenderTargets，所以我们通过 NumColorRenderTargets 
             // 或者显式遍历有效插槽来保证数据的正确性。
-            BoundRTs.NumColorAttachments = static_cast<uint8_t>(NumColorRenderTargets);
+            boundRTs.NumColorAttachments = static_cast<uint8_t>(NumColorRenderTargets);
 
             for (uint32_t i = 0; i < NumColorRenderTargets; ++i)
             {
-                const RenderTargetBinding& SourceSlot = ColorRenderTargets[i];
-                auto& DestSlot = BoundRTs.ColorAttachments[i];
+                const RenderTargetBinding& sourceSlot = ColorRenderTargets[i];
+                auto& destSlot = boundRTs.ColorAttachments[i];
 
-                if (SourceSlot.IsValid())
+                if (sourceSlot.IsValid())
                 {
                     // 【核心】从 RDG Texture 提取底层物理 RHI 纹理指针
                     // 请根据你引擎中 RenderGraphTexture 的实际提取函数名修改（如 ->GetRHITexture() 或 ->RHIResource）
-                    DestSlot.Texture = SourceSlot.Texture->GetRHITexture();
-                    DestSlot.ResolveTarget = SourceSlot.ResolveTexture ? SourceSlot.ResolveTexture->GetRHITexture() : nullptr;
+                    destSlot.Texture = sourceSlot.Texture->GetRHITexture();
+                    destSlot.ResolveTarget = sourceSlot.ResolveTexture ? sourceSlot.ResolveTexture->GetRHITexture() : nullptr;
 
-                    DestSlot.MipIndex = SourceSlot.MipIndex;
-                    DestSlot.ArraySlice = static_cast<int32_t>(SourceSlot.ArraySlice);
-                    DestSlot.Actions = SourceSlot.Action;
-                    DestSlot.SampleCount = SourceSlot.SampleCount;
-                    DestSlot.Actions = SourceSlot.Action;
+                    destSlot.MipIndex = sourceSlot.MipIndex;
+                    destSlot.ArraySlice = static_cast<int32_t>(sourceSlot.ArraySlice);
+                    destSlot.Actions = sourceSlot.Action;
+                    destSlot.SampleCount = sourceSlot.SampleCount;
+                    destSlot.Actions = sourceSlot.Action;
                     // 设置清除标记类型
-                    DestSlot.ClearBinding.Binding = RHI::RHIClearValueBinding::ClearValueBinding::Color;
-                    DestSlot.ClearBinding.Color[0] = SourceSlot.ClearValue.X;
-                    DestSlot.ClearBinding.Color[1] = SourceSlot.ClearValue.Y;
-                    DestSlot.ClearBinding.Color[2] = SourceSlot.ClearValue.Z;
-                    DestSlot.ClearBinding.Color[3] = SourceSlot.ClearValue.W;
+                    destSlot.ClearBinding.Binding = RHI::RHIClearValueBinding::ClearValueBinding::Color;
+                    destSlot.ClearBinding.Color[0] = sourceSlot.ClearValue.X;
+                    destSlot.ClearBinding.Color[1] = sourceSlot.ClearValue.Y;
+                    destSlot.ClearBinding.Color[2] = sourceSlot.ClearValue.Z;
+                    destSlot.ClearBinding.Color[3] = sourceSlot.ClearValue.W;
                 }
             }
 
             // 2. 填充深度模板附件
             if (DepthStencil.IsValid())
             {
-                auto& DestDepth = BoundRTs.DepthStencil;
+                auto& destDepth = boundRTs.DepthStencil;
 
                 // 【核心】提取底层物理 RHI 深度纹理指针
-                DestDepth.Texture = DepthStencil.Texture->GetRHITexture();
-                DestDepth.ResolveTarget = nullptr; // 深度通常不直接在这做 Resolve
+                destDepth.Texture = DepthStencil.Texture->GetRHITexture();
+                destDepth.ResolveTarget = nullptr; // 深度通常不直接在这做 Resolve
 
-                DestDepth.MipIndex = DepthStencil.MipIndex;
-                DestDepth.ArraySlice = static_cast<uint32_t>(DepthStencil.ArraySlice < 0 ? 0 : DepthStencil.ArraySlice);
-                DestDepth.Actions = DepthStencil.DepthAction; // 默认或者以 DepthAction 为主
-                DestDepth.SampleCount = DepthStencil.SampleCount;
+                destDepth.MipIndex = DepthStencil.MipIndex;
+                destDepth.ArraySlice = static_cast<uint32_t>(DepthStencil.ArraySlice < 0 ? 0 : DepthStencil.ArraySlice);
+                destDepth.Actions = DepthStencil.DepthAction; // 默认或者以 DepthAction 为主
+                destDepth.SampleCount = DepthStencil.SampleCount;
 
-                DestDepth.ClearBinding.Binding = RHI::RHIClearValueBinding::ClearValueBinding::DepthStencil;
-                DestDepth.ClearBinding.Depth = 1.0f;
-                DestDepth.ClearBinding.Stencil = 0;
+                destDepth.ClearBinding.Binding = RHI::RHIClearValueBinding::ClearValueBinding::DepthStencil;
+                destDepth.ClearBinding.Depth = 1.0f;
+                destDepth.ClearBinding.Stencil = 0;
             }
 
             // 3. 触发物理尺寸的重新计算与对齐
             // 由于 Bound 逻辑移到了这里，我们需要手动调用转换后结构的内部计算
             // 如果之前把 CalculateDimensions 方法设为了 protected/private，需要把它改成 public
-            BoundRTs.CalculateDimensions();
+            boundRTs.CalculateDimensions();
 
-            return BoundRTs;
+            return boundRTs;
         }
 
     };
@@ -181,23 +181,23 @@ namespace RenderCore {
             uint32_t NumElements = 0;
             const ShaderParametersMetadata* StructMetadata = nullptr;
             Member(
-            const char* InTypeName,
-            const char* InName,
-            uint32_t InOffset,
-            EShaderParameterBaseType InBaseType,
-            uint32_t InNumRows,
-            uint32_t InNumColumns,
-            uint32_t InNumElements,
-            const ShaderParametersMetadata* InStructMetadata
+            const char* inTypeName,
+            const char* inName,
+            uint32_t inOffset,
+            EShaderParameterBaseType inBaseType,
+            uint32_t inNumRows,
+            uint32_t inNumColumns,
+            uint32_t inNumElements,
+            const ShaderParametersMetadata* inStructMetadata
             ):
-				TypeName(InTypeName),
-				Name(InName), 
-                Offset(InOffset), 
-                BaseType(InBaseType),
-                NumRows(InNumRows), 
-                NumColumns(InNumColumns), 
-                NumElements(InNumElements), 
-                StructMetadata(InStructMetadata)
+				TypeName(inTypeName),
+				Name(inName),
+                Offset(inOffset),
+                BaseType(inBaseType),
+                NumRows(inNumRows),
+                NumColumns(inNumColumns),
+                NumElements(inNumElements),
+                StructMetadata(inStructMetadata)
             
             {
 
@@ -210,36 +210,36 @@ namespace RenderCore {
             bool IsArray() const { return (NumElements > 1); }
             bool IsRenderTargetSlots() const { return BaseType == EShaderParameterBaseType::RenderTargetSlots; }
         };
-		bool InitFlag = false;
+		bool bInitFlag = false;
     public:
 
         ShaderParametersMetadata(
-            const char* InStructName,
-            uint32_t InSize,
-            std::vector<Member> InMembers,
-            EUseCase InUseCase = EUseCase::ShaderParameterStruct)
-            : StructName(InStructName)
-            , Size(InSize)
-            , Members(std::move(InMembers))
-            , UseCase(InUseCase)
+            const char* inStructName,
+            uint32_t inSize,
+            std::vector<Member> inMembers,
+            EUseCase inUseCase = EUseCase::ShaderParameterStruct)
+            : m_StructName(inStructName)
+            , m_Size(inSize)
+            , Members(std::move(inMembers))
+            , m_UseCase(inUseCase)
         {
         }
 
-        const char* GetStructName() const { return StructName; }
-        uint32_t GetSize() const { return Size; }
+        const char* GetStructName() const { return m_StructName; }
+        uint32_t GetSize() const { return m_Size; }
         const std::vector<Member>& GetMembers() const { return Members; }
-        EUseCase GetUseCase() const { return UseCase; }
+        EUseCase GetUseCase() const { return m_UseCase; }
         bool HasResource() const
         {
-            for (const auto& Member : Members)
+            for (const auto& member : Members)
             {
-                if (Member.IsResource())
+                if (member.IsResource())
                     return true;
 
-                if (Member.IsNestedStruct())
+                if (member.IsNestedStruct())
                 {
-                    if (Member.StructMetadata &&
-                        Member.StructMetadata
+                    if (member.StructMetadata &&
+                        member.StructMetadata
                         ->HasResource())
                     {
                         return true;
@@ -251,30 +251,30 @@ namespace RenderCore {
 
         template<typename Fn>
         void IterateStructureMetadataDependencies(
-            Fn Lambda) const
+            Fn lambda) const
         {
-            for (auto& Member : Members)
+            for (auto& member : Members)
             {
-                auto* StructMeta =
-                    Member.GetStructMetadata();
+                auto* structMeta =
+                    member.GetStructMetadata();
 
-                if (!StructMeta || Member.IsIncludeStruct())
+                if (!structMeta || member.IsIncludeStruct())
                     continue;
 
-                StructMeta
+                structMeta
                     ->IterateStructureMetadataDependencies(
-                        Lambda);
+                        lambda);
             }
 
-            Lambda(this);
+            lambda(this);
         }
 
         std::vector<Member> Members;
     private:
-        const char* StructName;
-        uint32_t Size;
+        const char* m_StructName;
+        uint32_t m_Size;
         
-        EUseCase UseCase;
+        EUseCase m_UseCase;
 
     };
     
@@ -285,8 +285,8 @@ class Shader;
 RENDERCORE_API void SetShaderParameters(
     RHI::RHICommandListBase& cmdList,
     const Shader* shader,
-    const ShaderParametersMetadata* ParametersMetaData,
-    void* ParametersData);
+    const ShaderParametersMetadata* parametersMetaData,
+    void* parametersData);
 
 
 /**
@@ -299,8 +299,8 @@ template<typename TParameters>
 void SetShaderParameters(
     RHI::RHICommandListBase& cmdList,
     const Shader* shader,
-    const TParameters* ParametersData) {
-    SetShaderParameters(cmdList, shader, ParametersData->GetMetaData(), (void*)ParametersData);
+    const TParameters* parametersData) {
+    SetShaderParameters(cmdList, shader, parametersData->GetMetaData(), (void*)parametersData);
 }
 
 
@@ -329,14 +329,14 @@ struct ShaderParameterTypeInfo
 };
 class ShaderParameterElementAccessor {
 public:
-    virtual const uint8_t* GetElementOffset(uint32_t Index) const = 0;
+    virtual const uint8_t* GetElementOffset(uint32_t index) const = 0;
     virtual size_t GetElementCount() const = 0;
 };
 template<typename T, size_t InNumElements>
 class ShaderParameterArray : public ShaderParameterElementAccessor,public std::array<T, InNumElements> {
 public:
-    const uint8_t* GetElementOffset(uint32_t Index) const override {
-        return (uint8_t*)&(*this)[Index];
+    const uint8_t* GetElementOffset(uint32_t index) const override {
+        return (uint8_t*)&(*this)[index];
     }
 	size_t GetElementCount() const override {
 		return InNumElements;
@@ -693,7 +693,7 @@ public:\
     static const RenderCore::ShaderParametersMetadata* GetMetaData() \
     {\
         static RenderCore::ShaderParametersMetadata sMetaData(#StructClass,sizeof(StructClass),{});\
-        if(!sMetaData.InitFlag){\
+        if(!sMetaData.bInitFlag){\
         std::vector<RenderCore::ShaderParametersMetadata::Member>& Members = sMetaData.Members;\
         FuncPtr(*PrevFunc)(LastIdType, std::vector<RenderCore::ShaderParametersMetadata::Member>*);            \
         PrevFunc = sAppendMemberGetPrev; \
@@ -702,7 +702,7 @@ public:\
             func = reinterpret_cast<MemberFuncType>(func)(LastIdType(), &Members);\
 	    } while (func != nullptr); \
         std::reverse(Members.begin(), Members.end());\
-        sMetaData.InitFlag = true;\
+        sMetaData.bInitFlag = true;\
         }\
         return &sMetaData;\
     }\

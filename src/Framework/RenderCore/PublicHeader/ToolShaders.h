@@ -8,7 +8,7 @@ namespace RenderCore {
 
 
 
-    // ���� Blit �����ṹ
+    // Shader parameter structure for texture blitting.
     BEGIN_SHADER_PARAMETER_STRUCT(BlitTextureParameters)
         SHADER_PARAMETER(Core::Float2, SrcSize)
         SHADER_PARAMETER(Core::Float2, SrcInvSize)
@@ -35,16 +35,16 @@ namespace RenderCore {
         
         DECLARE_GLOBAL_SHADER_TYPE(BlitTextureCS);
 
-        static bool ShouldCompilePermutation(const ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters& Parameters,ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters& parameters,ShaderCompilerEnvironment& outEnvironment)
         {
-            PermutationDomain Domain;
-            Domain.SetFromId(Parameters.PermutationId);
-            Domain.ModifyCompilationEnvironment(OutEnvironment);
+            PermutationDomain domain;
+            domain.SetFromId(parameters.PermutationId);
+            domain.ModifyCompilationEnvironment(outEnvironment);
         }
 
         static const ShaderParametersMetadata* GetShaderParameterMetadata()

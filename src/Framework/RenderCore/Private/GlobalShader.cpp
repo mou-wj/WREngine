@@ -14,8 +14,8 @@ namespace RenderCore{
 
     Shader* GlobalShaderMap::GetShader(ShaderType* shaderType, ShaderPermutationId id)
     {
-        auto it = ShaderMap.find(shaderType);
-        if (it != ShaderMap.end()) {
+        auto it = m_ShaderMap.find(shaderType);
+        if (it != m_ShaderMap.end()) {
             auto shaderIt = it->second.find(id);
             if (shaderIt != it->second.end()) {
                 return shaderIt->second.get();
@@ -34,14 +34,14 @@ namespace RenderCore{
 
     bool GlobalShaderMap::Initialize()
     {
-        if (IsInitialized) {
+        if (m_bIsInitialized) {
             return true;
         }
 
-        // »ñÈ¡µ±Ç°ÔËĞĞÆ½Ì¨
+        // è·å–å½“å‰è¿è¡Œå¹³å°
         RHI::ERHIShaderPlatform platform = GShaderPlatform;
 
-        // 1. »ñÈ¡ËùÓĞ×¢²áÎª Global ÀàĞÍµÄ Shader
+        // 1. è·å–æ‰€æœ‰æ³¨å†Œä¸º Global ç±»å‹çš„ Shader
         const auto& globalTypes = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::Global];
 
         for (const auto& kv : globalTypes)
@@ -49,10 +49,10 @@ namespace RenderCore{
             ShaderType* st = kv.second;
             if (!st) continue;
 
-            // 2. ±éÀú¸Ã ShaderType µÄËùÓĞ±äÌå×éºÏ (ÓÉ IMPLEMENT_SHADER_TYPE ºê×Ô¶¯ÌáÈ¡)
+            // 2. éå†è¯¥ ShaderType çš„æ‰€æœ‰å˜ä½“ç»„åˆ (ç”± IMPLEMENT_SHADER_TYPE å®è‡ªåŠ¨æå–)
             for (int32_t permId = 0; permId < st->TotalPermutationCount; ++permId)
             {
-                // 3. ¼ì²éµ±Ç°±äÌåÊÇ·ñĞèÒª±àÒë
+                // 3. æ£€æŸ¥å½“å‰å˜ä½“æ˜¯å¦éœ€è¦ç¼–è¯‘
                 ShaderPermutationParameters permParams;
                 permParams.Platform = static_cast<uint32_t>(platform);
                 permParams.PermutationId = static_cast<uint32_t>(permId);
@@ -62,59 +62,59 @@ namespace RenderCore{
                     continue;
                 }
 
-                // 4. ×¼±¸±àÒë»·¾³ (Environment)
+                // 4. å‡†å¤‡ç¼–è¯‘ç¯å¢ƒ (Environment)
                 ShaderCompilerEnvironment env;
                 env.IncludePaths.push_back(Core::GetShaderFilesRootDir());
 
-                // A. ´¦Àí Shader ²ÎÊı (VFS ×¢²á)
+                // A. å¤„ç† Shader å‚æ•° (VFS æ³¨å†Œ)
                 if (st->RootParametersMetadata)
                 {
-                    // Éú³É HLSL ²¢×¢²áµ½ GShaderVirtualFileSystem
+                    // ç”Ÿæˆ HLSL å¹¶æ³¨å†Œåˆ° GShaderVirtualFileSystem
                     auto parameterInfos = ShaderCompiler::GenerateOrGetShaderPrameterMetaDataSF(*(st->RootParametersMetadata));
                 }
 
-                // B. ´¦Àí±äÌåºê×¢Èë (µ÷ÓÃ×ÓÀà¾²Ì¬·½·¨)
+                // B. å¤„ç†å˜ä½“å®æ³¨å…¥ (è°ƒç”¨å­ç±»é™æ€æ–¹æ³•)
                 if (st->ModifyCompilationEnvironment)
                 {
-                    // ÄÚ²¿»áµ÷ÓÃ Domain.SetFromId(permId) ºÍ Domain.ModifyCompilationEnvironment(env)
+                    // å†…éƒ¨ä¼šè°ƒç”¨ Domain.SetFromId(permId) å’Œ Domain.ModifyCompilationEnvironment(env)
                     st->ModifyCompilationEnvironment(permParams,env);
                 }
 
-                // 5. ¹¹Ôì±àÒëÊäÈë²¢µ÷ÓÃ±àÒëÆ÷
+                // 5. æ„é€ ç¼–è¯‘è¾“å…¥å¹¶è°ƒç”¨ç¼–è¯‘å™¨
                 ShaderCompileInput input;
                 input.VirtualSourceFilePath = st->SourceFile;
                 input.EntryPoint = st->EntryPoint;
                 input.Frequency = st->Frequency;
                 input.Platform = platform;
-                input.Environment = std::move(env); // ÒÆ¶¯»·¾³Êı¾İ
+                input.Environment = std::move(env); // ç§»åŠ¨ç¯å¢ƒæ•°æ®
 
                 ShaderCompilationOutput output = ShaderCompiler::Compile(input);
 
-                if (!output.Success)
+                if (!output.bSuccess)
                 {
-                    // ¼ÇÂ¼´íÎó²¢Ìø¹ı´Ë±äÌå
+                    // è®°å½•é”™è¯¯å¹¶è·³è¿‡æ­¤å˜ä½“
                     LOG_ERROR("Failed to compile %s (Permutation %d)", st->Name.c_str(), permId);
                     continue;
                 }
 
-                // 6. ¹¹Ôì RHI Shader ¶ÔÏó
+                // 6. æ„é€  RHI Shader å¯¹è±¡
                 ShaderCompiledInitializer initializer(st,output.PackedBinaryData,output.ParameterMap,permId);
 
-                // 7. ÊµÀı»¯²¢»º´æ
+                // 7. å®ä¾‹åŒ–å¹¶ç¼“å­˜
                 ShaderSP shaderInstance = std::shared_ptr<Shader>(st->ConstructCompiled(initializer));
 
-                // ShaderMap ½á¹¹: std::unordered_map<ShaderType*, std::map<ShaderPermutationId, ShaderSP>>
-                ShaderMap[st][permId] = shaderInstance;
+                // ShaderMap ç»“æ„: std::unordered_map<ShaderType*, std::map<ShaderPermutationId, ShaderSP>>
+                m_ShaderMap[st][permId] = shaderInstance;
             }
         }
 
-        IsInitialized = true;
+        m_bIsInitialized = true;
         return true;
     }
 
     void GlobalShaderMap::Clear()
     {
-        ShaderMap.clear();
+        m_ShaderMap.clear();
     }
 
 } // namespace RenderCore
