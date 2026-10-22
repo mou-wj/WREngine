@@ -30,7 +30,7 @@ namespace RHIDirectX12
         std::shared_ptr<std::atomic_uint32_t> ContextUses = std::make_shared<std::atomic_uint32_t>(0);
         DirectX12Queue* LastQueue = nullptr;
         uint64_t LastFence = 0;
-        bool UploadHeap = false;
+        bool bUploadHeap = false;
     };
 
     struct DirectX12AccelerationStructure
@@ -42,8 +42,8 @@ namespace RHIDirectX12
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS Inputs{};
         D3D12_RAYTRACING_GEOMETRY_DESC Geometry{};
         RHI::ERHIResourceAccess Access = RHI::ERHIResourceAccess::Unknown;
-        bool Built = false;
-        bool ScratchReady = false;
+        bool bBuilt = false;
+        bool bScratchReady = false;
         void Allocate(RHI::RayTracingAccelerationStructureSizeInfo& size);
     };
 
@@ -70,20 +70,20 @@ namespace RHIDirectX12
 
         DirectX12Device* GetDevice() const
         {
-            return Device;
+            return m_Device;
         }
 
 #if defined(_WIN32)
         ID3D12Resource* GetNativeResource() const
         {
-            return Resource.Get();
+            return m_Resource.Get();
         }
         void EnsureStorageTarget();
         std::shared_ptr<DirectX12Texture> StorageTarget;
-        bool StorageDirty = false;
+        bool bStorageDirty = false;
         DXGI_FORMAT GetNativeFormat() const
         {
-            return NativeFormat;
+            return m_NativeFormat;
         }
         D3D12_CPU_DESCRIPTOR_HANDLE GetRTV(uint32_t mip = 0, uint32_t slice = 0);
         D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(uint32_t mip = 0, uint32_t slice = 0);
@@ -91,14 +91,14 @@ namespace RHIDirectX12
 #endif
 
     private:
-        DirectX12Device* Device = nullptr;
-        std::weak_ptr<void> DeviceLifetime;
+        DirectX12Device* m_Device = nullptr;
+        std::weak_ptr<void> m_DeviceLifetime;
 
 #if defined(_WIN32)
-        Microsoft::WRL::ComPtr<ID3D12Resource> Resource;
-        DXGI_FORMAT NativeFormat = DXGI_FORMAT_UNKNOWN;
-        std::unordered_map<uint64_t, D3D12_CPU_DESCRIPTOR_HANDLE> RTVs, DSVs;
-        D3D12_CPU_DESCRIPTOR_HANDLE DefaultSRV{};
+        Microsoft::WRL::ComPtr<ID3D12Resource> m_Resource;
+        DXGI_FORMAT m_NativeFormat = DXGI_FORMAT_UNKNOWN;
+        std::unordered_map<uint64_t, D3D12_CPU_DESCRIPTOR_HANDLE> m_RTVs, m_DSVs;
+        D3D12_CPU_DESCRIPTOR_HANDLE m_DefaultSRV{};
 #endif
     };
     using DirectX12TextureSP = std::shared_ptr<DirectX12Texture>;
@@ -111,21 +111,21 @@ namespace RHIDirectX12
 
         DirectX12Device* GetDevice() const
         {
-            return Device;
+            return m_Device;
         }
 
 #if defined(_WIN32)
         ID3D12Resource* GetNativeResource() const
         {
-            return Resource.Get();
+            return m_Resource.Get();
         }
 #endif
 
     private:
-        DirectX12Device* Device = nullptr;
+        DirectX12Device* m_Device = nullptr;
 
 #if defined(_WIN32)
-        Microsoft::WRL::ComPtr<ID3D12Resource> Resource;
+        Microsoft::WRL::ComPtr<ID3D12Resource> m_Resource;
 #endif
     };
     using DirectX12BufferSP = std::shared_ptr<DirectX12Buffer>;
@@ -143,23 +143,23 @@ namespace RHIDirectX12
 #if defined(_WIN32)
         const D3D12_CPU_DESCRIPTOR_HANDLE& GetCpuHandle() const
         {
-            return CpuHandle;
+            return m_CpuHandle;
         }
         bool IsValid() const
         {
-            return bValid;
+            return m_bValid;
         }
         D3D12_CPU_DESCRIPTOR_HANDLE GetReadOnlyStorageUAV(D3D_SHADER_INPUT_TYPE type);
 #endif
 
     private:
 #if defined(_WIN32)
-        D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle{};
-        D3D12_CPU_DESCRIPTOR_HANDLE ReadOnlyStorageUAV{};
-        D3D12_CPU_DESCRIPTOR_HANDLE ReadOnlyRawStorageUAV{};
-        DirectX12Device* Device = nullptr;
-        std::weak_ptr<void> DeviceLifetime;
-        bool bValid = false;
+        D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle{};
+        D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyStorageUAV{};
+        D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyRawStorageUAV{};
+        DirectX12Device* m_Device = nullptr;
+        std::weak_ptr<void> m_DeviceLifetime;
+        bool m_bValid = false;
 #endif
     };
     using DirectX12ShaderResourceViewSP = std::shared_ptr<DirectX12ShaderResourceView>;
@@ -176,20 +176,20 @@ namespace RHIDirectX12
 #if defined(_WIN32)
         const D3D12_CPU_DESCRIPTOR_HANDLE& GetCpuHandle() const
         {
-            return CpuHandle;
+            return m_CpuHandle;
         }
         bool IsValid() const
         {
-            return bValid;
+            return m_bValid;
         }
 #endif
 
     private:
 #if defined(_WIN32)
-        D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle{};
-        DirectX12Device* Device = nullptr;
-        std::weak_ptr<void> DeviceLifetime;
-        bool bValid = false;
+        D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle{};
+        DirectX12Device* m_Device = nullptr;
+        std::weak_ptr<void> m_DeviceLifetime;
+        bool m_bValid = false;
 #endif
     };
     using DirectX12UnorderedAccessViewSP = std::shared_ptr<DirectX12UnorderedAccessView>;
@@ -207,21 +207,21 @@ namespace RHIDirectX12
 #if defined(_WIN32)
         ID3D12Resource* GetNativeResource() const
         {
-            return Resource.Get();
+            return m_Resource.Get();
         }
 #endif
 
     private:
-        DirectX12Device* Device = nullptr;
+        DirectX12Device* m_Device = nullptr;
 
 #if defined(_WIN32)
-        Microsoft::WRL::ComPtr<ID3D12Resource> Resource;
-        void* MappedPtr = nullptr;
-        D3D12_HEAP_TYPE HeapType = D3D12_HEAP_TYPE_UPLOAD;
+        Microsoft::WRL::ComPtr<ID3D12Resource> m_Resource;
+        void* m_MappedPtr = nullptr;
+        D3D12_HEAP_TYPE m_HeapType = D3D12_HEAP_TYPE_UPLOAD;
 #endif
 
-        std::vector<uint8_t> Storage;
-        bool bMapped = false;
+        std::vector<uint8_t> m_Storage;
+        bool m_bMapped = false;
     };
     using DirectX12StagingBufferSP = std::shared_ptr<DirectX12StagingBuffer>;
 
@@ -230,7 +230,7 @@ namespace RHIDirectX12
         D3D12_SHADER_INPUT_BIND_DESC Desc{};
         std::string Name;
         uint32_t ConstantBufferSize = 0;
-        bool ReadOnlyBufferUAV = false;
+        bool bReadOnlyBufferUAV = false;
     };
 
     class DirectX12ShaderBase
@@ -240,25 +240,25 @@ namespace RHIDirectX12
         virtual ~DirectX12ShaderBase() = default;
         const std::vector<char>& GetByteCode() const
         {
-            return ByteCode;
+            return _byteCode;
         }
         const std::vector<DirectX12ShaderBinding>& GetBindings() const
         {
-            return Bindings;
+            return _bindings;
         }
         ID3D12ShaderReflection* GetReflection() const
         {
-            return Reflection.Get();
+            return _reflection.Get();
         }
 
     protected:
-        std::vector<char> ByteCode;
-        std::vector<DirectX12ShaderBinding> Bindings;
-        Microsoft::WRL::ComPtr<ID3D12LibraryReflection> LibraryReflection;
+        std::vector<char> _byteCode;
+        std::vector<DirectX12ShaderBinding> _bindings;
+        Microsoft::WRL::ComPtr<ID3D12LibraryReflection> _libraryReflection;
     public:
         std::wstring ExportName;
     protected:
-        Microsoft::WRL::ComPtr<ID3D12ShaderReflection> Reflection;
+        Microsoft::WRL::ComPtr<ID3D12ShaderReflection> _reflection;
     };
 
     template<class Base> class DirectX12RayTracingShader : public Base, public DirectX12ShaderBase
@@ -275,7 +275,7 @@ namespace RHIDirectX12
 
         const std::vector<char>& GetByteCode() const
         {
-            return ByteCode;
+            return _byteCode;
         }
     };
     using DirectX12VertexShaderSP = std::shared_ptr<DirectX12VertexShader>;
@@ -288,7 +288,7 @@ namespace RHIDirectX12
 
         const std::vector<char>& GetByteCode() const
         {
-            return ByteCode;
+            return _byteCode;
         }
     };
     using DirectX12FragmentShaderSP = std::shared_ptr<DirectX12FragmentShader>;
@@ -301,7 +301,7 @@ namespace RHIDirectX12
 
         const std::vector<char>& GetByteCode() const
         {
-            return ByteCode;
+            return _byteCode;
         }
     };
     using DirectX12ComputeShaderSP = std::shared_ptr<DirectX12ComputeShader>;
@@ -314,7 +314,7 @@ namespace RHIDirectX12
 
         const std::vector<char>& GetByteCode() const
         {
-            return ByteCode;
+            return _byteCode;
         }
     };
     using DirectX12GeometryShaderSP = std::shared_ptr<DirectX12GeometryShader>;
@@ -327,7 +327,7 @@ namespace RHIDirectX12
 
         const std::vector<char>& GetByteCode() const
         {
-            return ByteCode;
+            return _byteCode;
         }
     };
     using DirectX12TessControlShaderSP = std::shared_ptr<DirectX12TessControlShader>;
@@ -340,7 +340,7 @@ namespace RHIDirectX12
 
         const std::vector<char>& GetByteCode() const
         {
-            return ByteCode;
+            return _byteCode;
         }
     };
     using DirectX12TessEvalShaderSP = std::shared_ptr<DirectX12TessEvalShader>;
@@ -353,7 +353,7 @@ namespace RHIDirectX12
 
         const std::vector<char>& GetByteCode() const
         {
-            return ByteCode;
+            return _byteCode;
         }
     };
     using DirectX12MeshShaderSP = std::shared_ptr<DirectX12MeshShader>;
@@ -366,7 +366,7 @@ namespace RHIDirectX12
 
         const std::vector<char>& GetByteCode() const
         {
-            return ByteCode;
+            return _byteCode;
         }
     };
     using DirectX12TaskShaderSP = std::shared_ptr<DirectX12TaskShader>;
@@ -383,25 +383,25 @@ namespace RHIDirectX12
 
         uint32_t GetWidth() const
         {
-            return Width;
+            return m_Width;
         }
         uint32_t GetHeight() const
         {
-            return Height;
+            return m_Height;
         }
         void Present();
         DirectX12Texture* GetCurrentTexture() const;
 
     private:
-        DirectX12Device* Device = nullptr;
-        void* WindowHandle = nullptr;
-        uint32_t Width = 0;
-        uint32_t Height = 0;
-        RHI::ERHIFormat Format = RHI::ERHIFormat::Unknown;
-        DirectX12Queue* GraphicsQueue = nullptr;
-        DirectX12Queue* ComputeQueue = nullptr;
-        Microsoft::WRL::ComPtr<IDXGISwapChain3> Swapchain;
-        std::vector<DirectX12TextureSP> BackBuffers;
+        DirectX12Device* m_Device = nullptr;
+        void* m_WindowHandle = nullptr;
+        uint32_t m_Width = 0;
+        uint32_t m_Height = 0;
+        RHI::ERHIFormat m_Format = RHI::ERHIFormat::Unknown;
+        DirectX12Queue* m_GraphicsQueue = nullptr;
+        DirectX12Queue* m_ComputeQueue = nullptr;
+        Microsoft::WRL::ComPtr<IDXGISwapChain3> m_Swapchain;
+        std::vector<DirectX12TextureSP> m_BackBuffers;
         void CreateBackBuffers();
         void WaitForIdle();
     };
@@ -414,13 +414,13 @@ namespace RHIDirectX12
         ~DirectX12Sampler() override;
         D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle() const
         {
-            return CpuHandle;
+            return m_CpuHandle;
         }
 
     private:
-        DirectX12Device* Device = nullptr;
-        std::weak_ptr<void> DeviceLifetime;
-        D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle{};
+        DirectX12Device* m_Device = nullptr;
+        std::weak_ptr<void> m_DeviceLifetime;
+        D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle{};
     };
     using DirectX12SamplerSP = std::shared_ptr<DirectX12Sampler>;
 

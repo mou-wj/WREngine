@@ -23,7 +23,7 @@ namespace RHIDirectX12
         ~DirectX12SyncPoint() override;
         ID3D12Fence* GetNativeFence() const
         {
-            return Fence.Get();
+            return m_Fence.Get();
         }
 
         uint64_t GetCurrentValue() override;
@@ -31,14 +31,14 @@ namespace RHIDirectX12
         uint64_t Signal();
 
     private:
-        std::atomic<uint64_t> TimelineValue{0};
-        std::mutex WaitMutex;
-        DirectX12Device* Device = nullptr;
+        std::atomic<uint64_t> m_TimelineValue{0};
+        std::mutex m_WaitMutex;
+        DirectX12Device* m_Device = nullptr;
 
 #if defined(_WIN32)
-        ID3D12CommandQueue* Queue = nullptr;
-        Microsoft::WRL::ComPtr<ID3D12Fence> Fence;
-        HANDLE FenceEvent = nullptr;
+        ID3D12CommandQueue* m_Queue = nullptr;
+        Microsoft::WRL::ComPtr<ID3D12Fence> m_Fence;
+        HANDLE m_FenceEvent = nullptr;
 #endif
     };
 
@@ -61,26 +61,26 @@ namespace RHIDirectX12
 
         DirectX12Device* GetDevice() const
         {
-            return Device;
+            return m_Device;
         }
 #if defined(_WIN32)
         ID3D12CommandQueue* GetNativeQueue() const
         {
-            return NativeQueue;
+            return m_NativeQueue;
         }
 #endif
 
     private:
-        DirectX12Device* Device = nullptr;
+        DirectX12Device* m_Device = nullptr;
 
 #if defined(_WIN32)
-        ID3D12CommandQueue* NativeQueue = nullptr;
+        ID3D12CommandQueue* m_NativeQueue = nullptr;
 #endif
 
-        RHI::EQueueType QueueType = RHI::EQueueType::Graphics;
-        DirectX12SyncPoint SyncPoint;
-        std::vector<std::unique_ptr<class DirectX12CommandContext>> Contexts;
-        std::mutex QueueMutex;
+        RHI::EQueueType m_QueueType = RHI::EQueueType::Graphics;
+        DirectX12SyncPoint m_SyncPoint;
+        std::vector<std::unique_ptr<class DirectX12CommandContext>> m_Contexts;
+        std::mutex m_QueueMutex;
     };
 
     class DirectX12PresentExecutor : public RHI::RHIPresentExecutor
@@ -92,7 +92,7 @@ namespace RHIDirectX12
         void Present(RHI::RHISwapchain* swapchain, const RHI::RHIWaitInfo& waitInfo) override;
 
     private:
-        DirectX12Queue* Queue = nullptr;
-        uint64_t PresentCount = 0;
+        DirectX12Queue* m_Queue = nullptr;
+        uint64_t m_PresentCount = 0;
     };
 } // namespace RHIDirectX12

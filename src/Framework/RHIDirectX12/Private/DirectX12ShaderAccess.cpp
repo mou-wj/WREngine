@@ -40,14 +40,14 @@ namespace RHIDirectX12
         {
             std::string Result;
             std::vector<std::string> Operands;
-            bool Origin = false, Annotation = false, Read = false;
+            bool bOrigin = false, bAnnotation = false, bRead = false;
         };
         bool found = false;
         std::vector<Instruction> instructions;
         auto checkFunction = [&]() {
             std::unordered_set<std::string> handles;
             for (const auto& instruction : instructions)
-                if (instruction.Origin)
+                if (instruction.bOrigin)
                     handles.insert(instruction.Result);
             if (handles.empty())
                 return true;
@@ -57,14 +57,14 @@ namespace RHIDirectX12
             {
                 changed = false;
                 for (const auto& instruction : instructions)
-                    if (instruction.Annotation && !instruction.Result.empty())
+                    if (instruction.bAnnotation && !instruction.Result.empty())
                         for (const auto& operand : instruction.Operands)
                             if (handles.count(operand))
                                 changed |= handles.insert(instruction.Result).second;
             } while (changed);
             for (const auto& instruction : instructions)
                 for (const auto& operand : instruction.Operands)
-                    if (handles.count(operand) && !instruction.Annotation && !instruction.Read)
+                    if (handles.count(operand) && !instruction.bAnnotation && !instruction.bRead)
                         return false; // Store, atomic, counter, phi/select, escape, or unknown use.
             return true;
         };
@@ -99,15 +99,15 @@ namespace RHIDirectX12
                 line = line.substr(static_cast<size_t>(match.position() + match.length()));
             }
             if (std::regex_search(line, match, legacy))
-                instruction.Origin = std::stoull(match[1]) == binding.uID;
+                instruction.bOrigin = std::stoull(match[1]) == binding.uID;
             else if (std::regex_search(line, match, fromBinding))
-                instruction.Origin = std::stoull(match[1]) == binding.BindPoint &&
+                instruction.bOrigin = std::stoull(match[1]) == binding.BindPoint &&
                                      std::stoull(match[2]) == UINT64(binding.BindPoint) + binding.BindCount - 1 &&
                                      std::stoull(match[3]) == binding.Space;
             if (instruction.Result.empty())
-                instruction.Origin = false;
-            instruction.Annotation = std::regex_search(line, annotate);
-            instruction.Read = std::regex_search(line, read);
+                instruction.bOrigin = false;
+            instruction.bAnnotation = std::regex_search(line, annotate);
+            instruction.bRead = std::regex_search(line, read);
             for (auto i = std::sregex_iterator(line.begin(), line.end(), value); i != std::sregex_iterator(); ++i)
                 instruction.Operands.push_back(i->str());
             instructions.push_back(std::move(instruction));

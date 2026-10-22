@@ -12,80 +12,80 @@
 namespace RHIDirectX12
 {
 
-    DirectX12CommandContext::DirectX12CommandContext(DirectX12Queue* inQueue) : Queue(inQueue)
+    DirectX12CommandContext::DirectX12CommandContext(DirectX12Queue* inQueue) : _queue(inQueue)
     {
     }
     DirectX12CommandContext::~DirectX12CommandContext()
     {
         // Submitted contexts are completed by their queue before destruction.
         // Abandoned recordings must also release their pool-use tokens.
-        for (const auto& token : ResourceUseTokens)
+        for (const auto& token : _resourceUseTokens)
             --*token;
     }
 
     void DirectX12CommandContext::Begin()
     {
-        if (!Queue)
+        if (!_queue)
             throw std::runtime_error("DirectX12 context has no queue");
-        if (bRecording)
+        if (_bRecording)
             throw std::runtime_error("DirectX12 context already recording");
         if (LastSubmission)
-            Queue->WaitValue(LastSubmission);
+            _queue->WaitValue(LastSubmission);
         Complete();
         LastSubmission = 0;
-        RetainedResources.clear();
+        _retainedResources.clear();
         UsedResources.clear();
         ResourceWaits.clear();
-        ComputeBindings.clear();
-        GraphicsBindings.clear();
-        CurrentGraphicsPipeline = nullptr;
-        CurrentComputePipeline = nullptr;
-        CurrentRayTracingPipeline = nullptr;
-        GraphicsParameterCache.clear();
-        ComputeReadOnlyStorage.clear();
-        GraphicsReadOnlyStorage.clear();
-        VertexBuffers.clear();
-        CurrentViewport.reset();
-        CurrentScissor.reset();
-        ResourceDescriptorCursor = SamplerDescriptorCursor = 0;
-        Reusable = false;
-        auto* device = Queue->GetDevice()->GetNativeDevice();
-        const auto type = Queue->GetNativeQueue()->GetDesc().Type;
-        if (!CommandAllocator)
-            CheckDX12(device->CreateCommandAllocator(type, IID_PPV_ARGS(&CommandAllocator)),
+        _computeBindings.clear();
+        _graphicsBindings.clear();
+        _currentGraphicsPipeline = nullptr;
+        _currentComputePipeline = nullptr;
+        _currentRayTracingPipeline = nullptr;
+        _graphicsParameterCache.clear();
+        _computeReadOnlyStorage.clear();
+        _graphicsReadOnlyStorage.clear();
+        _vertexBuffers.clear();
+        _currentViewport.reset();
+        _currentScissor.reset();
+        _resourceDescriptorCursor = _samplerDescriptorCursor = 0;
+        bReusable = false;
+        auto* device = _queue->GetDevice()->GetNativeDevice();
+        const auto type = _queue->GetNativeQueue()->GetDesc().Type;
+        if (!_commandAllocator)
+            CheckDX12(device->CreateCommandAllocator(type, IID_PPV_ARGS(&_commandAllocator)),
                       "Create command allocator");
-        if (!CommandList)
-            CheckDX12(device->CreateCommandList(0, type, CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&CommandList)),
+        if (!_commandList)
+            CheckDX12(device->CreateCommandList(0, type, _commandAllocator.Get(), nullptr, IID_PPV_ARGS(&_commandList)),
                       "Create command list");
         else
         {
-            CheckDX12(CommandAllocator->Reset(), "Reset command allocator");
-            CheckDX12(CommandList->Reset(CommandAllocator.Get(), nullptr), "Reset command list");
+            CheckDX12(_commandAllocator->Reset(), "Reset command allocator");
+            CheckDX12(_commandList->Reset(_commandAllocator.Get(), nullptr), "Reset command list");
         }
-        if (!ResourceHeap)
+        if (!_resourceHeap)
         {
             D3D12_DESCRIPTOR_HEAP_DESC desc{};
             desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
             desc.NumDescriptors = 4096;
             desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-            CheckDX12(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&ResourceHeap)),
+            CheckDX12(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&_resourceHeap)),
                       "Create shader-visible resource heap");
             desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
             desc.NumDescriptors = 256;
-            CheckDX12(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&SamplerHeap)),
+            CheckDX12(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&_samplerHeap)),
                       "Create shader-visible sampler heap");
         }
-        ID3D12DescriptorHeap* heaps[] = {ResourceHeap.Get(), SamplerHeap.Get()};
-        CommandList->SetDescriptorHeaps(2, heaps);
-        bRecording = true;
+        ID3D12DescriptorHeap* heaps[] = {_resourceHeap.Get(), _samplerHeap.Get()};
+        _commandList->SetDescriptorHeaps(2, heaps);
+        _bRecording = true;
     }
     void DirectX12CommandContext::End()
     {
-        if (!bRecording)
+        if (!_bRecording)
             return;
-        CheckDX12(CommandList->Close(), "Close command list");
-        bRecording = false;
-        Queue->GetDevice()->CheckDebugMessages();
+        CheckDX12(_commandList->Close(), "Close command list");
+        _bRecording = false;
+        _queue->GetDevice()->CheckDebugMessages();
     }
     void DirectX12CommandContext::TrackResource(RHI::RHIViewableResource* resource)
     {
@@ -96,12 +96,12 @@ namespace RHIDirectX12
             return;
         UsedResources.push_back(state);
         ++*state->ContextUses;
-        ResourceUseTokens.push_back(state->ContextUses);
-        if (state->LastQueue && state->LastQueue != Queue && state->LastFence)
+        _resourceUseTokens.push_back(state->ContextUses);
+        if (state->LastQueue && state->LastQueue != _queue && state->LastFence)
             ResourceWaits.push_back({state->LastQueue->GetSyncPoint(), state->LastQueue->GetType(), state->LastFence,
                                      RHI::ERHIPipelineStage::AllCommands});
         Microsoft::WRL::ComPtr<ID3D12Resource> retained = GetNativeResource(resource);
-        RetainedResources.push_back(std::move(retained));
+        _retainedResources.push_back(std::move(retained));
     }
     void DirectX12CommandContext::RequireAccess(RHI::RHIViewableResource* resource, RHI::ERHIResourceAccess access,
                                                 uint32_t subresource)
@@ -131,7 +131,7 @@ namespace RHIDirectX12
         {
             if (!RHI::ERHIResourceAccessFlags(state->DeclaredAccess[i]).HasAll(access))
                 throw std::runtime_error("Resource binding conflicts with declared RHI access; add an RHITransition");
-            if (!state->UploadHeap && (state->States[i] & required) != required)
+            if (!state->bUploadHeap && (state->States[i] & required) != required)
                 throw std::runtime_error("Native resource state conflicts with declared RHI access");
         }
         TrackResource(resource);
@@ -146,13 +146,13 @@ namespace RHIDirectX12
                 TrackResource(resource);
                 TransitionResource(texture->StorageTarget.get(), target, subresource);
                 texture->StorageTarget->DeclaredAccess = { RHI::ERHIResourceAccess::UAV };
-                texture->StorageDirty = true;
+                texture->bStorageDirty = true;
                 return;
             }
-            if (texture->StorageDirty)
+            if (texture->bStorageDirty)
             {
                 // Resolve before Present, raster rendering, copies or shader reads of the original image.
-                texture->StorageDirty = false;
+                texture->bStorageDirty = false;
                 RHI::RHIBlitTextureDesc blit{};
                 blit.SrcRegion.Width = blit.DstRegion.Width = texture->GetDesc().Width;
                 blit.SrcRegion.Height = blit.DstRegion.Height = texture->GetDesc().Height;
@@ -163,7 +163,7 @@ namespace RHIDirectX12
         }
         TrackResource(resource);
         auto* state = GetResourceState(resource);
-        if (state->UploadHeap)
+        if (state->bUploadHeap)
             return; // UPLOAD resources must remain in GENERIC_READ.
         const uint32_t first = subresource == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES ? 0 : subresource;
         const uint32_t end = subresource == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
@@ -187,7 +187,7 @@ namespace RHIDirectX12
                 barrier.Transition = {GetNativeResource(resource), i, state->States[i], target};
                 state->States[i] = target;
             }
-            CommandList->ResourceBarrier(1, &barrier);
+            _commandList->ResourceBarrier(1, &barrier);
         }
     }
     void DirectX12CommandContext::BeginTransitions(std::vector<const RHI::RHITransition*> transitions)
@@ -215,7 +215,7 @@ namespace RHIDirectX12
                     D3D12_RESOURCE_BARRIER barrier{};
                     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
                     barrier.UAV.pResource = as->Result.Get();
-                    CommandList->ResourceBarrier(1, &barrier);
+                    _commandList->ResourceBarrier(1, &barrier);
                     RetainResource(as->Result);
                     as->Access = info.AccessAfter;
                     continue;
@@ -298,16 +298,16 @@ namespace RHIDirectX12
                           static_cast<UINT>(r.OffsetX + r.Width),
                           static_cast<UINT>(r.OffsetY + r.Height),
                           static_cast<UINT>(r.OffsetZ + r.Depth)};
-            CommandList->CopyTextureRegion(&to, desc.DstRegion.OffsetX, desc.DstRegion.OffsetY, desc.DstRegion.OffsetZ,
+            _commandList->CopyTextureRegion(&to, desc.DstRegion.OffsetX, desc.DstRegion.OffsetY, desc.DstRegion.OffsetZ,
                                            &from, &box);
         }
     }
     D3D12_GPU_DESCRIPTOR_HANDLE DirectX12CommandContext::CopyDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE source,
                                                                         bool sampler)
     {
-        auto* device = Queue->GetDevice()->GetNativeDevice();
-        auto* heap = sampler ? SamplerHeap.Get() : ResourceHeap.Get();
-        auto& cursor = sampler ? SamplerDescriptorCursor : ResourceDescriptorCursor;
+        auto* device = _queue->GetDevice()->GetNativeDevice();
+        auto* heap = sampler ? _samplerHeap.Get() : _resourceHeap.Get();
+        auto& cursor = sampler ? _samplerDescriptorCursor : _resourceDescriptorCursor;
         if (cursor >= heap->GetDesc().NumDescriptors)
             throw std::runtime_error("DirectX12 per-command descriptor heap exhausted");
         const auto type = heap->GetDesc().Type;
@@ -338,8 +338,8 @@ namespace RHIDirectX12
     {
         auto* src = source;
         auto* dst = dest;
-        auto* device = Queue->GetDevice()->GetNativeDevice();
-        if (!BlitRoot)
+        auto* device = _queue->GetDevice()->GetNativeDevice();
+        if (!_blitRoot)
         {
             D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0};
             D3D12_ROOT_PARAMETER roots[2]{};
@@ -365,10 +365,10 @@ namespace RHIDirectX12
             CheckDX12(D3D12SerializeRootSignature(&root, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &errors),
                       "Serialize blit root");
             CheckDX12(device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                                                  IID_PPV_ARGS(&BlitRoot)),
+                                                  IID_PPV_ARGS(&_blitRoot)),
                       "Create blit root");
         }
-        auto& pipeline = BlitPipelines[dest->GetNativeFormat()];
+        auto& pipeline = _blitPipelines[dest->GetNativeFormat()];
         if (!pipeline)
         {
             const char* code = R"(
@@ -385,7 +385,7 @@ namespace RHIDirectX12
             )";
             auto vs = CompileDX12Shader(code, L"VSMain", L"vs_6_0"), ps = CompileDX12Shader(code, L"PSMain", L"ps_6_0");
             D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
-            pso.pRootSignature = BlitRoot.Get();
+            pso.pRootSignature = _blitRoot.Get();
             pso.VS = {vs.data(), vs.size()};
             pso.PS = {ps.data(), ps.size()};
             pso.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
@@ -408,52 +408,52 @@ namespace RHIDirectX12
         const auto srcState = source->States, dstState = dest->States;
         TransitionResource(src, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         TransitionResource(dst, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        CommandList->SetGraphicsRootSignature(BlitRoot.Get());
-        CommandList->SetPipelineState(pipeline.Get());
-        CommandList->SetGraphicsRootDescriptorTable(0, CopyDescriptor(source->GetDefaultSRV()));
+        _commandList->SetGraphicsRootSignature(_blitRoot.Get());
+        _commandList->SetPipelineState(pipeline.Get());
+        _commandList->SetGraphicsRootDescriptorTable(0, CopyDescriptor(source->GetDefaultSRV()));
         const UINT constants[] = {static_cast<UINT>(desc.SrcRegion.OffsetX),
                                   static_cast<UINT>(desc.SrcRegion.OffsetY),
                                   desc.SrcRegion.Width,
                                   desc.SrcRegion.Height,
                                   desc.SrcMipIndex,
                                   desc.Filter == RHI::ERHIFilter::Nearest ? 1u : 0u};
-        CommandList->SetGraphicsRoot32BitConstants(1, 6, constants, 0);
+        _commandList->SetGraphicsRoot32BitConstants(1, 6, constants, 0);
         const auto rtv = dest->GetRTV(desc.DstMipIndex, desc.DstArraySlice);
-        CommandList->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+        _commandList->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
         const auto& r = desc.DstRegion;
         D3D12_VIEWPORT viewport{float(r.OffsetX), float(r.OffsetY), float(r.Width), float(r.Height), 0, 1};
         D3D12_RECT scissor{r.OffsetX, r.OffsetY, r.OffsetX + LONG(r.Width), r.OffsetY + LONG(r.Height)};
-        CommandList->RSSetViewports(1, &viewport);
-        CommandList->RSSetScissorRects(1, &scissor);
-        CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        CommandList->DrawInstanced(3, 1, 0, 0);
-        CommandList->OMSetRenderTargets(0, nullptr, FALSE, nullptr);
+        _commandList->RSSetViewports(1, &viewport);
+        _commandList->RSSetScissorRects(1, &scissor);
+        _commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        _commandList->DrawInstanced(3, 1, 0, 0);
+        _commandList->OMSetRenderTargets(0, nullptr, FALSE, nullptr);
         for (UINT i = 0; i < srcState.size(); ++i)
             TransitionResource(src, srcState[i], i);
         for (UINT i = 0; i < dstState.size(); ++i)
             TransitionResource(dst, dstState[i], i);
         // BlitTexture is a transfer operation in the RHI. Restore the caller's
         // pipeline and dynamic state after its graphics-based implementation.
-        if (CurrentComputePipeline)
+        if (_currentComputePipeline)
         {
-            auto* pipeline = dynamic_cast<DirectX12ComputePipelineState*>(CurrentComputePipeline);
-            CommandList->SetPipelineState(pipeline->GetPipelineState());
+            auto* pipeline = dynamic_cast<DirectX12ComputePipelineState*>(_currentComputePipeline);
+            _commandList->SetPipelineState(pipeline->GetPipelineState());
         }
-        else if (CurrentGraphicsPipeline)
+        else if (_currentGraphicsPipeline)
         {
-            auto* pipeline = dynamic_cast<DirectX12GraphicsPipelineState*>(CurrentGraphicsPipeline);
-            CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
-            CommandList->SetPipelineState(pipeline->GetPipelineState());
-            CommandList->IASetPrimitiveTopology(ToPrimitiveTopology(pipeline->GetDesc().PrimitiveTopology));
-            for (const auto& binding : VertexBuffers)
-                CommandList->IASetVertexBuffers(binding.first, 1, &binding.second);
-            if (CurrentViewport)
-                CommandList->RSSetViewports(1, &*CurrentViewport);
-            if (CurrentScissor)
-                CommandList->RSSetScissorRects(1, &*CurrentScissor);
-            const auto cached = GraphicsParameterCache;
+            auto* pipeline = dynamic_cast<DirectX12GraphicsPipelineState*>(_currentGraphicsPipeline);
+            _commandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
+            _commandList->SetPipelineState(pipeline->GetPipelineState());
+            _commandList->IASetPrimitiveTopology(ToPrimitiveTopology(pipeline->GetDesc().PrimitiveTopology));
+            for (const auto& binding : _vertexBuffers)
+                _commandList->IASetVertexBuffers(binding.first, 1, &binding.second);
+            if (_currentViewport)
+                _commandList->RSSetViewports(1, &*_currentViewport);
+            if (_currentScissor)
+                _commandList->RSSetScissorRects(1, &*_currentScissor);
+            const auto cached = _graphicsParameterCache;
             for (const auto& parameters : cached)
-                BindParameters(parameters.first, parameters.second, GraphicsBindings, false);
+                BindParameters(parameters.first, parameters.second, _graphicsBindings, false);
         }
     }
     void DirectX12CommandContext::BindParameters(const DirectX12ShaderBase* shader,
@@ -461,9 +461,9 @@ namespace RHIDirectX12
                                                  const std::vector<DirectX12RootBinding>& bindings, bool compute)
     {
         if (!compute)
-            GraphicsParameterCache[shader] = parameters;
+            _graphicsParameterCache[shader] = parameters;
         std::vector<DirectX12Buffer*> readOnlyStorage;
-        auto* device = Queue->GetDevice()->GetNativeDevice();
+        auto* device = _queue->GetDevice()->GetNativeDevice();
         for (const auto& root : bindings)
         {
             if (root.Shader != shader)
@@ -472,9 +472,9 @@ namespace RHIDirectX12
             const auto& desc = binding.Desc;
             auto bindCBV = [&](D3D12_GPU_VIRTUAL_ADDRESS address) {
                 if (compute)
-                    CommandList->SetComputeRootConstantBufferView(root.RootIndex, address);
+                    _commandList->SetComputeRootConstantBufferView(root.RootIndex, address);
                 else
-                    CommandList->SetGraphicsRootConstantBufferView(root.RootIndex, address);
+                    _commandList->SetGraphicsRootConstantBufferView(root.RootIndex, address);
             };
             if (desc.Type == D3D_SIT_RTACCELERATIONSTRUCTURE)
             {
@@ -482,11 +482,11 @@ namespace RHIDirectX12
                     return p.Type == RHI::RHIShaderResourceParameter::EType::AccelerationStructure && p.Index == desc.BindPoint && p.ArrayIndex == 0;
                 });
                 auto* as = found == parameters.ResourceParameters.end() ? nullptr : dynamic_cast<DirectX12RayTracingInstance*>(found->Resource);
-                if (!compute || !as || !as->Built || as->Access != RHI::ERHIResourceAccess::BVHRead)
+                if (!compute || !as || !as->bBuilt || as->Access != RHI::ERHIResourceAccess::BVHRead)
                     throw std::runtime_error("DXR shader requires a built TLAS with BVHRead access");
                 RetainResource(as->Result);
                 for (const auto& result : as->ReferencedResults) RetainResource(result);
-                CommandList->SetComputeRootShaderResourceView(root.RootIndex, as->Result->GetGPUVirtualAddress());
+                _commandList->SetComputeRootShaderResourceView(root.RootIndex, as->Result->GetGPUVirtualAddress());
                 continue;
             }
             if (desc.Type == D3D_SIT_CBUFFER)
@@ -509,7 +509,7 @@ namespace RHIDirectX12
                 else
                 {
                     const UINT size = (binding.ConstantBufferSize + 255) & ~255u;
-                    auto upload = std::make_shared<DirectX12StagingBuffer>(Queue->GetDevice(), size);
+                    auto upload = std::make_shared<DirectX12StagingBuffer>(_queue->GetDevice(), size);
                     auto* data = static_cast<uint8_t*>(upload->Map(0, size));
                     std::memset(data, 0, size);
                     for (const auto& uniform : parameters.UniformParameters)
@@ -543,7 +543,7 @@ namespace RHIDirectX12
                         found = &p;
                         break;
                     }
-                    if (!found && binding.ReadOnlyBufferUAV && p.Type == T::SRV)
+                    if (!found && binding.bReadOnlyBufferUAV && p.Type == T::SRV)
                         if (auto* view = dynamic_cast<DirectX12ShaderResourceView*>(p.Resource))
                             if (dynamic_cast<DirectX12Buffer*>(view->GetResource()))
                                 found = &p;
@@ -605,7 +605,7 @@ namespace RHIDirectX12
                             RequireAccess(view->GetResource(), RHI::ERHIResourceAccess::SRV, i);
                     if (IsUAV(desc.Type))
                     {
-                        if (!binding.ReadOnlyBufferUAV)
+                        if (!binding.bReadOnlyBufferUAV)
                             throw std::runtime_error("Writable DXIL resource cannot use an RHI SRV");
                         cpu = view->GetReadOnlyStorageUAV(desc.Type);
                         readOnlyStorage.push_back(static_cast<DirectX12Buffer*>(view->GetResource()));
@@ -620,17 +620,17 @@ namespace RHIDirectX12
                     table = gpu;
             }
             if (compute)
-                CommandList->SetComputeRootDescriptorTable(root.RootIndex, table);
+                _commandList->SetComputeRootDescriptorTable(root.RootIndex, table);
             else
-                CommandList->SetGraphicsRootDescriptorTable(root.RootIndex, table);
+                _commandList->SetGraphicsRootDescriptorTable(root.RootIndex, table);
         }
-        (compute ? ComputeReadOnlyStorage : GraphicsReadOnlyStorage)[shader] = std::move(readOnlyStorage);
+        (compute ? _computeReadOnlyStorage : _graphicsReadOnlyStorage)[shader] = std::move(readOnlyStorage);
     }
     std::vector<DirectX12CommandContext::NativeStorageState> DirectX12CommandContext::BeginReadOnlyStorageAccess(
         bool compute)
     {
         std::vector<NativeStorageState> result;
-        for (const auto& entry : compute ? ComputeReadOnlyStorage : GraphicsReadOnlyStorage)
+        for (const auto& entry : compute ? _computeReadOnlyStorage : _graphicsReadOnlyStorage)
             for (auto* buffer : entry.second)
                 if (std::none_of(result.begin(), result.end(),
                                  [buffer](const auto& state) { return state.Buffer == buffer; }))
@@ -649,10 +649,10 @@ namespace RHIDirectX12
     }
     void DirectX12CommandContext::Complete()
     {
-        for (auto& callback : CompletionCallbacks)
+        for (auto& callback : _completionCallbacks)
             callback();
-        CompletionCallbacks.clear();
-        for (const auto& readback : DiagnosticReadbacks)
+        _completionCallbacks.clear();
+        for (const auto& readback : _diagnosticReadbacks)
         {
             float* data = nullptr;
             D3D12_RANGE range{0, 16};
@@ -662,11 +662,11 @@ namespace RHIDirectX12
             D3D12_RANGE written{0, 0};
             readback.Resource->Unmap(0, &written);
         }
-        DiagnosticReadbacks.clear();
-        RetainedResources.clear();
-        for (const auto& token : ResourceUseTokens)
+        _diagnosticReadbacks.clear();
+        _retainedResources.clear();
+        for (const auto& token : _resourceUseTokens)
             --*token;
-        ResourceUseTokens.clear();
+        _resourceUseTokens.clear();
         UsedResources.clear();
     }
 
@@ -678,16 +678,16 @@ namespace RHIDirectX12
     {
 #if defined(_WIN32)
         auto* dxPipeline = dynamic_cast<DirectX12ComputePipelineState*>(pipelineState);
-        if (!dxPipeline || !CommandList)
+        if (!dxPipeline || !_commandList)
         {
             return;
         }
 
-        CurrentComputePipeline = pipelineState;
-        ComputeBindings = dxPipeline->GetBindings();
-        ComputeReadOnlyStorage.clear();
-        CommandList->SetComputeRootSignature(dxPipeline->GetRootSignature());
-        CommandList->SetPipelineState(dxPipeline->GetPipelineState());
+        _currentComputePipeline = pipelineState;
+        _computeBindings = dxPipeline->GetBindings();
+        _computeReadOnlyStorage.clear();
+        _commandList->SetComputeRootSignature(dxPipeline->GetRootSignature());
+        _commandList->SetPipelineState(dxPipeline->GetPipelineState());
 #else
         (void)pipelineState;
 #endif
@@ -699,19 +699,19 @@ namespace RHIDirectX12
         auto* dxShader = dynamic_cast<DirectX12ShaderBase*>(shader);
         if (!dxShader)
             throw std::runtime_error("Invalid compute shader");
-        BindParameters(dxShader, parameter, ComputeBindings, true);
+        BindParameters(dxShader, parameter, _computeBindings, true);
     }
 
     void DirectX12ComputeContext::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
     {
 #if defined(_WIN32)
-        if (!CommandList)
+        if (!_commandList)
         {
             return;
         }
 
         const auto storageStates = BeginReadOnlyStorageAccess(true);
-        CommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
+        _commandList->Dispatch(groupCountX, groupCountY, groupCountZ);
         EndReadOnlyStorageAccess(storageStates);
         static uint32_t diagnosticDispatches = 0;
         if (DX12Diagnostics() && diagnosticDispatches++ < 4)
@@ -724,11 +724,11 @@ namespace RHIDirectX12
                     continue;
                 const auto oldState = buffer->States[0];
                 auto readback =
-                    std::make_shared<DirectX12StagingBuffer>(Queue->GetDevice(), 16, D3D12_HEAP_TYPE_READBACK);
+                    std::make_shared<DirectX12StagingBuffer>(_queue->GetDevice(), 16, D3D12_HEAP_TYPE_READBACK);
                 TransitionResource(buffer, D3D12_RESOURCE_STATE_COPY_SOURCE);
-                CommandList->CopyBufferRegion(readback->GetNativeResource(), 0, buffer->GetNativeResource(), 0, 16);
+                _commandList->CopyBufferRegion(readback->GetNativeResource(), 0, buffer->GetNativeResource(), 0, 16);
                 TransitionResource(buffer, oldState);
-                DiagnosticReadbacks.push_back({readback->GetNativeResource(), "buffer"});
+                _diagnosticReadbacks.push_back({readback->GetNativeResource(), "buffer"});
                 RetainResource(readback->GetNativeResource());
             }
         }
@@ -749,22 +749,22 @@ namespace RHIDirectX12
         auto* dxShader = dynamic_cast<DirectX12ShaderBase*>(shader);
         if (!dxShader)
             throw std::runtime_error("Invalid graphics shader");
-        BindParameters(dxShader, parameter, GraphicsBindings, false);
+        BindParameters(dxShader, parameter, _graphicsBindings, false);
     }
 
     void DirectX12GraphicContext::SetStreamSource(uint32_t streamIndex, RHI::RHIBuffer* vertexBuffer, uint32_t offset)
     {
 #if defined(_WIN32)
         auto* dxBuffer = dynamic_cast<DirectX12Buffer*>(vertexBuffer);
-        if (!dxBuffer || !dxBuffer->GetNativeResource() || !CommandList)
+        if (!dxBuffer || !dxBuffer->GetNativeResource() || !_commandList)
         {
             return;
         }
 
         const auto& bufferDesc = dxBuffer->GetDesc();
         uint32_t stride = bufferDesc.Stride;
-        if (CurrentGraphicsPipeline && CurrentGraphicsPipeline->GetDesc().VertexDescState)
-            for (const auto& binding : CurrentGraphicsPipeline->GetDesc().VertexDescState->GetDesc().Bindings)
+        if (_currentGraphicsPipeline && _currentGraphicsPipeline->GetDesc().VertexDescState)
+            for (const auto& binding : _currentGraphicsPipeline->GetDesc().VertexDescState->GetDesc().Bindings)
                 if (binding.Binding == streamIndex)
                     stride = binding.Stride;
         RequireAccess(vertexBuffer, RHI::ERHIResourceAccess::VertexOrIndexBuffer);
@@ -777,8 +777,8 @@ namespace RHIDirectX12
         vbView.BufferLocation = dxBuffer->GetNativeResource()->GetGPUVirtualAddress() + offset;
         vbView.SizeInBytes = static_cast<UINT>(bufferDesc.Size - offset);
         vbView.StrideInBytes = stride;
-        VertexBuffers[streamIndex] = vbView;
-        CommandList->IASetVertexBuffers(streamIndex, 1, &vbView);
+        _vertexBuffers[streamIndex] = vbView;
+        _commandList->IASetVertexBuffers(streamIndex, 1, &vbView);
 #else
         (void)streamIndex;
         (void)vertexBuffer;
@@ -790,17 +790,17 @@ namespace RHIDirectX12
     {
 #if defined(_WIN32)
         auto* dxPipeline = dynamic_cast<DirectX12GraphicsPipelineState*>(pipelineState);
-        if (!dxPipeline || !CommandList)
+        if (!dxPipeline || !_commandList)
         {
             return;
         }
 
-        CurrentGraphicsPipeline = pipelineState;
-        GraphicsBindings = dxPipeline->GetBindings();
-        GraphicsReadOnlyStorage.clear();
-        CommandList->SetGraphicsRootSignature(dxPipeline->GetRootSignature());
-        CommandList->SetPipelineState(dxPipeline->GetPipelineState());
-        CommandList->IASetPrimitiveTopology(ToPrimitiveTopology(dxPipeline->GetDesc().PrimitiveTopology));
+        _currentGraphicsPipeline = pipelineState;
+        _graphicsBindings = dxPipeline->GetBindings();
+        _graphicsReadOnlyStorage.clear();
+        _commandList->SetGraphicsRootSignature(dxPipeline->GetRootSignature());
+        _commandList->SetPipelineState(dxPipeline->GetPipelineState());
+        _commandList->IASetPrimitiveTopology(ToPrimitiveTopology(dxPipeline->GetDesc().PrimitiveTopology));
 #else
         (void)pipelineState;
 #endif
@@ -809,7 +809,7 @@ namespace RHIDirectX12
     void DirectX12GraphicContext::SetViewport(float x, float y, float w, float h, float minDepth, float maxDepth)
     {
 #if defined(_WIN32)
-        if (!CommandList)
+        if (!_commandList)
         {
             return;
         }
@@ -821,8 +821,8 @@ namespace RHIDirectX12
         viewport.Height = h;
         viewport.MinDepth = minDepth;
         viewport.MaxDepth = maxDepth;
-        CurrentViewport = viewport;
-        CommandList->RSSetViewports(1, &viewport);
+        _currentViewport = viewport;
+        _commandList->RSSetViewports(1, &viewport);
 #else
         (void)x;
         (void)y;
@@ -836,7 +836,7 @@ namespace RHIDirectX12
     void DirectX12GraphicContext::SetScissor(int32_t x, int32_t y, uint32_t w, uint32_t h)
     {
 #if defined(_WIN32)
-        if (!CommandList)
+        if (!_commandList)
         {
             return;
         }
@@ -846,8 +846,8 @@ namespace RHIDirectX12
         rect.top = y;
         rect.right = x + static_cast<LONG>(w);
         rect.bottom = y + static_cast<LONG>(h);
-        CurrentScissor = rect;
-        CommandList->RSSetScissorRects(1, &rect);
+        _currentScissor = rect;
+        _commandList->RSSetScissorRects(1, &rect);
 #else
         (void)x;
         (void)y;
@@ -860,13 +860,13 @@ namespace RHIDirectX12
                                        uint32_t firstInstance)
     {
 #if defined(_WIN32)
-        if (!CommandList)
+        if (!_commandList)
         {
             return;
         }
 
         const auto storageStates = BeginReadOnlyStorageAccess(false);
-        CommandList->DrawInstanced(vertexCount, instanceCount, firstVertex, firstInstance);
+        _commandList->DrawInstanced(vertexCount, instanceCount, firstVertex, firstInstance);
         EndReadOnlyStorageAccess(storageStates);
 #else
         (void)vertexCount;
@@ -881,7 +881,7 @@ namespace RHIDirectX12
     {
 #if defined(_WIN32)
         auto* dxIndexBuffer = dynamic_cast<DirectX12Buffer*>(indexBuffer);
-        if (!dxIndexBuffer || !dxIndexBuffer->GetNativeResource() || !CommandList)
+        if (!dxIndexBuffer || !dxIndexBuffer->GetNativeResource() || !_commandList)
         {
             return;
         }
@@ -892,9 +892,9 @@ namespace RHIDirectX12
         ibView.BufferLocation = dxIndexBuffer->GetNativeResource()->GetGPUVirtualAddress();
         ibView.SizeInBytes = static_cast<UINT>(desc.Size);
         ibView.Format = desc.Stride == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
-        CommandList->IASetIndexBuffer(&ibView);
+        _commandList->IASetIndexBuffer(&ibView);
         const auto storageStates = BeginReadOnlyStorageAccess(false);
-        CommandList->DrawIndexedInstanced(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+        _commandList->DrawIndexedInstanced(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
         EndReadOnlyStorageAccess(storageStates);
 #else
         (void)indexBuffer;
@@ -909,7 +909,7 @@ namespace RHIDirectX12
     void DirectX12GraphicContext::BeginRenderPass(const RHI::RHIRenderPassInfo& renderPassInfo)
     {
 #if defined(_WIN32)
-        if (!CommandList || !Queue || !Queue->GetDevice())
+        if (!_commandList || !_queue || !_queue->GetDevice())
         {
             return;
         }
@@ -938,7 +938,7 @@ namespace RHIDirectX12
             if (loadOp == RHI::ERenderTargetLoadOp::Clear)
             {
                 const float* color = colorAttachment.ClearBinding.Color;
-                CommandList->ClearRenderTargetView(rtvHandle, color, 0, nullptr);
+                _commandList->ClearRenderTargetView(rtvHandle, color, 0, nullptr);
             }
 
             rtvHandles.push_back(rtvHandle);
@@ -963,7 +963,7 @@ namespace RHIDirectX12
                         static_cast<uint8_t>(RHI::ERenderTargetActions::LoadOpShift));
                     if (depthLoadOp == RHI::ERenderTargetLoadOp::Clear)
                     {
-                        CommandList->ClearDepthStencilView(
+                        _commandList->ClearDepthStencilView(
                             dsvHandle,
                             depthTexture->GetDesc().Format == RHI::ERHIFormat::D24_UNorm_S8_UInt
                                 ? D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL
@@ -984,19 +984,19 @@ namespace RHIDirectX12
             viewport.Height = static_cast<float>(renderPassInfo.RenderArea.Height);
             viewport.MinDepth = 0.0f;
             viewport.MaxDepth = 1.0f;
-            CurrentViewport = viewport;
-            CommandList->RSSetViewports(1, &viewport);
+            _currentViewport = viewport;
+            _commandList->RSSetViewports(1, &viewport);
 
             D3D12_RECT scissor{};
             scissor.left = renderPassInfo.RenderArea.X;
             scissor.top = renderPassInfo.RenderArea.Y;
             scissor.right = renderPassInfo.RenderArea.X + static_cast<LONG>(renderPassInfo.RenderArea.Width);
             scissor.bottom = renderPassInfo.RenderArea.Y + static_cast<LONG>(renderPassInfo.RenderArea.Height);
-            CurrentScissor = scissor;
-            CommandList->RSSetScissorRects(1, &scissor);
+            _currentScissor = scissor;
+            _commandList->RSSetScissorRects(1, &scissor);
         }
 
-        CommandList->OMSetRenderTargets(static_cast<UINT>(rtvHandles.size()),
+        _commandList->OMSetRenderTargets(static_cast<UINT>(rtvHandles.size()),
                                         rtvHandles.empty() ? nullptr : rtvHandles.data(), FALSE,
                                         hasDepthStencil ? &dsvHandle : nullptr);
 #else
@@ -1007,12 +1007,12 @@ namespace RHIDirectX12
     void DirectX12GraphicContext::EndRenderPass()
     {
 #if defined(_WIN32)
-        if (!CommandList)
+        if (!_commandList)
         {
             return;
         }
 
-        CommandList->OMSetRenderTargets(0, nullptr, FALSE, nullptr);
+        _commandList->OMSetRenderTargets(0, nullptr, FALSE, nullptr);
 #endif
     }
 
@@ -1020,25 +1020,25 @@ namespace RHIDirectX12
         const RHI::RHIBatchedShaderParameters& parameters)
     {
         auto* native = dynamic_cast<DirectX12ShaderBase*>(shader);
-        if (!CurrentRayTracingPipeline || !native) throw std::runtime_error("DXR pipeline must be bound before parameters");
-        BindParameters(native, parameters, CurrentRayTracingPipeline->Bindings, true);
+        if (!_currentRayTracingPipeline || !native) throw std::runtime_error("DXR pipeline must be bound before parameters");
+        BindParameters(native, parameters, _currentRayTracingPipeline->Bindings, true);
     }
     void DirectX12GraphicContext::SetRayTracingPipelineState(RHI::RHIRayTracingPipelineState* pipelineState)
     {
-        CurrentRayTracingPipeline = dynamic_cast<DirectX12RayTracingPipelineState*>(pipelineState);
-        if (!CurrentRayTracingPipeline) throw std::runtime_error("Invalid DXR pipeline");
+        _currentRayTracingPipeline = dynamic_cast<DirectX12RayTracingPipelineState*>(pipelineState);
+        if (!_currentRayTracingPipeline) throw std::runtime_error("Invalid DXR pipeline");
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> dxr;
-        CheckDX12(CommandList.As(&dxr), "Query DXR command list");
-        CommandList->SetComputeRootSignature(CurrentRayTracingPipeline->RootSignature.Get());
-        dxr->SetPipelineState1(CurrentRayTracingPipeline->StateObject.Get());
-        RetainResource(CurrentRayTracingPipeline->ShaderTable);
-        OnComplete([root = CurrentRayTracingPipeline->RootSignature, pipeline = CurrentRayTracingPipeline->StateObject] {});
+        CheckDX12(_commandList.As(&dxr), "Query DXR command list");
+        _commandList->SetComputeRootSignature(_currentRayTracingPipeline->RootSignature.Get());
+        dxr->SetPipelineState1(_currentRayTracingPipeline->StateObject.Get());
+        RetainResource(_currentRayTracingPipeline->ShaderTable);
+        OnComplete([root = _currentRayTracingPipeline->RootSignature, pipeline = _currentRayTracingPipeline->StateObject] {});
     }
     void DirectX12CommandContext::BuildRayTracing(RHI::RHIRayTracingAccelerationStructure* accelerationStructure, bool update)
     {
         auto* as = dynamic_cast<DirectX12AccelerationStructure*>(accelerationStructure);
         if (!as || as->Access != RHI::ERHIResourceAccess::BVHWrite) throw std::runtime_error("DXR build requires BVHWrite access");
-        if (update && (!as->Built || !(as->Inputs.Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)))
+        if (update && (!as->bBuilt || !(as->Inputs.Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)))
             throw std::runtime_error("DXR update requires a previous build and AllowUpdate");
         if (auto* geometry = dynamic_cast<DirectX12RayTracingGeometry*>(accelerationStructure))
         {
@@ -1049,35 +1049,35 @@ namespace RHIDirectX12
             for (const auto& instance : instances->GetInstancesDesc().Instances)
             {
                 auto* blas = dynamic_cast<DirectX12RayTracingGeometry*>(instance.Geometry);
-                if (!blas || !blas->Built || blas->Access != RHI::ERHIResourceAccess::BVHRead)
+                if (!blas || !blas->bBuilt || blas->Access != RHI::ERHIResourceAccess::BVHRead)
                     throw std::runtime_error("DXR TLAS build requires built BLAS with BVHRead access");
             }
         D3D12_RESOURCE_BARRIER barrier{};
-        if (!as->ScratchReady)
+        if (!as->bScratchReady)
         {
             barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
             barrier.Transition = { as->Scratch.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
                 D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS };
-            as->ScratchReady = true;
+            as->bScratchReady = true;
         }
         else
         {
             barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
             barrier.UAV.pResource = as->Scratch.Get();
         }
-        CommandList->ResourceBarrier(1, &barrier);
+        _commandList->ResourceBarrier(1, &barrier);
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build{};
         build.Inputs = as->Inputs;
         if (update) { build.Inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE; build.SourceAccelerationStructureData = as->Result->GetGPUVirtualAddress(); }
         build.DestAccelerationStructureData = as->Result->GetGPUVirtualAddress();
         build.ScratchAccelerationStructureData = as->Scratch->GetGPUVirtualAddress();
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> dxr;
-        CheckDX12(CommandList.As(&dxr), "Query DXR build command list");
+        CheckDX12(_commandList.As(&dxr), "Query DXR build command list");
         dxr->BuildRaytracingAccelerationStructure(&build, 0, nullptr);
         RetainResource(as->Result); RetainResource(as->Scratch);
         if (as->InstanceUpload) RetainResource(as->InstanceUpload);
         for (const auto& result : as->ReferencedResults) RetainResource(result);
-        as->Built = true;
+        as->bBuilt = true;
     }
     void DirectX12GraphicContext::BuildAccelerationStructure(RHI::RHIRayTracingAccelerationStructure* structure)
     { BuildRayTracing(structure, false); }
@@ -1085,12 +1085,12 @@ namespace RHIDirectX12
     { BuildRayTracing(structure, true); }
     void DirectX12GraphicContext::TraceRays(uint32_t width, uint32_t height, uint32_t depth)
     {
-        if (!CurrentRayTracingPipeline || !width || !height || !depth || uint64_t(width)*height*depth > (1ull<<30))
+        if (!_currentRayTracingPipeline || !width || !height || !depth || uint64_t(width)*height*depth > (1ull<<30))
             throw std::runtime_error("Invalid DXR dispatch");
-        auto dispatch = CurrentRayTracingPipeline->Dispatch;
+        auto dispatch = _currentRayTracingPipeline->Dispatch;
         dispatch.Width = width; dispatch.Height = height; dispatch.Depth = depth;
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> dxr;
-        CheckDX12(CommandList.As(&dxr), "Query DXR trace command list");
+        CheckDX12(_commandList.As(&dxr), "Query DXR trace command list");
         const auto states = BeginReadOnlyStorageAccess(true);
         dxr->DispatchRays(&dispatch);
         EndReadOnlyStorageAccess(states);

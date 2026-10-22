@@ -35,17 +35,17 @@ namespace RHIDirectX12
                             const RHI::RHIReadBufferInfo& info) override;
         void Unmap(void* mappedData) override;
 
-        RHI::RHIShaderResourceViewSP CreateTextureShaderResourceView(RHI::RHITexture* Texture,
-                                                                     const RHI::RHITexSRVCreateInfo& Desc) override;
+        RHI::RHIShaderResourceViewSP CreateTextureShaderResourceView(RHI::RHITexture* texture,
+                                                                     const RHI::RHITexSRVCreateInfo& desc) override;
 
-        RHI::RHIUnorderedAccessViewSP CreateTextureUnorderedAccessView(RHI::RHITexture* Texture,
-                                                                       const RHI::RHITexUAVCreateInfo& Desc) override;
+        RHI::RHIUnorderedAccessViewSP CreateTextureUnorderedAccessView(RHI::RHITexture* texture,
+                                                                       const RHI::RHITexUAVCreateInfo& desc) override;
 
-        RHI::RHIShaderResourceViewSP CreateBufferShaderResourceView(RHI::RHIBuffer* Buffer,
-                                                                    const RHI::RHIBufferSRVCreateInfo& Desc) override;
+        RHI::RHIShaderResourceViewSP CreateBufferShaderResourceView(RHI::RHIBuffer* buffer,
+                                                                    const RHI::RHIBufferSRVCreateInfo& desc) override;
 
-        RHI::RHIUnorderedAccessViewSP CreateBufferUnorderedAccessView(RHI::RHIBuffer* Buffer,
-                                                                      const RHI::RHIBufferUAVCreateInfo& Desc) override;
+        RHI::RHIUnorderedAccessViewSP CreateBufferUnorderedAccessView(RHI::RHIBuffer* buffer,
+                                                                      const RHI::RHIBufferUAVCreateInfo& desc) override;
 
         RHI::RHIRayTracingGeometrySP CreateRayTracingGeometry(const RHI::RHIRayTracingGeometryDesc& desc) override;
         RHI::RHIRayTracingInstanceSP CreateRayTracingInstance(const RHI::RHIRayTracingInstancesDesc& desc) override;
@@ -83,24 +83,24 @@ namespace RHIDirectX12
                                             RHI::ERHIFormat format) override;
         RHI::RHISamplerSP CreateSampler(const RHI::RHISamplerDesc& desc) override;
 
-        RHI::RHIQueue* GetQueue(RHI::EQueueType Type) override;
+        RHI::RHIQueue* GetQueue(RHI::EQueueType type) override;
         RHI::RHIPresentExecutor* GetPresentExecutor() override;
 
-        void RHICreateTransition(RHI::RHITransition* Transition,
-                                 const RHI::RHITransitionCreateInfo& CreateInfo) override;
-        void RHIReleaseTransition(RHI::RHITransition* Transition) override;
+        void RHICreateTransition(RHI::RHITransition* transition,
+                                 const RHI::RHITransitionCreateInfo& createInfo) override;
+        void RHIReleaseTransition(RHI::RHITransition* transition) override;
 
         RHI::RHITransientResourceManagerSP CreateTransientResourceManager() override;
 
     private:
-        bool bInitialized = false;
-        RHI::RHIPlatformInfo PlatformInfo{};
-        std::unique_ptr<DirectX12Queue> GraphicsQueue;
-        std::unique_ptr<DirectX12Queue> ComputeQueue;
-        std::unique_ptr<DirectX12PresentExecutor> PresentExecutor;
-        std::unique_ptr<DirectX12Device> Device;
-        std::unordered_map<void*, std::shared_ptr<DirectX12StagingBuffer>> MappedStagingBuffers;
-        std::unordered_map<void*, std::shared_ptr<std::vector<uint8_t>>> PackedReadbacks;
+        bool m_bInitialized = false;
+        RHI::RHIPlatformInfo m_PlatformInfo{};
+        std::unique_ptr<DirectX12Queue> m_GraphicsQueue;
+        std::unique_ptr<DirectX12Queue> m_ComputeQueue;
+        std::unique_ptr<DirectX12PresentExecutor> m_PresentExecutor;
+        std::unique_ptr<DirectX12Device> m_Device;
+        std::unordered_map<void*, std::shared_ptr<DirectX12StagingBuffer>> m_MappedStagingBuffers;
+        std::unordered_map<void*, std::shared_ptr<std::vector<uint8_t>>> m_PackedReadbacks;
     };
 
     class RHIDIRECTX12_API DirectX12RHIModule final : public RHI::RHIModule
@@ -116,7 +116,7 @@ namespace RHIDirectX12
         RHI::RHIApi* CreateRHIApi() override;
 
     private:
-        bool bLoaded = false;
-        std::string ModuleName = "DirectX12RHI";
+        bool m_bLoaded = false;
+        std::string m_ModuleName = "DirectX12RHI";
     };
 } // namespace RHIDirectX12

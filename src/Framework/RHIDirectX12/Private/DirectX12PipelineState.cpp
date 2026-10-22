@@ -207,10 +207,10 @@ namespace RHIDirectX12
 
     DirectX12GraphicsPipelineState::DirectX12GraphicsPipelineState(DirectX12Device* inDevice,
                                                                    const RHI::RHIGraphicsPipelineStateDesc& desc)
-        : RHI::RHIGraphicsPipelineState(desc), Device(inDevice)
+        : RHI::RHIGraphicsPipelineState(desc), m_Device(inDevice)
     {
 #if defined(_WIN32)
-        if (!Device || !Device->GetNativeDevice())
+        if (!m_Device || !m_Device->GetNativeDevice())
         {
             return;
         }
@@ -223,9 +223,9 @@ namespace RHIDirectX12
         }
 
         CreateReflectedRootSignature(
-            Device->GetNativeDevice(),
+            m_Device->GetNativeDevice(),
             {{vertexShader, D3D12_SHADER_VISIBILITY_VERTEX}, {pixelShader, D3D12_SHADER_VISIBILITY_PIXEL}}, true,
-            RootSignature, Bindings);
+            m_RootSignature, m_Bindings);
 
         std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements;
         std::vector<std::string> semanticNames;
@@ -268,7 +268,7 @@ namespace RHIDirectX12
         }
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
-        psoDesc.pRootSignature = RootSignature.Get();
+        psoDesc.pRootSignature = m_RootSignature.Get();
         psoDesc.VS.pShaderBytecode = vertexShader->GetByteCode().data();
         psoDesc.VS.BytecodeLength = vertexShader->GetByteCode().size();
         psoDesc.PS.pShaderBytecode = pixelShader->GetByteCode().data();
@@ -379,19 +379,19 @@ namespace RHIDirectX12
         psoDesc.SampleDesc.Count = std::max(1u, desc.AttachmentDesc.NumSamples);
         psoDesc.SampleDesc.Quality = 0;
 
-        CheckDX12(Device->GetNativeDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&PipelineState)),
+        CheckDX12(m_Device->GetNativeDevice()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_PipelineState)),
                   "Create graphics PSO");
-        Device->CheckDebugMessages();
+        m_Device->CheckDebugMessages();
 
 #endif
     }
 
     DirectX12ComputePipelineState::DirectX12ComputePipelineState(DirectX12Device* inDevice,
                                                                  const RHI::RHIComputePipelineStateDesc& desc)
-        : RHI::RHIComputePipelineState(desc), Device(inDevice)
+        : RHI::RHIComputePipelineState(desc), m_Device(inDevice)
     {
 #if defined(_WIN32)
-        if (!Device || !Device->GetNativeDevice())
+        if (!m_Device || !m_Device->GetNativeDevice())
         {
             return;
         }
@@ -402,17 +402,17 @@ namespace RHIDirectX12
             return;
         }
 
-        CreateReflectedRootSignature(Device->GetNativeDevice(), {{computeShader, D3D12_SHADER_VISIBILITY_ALL}}, false,
-                                     RootSignature, Bindings);
+        CreateReflectedRootSignature(m_Device->GetNativeDevice(), {{computeShader, D3D12_SHADER_VISIBILITY_ALL}}, false,
+                                     m_RootSignature, m_Bindings);
 
         D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc{};
-        psoDesc.pRootSignature = RootSignature.Get();
+        psoDesc.pRootSignature = m_RootSignature.Get();
         psoDesc.CS.pShaderBytecode = computeShader->GetByteCode().data();
         psoDesc.CS.BytecodeLength = computeShader->GetByteCode().size();
 
-        CheckDX12(Device->GetNativeDevice()->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&PipelineState)),
+        CheckDX12(m_Device->GetNativeDevice()->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&m_PipelineState)),
                   "Create compute PSO");
-        Device->CheckDebugMessages();
+        m_Device->CheckDebugMessages();
 #endif
     }
 } // namespace RHIDirectX12

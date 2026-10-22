@@ -10,49 +10,49 @@
 namespace RHIDirectX12
 {
     DirectX12SyncPoint::DirectX12SyncPoint(RHI::EQueueType type, DirectX12Device* device, ID3D12CommandQueue* queue)
-        : Device(device), Queue(queue)
+        : m_Device(device), m_Queue(queue)
     {
         _type = type;
-        CheckDX12(Device->GetNativeDevice()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&Fence)),
+        CheckDX12(m_Device->GetNativeDevice()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_Fence)),
                   "Create queue fence");
-        FenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-        if (!FenceEvent)
+        m_FenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (!m_FenceEvent)
             throw std::runtime_error("Create fence event failed");
     }
     DirectX12SyncPoint::~DirectX12SyncPoint()
     {
-        if (FenceEvent)
-            CloseHandle(FenceEvent);
+        if (m_FenceEvent)
+            CloseHandle(m_FenceEvent);
     }
     uint64_t DirectX12SyncPoint::GetCurrentValue()
     {
-        const auto value = Fence->GetCompletedValue();
+        const auto value = m_Fence->GetCompletedValue();
         if (value == UINT64_MAX)
-            CheckDX12(Device->GetNativeDevice()->GetDeviceRemovedReason(), "D3D12 device removed");
+            CheckDX12(m_Device->GetNativeDevice()->GetDeviceRemovedReason(), "D3D12 device removed");
         return value;
     }
     void DirectX12SyncPoint::Wait(uint64_t value, uint64_t timeoutNS)
     {
         if (!value || GetCurrentValue() >= value)
             return;
-        std::lock_guard<std::mutex> lock(WaitMutex);
-        CheckDX12(Fence->SetEventOnCompletion(value, FenceEvent), "SetEventOnCompletion");
+        std::lock_guard<std::mutex> lock(m_WaitMutex);
+        CheckDX12(m_Fence->SetEventOnCompletion(value, m_FenceEvent), "SetEventOnCompletion");
         DWORD timeout = timeoutNS == UINT64_MAX
                             ? INFINITE
                             : static_cast<DWORD>(std::min<uint64_t>((timeoutNS + 999999) / 1000000, MAXDWORD - 1));
-        const auto result = WaitForSingleObject(FenceEvent, timeout);
+        const auto result = WaitForSingleObject(m_FenceEvent, timeout);
         if (result != WAIT_OBJECT_0)
             throw std::runtime_error(result == WAIT_TIMEOUT ? "D3D12 fence wait timed out" : "D3D12 fence wait failed");
         GetCurrentValue();
     }
     uint64_t DirectX12SyncPoint::Signal()
     {
-        const auto value = TimelineValue.fetch_add(1) + 1;
-        CheckDX12(Queue->Signal(Fence.Get(), value), "Signal queue fence");
+        const auto value = m_TimelineValue.fetch_add(1) + 1;
+        CheckDX12(m_Queue->Signal(m_Fence.Get(), value), "Signal queue fence");
         return value;
     }
     DirectX12Queue::DirectX12Queue(RHI::EQueueType type, DirectX12Device* device, ID3D12CommandQueue* queue)
-        : Device(device), NativeQueue(queue), QueueType(type), SyncPoint(type, device, queue)
+        : m_Device(device), m_NativeQueue(queue), m_QueueType(type), m_SyncPoint(type, device, queue)
     {
     }
     DirectX12Queue::~DirectX12Queue()
@@ -64,29 +64,29 @@ namespace RHIDirectX12
         catch (...)
         {
         }
-        Contexts.clear();
+        m_Contexts.clear();
     }
     RHI::EQueueType DirectX12Queue::GetType() const
     {
-        return QueueType;
+        return m_QueueType;
     }
     RHI::RHIContextBase* DirectX12Queue::AcquireCommandContext()
     {
-        const auto completed = SyncPoint.GetCurrentValue();
-        for (const auto& context : Contexts)
-            if (context->Reusable && context->LastSubmission <= completed)
+        const auto completed = m_SyncPoint.GetCurrentValue();
+        for (const auto& context : m_Contexts)
+            if (context->bReusable && context->LastSubmission <= completed)
             {
                 context->Complete();
-                context->Reusable = false;
+                context->bReusable = false;
                 return context.get();
             }
         std::unique_ptr<DirectX12CommandContext> context;
-        if (QueueType == RHI::EQueueType::Compute)
+        if (m_QueueType == RHI::EQueueType::Compute)
             context = std::make_unique<DirectX12ComputeContext>(this);
         else
             context = std::make_unique<DirectX12GraphicContext>(this);
         auto* result = context.get();
-        Contexts.push_back(std::move(context));
+        m_Contexts.push_back(std::move(context));
         return result;
     }
     RHI::RHIContextBase* DirectX12Queue::ReleaseCommandContext(RHI::RHIContextBase* context)
@@ -97,7 +97,7 @@ namespace RHIDirectX12
                 throw std::runtime_error("Releasing context to the wrong queue");
             if (dx->LastSubmission)
                 WaitValue(dx->LastSubmission);
-            dx->Reusable = true;
+            dx->bReusable = true;
         }
         return nullptr;
     }
@@ -108,12 +108,12 @@ namespace RHIDirectX12
     uint64_t DirectX12Queue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& contexts,
                                             const std::vector<RHI::RHIWaitInfo>& waits)
     {
-        std::lock_guard<std::mutex> lock(QueueMutex);
+        std::lock_guard<std::mutex> lock(m_QueueMutex);
         auto wait = [&](const RHI::RHIWaitInfo& info) {
             if (!info.SyncPoint || !info.Value)
                 return;
             if (auto* point = dynamic_cast<DirectX12SyncPoint*>(info.SyncPoint))
-                CheckDX12(NativeQueue->Wait(point->GetNativeFence(), info.Value), "GPU queue wait");
+                CheckDX12(m_NativeQueue->Wait(point->GetNativeFence(), info.Value), "GPU queue wait");
             else
                 info.SyncPoint->Wait(info.Value);
         };
@@ -131,13 +131,13 @@ namespace RHIDirectX12
             lists.push_back(dx->GetNativeCommandList());
         }
         if (!lists.empty())
-            NativeQueue->ExecuteCommandLists(static_cast<UINT>(lists.size()), lists.data());
-        const auto value = SyncPoint.Signal();
+            m_NativeQueue->ExecuteCommandLists(static_cast<UINT>(lists.size()), lists.data());
+        const auto value = m_SyncPoint.Signal();
         for (auto* context : contexts)
         {
             auto* dx = dynamic_cast<DirectX12CommandContext*>(context);
             dx->LastSubmission = value;
-            dx->Reusable = true;
+            dx->bReusable = true;
             for (auto* resource : dx->UsedResources)
             {
                 resource->LastQueue = this;
@@ -147,30 +147,30 @@ namespace RHIDirectX12
                 // the GPU validation layer's explicit transition history.
             }
         }
-        Device->CheckDebugMessages();
+        m_Device->CheckDebugMessages();
         return value;
     }
     void DirectX12Queue::WaitValue(uint64_t value)
     {
-        SyncPoint.Wait(value);
-        for (const auto& context : Contexts)
+        m_SyncPoint.Wait(value);
+        for (const auto& context : m_Contexts)
             if (context->LastSubmission && context->LastSubmission <= value)
                 context->Complete();
-        Device->CheckDebugMessages();
+        m_Device->CheckDebugMessages();
     }
     void DirectX12Queue::WaitIdle()
     {
-        WaitValue(SyncPoint.Signal());
+        WaitValue(m_SyncPoint.Signal());
     }
     uint64_t DirectX12Queue::GetCurrentTimelineValue()
     {
-        return SyncPoint.GetCurrentValue();
+        return m_SyncPoint.GetCurrentValue();
     }
     RHI::RHISyncPoint* DirectX12Queue::GetSyncPoint()
     {
-        return &SyncPoint;
+        return &m_SyncPoint;
     }
-    DirectX12PresentExecutor::DirectX12PresentExecutor(DirectX12Queue* queue) : Queue(queue)
+    DirectX12PresentExecutor::DirectX12PresentExecutor(DirectX12Queue* queue) : m_Queue(queue)
     {
     }
     void DirectX12PresentExecutor::Present(RHI::RHISwapchain* swapchain, const RHI::RHIWaitInfo& wait)
@@ -185,13 +185,13 @@ namespace RHIDirectX12
         if (DX12Diagnostics() && captureIndex < 4)
         {
             auto* texture = dx->GetCurrentTexture();
-            auto* context = dynamic_cast<DirectX12CommandContext*>(Queue->AcquireCommandContext());
+            auto* context = dynamic_cast<DirectX12CommandContext*>(m_Queue->AcquireCommandContext());
             RHI::RHIGraphicCommandList commandList(dynamic_cast<RHI::RHIGraphicContex*>(context));
             commandList.SetImmediate(true);
             commandList.Begin();
             const auto* data = static_cast<const uint8_t*>(RHI::GRHIApi->MapReadTexture(commandList, texture, {}));
             commandList.End();
-            Queue->WaitValue(Queue->ExecuteContext(context));
+            m_Queue->WaitValue(m_Queue->ExecuteContext(context));
             const auto folder = DX12DiagnosticDirectory();
             std::filesystem::create_directories(folder);
             const auto path = std::filesystem::path(folder) / ("frame-" + std::to_string(captureIndex++) + ".ppm");
@@ -207,12 +207,12 @@ namespace RHIDirectX12
                 }
             LOG_INFO("DirectX12 GPU image captured: %s", path.string().c_str());
             RHI::GRHIApi->Unmap(const_cast<uint8_t*>(data));
-            Queue->ReleaseCommandContext(context);
+            m_Queue->ReleaseCommandContext(context);
         }
-        Queue->GetDevice()->CheckDebugMessages();
+        m_Queue->GetDevice()->CheckDebugMessages();
         dx->Present();
-        ++PresentCount;
-        if (DX12Diagnostics() && PresentCount % 120 == 0)
-            LOG_INFO("DirectX12 presented %llu frames", PresentCount);
+        ++m_PresentCount;
+        if (DX12Diagnostics() && m_PresentCount % 120 == 0)
+            LOG_INFO("DirectX12 presented %llu frames", m_PresentCount);
     }
 } // namespace RHIDirectX12

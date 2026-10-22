@@ -35,13 +35,13 @@ namespace RHIDirectX12
 
         DirectX12Queue* GetQueue() const
         {
-            return Queue;
+            return _queue;
         }
         void TransitionResource(RHI::RHIViewableResource* resource, D3D12_RESOURCE_STATES state,
                                 uint32_t subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
         void RetainResource(Microsoft::WRL::ComPtr<ID3D12Resource> resource)
         {
-            RetainedResources.push_back(std::move(resource));
+            _retainedResources.push_back(std::move(resource));
         }
         void TrackResource(RHI::RHIViewableResource* resource);
         void RequireAccess(RHI::RHIViewableResource* resource, RHI::ERHIResourceAccess access,
@@ -49,38 +49,38 @@ namespace RHIDirectX12
         void Complete();
         void OnComplete(std::function<void()> callback)
         {
-            CompletionCallbacks.push_back(std::move(callback));
+            _completionCallbacks.push_back(std::move(callback));
         }
         uint64_t LastSubmission = 0;
-        bool Reusable = false;
+        bool bReusable = false;
         std::vector<DirectX12ResourceState*> UsedResources;
         std::vector<RHI::RHIWaitInfo> ResourceWaits;
 
 #if defined(_WIN32)
         ID3D12GraphicsCommandList* GetNativeCommandList() const
         {
-            return CommandList.Get();
+            return _commandList.Get();
         }
 #endif
 
     protected:
-        DirectX12Queue* Queue = nullptr;
+        DirectX12Queue* _queue = nullptr;
 
 #if defined(_WIN32)
-        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocator;
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList;
-        bool bRecording = false;
-        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> RetainedResources;
-        std::vector<std::shared_ptr<std::atomic_uint32_t>> ResourceUseTokens;
-        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ResourceHeap, SamplerHeap;
-        uint32_t ResourceDescriptorCursor = 0, SamplerDescriptorCursor = 0;
-        std::vector<DirectX12RootBinding> ComputeBindings, GraphicsBindings;
-        RHI::RHIGraphicsPipelineState* CurrentGraphicsPipeline = nullptr;
-        RHI::RHIComputePipelineState* CurrentComputePipeline = nullptr;
-        DirectX12RayTracingPipelineState* CurrentRayTracingPipeline = nullptr;
-        std::unordered_map<const DirectX12ShaderBase*, RHI::RHIBatchedShaderParameters> GraphicsParameterCache;
+        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> _commandAllocator;
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> _commandList;
+        bool _bRecording = false;
+        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> _retainedResources;
+        std::vector<std::shared_ptr<std::atomic_uint32_t>> _resourceUseTokens;
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> _resourceHeap, _samplerHeap;
+        uint32_t _resourceDescriptorCursor = 0, _samplerDescriptorCursor = 0;
+        std::vector<DirectX12RootBinding> _computeBindings, _graphicsBindings;
+        RHI::RHIGraphicsPipelineState* _currentGraphicsPipeline = nullptr;
+        RHI::RHIComputePipelineState* _currentComputePipeline = nullptr;
+        DirectX12RayTracingPipelineState* _currentRayTracingPipeline = nullptr;
+        std::unordered_map<const DirectX12ShaderBase*, RHI::RHIBatchedShaderParameters> _graphicsParameterCache;
         using ReadOnlyStorageMap = std::unordered_map<const DirectX12ShaderBase*, std::vector<DirectX12Buffer*>>;
-        ReadOnlyStorageMap ComputeReadOnlyStorage, GraphicsReadOnlyStorage;
+        ReadOnlyStorageMap _computeReadOnlyStorage, _graphicsReadOnlyStorage;
         struct NativeStorageState
         {
             DirectX12Buffer* Buffer;
@@ -88,11 +88,11 @@ namespace RHIDirectX12
         };
         std::vector<NativeStorageState> BeginReadOnlyStorageAccess(bool compute);
         void EndReadOnlyStorageAccess(const std::vector<NativeStorageState>& states);
-        std::unordered_map<uint32_t, D3D12_VERTEX_BUFFER_VIEW> VertexBuffers;
-        std::optional<D3D12_VIEWPORT> CurrentViewport;
-        std::optional<D3D12_RECT> CurrentScissor;
-        Microsoft::WRL::ComPtr<ID3D12RootSignature> BlitRoot;
-        std::unordered_map<uint32_t, Microsoft::WRL::ComPtr<ID3D12PipelineState>> BlitPipelines;
+        std::unordered_map<uint32_t, D3D12_VERTEX_BUFFER_VIEW> _vertexBuffers;
+        std::optional<D3D12_VIEWPORT> _currentViewport;
+        std::optional<D3D12_RECT> _currentScissor;
+        Microsoft::WRL::ComPtr<ID3D12RootSignature> _blitRoot;
+        std::unordered_map<uint32_t, Microsoft::WRL::ComPtr<ID3D12PipelineState>> _blitPipelines;
         void BuildRayTracing(RHI::RHIRayTracingAccelerationStructure* accelerationStructure, bool update);
         void BlitTextureNative(DirectX12Texture* source, DirectX12Texture* destination, const RHI::RHIBlitTextureDesc& desc);
         void BindParameters(const DirectX12ShaderBase* shader, const RHI::RHIBatchedShaderParameters& parameters,
@@ -103,8 +103,8 @@ namespace RHIDirectX12
             Microsoft::WRL::ComPtr<ID3D12Resource> Resource;
             std::string Name;
         };
-        std::vector<DiagnosticReadback> DiagnosticReadbacks;
-        std::vector<std::function<void()>> CompletionCallbacks;
+        std::vector<DiagnosticReadback> _diagnosticReadbacks;
+        std::vector<std::function<void()>> _completionCallbacks;
 #endif
     };
 

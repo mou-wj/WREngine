@@ -16,16 +16,16 @@ namespace RHIDirectX12
         // Preserve the command-list's immediate/deferred execution contract.
         class DirectX12LambdaCommand final : public RHI::RHICommandBase
         {
-            std::function<void(RHI::RHICommandListBase&)> Function;
+            std::function<void(RHI::RHICommandListBase&)> m_Function;
 
         public:
             explicit DirectX12LambdaCommand(std::function<void(RHI::RHICommandListBase&)> function)
-                : Function(std::move(function))
+                : m_Function(std::move(function))
             {
             }
             void Execute(RHI::RHICommandListBase& list) override
             {
-                Function(list);
+                m_Function(list);
             }
         };
     } // namespace
@@ -39,14 +39,14 @@ namespace RHIDirectX12
 
     bool DirectX12RHIApi::Init()
     {
-        if (bInitialized)
+        if (m_bInitialized)
         {
             return true;
         }
 
         RHI::GShaderPlatform = RHI::ERHIShaderPlatform::D3D12;
-        PlatformInfo.DepthRange = RHI::EDepthRange::ZeroToOne;
-        PlatformInfo.bEnableRayTracing = false;
+        m_PlatformInfo.DepthRange = RHI::EDepthRange::ZeroToOne;
+        m_PlatformInfo.bEnableRayTracing = false;
 
         const uint32_t headerSize = static_cast<uint32_t>(sizeof(RHI::RHITransition));
         const uint32_t alignment = static_cast<uint32_t>(alignof(std::max_align_t));
@@ -55,76 +55,76 @@ namespace RHIDirectX12
         RHI::G_RHITransition_PrivateDataOffset = (headerSize + alignment - 1) & ~(alignment - 1);
         RHI::G_RHITransition_TotalSize = RHI::G_RHITransition_PrivateDataOffset + privateDataSize;
 
-        Device = std::make_unique<DirectX12Device>();
-        if (!Device->Init())
+        m_Device = std::make_unique<DirectX12Device>();
+        if (!m_Device->Init())
         {
-            Device.reset();
+            m_Device.reset();
             return false;
         }
 
 #if defined(_WIN32)
-        PlatformInfo.bEnableRayTracing = Device->SupportsRayTracing();
+        m_PlatformInfo.bEnableRayTracing = m_Device->SupportsRayTracing();
 
-        GraphicsQueue = std::make_unique<DirectX12Queue>(RHI::EQueueType::Graphics, Device.get(),
-                                                         Device->GetGraphicsCommandQueue());
-        ComputeQueue =
-            std::make_unique<DirectX12Queue>(RHI::EQueueType::Compute, Device.get(), Device->GetComputeCommandQueue());
+        m_GraphicsQueue = std::make_unique<DirectX12Queue>(RHI::EQueueType::Graphics, m_Device.get(),
+                                                         m_Device->GetGraphicsCommandQueue());
+        m_ComputeQueue =
+            std::make_unique<DirectX12Queue>(RHI::EQueueType::Compute, m_Device.get(), m_Device->GetComputeCommandQueue());
 #else
         GraphicsQueue = nullptr;
         ComputeQueue = nullptr;
 #endif
 
-        if (!GraphicsQueue)
+        if (!m_GraphicsQueue)
         {
-            Device->Shutdown();
-            Device.reset();
+            m_Device->Shutdown();
+            m_Device.reset();
             return false;
         }
 
-        if (!ComputeQueue)
+        if (!m_ComputeQueue)
         {
-            ComputeQueue = std::make_unique<DirectX12Queue>(RHI::EQueueType::Compute, Device.get(),
-                                                            Device->GetGraphicsCommandQueue());
+            m_ComputeQueue = std::make_unique<DirectX12Queue>(RHI::EQueueType::Compute, m_Device.get(),
+                                                            m_Device->GetGraphicsCommandQueue());
         }
 
-        PresentExecutor = std::make_unique<DirectX12PresentExecutor>(GraphicsQueue.get());
+        m_PresentExecutor = std::make_unique<DirectX12PresentExecutor>(m_GraphicsQueue.get());
 
-        bInitialized = true;
+        m_bInitialized = true;
         return true;
     }
 
     void DirectX12RHIApi::Shutdown()
     {
-        if (ComputeQueue)
-            ComputeQueue->WaitIdle();
-        if (GraphicsQueue)
-            GraphicsQueue->WaitIdle();
-        MappedStagingBuffers.clear();
-        PackedReadbacks.clear();
-        PresentExecutor.reset();
-        ComputeQueue.reset();
-        GraphicsQueue.reset();
-        if (Device)
+        if (m_ComputeQueue)
+            m_ComputeQueue->WaitIdle();
+        if (m_GraphicsQueue)
+            m_GraphicsQueue->WaitIdle();
+        m_MappedStagingBuffers.clear();
+        m_PackedReadbacks.clear();
+        m_PresentExecutor.reset();
+        m_ComputeQueue.reset();
+        m_GraphicsQueue.reset();
+        if (m_Device)
         {
-            Device->Shutdown();
-            Device.reset();
+            m_Device->Shutdown();
+            m_Device.reset();
         }
-        bInitialized = false;
+        m_bInitialized = false;
     }
 
     const RHI::RHIPlatformInfo& DirectX12RHIApi::GetPlatformInfo() const
     {
-        return PlatformInfo;
+        return m_PlatformInfo;
     }
 
     RHI::RHITextureSP DirectX12RHIApi::CreateTexture(const RHI::RHITextureDesc& desc)
     {
-        return std::make_shared<DirectX12Texture>(Device.get(), desc);
+        return std::make_shared<DirectX12Texture>(m_Device.get(), desc);
     }
 
     RHI::RHIBufferSP DirectX12RHIApi::CreateBuffer(const RHI::RHIBufferDesc& desc)
     {
-        return std::make_shared<DirectX12Buffer>(Device.get(), desc);
+        return std::make_shared<DirectX12Buffer>(m_Device.get(), desc);
     }
 
     void DirectX12RHIApi::UpdateTexture(RHI::RHICommandListBase& cmdList, RHI::RHITexture* texture, const void* data,
@@ -139,7 +139,7 @@ namespace RHIDirectX12
         const UINT pixelSize = RHI::GFormatInfoMap.at(texture->GetDesc().Format).BytesPerPixel;
         const UINT srcPitch = region.Width * pixelSize, rowPitch = (srcPitch + 255) & ~255u;
         const UINT bytes = rowPitch * region.Height * region.Depth;
-        auto upload = std::make_shared<DirectX12StagingBuffer>(Device.get(), bytes);
+        auto upload = std::make_shared<DirectX12StagingBuffer>(m_Device.get(), bytes);
         auto* mapped = static_cast<uint8_t*>(upload->Map(0, bytes));
         for (UINT z = 0; z < region.Depth; ++z)
             for (UINT y = 0; y < region.Height; ++y)
@@ -174,7 +174,7 @@ namespace RHIDirectX12
         const UINT64 bytes = region.Size ? region.Size : buffer->GetDesc().Size - region.Offset;
         if (!bytes || bytes > buffer->GetDesc().Size - region.Offset || bytes > UINT_MAX)
             throw std::out_of_range("Buffer upload region");
-        if (dx->UploadHeap)
+        if (dx->bUploadHeap)
         {
             // A deferred list must snapshot the caller's bytes before returning.
             auto copied = std::make_shared<std::vector<uint8_t>>(static_cast<size_t>(bytes));
@@ -195,7 +195,7 @@ namespace RHIDirectX12
             });
             return;
         }
-        auto upload = std::make_shared<DirectX12StagingBuffer>(Device.get(), static_cast<UINT>(bytes));
+        auto upload = std::make_shared<DirectX12StagingBuffer>(m_Device.get(), static_cast<UINT>(bytes));
         std::memcpy(upload->Map(0, static_cast<UINT>(bytes)), data, static_cast<size_t>(bytes));
         cmdList.AddCommand<DirectX12LambdaCommand>([dx, buffer, upload, region, bytes](RHI::RHICommandListBase& list) {
             auto* context = dynamic_cast<DirectX12CommandContext*>(list.GetContext());
@@ -226,7 +226,7 @@ namespace RHIDirectX12
         if (gpuSlice * info.ArrayCount > UINT_MAX)
             throw std::out_of_range("Texture readback is too large");
         auto readback = std::make_shared<DirectX12StagingBuffer>(
-            Device.get(), static_cast<UINT>(gpuSlice * info.ArrayCount), D3D12_HEAP_TYPE_READBACK);
+            m_Device.get(), static_cast<UINT>(gpuSlice * info.ArrayCount), D3D12_HEAP_TYPE_READBACK);
         auto packed = std::make_shared<std::vector<uint8_t>>(size_t(pitch) * height * depth * info.ArrayCount);
         cmdList.AddCommand<DirectX12LambdaCommand>([dx, texture, readback, packed, info, width, height, depth, pitch,
                                                     gpuPitch, gpuSlice](RHI::RHICommandListBase& list) {
@@ -258,8 +258,8 @@ namespace RHIDirectX12
             });
         });
         void* result = packed->data();
-        MappedStagingBuffers[result] = readback;
-        PackedReadbacks[result] = packed;
+        m_MappedStagingBuffers[result] = readback;
+        m_PackedReadbacks[result] = packed;
         return result;
     }
     void* DirectX12RHIApi::MapReadBuffer(RHI::RHICommandListBase& cmdList, RHI::RHIBuffer* buffer,
@@ -273,7 +273,7 @@ namespace RHIDirectX12
         if (!size || size > UINT_MAX || size > buffer->GetDesc().Size - info.Offset)
             throw std::out_of_range("Buffer readback region");
         auto readback =
-            std::make_shared<DirectX12StagingBuffer>(Device.get(), static_cast<UINT>(size), D3D12_HEAP_TYPE_READBACK);
+            std::make_shared<DirectX12StagingBuffer>(m_Device.get(), static_cast<UINT>(size), D3D12_HEAP_TYPE_READBACK);
         cmdList.AddCommand<DirectX12LambdaCommand>([dx, buffer, readback, info, size](RHI::RHICommandListBase& list) {
             auto* context = dynamic_cast<DirectX12CommandContext*>(list.GetContext());
             const auto oldState = dx->States[0];
@@ -284,7 +284,7 @@ namespace RHIDirectX12
             context->RetainResource(readback->GetNativeResource());
         });
         void* result = readback->Map(0, static_cast<UINT>(size));
-        MappedStagingBuffers[result] = readback;
+        m_MappedStagingBuffers[result] = readback;
         return result;
     }
 
@@ -295,92 +295,92 @@ namespace RHIDirectX12
             return;
         }
 
-        auto it = MappedStagingBuffers.find(mappedData);
-        if (it == MappedStagingBuffers.end())
+        auto it = m_MappedStagingBuffers.find(mappedData);
+        if (it == m_MappedStagingBuffers.end())
         {
             return;
         }
 
         it->second->Unmap();
-        MappedStagingBuffers.erase(it);
-        PackedReadbacks.erase(mappedData);
+        m_MappedStagingBuffers.erase(it);
+        m_PackedReadbacks.erase(mappedData);
     }
 
-    RHI::RHIShaderResourceViewSP DirectX12RHIApi::CreateTextureShaderResourceView(RHI::RHITexture* Texture,
-                                                                                  const RHI::RHITexSRVCreateInfo& Desc)
+    RHI::RHIShaderResourceViewSP DirectX12RHIApi::CreateTextureShaderResourceView(RHI::RHITexture* texture,
+                                                                                  const RHI::RHITexSRVCreateInfo& desc)
     {
-        auto* viewable = dynamic_cast<RHI::RHIViewableResource*>(Texture);
+        auto* viewable = dynamic_cast<RHI::RHIViewableResource*>(texture);
         if (!viewable)
         {
             return nullptr;
         }
-        return std::make_shared<DirectX12ShaderResourceView>(viewable, Desc);
+        return std::make_shared<DirectX12ShaderResourceView>(viewable, desc);
     }
 
     RHI::RHIUnorderedAccessViewSP DirectX12RHIApi::CreateTextureUnorderedAccessView(
-        RHI::RHITexture* Texture, const RHI::RHITexUAVCreateInfo& Desc)
+        RHI::RHITexture* texture, const RHI::RHITexUAVCreateInfo& desc)
     {
-        auto* viewable = dynamic_cast<RHI::RHIViewableResource*>(Texture);
+        auto* viewable = dynamic_cast<RHI::RHIViewableResource*>(texture);
         if (!viewable)
         {
             return nullptr;
         }
-        return std::make_shared<DirectX12UnorderedAccessView>(viewable, Desc);
+        return std::make_shared<DirectX12UnorderedAccessView>(viewable, desc);
     }
 
     RHI::RHIShaderResourceViewSP DirectX12RHIApi::CreateBufferShaderResourceView(
-        RHI::RHIBuffer* Buffer, const RHI::RHIBufferSRVCreateInfo& Desc)
+        RHI::RHIBuffer* buffer, const RHI::RHIBufferSRVCreateInfo& desc)
     {
-        auto* viewable = dynamic_cast<RHI::RHIViewableResource*>(Buffer);
+        auto* viewable = dynamic_cast<RHI::RHIViewableResource*>(buffer);
         if (!viewable)
         {
             return nullptr;
         }
-        return std::make_shared<DirectX12ShaderResourceView>(viewable, Desc);
+        return std::make_shared<DirectX12ShaderResourceView>(viewable, desc);
     }
 
     RHI::RHIUnorderedAccessViewSP DirectX12RHIApi::CreateBufferUnorderedAccessView(
-        RHI::RHIBuffer* Buffer, const RHI::RHIBufferUAVCreateInfo& Desc)
+        RHI::RHIBuffer* buffer, const RHI::RHIBufferUAVCreateInfo& desc)
     {
-        auto* viewable = dynamic_cast<RHI::RHIViewableResource*>(Buffer);
+        auto* viewable = dynamic_cast<RHI::RHIViewableResource*>(buffer);
         if (!viewable)
         {
             return nullptr;
         }
-        return std::make_shared<DirectX12UnorderedAccessView>(viewable, Desc);
+        return std::make_shared<DirectX12UnorderedAccessView>(viewable, desc);
     }
 
     RHI::RHIRayTracingGeometrySP DirectX12RHIApi::CreateRayTracingGeometry(const RHI::RHIRayTracingGeometryDesc& desc)
     {
-        return std::make_shared<DirectX12RayTracingGeometry>(Device.get(), desc);
+        return std::make_shared<DirectX12RayTracingGeometry>(m_Device.get(), desc);
     }
 
     RHI::RHIRayTracingInstanceSP DirectX12RHIApi::CreateRayTracingInstance(const RHI::RHIRayTracingInstancesDesc& desc)
     {
-        return std::make_shared<DirectX12RayTracingInstance>(Device.get(), desc);
+        return std::make_shared<DirectX12RayTracingInstance>(m_Device.get(), desc);
     }
 
     RHI::RHIStagingBufferSP DirectX12RHIApi::CreateStagingBuffer(uint32_t size)
     {
-        return std::make_shared<DirectX12StagingBuffer>(Device.get(), size);
+        return std::make_shared<DirectX12StagingBuffer>(m_Device.get(), size);
     }
 
     RHI::RHIGraphicsPipelineStateSP DirectX12RHIApi::CreateGraphicsPipelineState(
         const RHI::RHIGraphicsPipelineStateDesc& desc)
     {
-        return std::make_shared<DirectX12GraphicsPipelineState>(Device.get(), desc);
+        return std::make_shared<DirectX12GraphicsPipelineState>(m_Device.get(), desc);
     }
 
     RHI::RHIComputePipelineStateSP DirectX12RHIApi::CreateComputePipelineState(
         const RHI::RHIComputePipelineStateDesc& desc)
     {
-        return std::make_shared<DirectX12ComputePipelineState>(Device.get(), desc);
+        return std::make_shared<DirectX12ComputePipelineState>(m_Device.get(), desc);
     }
 
     RHI::RHIRayTracingPipelineStateSP DirectX12RHIApi::CreateRayTracingsPipelineState(
         const RHI::RHIRayTracingPipelineStateDesc& desc)
     {
-        return std::make_shared<DirectX12RayTracingPipelineState>(Device.get(), desc);
+        return std::make_shared<DirectX12RayTracingPipelineState>(m_Device.get(), desc);
     }
 
     RHI::RHIVertexDescStateSP DirectX12RHIApi::CreateVertexDescState(const RHI::RHIVertexDescStateDesc& desc)
@@ -476,59 +476,59 @@ namespace RHIDirectX12
     RHI::RHISwapchainSP DirectX12RHIApi::CreateSwapchain(void* inWindowHandle, uint32_t w, uint32_t h,
                                                          RHI::ERHIFormat format)
     {
-        return std::make_shared<DirectX12Swapchain>(Device.get(), GraphicsQueue.get(), ComputeQueue.get(),
+        return std::make_shared<DirectX12Swapchain>(m_Device.get(), m_GraphicsQueue.get(), m_ComputeQueue.get(),
                                                     inWindowHandle, w, h, format);
     }
 
     RHI::RHISamplerSP DirectX12RHIApi::CreateSampler(const RHI::RHISamplerDesc& desc)
     {
-        return std::make_shared<DirectX12Sampler>(Device.get(), desc);
+        return std::make_shared<DirectX12Sampler>(m_Device.get(), desc);
     }
 
-    RHI::RHIQueue* DirectX12RHIApi::GetQueue(RHI::EQueueType Type)
+    RHI::RHIQueue* DirectX12RHIApi::GetQueue(RHI::EQueueType type)
     {
-        switch (Type)
+        switch (type)
         {
         case RHI::EQueueType::Compute:
-            return ComputeQueue.get();
+            return m_ComputeQueue.get();
         case RHI::EQueueType::Graphics:
         default:
-            return GraphicsQueue.get();
+            return m_GraphicsQueue.get();
         }
     }
 
     RHI::RHIPresentExecutor* DirectX12RHIApi::GetPresentExecutor()
     {
-        return PresentExecutor.get();
+        return m_PresentExecutor.get();
     }
 
-    void DirectX12RHIApi::RHICreateTransition(RHI::RHITransition* Transition,
-                                              const RHI::RHITransitionCreateInfo& CreateInfo)
+    void DirectX12RHIApi::RHICreateTransition(RHI::RHITransition* transition,
+                                              const RHI::RHITransitionCreateInfo& createInfo)
     {
-        if (!Transition)
+        if (!transition)
             throw std::invalid_argument("Null RHI transition");
-        if (CreateInfo.Flags != RHI::ERHITransitionCreateFlags::None &&
-            CreateInfo.Flags != RHI::ERHITransitionCreateFlags::NoSplit)
+        if (createInfo.Flags != RHI::ERHITransitionCreateFlags::None &&
+            createInfo.Flags != RHI::ERHITransitionCreateFlags::NoSplit)
             throw std::invalid_argument("Unsupported transition creation flags");
-        for (const auto& info : CreateInfo.TransitionInfos)
+        for (const auto& info : createInfo.TransitionInfos)
         {
-            if (info.Type == RHI::RHITransitionInfo::EType::BVH && !PlatformInfo.bEnableRayTracing)
+            if (info.Type == RHI::RHITransitionInfo::EType::BVH && !m_PlatformInfo.bEnableRayTracing)
                 throw std::runtime_error("The selected DirectX12 adapter does not support DXR");
             if (info.Flags != RHI::EResourceTransitionFlags::None)
                 throw std::runtime_error("DirectX12 transition discard/compression flags are not implemented");
         }
-        new (Transition->GetPrivateData<DirectX12TransitionData>()) DirectX12TransitionData{CreateInfo.TransitionInfos};
+        new (transition->GetPrivateData<DirectX12TransitionData>()) DirectX12TransitionData{createInfo.TransitionInfos};
     }
 
-    void DirectX12RHIApi::RHIReleaseTransition(RHI::RHITransition* Transition)
+    void DirectX12RHIApi::RHIReleaseTransition(RHI::RHITransition* transition)
     {
-        if (Transition)
-            Transition->GetPrivateData<DirectX12TransitionData>()->~DirectX12TransitionData();
+        if (transition)
+            transition->GetPrivateData<DirectX12TransitionData>()->~DirectX12TransitionData();
     }
 
     RHI::RHITransientResourceManagerSP DirectX12RHIApi::CreateTransientResourceManager()
     {
-        return std::make_shared<DirectX12TransientResourceManager>(Device.get());
+        return std::make_shared<DirectX12TransientResourceManager>(m_Device.get());
     }
 
     DirectX12RHIModule::DirectX12RHIModule() = default;
@@ -536,7 +536,7 @@ namespace RHIDirectX12
 
     void DirectX12RHIModule::StartupModule()
     {
-        if (bLoaded)
+        if (m_bLoaded)
         {
             return;
         }
@@ -544,12 +544,12 @@ namespace RHIDirectX12
         RHI::GRHIApi = CreateRHIApi();
         if (!RHI::GRHIApi)
         {
-            bLoaded = false;
+            m_bLoaded = false;
             return;
         }
 
-        bLoaded = RHI::GRHIApi->Init();
-        if (!bLoaded)
+        m_bLoaded = RHI::GRHIApi->Init();
+        if (!m_bLoaded)
         {
             delete RHI::GRHIApi;
             RHI::GRHIApi = nullptr;
@@ -564,12 +564,12 @@ namespace RHIDirectX12
             delete RHI::GRHIApi;
             RHI::GRHIApi = nullptr;
         }
-        bLoaded = false;
+        m_bLoaded = false;
     }
 
     bool DirectX12RHIModule::IsLoaded() const
     {
-        return bLoaded;
+        return m_bLoaded;
     }
 
     RHI::RHIApi* DirectX12RHIModule::CreateRHIApi()

@@ -9,7 +9,7 @@ namespace RHIDirectX12
     class DirectX12TransientResourceManager final : public RHI::RHITransientResourceManager
     {
     public:
-        explicit DirectX12TransientResourceManager(DirectX12Device* device) : Device(device)
+        explicit DirectX12TransientResourceManager(DirectX12Device* device) : m_Device(device)
         {
         }
         ~DirectX12TransientResourceManager() override;
@@ -21,6 +21,6 @@ namespace RHIDirectX12
         void PrepareForReuse(RHI::RHIViewableResource& resource) override;
 
     private:
-        DirectX12Device* Device;
+        DirectX12Device* m_Device;
     };
 } // namespace RHIDirectX12

@@ -38,31 +38,31 @@ namespace RHIDirectX12
 
         DirectX12Device* GetDevice() const
         {
-            return Device;
+            return m_Device;
         }
 
 #if defined(_WIN32)
         ID3D12RootSignature* GetRootSignature() const
         {
-            return RootSignature.Get();
+            return m_RootSignature.Get();
         }
         ID3D12PipelineState* GetPipelineState() const
         {
-            return PipelineState.Get();
+            return m_PipelineState.Get();
         }
         const std::vector<DirectX12RootBinding>& GetBindings() const
         {
-            return Bindings;
+            return m_Bindings;
         }
 #endif
 
     private:
-        DirectX12Device* Device = nullptr;
+        DirectX12Device* m_Device = nullptr;
 
 #if defined(_WIN32)
-        Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature;
-        Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState;
-        std::vector<DirectX12RootBinding> Bindings;
+        Microsoft::WRL::ComPtr<ID3D12RootSignature> m_RootSignature;
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> m_PipelineState;
+        std::vector<DirectX12RootBinding> m_Bindings;
 #endif
     };
     using DirectX12GraphicsPipelineStateSP = std::shared_ptr<DirectX12GraphicsPipelineState>;
@@ -75,31 +75,31 @@ namespace RHIDirectX12
 
         DirectX12Device* GetDevice() const
         {
-            return Device;
+            return m_Device;
         }
 
 #if defined(_WIN32)
         ID3D12RootSignature* GetRootSignature() const
         {
-            return RootSignature.Get();
+            return m_RootSignature.Get();
         }
         ID3D12PipelineState* GetPipelineState() const
         {
-            return PipelineState.Get();
+            return m_PipelineState.Get();
         }
         const std::vector<DirectX12RootBinding>& GetBindings() const
         {
-            return Bindings;
+            return m_Bindings;
         }
 #endif
 
     private:
-        DirectX12Device* Device = nullptr;
+        DirectX12Device* m_Device = nullptr;
 
 #if defined(_WIN32)
-        Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignature;
-        Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineState;
-        std::vector<DirectX12RootBinding> Bindings;
+        Microsoft::WRL::ComPtr<ID3D12RootSignature> m_RootSignature;
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> m_PipelineState;
+        std::vector<DirectX12RootBinding> m_Bindings;
 #endif
     };
     using DirectX12ComputePipelineStateSP = std::shared_ptr<DirectX12ComputePipelineState>;

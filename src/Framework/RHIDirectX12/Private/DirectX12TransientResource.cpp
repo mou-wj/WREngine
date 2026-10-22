@@ -8,24 +8,24 @@ namespace RHIDirectX12
 {
     DirectX12TransientResourceManager::~DirectX12TransientResourceManager()
     {
-        for (auto* queue : {Device->GetGraphicsCommandQueue(), Device->GetComputeCommandQueue()})
+        for (auto* queue : {m_Device->GetGraphicsCommandQueue(), m_Device->GetComputeCommandQueue()})
             if (queue)
             {
-                DirectX12SyncPoint completion(RHI::EQueueType::Graphics, Device, queue);
+                DirectX12SyncPoint completion(RHI::EQueueType::Graphics, m_Device, queue);
                 completion.Wait(completion.Signal());
             }
         ClearResources();
     }
     RHI::RHITextureSP DirectX12TransientResourceManager::CreateTextureInternal(const RHI::RHITextureDesc& desc)
     {
-        auto resource = std::make_shared<DirectX12Texture>(Device, desc);
+        auto resource = std::make_shared<DirectX12Texture>(m_Device, desc);
         if (!resource->GetNativeResource())
             throw std::runtime_error("Failed to create transient D3D12 texture");
         return resource;
     }
     RHI::RHIBufferSP DirectX12TransientResourceManager::CreateBufferInternal(const RHI::RHIBufferDesc& desc)
     {
-        auto resource = std::make_shared<DirectX12Buffer>(Device, desc);
+        auto resource = std::make_shared<DirectX12Buffer>(m_Device, desc);
         if (!resource->GetNativeResource())
             throw std::runtime_error("Failed to create transient D3D12 buffer");
         return resource;
