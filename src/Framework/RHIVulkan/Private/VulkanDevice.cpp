@@ -16,34 +16,34 @@ namespace RHIVulkan{
 
 VulkanDevice::VulkanDevice(VulkanRHIApi* rhiApi,
                            VkPhysicalDevice physicalDevice)
-    : rhiApi_(rhiApi),
-      physicalDevice_(physicalDevice),
-      device_(VK_NULL_HANDLE),
-      graphicsQueueFamilyIndex_(UINT32_MAX),
-      computeQueueFamilyIndex_(UINT32_MAX),
-      transferQueueFamilyIndex_(UINT32_MAX),
-      presentQueueFamilyIndex_(UINT32_MAX),
-      graphicsQueue_(nullptr),
-      computeQueue_(nullptr),
-      transferQueue_(nullptr),
-      presentQueue_(nullptr),
-      memoryManager_(nullptr),
-      presentExecutor_(nullptr)
+    : m_RhiApi(rhiApi),
+      m_PhysicalDevice(physicalDevice),
+      m_Device(VK_NULL_HANDLE),
+      m_GraphicsQueueFamilyIndex(UINT32_MAX),
+      m_ComputeQueueFamilyIndex(UINT32_MAX),
+      m_TransferQueueFamilyIndex(UINT32_MAX),
+      m_PresentQueueFamilyIndex(UINT32_MAX),
+      m_GraphicsQueue(nullptr),
+      m_ComputeQueue(nullptr),
+      m_TransferQueue(nullptr),
+      m_PresentQueue(nullptr),
+      m_MemoryManager(nullptr),
+      m_PresentExecutor(nullptr)
 {
-    memoryManager_ = new VulkanMemoryManager(this);
-	stagingManager_ = new VulkanStagingManager(this, memoryManager_);
+    m_MemoryManager = new VulkanMemoryManager(this);
+	m_StagingManager = new VulkanStagingManager(this, m_MemoryManager);
 
-    fenceManager_ = new VulkanFenceManager(this);
-    semaphoreManager_ = new VulkanSemaphoreManager(this);
-    renderPassManager_ = new VulkanRenderPassManager(this);
-    descriptorSetLayoutManager_ = new VulkanDescriptorSetLayoutManager(this);
-    descriptorSetManager_ = new VulkanDescriptorSetManager(this, descriptorSetLayoutManager_);
-	shaderManager_ = new VulkanShaderManager(this);
-	pipelineLayoutCache_ = new VulkanPipelineLayoutCache(this);
-    deferredDeleteQueue_ = new VulkanDeferredDeleteQueue(this);
-    supportedFeatures2_.pNext
-		= &timelineSemaphoreFeatures_;
-	VKFunc::GetPhysicalDeviceFeatures2(physicalDevice_, &supportedFeatures2_);
+    m_FenceManager = new VulkanFenceManager(this);
+    m_SemaphoreManager = new VulkanSemaphoreManager(this);
+    m_RenderPassManager = new VulkanRenderPassManager(this);
+    m_DescriptorSetLayoutManager = new VulkanDescriptorSetLayoutManager(this);
+    m_DescriptorSetManager = new VulkanDescriptorSetManager(this, m_DescriptorSetLayoutManager);
+	m_ShaderManager = new VulkanShaderManager(this);
+	m_PipelineLayoutCache = new VulkanPipelineLayoutCache(this);
+    m_DeferredDeleteQueue = new VulkanDeferredDeleteQueue(this);
+    m_SupportedFeatures2.pNext
+		= &m_TimelineSemaphoreFeatures;
+	VKFunc::GetPhysicalDeviceFeatures2(m_PhysicalDevice, &m_SupportedFeatures2);
 }
 
 VulkanDevice::~VulkanDevice()
@@ -54,93 +54,93 @@ VulkanDevice::~VulkanDevice()
 bool VulkanDevice::Init(const std::vector<const char*>& enabledLayers,
                         const std::vector<const char*>& enabledExtensions)
 {
-    SelectQueueFamilies(physicalDevice_);
-    CreateLogicalDevice(physicalDevice_, enabledExtensions, enabledLayers);
-    globalCommandContext_ = new VulkanGraphicContext(this, graphicsQueue_);
+    SelectQueueFamilies(m_PhysicalDevice);
+    CreateLogicalDevice(m_PhysicalDevice, enabledExtensions, enabledLayers);
+    m_GlobalCommandContext = new VulkanGraphicContext(this, m_GraphicsQueue);
     return true;
 }
 
 void VulkanDevice::SelectQueueFamilies(VkPhysicalDevice physicalDevice)
 {
-    VKFunc::GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
-    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    VKFunc::GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
+    VKFunc::GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &m_QueueFamilyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> queueFamilies(m_QueueFamilyCount);
+    VKFunc::GetPhysicalDeviceQueueFamilyProperties(physicalDevice, &m_QueueFamilyCount, queueFamilies.data());
 
     // Step 1: Try to find a queue family that supports all operations (Graphics + Compute + Transfer)
-    for (uint32_t i = 0; i < queueFamilyCount; ++i)
+    for (uint32_t i = 0; i < m_QueueFamilyCount; ++i)
     {
         const auto& props = queueFamilies[i];
         if ((props.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
             (props.queueFlags & VK_QUEUE_COMPUTE_BIT) &&
             (props.queueFlags & VK_QUEUE_TRANSFER_BIT))
         {
-            graphicsQueueFamilyIndex_ = i;
-            computeQueueFamilyIndex_ = i;
-            transferQueueFamilyIndex_ = i;
+            m_GraphicsQueueFamilyIndex = i;
+            m_ComputeQueueFamilyIndex = i;
+            m_TransferQueueFamilyIndex = i;
             return; // Found ideal queue, use it for all operations
         }
     }
 
     // Step 2: Try to find a queue family that supports Graphics + Transfer
-    for (uint32_t i = 0; i < queueFamilyCount; ++i)
+    for (uint32_t i = 0; i < m_QueueFamilyCount; ++i)
     {
         const auto& props = queueFamilies[i];
         if ((props.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
             (props.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
-            graphicsQueueFamilyIndex_ == UINT32_MAX)
+            m_GraphicsQueueFamilyIndex == UINT32_MAX)
         {
-            graphicsQueueFamilyIndex_ = i;
-            transferQueueFamilyIndex_ = i;
+            m_GraphicsQueueFamilyIndex = i;
+            m_TransferQueueFamilyIndex = i;
             break;
         }
     }
 
     // Step 3: Try to find a dedicated Compute queue (without Graphics)
-    for (uint32_t i = 0; i < queueFamilyCount; ++i)
+    for (uint32_t i = 0; i < m_QueueFamilyCount; ++i)
     {
         const auto& props = queueFamilies[i];
         if ((props.queueFlags & VK_QUEUE_COMPUTE_BIT) &&
             !(props.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
-            computeQueueFamilyIndex_ == UINT32_MAX)
+            m_ComputeQueueFamilyIndex == UINT32_MAX)
         {
-            computeQueueFamilyIndex_ = i;
+            m_ComputeQueueFamilyIndex = i;
             break;
         }
     }
 
     // Step 4: Try to find a dedicated Transfer queue (without Graphics and Compute)
-    for (uint32_t i = 0; i < queueFamilyCount; ++i)
+    for (uint32_t i = 0; i < m_QueueFamilyCount; ++i)
     {
         const auto& props = queueFamilies[i];
         if ((props.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
             !(props.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
             !(props.queueFlags & VK_QUEUE_COMPUTE_BIT) &&
-            transferQueueFamilyIndex_ == UINT32_MAX)
+            m_TransferQueueFamilyIndex == UINT32_MAX)
         {
-            transferQueueFamilyIndex_ = i;
+            m_TransferQueueFamilyIndex = i;
             break;
         }
     }
 
     // Step 5: If Graphics queue not found, find any queue with Graphics capability
-    if (graphicsQueueFamilyIndex_ == UINT32_MAX)
+    if (m_GraphicsQueueFamilyIndex == UINT32_MAX)
     {
-        for (uint32_t i = 0; i < queueFamilyCount; ++i)
+        for (uint32_t i = 0; i < m_QueueFamilyCount; ++i)
         {
             const auto& props = queueFamilies[i];
             if (props.queueFlags & VK_QUEUE_GRAPHICS_BIT)
             {
-                graphicsQueueFamilyIndex_ = i;
+                m_GraphicsQueueFamilyIndex = i;
                 break;
             }
         }
     }
 
     // Step 6: Fallback - use Graphics queue for missing operations
-    if (computeQueueFamilyIndex_ == UINT32_MAX)
-        computeQueueFamilyIndex_ = graphicsQueueFamilyIndex_;
-    if (transferQueueFamilyIndex_ == UINT32_MAX)
-        transferQueueFamilyIndex_ = graphicsQueueFamilyIndex_;
+    if (m_ComputeQueueFamilyIndex == UINT32_MAX)
+        m_ComputeQueueFamilyIndex = m_GraphicsQueueFamilyIndex;
+    if (m_TransferQueueFamilyIndex == UINT32_MAX)
+        m_TransferQueueFamilyIndex = m_GraphicsQueueFamilyIndex;
 
 }
 
@@ -150,9 +150,9 @@ void VulkanDevice::CreateLogicalDevice(VkPhysicalDevice physicalDevice,
 {
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     std::set<uint32_t> uniqueQueueFamilies = {
-        graphicsQueueFamilyIndex_,
-        computeQueueFamilyIndex_,
-        transferQueueFamilyIndex_,
+        m_GraphicsQueueFamilyIndex,
+        m_ComputeQueueFamilyIndex,
+        m_TransferQueueFamilyIndex,
     };
 
     float queuePriority = 1.0f;
@@ -182,8 +182,8 @@ void VulkanDevice::CreateLogicalDevice(VkPhysicalDevice physicalDevice,
 
 	VkPhysicalDeviceFeatures2 features2{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
     
-    if (timelineSemaphoreFeatures_.timelineSemaphore) {
-		createInfo.pNext = &timelineSemaphoreFeatures_;
+    if (m_TimelineSemaphoreFeatures.timelineSemaphore) {
+		createInfo.pNext = &m_TimelineSemaphoreFeatures;
     }
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelStructFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
     accelStructFeatures.accelerationStructure = VK_TRUE;
@@ -231,93 +231,93 @@ void VulkanDevice::CreateLogicalDevice(VkPhysicalDevice physicalDevice,
     //faultFeatures.deviceFault = VK_TRUE; // ◄── 必须开启这个
     //faultFeatures.deviceFaultVendorBinary = VK_TRUE; // ◄── 必须开启这个
     //timelineSemaphoreFeatures_.pNext = &faultFeatures;
-    VKFunc::CreateDevice(physicalDevice, &createInfo,&device_);
+    VKFunc::CreateDevice(physicalDevice, &createInfo,&m_Device);
     
     // 获取队列
     VkQueue graphicsQueue;
-    VKFunc::GetDeviceQueue(device_, graphicsQueueFamilyIndex_, 0, &graphicsQueue);
+    VKFunc::GetDeviceQueue(m_Device, m_GraphicsQueueFamilyIndex, 0, &graphicsQueue);
     VkQueue computeQueue;
-    VKFunc::GetDeviceQueue(device_, computeQueueFamilyIndex_, 0, &computeQueue);
+    VKFunc::GetDeviceQueue(m_Device, m_ComputeQueueFamilyIndex, 0, &computeQueue);
     VkQueue transferQueue;
-    VKFunc::GetDeviceQueue(device_, transferQueueFamilyIndex_, 0, &transferQueue);
+    VKFunc::GetDeviceQueue(m_Device, m_TransferQueueFamilyIndex, 0, &transferQueue);
 
-    graphicsQueue_ = new VulkanQueue(this, graphicsQueue, graphicsQueueFamilyIndex_, EQueueType::Graphics);
-	graphicsQueue_->InitContextPool(10);
-    computeQueue_  = new VulkanQueue(this, computeQueue, computeQueueFamilyIndex_, EQueueType::Compute);
-	computeQueue_->InitContextPool(10);
-    transferQueue_ = nullptr;//暂时不做async transfer
+    m_GraphicsQueue = new VulkanQueue(this, graphicsQueue, m_GraphicsQueueFamilyIndex, EQueueType::Graphics);
+	m_GraphicsQueue->InitContextPool(10);
+    m_ComputeQueue  = new VulkanQueue(this, computeQueue, m_ComputeQueueFamilyIndex, EQueueType::Compute);
+	m_ComputeQueue->InitContextPool(10);
+    m_TransferQueue = nullptr;//暂时不做async transfer
 }
 
-bool VulkanDevice::InitPresentQueue(VkSurfaceKHR Surface)
+bool VulkanDevice::InitPresentQueue(VkSurfaceKHR surface)
 {
-    auto CheckPresentSupport = [this](VulkanQueue* queue, VkSurfaceKHR surface)  {
-        if (presentQueue_) return;
+    auto checkPresentSupport = [this](VulkanQueue* queue, VkSurfaceKHR surface)  {
+        if (m_PresentQueue) return;
         VkBool32 surport = false;
-        VKFunc::GetPhysicalDeviceSurfaceSupportKHR(physicalDevice_, queue->GetFamilyIndex(), surface, &surport);
+        VKFunc::GetPhysicalDeviceSurfaceSupportKHR(m_PhysicalDevice, queue->GetFamilyIndex(), surface, &surport);
         if (surport) {
-            presentQueue_ = queue;
-			presentQueueFamilyIndex_ = queue->GetFamilyIndex();
+            m_PresentQueue = queue;
+			m_PresentQueueFamilyIndex = queue->GetFamilyIndex();
         }
     };
-    CheckPresentSupport(graphicsQueue_, Surface);
-    CheckPresentSupport(computeQueue_, Surface);
-    CheckPresentSupport(transferQueue_, Surface);
-    if (!presentQueue_) return false;
-    if (!presentExecutor_) {
-        presentExecutor_ = new VulkanPresentExecutor(presentQueue_);
+    checkPresentSupport(m_GraphicsQueue, surface);
+    checkPresentSupport(m_ComputeQueue, surface);
+    checkPresentSupport(m_TransferQueue, surface);
+    if (!m_PresentQueue) return false;
+    if (!m_PresentExecutor) {
+        m_PresentExecutor = new VulkanPresentExecutor(m_PresentQueue);
     }
     return true;
 }
 
 void VulkanDevice::Destroy()
 {
-    if (device_ == VK_NULL_HANDLE)
+    if (m_Device == VK_NULL_HANDLE)
     {
         return;
     }
 
-    VKFunc::DeviceWaitIdle(device_);
+    VKFunc::DeviceWaitIdle(m_Device);
 
-    if (globalCommandContext_ != nullptr)
+    if (m_GlobalCommandContext != nullptr)
     {
-        delete globalCommandContext_;
-        globalCommandContext_ = nullptr;
+        delete m_GlobalCommandContext;
+        m_GlobalCommandContext = nullptr;
     }
 
 
 
-    if (pipelineLayoutCache_ != nullptr)
+    if (m_PipelineLayoutCache != nullptr)
     {
-        delete pipelineLayoutCache_;
-        pipelineLayoutCache_ = nullptr;
+        delete m_PipelineLayoutCache;
+        m_PipelineLayoutCache = nullptr;
     }
-    if (descriptorSetManager_ != nullptr) {
-		delete descriptorSetManager_;
-        descriptorSetManager_ = nullptr;
-    }
-
-    if (shaderManager_ != nullptr)
-    {
-        delete shaderManager_;
-        shaderManager_ = nullptr;
+    if (m_DescriptorSetManager != nullptr) {
+		delete m_DescriptorSetManager;
+        m_DescriptorSetManager = nullptr;
     }
 
-    if (descriptorSetManager_ != nullptr)
+    if (m_ShaderManager != nullptr)
     {
-        delete descriptorSetManager_;
-        descriptorSetManager_ = nullptr;
+        delete m_ShaderManager;
+        m_ShaderManager = nullptr;
     }
 
-    if (descriptorSetLayoutManager_ != nullptr)
+    if (m_DescriptorSetManager != nullptr)
     {
-        delete descriptorSetLayoutManager_;
-        descriptorSetLayoutManager_ = nullptr;
+        delete m_DescriptorSetManager;
+        m_DescriptorSetManager = nullptr;
     }
 
-    if (renderPassManager_ != nullptr)
+    if (m_DescriptorSetLayoutManager != nullptr)
     {
-        delete renderPassManager_;
-        renderPassManager_ = nullptr;
+        delete m_DescriptorSetLayoutManager;
+        m_DescriptorSetLayoutManager = nullptr;
+    }
+
+    if (m_RenderPassManager != nullptr)
+    {
+        delete m_RenderPassManager;
+        m_RenderPassManager = nullptr;
     }
 
 
@@ -326,70 +326,70 @@ void VulkanDevice::Destroy()
     ReleaseDeferredResources();
 
     std::set<VulkanQueue*> uniqueQueues;
-    uniqueQueues.insert(graphicsQueue_);
-    uniqueQueues.insert(computeQueue_);
-    uniqueQueues.insert(transferQueue_);
-    uniqueQueues.insert(presentQueue_);
+    uniqueQueues.insert(m_GraphicsQueue);
+    uniqueQueues.insert(m_ComputeQueue);
+    uniqueQueues.insert(m_TransferQueue);
+    uniqueQueues.insert(m_PresentQueue);
     for (auto queue : uniqueQueues) {
         if (queue != nullptr)
         {
             delete queue;
         }
     }
-    transferQueue_ = nullptr;
-    computeQueue_ = nullptr;
-    graphicsQueue_ = nullptr;
-    presentQueue_ = nullptr;
+    m_TransferQueue = nullptr;
+    m_ComputeQueue = nullptr;
+    m_GraphicsQueue = nullptr;
+    m_PresentQueue = nullptr;
 
-    if (stagingManager_ != nullptr)
+    if (m_StagingManager != nullptr)
     {
-        delete stagingManager_;
-        stagingManager_ = nullptr;
+        delete m_StagingManager;
+        m_StagingManager = nullptr;
     }
 
 
-    if (semaphoreManager_ != nullptr)
+    if (m_SemaphoreManager != nullptr)
     {
-        delete semaphoreManager_;
-        semaphoreManager_ = nullptr;
+        delete m_SemaphoreManager;
+        m_SemaphoreManager = nullptr;
     }
 
-    if (deferredDeleteQueue_ != nullptr)
+    if (m_DeferredDeleteQueue != nullptr)
     {
-        deferredDeleteQueue_->Clear();
-        delete deferredDeleteQueue_;
-        deferredDeleteQueue_ = nullptr;
-    }
-
-
-
-
-    if (memoryManager_ != nullptr)
-    {
-        delete memoryManager_;
-        memoryManager_ = nullptr;
-    }
-
-    if (fenceManager_ != nullptr)
-    {
-        delete fenceManager_;
-        fenceManager_ = nullptr;
+        m_DeferredDeleteQueue->Clear();
+        delete m_DeferredDeleteQueue;
+        m_DeferredDeleteQueue = nullptr;
     }
 
 
 
-    if (device_ != VK_NULL_HANDLE)
+
+    if (m_MemoryManager != nullptr)
     {
-        VKFunc::DestroyDevice(device_);
-        device_ = VK_NULL_HANDLE;
+        delete m_MemoryManager;
+        m_MemoryManager = nullptr;
+    }
+
+    if (m_FenceManager != nullptr)
+    {
+        delete m_FenceManager;
+        m_FenceManager = nullptr;
+    }
+
+
+
+    if (m_Device != VK_NULL_HANDLE)
+    {
+        VKFunc::DestroyDevice(m_Device);
+        m_Device = VK_NULL_HANDLE;
     }
 }
 
 // ============ VulkanDeferredDeleteQueue Implementation ============
 
-VulkanDeferredDeleteQueue::VulkanDeferredDeleteQueue(VulkanDevice* InDevice)
-    : device_(InDevice),
-      currentFrameNumber_(0)
+VulkanDeferredDeleteQueue::VulkanDeferredDeleteQueue(VulkanDevice* inDevice)
+    : m_Device(inDevice),
+      m_CurrentFrameNumber(0)
 {
 }
 
@@ -398,82 +398,82 @@ VulkanDeferredDeleteQueue::~VulkanDeferredDeleteQueue()
     Clear();
 }
 
-void VulkanDeferredDeleteQueue::EnqueueGenericResource(EResourceType Type, uint64_t Handle)
+void VulkanDeferredDeleteQueue::EnqueueGenericResource(EResourceType type, uint64_t handle)
 {
-    if (Handle == 0)
+    if (handle == 0)
         return;
 
-    std::lock_guard<std::mutex> Lock(queueMutex_);
-    FDeferredDelete Entry;
-    Entry.Handle = Handle;
-    Entry.FrameNumber = currentFrameNumber_;
-    queues_[static_cast<size_t>(Type)].push(Entry);
+    std::lock_guard<std::mutex> lock(m_QueueMutex);
+    FDeferredDelete entry;
+    entry.Handle = handle;
+    entry.FrameNumber = m_CurrentFrameNumber;
+    m_Queues[static_cast<size_t>(type)].push(entry);
 }
 
-void VulkanDeferredDeleteQueue::ReleaseResource(EResourceType Type, const FDeferredDelete& Entry)
+void VulkanDeferredDeleteQueue::ReleaseResource(EResourceType type, const FDeferredDelete& entry)
 {
-    if (!device_ || device_->GetHandle() == VK_NULL_HANDLE)
+    if (!m_Device || m_Device->GetHandle() == VK_NULL_HANDLE)
         return;
 
-    VkDevice VulkanDevice = device_->GetHandle();
-    switch (Type)
+    VkDevice vulkanDevice = m_Device->GetHandle();
+    switch (type)
     {
     case EResourceType::RenderPass:
-        VKFunc::DestroyRenderPass(VulkanDevice, reinterpret_cast<VkRenderPass>(Entry.Handle));
+        VKFunc::DestroyRenderPass(vulkanDevice, reinterpret_cast<VkRenderPass>(entry.Handle));
         break;
     case EResourceType::Buffer:
-        VKFunc::DestroyBuffer(VulkanDevice, reinterpret_cast<VkBuffer>(Entry.Handle));
+        VKFunc::DestroyBuffer(vulkanDevice, reinterpret_cast<VkBuffer>(entry.Handle));
         break;
     case EResourceType::BufferView:
-        VKFunc::DestroyBufferView(VulkanDevice, reinterpret_cast<VkBufferView>(Entry.Handle));
+        VKFunc::DestroyBufferView(vulkanDevice, reinterpret_cast<VkBufferView>(entry.Handle));
         break;
     case EResourceType::Image:
     {
-        VkImage Image = reinterpret_cast<VkImage>(Entry.Handle);
-        device_->GetGraphicsQueue()->GetImageLayoutManager()->NotifyDeletedImage(Image);
-        device_->GetComputeQueue()->GetImageLayoutManager()->NotifyDeletedImage(Image);
+        VkImage image = reinterpret_cast<VkImage>(entry.Handle);
+        m_Device->GetGraphicsQueue()->GetImageLayoutManager()->NotifyDeletedImage(image);
+        m_Device->GetComputeQueue()->GetImageLayoutManager()->NotifyDeletedImage(image);
         //device_->GetTransferQueue()->GetImageLayoutManager()->NotifyDeletedImage(Image);
 
-        VKFunc::DestroyImage(VulkanDevice, Image);
+        VKFunc::DestroyImage(vulkanDevice, image);
         break;
     }
     case EResourceType::ImageView:
-        VKFunc::DestroyImageView(VulkanDevice, reinterpret_cast<VkImageView>(Entry.Handle));
+        VKFunc::DestroyImageView(vulkanDevice, reinterpret_cast<VkImageView>(entry.Handle));
         break;
     case EResourceType::Pipeline:
-        VKFunc::DestroyPipeline(VulkanDevice, reinterpret_cast<VkPipeline>(Entry.Handle));
+        VKFunc::DestroyPipeline(vulkanDevice, reinterpret_cast<VkPipeline>(entry.Handle));
         break;
     case EResourceType::Framebuffer:
-        VKFunc::DestroyFramebuffer(VulkanDevice, reinterpret_cast<VkFramebuffer>(Entry.Handle));
+        VKFunc::DestroyFramebuffer(vulkanDevice, reinterpret_cast<VkFramebuffer>(entry.Handle));
         break;
     case EResourceType::Sampler:
-        VKFunc::DestroySampler(VulkanDevice, reinterpret_cast<VkSampler>(Entry.Handle));
+        VKFunc::DestroySampler(vulkanDevice, reinterpret_cast<VkSampler>(entry.Handle));
         break;
     case EResourceType::ShaderModule:
-        VKFunc::DestroyShaderModule(VulkanDevice, reinterpret_cast<VkShaderModule>(Entry.Handle));
+        VKFunc::DestroyShaderModule(vulkanDevice, reinterpret_cast<VkShaderModule>(entry.Handle));
         break;
 	case EResourceType::Semaphore:
-        VKFunc::DestroySemaphore(VulkanDevice, reinterpret_cast<VkSemaphore>(Entry.Handle));
+        VKFunc::DestroySemaphore(vulkanDevice, reinterpret_cast<VkSemaphore>(entry.Handle));
 		break;
     default:
         break;
     }
 }
 
-void VulkanDeferredDeleteQueue::ReleaseResources(uint32_t FrameDelay)
+void VulkanDeferredDeleteQueue::ReleaseResources(uint32_t frameDelay)
 {
-    std::lock_guard<std::mutex> Lock(queueMutex_);
-    currentFrameNumber_++;
+    std::lock_guard<std::mutex> lock(m_QueueMutex);
+    m_CurrentFrameNumber++;
 
     // 按照删除顺序处理每个类型的队列
-    for (EResourceType Type : DeletionOrder)
+    for (EResourceType type : DeletionOrder)
     {
-        auto& queue = queues_[static_cast<size_t>(Type)];
+        auto& queue = m_Queues[static_cast<size_t>(type)];
         while (!queue.empty())
         {
-            const FDeferredDelete& Entry = queue.front();
+            const FDeferredDelete& entry = queue.front();
 
-            ReleaseResource(Type, Entry);
+            ReleaseResource(type, entry);
             queue.pop();
 
 
@@ -483,101 +483,101 @@ void VulkanDeferredDeleteQueue::ReleaseResources(uint32_t FrameDelay)
 
 void VulkanDeferredDeleteQueue::Clear()
 {
-    std::lock_guard<std::mutex> Lock(queueMutex_);
+    std::lock_guard<std::mutex> lock(m_QueueMutex);
 
     // 按照删除顺序立即释放所有待处理资源
-    for (EResourceType Type : DeletionOrder)
+    for (EResourceType type : DeletionOrder)
     {
-        auto& queue = queues_[static_cast<size_t>(Type)];
+        auto& queue = m_Queues[static_cast<size_t>(type)];
         while (!queue.empty())
         {
-            const FDeferredDelete& Entry = queue.front();
-            ReleaseResource(Type, Entry);
+            const FDeferredDelete& entry = queue.front();
+            ReleaseResource(type, entry);
             queue.pop();
         }
     }
 }
-void VulkanDevice::EnqueueRenderPassForDeletion(VkRenderPass RenderPass)
+void VulkanDevice::EnqueueRenderPassForDeletion(VkRenderPass renderPass)
 {
-    if (deferredDeleteQueue_)
-        deferredDeleteQueue_->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::RenderPass, RenderPass);
+    if (m_DeferredDeleteQueue)
+        m_DeferredDeleteQueue->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::RenderPass, renderPass);
 }
 
-void VulkanDevice::EnqueueBufferForDeletion(VkBuffer Buffer)
+void VulkanDevice::EnqueueBufferForDeletion(VkBuffer buffer)
 {
-    if (deferredDeleteQueue_)
-        deferredDeleteQueue_->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Buffer, Buffer);
+    if (m_DeferredDeleteQueue)
+        m_DeferredDeleteQueue->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Buffer, buffer);
 }
 
-void VulkanDevice::EnqueueImageForDeletion(VkImage Image)
+void VulkanDevice::EnqueueImageForDeletion(VkImage image)
 {
-    if (deferredDeleteQueue_)
+    if (m_DeferredDeleteQueue)
     {
-        deferredDeleteQueue_->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Image, Image);
+        m_DeferredDeleteQueue->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Image, image);
 		// 通知 RenderPassManager 相关的 Framebuffer 可能需要更新
-        if (renderPassManager_)
+        if (m_RenderPassManager)
         {
-            renderPassManager_->NotifyDeletedImage(Image);
+            m_RenderPassManager->NotifyDeletedImage(image);
         }
             			
     }
 
 }
 
-void VulkanDevice::EnqueueImageViewForDeletion(VkImageView ImageView)
+void VulkanDevice::EnqueueImageViewForDeletion(VkImageView imageView)
 {
-    if (deferredDeleteQueue_)
-        deferredDeleteQueue_->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::ImageView, ImageView);
+    if (m_DeferredDeleteQueue)
+        m_DeferredDeleteQueue->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::ImageView, imageView);
 }
 
-void VulkanDevice::EnqueueBufferViewForDeletion(VkBufferView BufferView)
+void VulkanDevice::EnqueueBufferViewForDeletion(VkBufferView bufferView)
 {
-    if (deferredDeleteQueue_)
-        deferredDeleteQueue_->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::BufferView, BufferView);
+    if (m_DeferredDeleteQueue)
+        m_DeferredDeleteQueue->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::BufferView, bufferView);
 }
 
-void VulkanDevice::EnqueuePipelineForDeletion(VkPipeline Pipeline)
+void VulkanDevice::EnqueuePipelineForDeletion(VkPipeline pipeline)
 {
-    if (deferredDeleteQueue_)
-        deferredDeleteQueue_->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Pipeline, Pipeline);
-}
-
-
-void VulkanDevice::EnqueueFramebufferForDeletion(VkFramebuffer Framebuffer)
-{
-    if (deferredDeleteQueue_)
-        deferredDeleteQueue_->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Framebuffer, Framebuffer);
-}
-
-void VulkanDevice::EnqueueSamplerForDeletion(VkSampler Sampler)
-{
-    if (deferredDeleteQueue_)
-        deferredDeleteQueue_->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Sampler, Sampler);
-}
-
-void VulkanDevice::EnqueueShaderModuleForDeletion(VkShaderModule ShaderModule)
-{
-    if (deferredDeleteQueue_)
-        deferredDeleteQueue_->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::ShaderModule, ShaderModule);
-}
-
-void VulkanDevice::EnqueueSemaphoreForDeletion(VkSemaphore Semaphore)
-{
-	if (deferredDeleteQueue_)
-		deferredDeleteQueue_->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Semaphore, Semaphore);
+    if (m_DeferredDeleteQueue)
+        m_DeferredDeleteQueue->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Pipeline, pipeline);
 }
 
 
-void VulkanDevice::ReleaseDeferredResources(uint32_t FrameDelay)
+void VulkanDevice::EnqueueFramebufferForDeletion(VkFramebuffer framebuffer)
 {
-    if (deferredDeleteQueue_)
-        deferredDeleteQueue_->ReleaseResources(FrameDelay);
+    if (m_DeferredDeleteQueue)
+        m_DeferredDeleteQueue->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Framebuffer, framebuffer);
+}
+
+void VulkanDevice::EnqueueSamplerForDeletion(VkSampler sampler)
+{
+    if (m_DeferredDeleteQueue)
+        m_DeferredDeleteQueue->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Sampler, sampler);
+}
+
+void VulkanDevice::EnqueueShaderModuleForDeletion(VkShaderModule shaderModule)
+{
+    if (m_DeferredDeleteQueue)
+        m_DeferredDeleteQueue->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::ShaderModule, shaderModule);
+}
+
+void VulkanDevice::EnqueueSemaphoreForDeletion(VkSemaphore semaphore)
+{
+	if (m_DeferredDeleteQueue)
+		m_DeferredDeleteQueue->EnqueueResource(VulkanDeferredDeleteQueue::EResourceType::Semaphore, semaphore);
+}
+
+
+void VulkanDevice::ReleaseDeferredResources(uint32_t frameDelay)
+{
+    if (m_DeferredDeleteQueue)
+        m_DeferredDeleteQueue->ReleaseResources(frameDelay);
 }
 
 uint32_t VulkanDevice::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const
 {
     VkPhysicalDeviceMemoryProperties memProperties;
-    VKFunc::GetPhysicalDeviceMemoryProperties(physicalDevice_, &memProperties);
+    VKFunc::GetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memProperties);
 
     for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
     {

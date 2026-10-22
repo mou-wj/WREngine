@@ -46,16 +46,16 @@ namespace RHIVulkan{
         if (!contentView)
             return false;
 
-        // »ñÈ¡ backing layer ³ß´ç
+        // è·å– backing layer å°ºå¯¸
         NSRect bounds = [contentView bounds];
         NSScreen* screen = [nsWindow screen];
-        CGFloat scale = [screen backingScaleFactor]; // Retina ÆÁÄ»ĞèÒªËõ·Å
+        CGFloat scale = [screen backingScaleFactor]; // Retina å±å¹•éœ€è¦ç¼©æ”¾
         width = bounds.size.width * scale;
         height = bounds.size.height * scale;
         return true;
 
 #elif defined(__linux__)
-        // ¼ÙÉè X11
+        // å‡è®¾ X11
         Window win = reinterpret_cast<Window>(windowHandle);
         Display* dpy = XOpenDisplay(nullptr);
         if (!dpy)
@@ -84,13 +84,13 @@ namespace RHIVulkan{
 #ifdef DEBUG_INFO
         layers.push_back("VK_LAYER_KHRONOS_validation");
 #endif
-       // Æ½Ì¨²ã
+       // å¹³å°å±‚
 #ifdef _WIN32
-    // Windows Ã»ÓĞÌØÊâ layer
+    // Windows æ²¡æœ‰ç‰¹æ®Š layer
 #elif defined(__linux__)
-    // Linux Ã»ÓĞÌØÊâ layer
+    // Linux æ²¡æœ‰ç‰¹æ®Š layer
 #elif defined(__APPLE__)
-    // MoltenVK / macOS Ã»ÓĞÌØÊâ layer
+    // MoltenVK / macOS æ²¡æœ‰ç‰¹æ®Š layer
 #endif
        return layers;
     }
@@ -99,7 +99,7 @@ namespace RHIVulkan{
     {
         std::vector<const char*> extensions;
 #if defined DEBUG_INFO
-        // Debug Utils ÓÃÓÚ debug / marker
+        // Debug Utils ç”¨äº debug / marker
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
         extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
@@ -107,7 +107,7 @@ namespace RHIVulkan{
         extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 #elif defined(__linux__)
         extensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
-        // »òÕß VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME
+        // æˆ–è€… VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME
 #elif defined(__APPLE__)
         extensions.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
 #endif

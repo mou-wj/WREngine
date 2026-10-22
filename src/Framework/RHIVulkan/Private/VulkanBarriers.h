@@ -25,18 +25,18 @@ namespace RHIVulkan {
 		void CollapseIfPossible();
 
 
-		uint32_t GetNumMips() const { return NumMips; }
-		uint32_t GetNumLayers() const { return NumLayers; }
-		VkImageLayout GetMainLayout() const { return MainLayout; }
+		uint32_t GetNumMips() const { return m_NumMips; }
+		uint32_t GetNumLayers() const { return m_NumLayers; }
+		VkImageLayout GetMainLayout() const { return m_MainLayout; }
 
 
 	private:
-		uint32_t NumMips = 0;
-		uint32_t NumLayers = 0;
+		uint32_t m_NumMips = 0;
+		uint32_t m_NumLayers = 0;
 
 
-		VkImageLayout MainLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		std::vector<VkImageLayout> SubresourceLayouts;
+		VkImageLayout m_MainLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		std::vector<VkImageLayout> m_SubresourceLayouts;
 
 
 		uint32_t Index(uint32_t mip, uint32_t layer) const;
@@ -48,7 +48,7 @@ namespace RHIVulkan {
 	{
 	public:
 		explicit VulkanImageLayoutManager(VulkanImageLayoutManager* fallback = nullptr);
-		void Clear() { Layouts.clear(); }
+		void Clear() { m_Layouts.clear(); }
 
 		const VulkanImageLayout* GetFullLayout(VkImage image) const;
 		const VulkanImageLayout* GetFullLayout(VulkanTexture* texture) const;
@@ -70,8 +70,8 @@ namespace RHIVulkan {
 		void PrintLayoutInfo();
 #endif
 	private:
-		std::unordered_map<VkImage, VulkanImageLayout> Layouts;
-		VulkanImageLayoutManager* Fallback = nullptr;
+		std::unordered_map<VkImage, VulkanImageLayout> m_Layouts;
+		VulkanImageLayoutManager* m_Fallback = nullptr;
 	};
 
 
@@ -112,9 +112,9 @@ namespace RHIVulkan {
 
 	private:
 		void Push(const VkImageMemoryBarrier& barrier);
-		std::vector<VkImageMemoryBarrier> ImageBarriers;
-		std::vector<VkMemoryBarrier> MemoryBarriers;
-		std::vector<VkBufferMemoryBarrier> BufferBarriers;
+		std::vector<VkImageMemoryBarrier> m_ImageBarriers;
+		std::vector<VkMemoryBarrier> m_MemoryBarriers;
+		std::vector<VkBufferMemoryBarrier> m_BufferBarriers;
 	};
 
 }

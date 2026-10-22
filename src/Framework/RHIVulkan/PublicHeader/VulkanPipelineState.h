@@ -35,15 +35,15 @@ namespace RHIVulkan{
 		};
 
         std::vector<DescriptorSetLayoutInfo> Layouts;//pipeline 全局setlayout
-        std::unordered_map<uint32_t, ShaderFrequencyLayoutInfo> setLayoutsByFrequency;
-        VkPushConstantRange pushConstant{};
-        bool hasPushConstant = false;
+        std::unordered_map<uint32_t, ShaderFrequencyLayoutInfo> SetLayoutsByFrequency;
+        VkPushConstantRange PushConstant{};
+        bool bHasPushConstant = false;
 
         // 获取指定着色器频率的 descriptor set layouts
         const ShaderFrequencyLayoutInfo* GetLayoutsForFrequency(RHI::ERHIShaderFrequency frequency) const
         {
-            auto it = setLayoutsByFrequency.find(static_cast<uint32_t>(frequency));
-            if (it != setLayoutsByFrequency.end()) {
+            auto it = SetLayoutsByFrequency.find(static_cast<uint32_t>(frequency));
+            if (it != SetLayoutsByFrequency.end()) {
                 return &it->second;
             }
             return nullptr;
@@ -51,7 +51,7 @@ namespace RHIVulkan{
 
         void AddUniformBufferLayoutForFrequency(RHI::ERHIShaderFrequency frequency, const ShaderUniformBufferLayoutInfo& layout)
 		{
-			ShaderFrequencyLayoutInfo& freqInfo = setLayoutsByFrequency[static_cast<uint32_t>(frequency)];
+			ShaderFrequencyLayoutInfo& freqInfo = SetLayoutsByFrequency[static_cast<uint32_t>(frequency)];
 			freqInfo.UniformBufferLayouts.push_back(layout);
 		}
 
@@ -70,11 +70,11 @@ namespace RHIVulkan{
                 HashCombine(h, std::hash<uint64_t>()((uint64_t)DescriptorSetLayoutInfo::CalculateHash(layout)));
             }
 
-            if (info.hasPushConstant)
+            if (info.bHasPushConstant)
             {
-                HashCombine(h, info.pushConstant.offset);
-                HashCombine(h, info.pushConstant.size);
-                HashCombine(h, info.pushConstant.stageFlags);
+                HashCombine(h, info.PushConstant.offset);
+                HashCombine(h, info.PushConstant.size);
+                HashCombine(h, info.PushConstant.stageFlags);
             }
 
             return h;
@@ -86,10 +86,10 @@ namespace RHIVulkan{
     public:
 
         VulkanPipelineLayout(
-            VulkanDevice* Device,
+            VulkanDevice* device,
             const PipelineLayoutInfo& info)
-            : device(Device)
-            , info(info)
+            : m_Device(device)
+            , m_Info(info)
         {
             VkPipelineLayoutCreateInfo createInfo{};
             createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -102,43 +102,43 @@ namespace RHIVulkan{
             for (const auto& layout : allLayouts)
 			{
 				layouts.push_back(
-					device->GetDescriptorSetLayoutManager()->GetOrCreateLayout(layout));
+					m_Device->GetDescriptorSetLayoutManager()->GetOrCreateLayout(layout));
 			}
             createInfo.pSetLayouts =
                 layouts.data();
 
-            if (info.hasPushConstant)
+            if (info.bHasPushConstant)
             {
                 createInfo.pushConstantRangeCount = 1;
-                createInfo.pPushConstantRanges = &info.pushConstant;
+                createInfo.pPushConstantRanges = &info.PushConstant;
             }
 
             VKFunc::CreatePipelineLayout(
-                device->GetHandle(),
+                m_Device->GetHandle(),
                 &createInfo,
-                &layout);
+                &m_Layout);
         }
 
         ~VulkanPipelineLayout()
         {
-            if (layout != VK_NULL_HANDLE) 
+            if (m_Layout != VK_NULL_HANDLE)
             {
-                VKFunc::DestroyPipelineLayout(device->GetHandle(), layout);
+                VKFunc::DestroyPipelineLayout(m_Device->GetHandle(), m_Layout);
             }
                 
         }
 
         VkPipelineLayout GetHandle()
         {
-            return layout;
+            return m_Layout;
         }
-        const PipelineLayoutInfo& GetInfo() const { return info; }
+        const PipelineLayoutInfo& GetInfo() const { return m_Info; }
 
     private:
 
-        VulkanDevice* device;
-        VkPipelineLayout layout = VK_NULL_HANDLE;
-        PipelineLayoutInfo info;
+        VulkanDevice* m_Device;
+        VkPipelineLayout m_Layout = VK_NULL_HANDLE;
+        PipelineLayoutInfo m_Info;
         friend class VulkanPipelineStateCache;
     };
 
@@ -147,12 +147,12 @@ namespace RHIVulkan{
     public:
 
         VulkanPipelineLayoutCache(VulkanDevice* device)
-            : device(device)
+            : m_Device(device)
         {
         }   
         ~VulkanPipelineLayoutCache() 
         {
-			Layouts.clear();
+			m_Layouts.clear();
         }
 
         VulkanPipelineLayout* GetOrCreateLayout(
@@ -160,31 +160,31 @@ namespace RHIVulkan{
         {
             uint64_t hash = PipelineLayoutInfo::CalculateHash(info);
 
-            auto it = Layouts.find(hash);
-            if (it != Layouts.end())
+            auto it = m_Layouts.find(hash);
+            if (it != m_Layouts.end())
             {
                 return it->second.get();
             }
 
             auto layout =
                 std::make_unique<VulkanPipelineLayout>(
-                    device,
+                    m_Device,
                     info);
 
             VulkanPipelineLayout* result = layout.get();
 
-            Layouts[hash] = std::move(layout);
+            m_Layouts[hash] = std::move(layout);
 
             return result;
         }
 
     private:
 
-        VulkanDevice* device;
+        VulkanDevice* m_Device;
 
         std::unordered_map<
             uint64_t,
-            std::unique_ptr<VulkanPipelineLayout>> Layouts;
+            std::unique_ptr<VulkanPipelineLayout>> m_Layouts;
     };
 
 
@@ -195,16 +195,16 @@ public:
     explicit VulkanPipelineBase(VulkanDevice* device);
     virtual ~VulkanPipelineBase();
 
-    VkPipeline GetHandle() const { return pipeline; }
-    VulkanPipelineLayout* GetLayout() const { return pipelineLayout; }
+    VkPipeline GetHandle() const { return _pipeline; }
+    VulkanPipelineLayout* GetLayout() const { return _pipelineLayout; }
 
 protected:
 
-    VulkanDevice* device;
-    VkPipeline pipeline;
-	VulkanPipelineLayout* pipelineLayout;
+    VulkanDevice* _device;
+    VkPipeline _pipeline;
+	VulkanPipelineLayout* _pipelineLayout;
     //VulkanDescriptorSets boundDescriptorSets; // 绑定的描述符集
-    VulkanRenderPass* renderPass;
+    VulkanRenderPass* _renderPass;
     friend class VulkanPipelineStateCache;
     
     virtual void CreatePipeline() = 0;
@@ -220,10 +220,10 @@ public:
 private:
     PipelineLayoutInfo BuildPipelineLayoutInfo(
         const RHIGraphicsPipelineStateDesc& pipelineDesc);
-    VkGraphicsPipelineCreateInfo createInfo; // Vulkan-specific create info
+    VkGraphicsPipelineCreateInfo m_CreateInfo; // Vulkan-specific create info
 
     void CreatePipeline() override;
-    std::vector<VkDynamicState>  dynamicStates; // 动态状态列表
+    std::vector<VkDynamicState>  m_DynamicStates; // 动态状态列表
 };
 
 // 计算管线
@@ -235,7 +235,7 @@ public:
 
 private:
     PipelineLayoutInfo BuildPipelineLayoutInfo(const RHIComputePipelineStateDesc& pipelineDesc);
-    VkComputePipelineCreateInfo createInfo; // Vulkan-specific create info
+    VkComputePipelineCreateInfo m_CreateInfo; // Vulkan-specific create info
 
     void CreatePipeline() override;
 };
@@ -246,23 +246,23 @@ public:
     VulkanRayTracingPipeline(VulkanDevice* device, const RHIRayTracingPipelineStateDesc& pipelineDesc);
     ~VulkanRayTracingPipeline();
 
-    const VkStridedDeviceAddressRegionKHR& GetRayGenShaderBindingTableRegion() const { return rayGenShaderBindingTableRegion; }
-    const VkStridedDeviceAddressRegionKHR& GetMissShaderBindingTableRegion() const { return missShaderBindingTableRegion; }
-    const VkStridedDeviceAddressRegionKHR& GetHitShaderBindingTableRegion() const { return hitShaderBindingTableRegion; }
-    const VkStridedDeviceAddressRegionKHR& GetCallableShaderBindingTableRegion() const { return callableShaderBindingTableRegion; }
+    const VkStridedDeviceAddressRegionKHR& GetRayGenShaderBindingTableRegion() const { return m_RayGenShaderBindingTableRegion; }
+    const VkStridedDeviceAddressRegionKHR& GetMissShaderBindingTableRegion() const { return m_MissShaderBindingTableRegion; }
+    const VkStridedDeviceAddressRegionKHR& GetHitShaderBindingTableRegion() const { return m_HitShaderBindingTableRegion; }
+    const VkStridedDeviceAddressRegionKHR& GetCallableShaderBindingTableRegion() const { return m_CallableShaderBindingTableRegion; }
 
 private:
     PipelineLayoutInfo BuildPipelineLayoutInfo(const RHIRayTracingPipelineStateDesc& pipelineDesc);
-    VkRayTracingPipelineCreateInfoKHR createInfo; // Vulkan-specific create info
+    VkRayTracingPipelineCreateInfoKHR m_CreateInfo; // Vulkan-specific create info
 
-    VkStridedDeviceAddressRegionKHR rayGenShaderBindingTableRegion{};
-    VkStridedDeviceAddressRegionKHR missShaderBindingTableRegion{};
-    VkStridedDeviceAddressRegionKHR hitShaderBindingTableRegion{};
-    VkStridedDeviceAddressRegionKHR callableShaderBindingTableRegion{};
+    VkStridedDeviceAddressRegionKHR m_RayGenShaderBindingTableRegion{};
+    VkStridedDeviceAddressRegionKHR m_MissShaderBindingTableRegion{};
+    VkStridedDeviceAddressRegionKHR m_HitShaderBindingTableRegion{};
+    VkStridedDeviceAddressRegionKHR m_CallableShaderBindingTableRegion{};
 
-    VkBuffer shaderBindingTableBuffer = VK_NULL_HANDLE;
-    VulkanAllocation shaderBindingTableAllocation{};
-    VkDeviceAddress shaderBindingTableDeviceAddress = 0;
+    VkBuffer m_ShaderBindingTableBuffer = VK_NULL_HANDLE;
+    VulkanAllocation m_ShaderBindingTableAllocation{};
+    VkDeviceAddress m_ShaderBindingTableDeviceAddress = 0;
 
     void CreatePipeline() override;
 };

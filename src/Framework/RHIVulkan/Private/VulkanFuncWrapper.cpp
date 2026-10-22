@@ -2,11 +2,11 @@
 #include "Log.h"
 #include <assert.h>
 
-// ������ں�����ͨ����̬��ֱ�ӵ�����
+// Loader entry points exported by the Vulkan library.
 #define VK_EXPORTED_FUNC_LIST(V) \
     V(vkGetInstanceProcAddr)
 
-// ʵ����������ͨ�� vkGetInstanceProcAddr ���أ�
+// Instance functions resolved through vkGetInstanceProcAddr.
 #define VK_INSTANCE_FUNC_LIST(V) \
     V(vkCreateInstance) \
     V(vkDestroyInstance) \
@@ -32,7 +32,7 @@
     V(vkCreateDebugUtilsMessengerEXT) \
     V(vkDestroyDebugUtilsMessengerEXT)
 
-// �豸��������ͨ�� vkGetDeviceProcAddr ���أ�Ч����ߣ�
+// Device functions resolved through vkGetDeviceProcAddr.
 #define VK_DEVICE_FUNC_LIST(V) \
     V(vkDestroyDevice) \
     V(vkGetDeviceQueue) \
@@ -135,7 +135,7 @@
     V(vkAcquireNextImageKHR) \
     V(vkQueuePresentKHR) \
     V(vkGetDeviceFaultInfoEXT)\
-    V(vkSetDebugUtilsObjectNameEXT) // ��Ӧ SetDebugName
+    V(vkSetDebugUtilsObjectNameEXT) // Used by SetDebugName.
 
 #define DECLARE_PFN(name) static PFN_##name name = nullptr;
 
@@ -158,17 +158,17 @@ using namespace Core;
 namespace VKFunc {
 
     bool InitializeLoader() {
-        // 1. ���ض�̬�� (LoadLibrary/dlopen) �߼�ʡ��...
+        // Load the Vulkan shared library.
 #if defined(_WIN32)
         vulkanLib = LoadLibraryA("vulkan-1.dll");
 #elif defined(__linux__) || defined(__APPLE__)
         vulkanLib = dlopen("vulkan-1.so", RTLD_LAZY);
 #endif
-        // 2. ���ص����Ļ�������
+        // Resolve loader entry points.
 #define LOAD_EXPORTED(name) name = (PFN_##name)GetProcAddress(vulkanLib, #name);
         VK_EXPORTED_FUNC_LIST(LOAD_EXPORTED)
 #undef LOAD_EXPORTED
-        //3. Ԥ����ȫ�ֽӿ�
+        // Resolve global enumeration functions.
        vkEnumerateInstanceExtensionProperties = (PFN_vkEnumerateInstanceExtensionProperties)
             vkGetInstanceProcAddr(nullptr, "vkEnumerateInstanceExtensionProperties");
 
@@ -238,7 +238,7 @@ namespace VKFunc {
         }
 #endif
     }
-    // ����������������ز����ô�������
+    // Resolve and call the debug messenger creation function.
     bool CreateDebugUtilsMessengerEXT(VkInstance instance,
         const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
         VkDebugUtilsMessengerEXT* pDebugMessenger) {
@@ -250,7 +250,7 @@ namespace VKFunc {
         return false;
     }
 
-    // ����������������ز��������ٺ���
+    // Destroy the debug messenger if the extension function is available.
     void DestroyDebugUtilsMessengerEXT(VkInstance instance,
         VkDebugUtilsMessengerEXT debugMessenger) {
         if (vkDestroyDebugUtilsMessengerEXT) {
@@ -359,8 +359,8 @@ namespace VKFunc {
             if (result != VK_SUCCESS) {
                 fprintf(stderr, "[ERROR] vkDeviceWaitIdle failed with code: %d\n", result);
                 if (result == VK_ERROR_DEVICE_LOST) {
-                    // ǿ�ƴ����ϵ㣨Windows �¿��� __debugbreak()��Linux ���� raise(SIGTRAP) ��ֱ�� assert��
-                    assert(false && "GPU ������Device Lost ����������� WaitIdle ֮ǰ��");
+                    // Stop on a validation error before waiting on the device.
+                    assert(false && "GPU validation error or device loss before WaitIdle");
                 }
             }
         }
@@ -779,7 +779,7 @@ namespace VKFunc {
         if (commandBuffer) vkResetCommandBuffer(commandBuffer, flags);
     }
 
-    // ָ��¼�ƽӿ� (�����������Ŀռ��)
+    // Command recording wrappers.
     void CmdBindPipeline(VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline) {
         if (commandBuffer && pipeline) vkCmdBindPipeline(commandBuffer, pipelineBindPoint, pipeline);
     }

@@ -14,8 +14,8 @@ namespace RHIVulkan {
     struct DescriptorBindingState
     {
         VkDescriptorType Type;
-        uint64_t ResourceHash = 0; // SRV/UAV/Sampler Ψһ��ʶ
-        bool Dirty = true;
+        uint64_t ResourceHash = 0; // Unique resource identity for SRV, UAV and sampler bindings.
+        bool bDirty = true;
     };
 
     struct VulkanPerSetDescriptorState
@@ -77,11 +77,11 @@ namespace RHIVulkan {
             bool bUseExternalBuffer = false;
         };
         std::vector<PackedUniformBinding> Bindings;
-		int GetBindingInfoIndex(uint32_t BufferIndex) const
+		int GetBindingInfoIndex(uint32_t bufferIndex) const
 		{
 			for (size_t i = 0; i < Bindings.size(); i++)
 			{
-				if (Bindings[i].Binding == BufferIndex)
+				if (Bindings[i].Binding == bufferIndex)
 				{
 					return static_cast<int>(i);
 				}
@@ -89,14 +89,14 @@ namespace RHIVulkan {
 			return -1; // 没有找到
 		}
 		PackedUniformBuffer() = default;
-        PackedUniformBuffer(size_t InSize)
-            : Data(InSize, 0), GPUBufferOffset(0), bDirty(true)
+        PackedUniformBuffer(size_t inSize)
+            : Data(inSize, 0), GPUBufferOffset(0), bDirty(true)
         {
         }
-        PackedUniformBuffer(const std::vector<PackedUniformBinding>& BindingInfo)
+        PackedUniformBuffer(const std::vector<PackedUniformBinding>& bindingInfo)
             : GPUBufferOffset(0), bDirty(true)
         {
-			Bindings = BindingInfo;
+			Bindings = bindingInfo;
 			size_t totalSize = 0;
 			for (auto& binding : Bindings)
 			{
@@ -121,11 +121,11 @@ namespace RHIVulkan {
     public:
 
         VulkanCommonPipelineDescriptorState(VulkanDevice* device, VulkanPipelineBase* pipeline,VulkanCommandContext* context)
-            : Device(device)
-            , pipeline(pipeline)
-            , Context(context)
+            : _device(device)
+            , _pipeline(pipeline)
+            , _context(context)
         {
-            Sets.resize(MaxDescriptorSets);
+            _sets.resize(m_MaxDescriptorSets);
 			ParsePipelineLayout(*(pipeline->GetLayout()));
         }
 
@@ -135,7 +135,7 @@ namespace RHIVulkan {
 
         void Reset()
         {
-            for (auto& set : Sets)
+            for (auto& set : _sets)
             {
                 set.Reset();
             }
@@ -153,7 +153,7 @@ namespace RHIVulkan {
             uint32_t element,
             VulkanTexture* texture)
         {
-            auto& set = Sets[setIndex];
+            auto& set = _sets[setIndex];
             DescriptorBindingState state;
             state.Kind = DescriptorBindingState::EKind::Image;
             state.Type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
@@ -181,7 +181,7 @@ namespace RHIVulkan {
             uint32_t element,
 			VulkanSampler* sampler)
 		{
-			auto& set = Sets[setIndex];
+			auto& set = _sets[setIndex];
             DescriptorBindingState state;
             state.Kind =
                 DescriptorBindingState::EKind::Image;
@@ -218,7 +218,7 @@ namespace RHIVulkan {
             uint32_t element,
             VulkanShaderResourceView* srv)
         {
-            auto& set = Sets[setIndex];
+            auto& set = _sets[setIndex];
 
             DescriptorBindingState state;
 
@@ -292,7 +292,7 @@ namespace RHIVulkan {
             uint32_t element,
             VulkanUnorderedAccessView* uav)
         {
-            auto& set = Sets[setIndex];
+            auto& set = _sets[setIndex];
 
             DescriptorBindingState state;
 
@@ -369,7 +369,7 @@ namespace RHIVulkan {
             VkDeviceSize offset,
             VkDeviceSize size)
         {
-            auto& set = Sets[setIndex];
+            auto& set = _sets[setIndex];
 
             DescriptorBindingState state;
 
@@ -397,7 +397,7 @@ namespace RHIVulkan {
             uint32_t element,
             VulkanRayTracingInstance* accelerationStructure)
         {
-            auto& set = Sets[setIndex];
+            auto& set = _sets[setIndex];
 
             DescriptorBindingState state;
             state.Kind = DescriptorBindingState::EKind::AccelerationStructure;
@@ -414,12 +414,12 @@ namespace RHIVulkan {
         {
             bool isUpdate = false;
             VulkanDescriptorWriter batchWriter;
-            const auto& sets = pipeline->GetLayout()->GetInfo().GetAllLayouts();
+            const auto& sets = _pipeline->GetLayout()->GetInfo().GetAllLayouts();
             for (uint32_t i = 0;
                 i < sets.size();
                 ++i)
             {
-                auto& set = Sets[i];
+                auto& set = _sets[i];
 
                 //---------------------------------
                 // Skip
@@ -431,7 +431,7 @@ namespace RHIVulkan {
                 }
 
                 set.DescriptorSet =
-                    Device
+                    _device
                     ->GetDescriptorSetManager()
                     ->GetDescriptorSet(
                         sets[i]);
@@ -501,7 +501,7 @@ namespace RHIVulkan {
             //---------------------------------
             bool isUpdated = batchWriter.IsDirty();
             batchWriter.Update(
-                Device->GetHandle());
+                _device->GetHandle());
             return isUpdated;
         }
 
@@ -510,12 +510,12 @@ namespace RHIVulkan {
 
         VkDescriptorSet GetDescriptorSet(uint32_t setIndex) const
         {
-            return Sets[setIndex].DescriptorSet;
+            return _sets[setIndex].DescriptorSet;
         }
 
     private:
 
-        static constexpr uint32_t MaxDescriptorSets = 8;
+        static constexpr uint32_t m_MaxDescriptorSets = 8;
 
     protected:
         struct DescriptorBindingState
@@ -598,10 +598,10 @@ namespace RHIVulkan {
             }
         };
 
-        VulkanDevice* Device = nullptr;
+        VulkanDevice* _device = nullptr;
 
-        std::vector<VulkanPerSetDescriptorState> Sets;
-        VulkanPipelineBase* pipeline;
+        std::vector<VulkanPerSetDescriptorState> _sets;
+        VulkanPipelineBase* _pipeline;
         bool UpdateBindingState(
             VulkanPerSetDescriptorState& set,
             uint32_t binding,
@@ -625,7 +625,7 @@ namespace RHIVulkan {
     private:
         void ParsePipelineLayout(const VulkanPipelineLayout& layout)
         {
-            for (const auto& pair : layout.GetInfo().setLayoutsByFrequency)
+            for (const auto& pair : layout.GetInfo().SetLayoutsByFrequency)
             {
                 ERHIShaderFrequency freq = static_cast<ERHIShaderFrequency>(pair.first);
                 const PipelineLayoutInfo::ShaderFrequencyLayoutInfo& freqInfo = pair.second;
@@ -642,7 +642,7 @@ namespace RHIVulkan {
 						binding.Size = ubLayout.Size;
 						bindings.push_back(binding);
 					}
-					PackedUniformBuffersByFrequency[freq] = PackedUniformBuffer(bindings);
+					_packedUniformBuffersByFrequency[freq] = PackedUniformBuffer(bindings);
                 }
                 // 构建shader参数的binding映射
                 for (size_t i = 0; i < freqInfo.ResourceParameterLayouts.size(); ++i)
@@ -651,7 +651,7 @@ namespace RHIVulkan {
                     {
                         ShaderParameterKey key{ freq, binding.BindingIndex };
                         ShaderParameterBinding value{ binding.SetIndex, binding.BindingIndex };
-                        ParameterBindingMap[key] = value;
+                        m_ParameterBindingMap[key] = value;
                     }
                 }
             }
@@ -668,9 +668,9 @@ namespace RHIVulkan {
         std::unordered_map<
             ShaderParameterKey,
             ShaderParameterBinding,
-            ShaderParameterKeyHash> ParameterBindingMap;
+            ShaderParameterKeyHash> m_ParameterBindingMap;
     public:
-        // �ⲿ��ȡ set + binding
+        // Expose the descriptor set and binding.
         bool GetBinding(
             ERHIShaderFrequency frequency,
             uint32_t parameterId,
@@ -678,8 +678,8 @@ namespace RHIVulkan {
             uint32_t& outBinding) const
         {
             ShaderParameterKey key{ frequency, parameterId };
-            auto it = ParameterBindingMap.find(key);
-            if (it == ParameterBindingMap.end())
+            auto it = m_ParameterBindingMap.find(key);
+            if (it == m_ParameterBindingMap.end())
                 return false;
 
             outSetIndex = it->second.SetIndex;
@@ -690,8 +690,8 @@ namespace RHIVulkan {
         void FlushAndBind(VulkanCommandBuffer* cmd);
         void MarkUiformBufferUseExternal(ERHIShaderFrequency frequency, uint32_t set, uint32_t binding)
         {
-            auto it = PackedUniformBuffersByFrequency.find(frequency);
-            if (it == PackedUniformBuffersByFrequency.end())
+            auto it = _packedUniformBuffersByFrequency.find(frequency);
+            if (it == _packedUniformBuffersByFrequency.end())
                 return;
 
             PackedUniformBuffer& buffer = it->second;
@@ -705,33 +705,33 @@ namespace RHIVulkan {
             }
         }
     protected:
-        std::unordered_map<ERHIShaderFrequency, PackedUniformBuffer> PackedUniformBuffersByFrequency;
+        std::unordered_map<ERHIShaderFrequency, PackedUniformBuffer> _packedUniformBuffersByFrequency;
         public:
         void SetPackedGlobalParameter(
             ERHIShaderFrequency frequency,
-            uint32_t BufferIndex,
-            uint32_t ByteOffset,
-            uint32_t NumBytes,
-            const void* NewValue)
+            uint32_t bufferIndex,
+            uint32_t byteOffset,
+            uint32_t numBytes,
+            const void* newValue)
         {
-            auto it = PackedUniformBuffersByFrequency.find(frequency);
-            if (it == PackedUniformBuffersByFrequency.end())
+            auto it = _packedUniformBuffersByFrequency.find(frequency);
+            if (it == _packedUniformBuffersByFrequency.end())
                 return;
 
             PackedUniformBuffer& buffer = it->second;
             //获取bufferIndex的信息
-            int index = buffer.GetBindingInfoIndex(BufferIndex);
+            int index = buffer.GetBindingInfoIndex(bufferIndex);
             if (index == -1) 
             {
                 return;
             }
             const PackedUniformBuffer::PackedUniformBinding& binding = buffer.Bindings[index];
-            assert(ByteOffset + NumBytes <= binding.Size);
-            assert((NumBytes & 3) == 0 && (ByteOffset & 3) == 0);
+            assert(byteOffset + numBytes <= binding.Size);
+            assert((numBytes & 3) == 0 && (byteOffset & 3) == 0);
 
-            uint32_t* dst = reinterpret_cast<uint32_t*>(buffer.GetData() + ByteOffset + binding.CPUOffset);
-            const uint32_t* src = reinterpret_cast<const uint32_t*>(NewValue);
-            size_t count = NumBytes / 4;
+            uint32_t* dst = reinterpret_cast<uint32_t*>(buffer.GetData() + byteOffset + binding.CPUOffset);
+            const uint32_t* src = reinterpret_cast<const uint32_t*>(newValue);
+            size_t count = numBytes / 4;
 
             for (size_t i = 0; i < count; ++i)
             {
@@ -742,8 +742,8 @@ namespace RHIVulkan {
             buffer.MarkDirty();
         }
     protected:
-        VkPipelineBindPoint pipelineBindingPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
-		VulkanCommandContext* Context = nullptr;
+        VkPipelineBindPoint _pipelineBindingPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
+		VulkanCommandContext* _context = nullptr;
     };
 
 
@@ -759,12 +759,12 @@ namespace RHIVulkan {
             VulkanComputePipelineState* pipeline,
             VulkanCommandContext* context)
             : VulkanCommonPipelineDescriptorState(device, pipeline,context)
-            , Pipeline(pipeline)
+            , m_Pipeline(pipeline)
         {
-            pipelineBindingPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
+            _pipelineBindingPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
         }
     private:
-        VulkanComputePipelineState* Pipeline = nullptr;
+        VulkanComputePipelineState* m_Pipeline = nullptr;
     };
 
     class VulkanGraphicsPipelineDescriptorState
@@ -776,12 +776,12 @@ namespace RHIVulkan {
             VulkanGraphicsPipelineState* pipeline,
             VulkanCommandContext* context)
             : VulkanCommonPipelineDescriptorState(device, pipeline,context)
-            , Pipeline(pipeline)
+            , m_Pipeline(pipeline)
         {
-            pipelineBindingPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            _pipelineBindingPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         }
     private:
-        VulkanGraphicsPipelineState* Pipeline;
+        VulkanGraphicsPipelineState* m_Pipeline;
     };
 
     class VulkanRayTracingPipelineDescriptorState
@@ -793,194 +793,194 @@ namespace RHIVulkan {
             VulkanRayTracingPipeline* pipeline,
             VulkanCommandContext* context)
             : VulkanCommonPipelineDescriptorState(device, pipeline, context)
-            , Pipeline(pipeline)
+            , m_Pipeline(pipeline)
         {
-            pipelineBindingPoint = VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR;
+            _pipelineBindingPoint = VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR;
         }
     private:
-        VulkanRayTracingPipeline* Pipeline;
+        VulkanRayTracingPipeline* m_Pipeline;
     };
 
     class VulkanPendingComputeState
     {
     public:
         VulkanPendingComputeState(VulkanDevice* device, VulkanCommandContext* context)
-            : Device(device)
-			, Context(context)
+            : m_Device(device)
+			, m_Context(context)
         {
         }
 
         void Reset()
         {
-            CurrentPipeline = nullptr;
-            CurrentState = nullptr;
-            bDirtyPipelineState = false;
-            CurrentPipeline = nullptr;
-            CurrentState = nullptr;
-            for (auto& state : States) {
+            m_CurrentPipeline = nullptr;
+            m_CurrentState = nullptr;
+            m_bDirtyPipelineState = false;
+            m_CurrentPipeline = nullptr;
+            m_CurrentState = nullptr;
+            for (auto& state : m_States) {
                 state.second->Reset();
             }
         }
 
         void SetPipeline(VulkanComputePipelineState* pipeline)
         {
-            bDirtyPipelineState = true;
-            if (CurrentPipeline == pipeline)
+            m_bDirtyPipelineState = true;
+            if (m_CurrentPipeline == pipeline)
                 return;
            
-            CurrentPipeline = pipeline;
+            m_CurrentPipeline = pipeline;
 
-            auto it = States.find(pipeline);
-            if (it == States.end())
+            auto it = m_States.find(pipeline);
+            if (it == m_States.end())
             {
                 auto state =
                     std::make_unique<
                     VulkanComputePipelineDescriptorState>(
-                        Device, pipeline,Context);
+                        m_Device, pipeline,m_Context);
 
-                CurrentState = state.get();
-                States[pipeline] = std::move(state);
+                m_CurrentState = state.get();
+                m_States[pipeline] = std::move(state);
             }
             else
             {
-                CurrentState = it->second.get();
+                m_CurrentState = it->second.get();
             }
         }
 
         void SetTexture(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanTexture* texture)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->SetTexture(setIndex, binding,elementId, texture);
+                m_CurrentState->SetTexture(setIndex, binding,elementId, texture);
             }
         }
 
 		void SetSampler(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanSampler* sampler)
 		{
-			if (!CurrentState)
+			if (!m_CurrentState)
 				return;
 			uint32_t setIndex = 0;
 			uint32_t binding = 0;
-			if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+			if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
 			{
-				CurrentState->SetSampler(setIndex, binding,elementId, sampler);
+				m_CurrentState->SetSampler(setIndex, binding,elementId, sampler);
 			}
 		}
 
 
         //--------------------------------------------------------
-        // ͨ�� ShaderFrequency + parameterId ���� SRV
+        // Bind an SRV by shader frequency and parameter ID.
         //--------------------------------------------------------
         void SetSRV(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanShaderResourceView* srv)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->SetSRV(setIndex, binding,elementId, srv);
+                m_CurrentState->SetSRV(setIndex, binding,elementId, srv);
             }
         }
 
         //--------------------------------------------------------
-        // ͨ�� ShaderFrequency + parameterId ���� UAV
+        // Bind a UAV by shader frequency and parameter ID.
         //--------------------------------------------------------
         void SetUAV(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanUnorderedAccessView* uav)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->SetUAV(setIndex, binding,elementId, uav);
+                m_CurrentState->SetUAV(setIndex, binding,elementId, uav);
             }
         }
 
         //--------------------------------------------------------
-        // ͨ�� ShaderFrequency + parameterId ���� UniformBuffer
+        // Bind a uniform buffer by shader frequency and parameter ID.
         //--------------------------------------------------------
         void SetUniformBuffer(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanBuffer* uniformBuffer)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->MarkUiformBufferUseExternal(frequency,setIndex,binding);
-                CurrentState->SetUniformBuffer(setIndex, binding,elementId, uniformBuffer->GetHandle(), 0, uniformBuffer->GetSize());
+                m_CurrentState->MarkUiformBufferUseExternal(frequency,setIndex,binding);
+                m_CurrentState->SetUniformBuffer(setIndex, binding,elementId, uniformBuffer->GetHandle(), 0, uniformBuffer->GetSize());
             }
         }
 
-        void SetShaderParameter(ERHIShaderFrequency frequency,uint32_t BufferIndex, uint32_t BaseIndex, uint32_t NumBytes, const void* NewValue) {
-			if (!CurrentState)
+        void SetShaderParameter(ERHIShaderFrequency frequency,uint32_t bufferIndex, uint32_t baseIndex, uint32_t numBytes, const void* newValue) {
+			if (!m_CurrentState)
 				return;
-            CurrentState->SetPackedGlobalParameter(frequency, BufferIndex, BaseIndex, NumBytes, NewValue);
+            m_CurrentState->SetPackedGlobalParameter(frequency, bufferIndex, baseIndex, numBytes, newValue);
         }
 
         bool HasPipeline() const
         {
-            return CurrentPipeline != nullptr;
+            return m_CurrentPipeline != nullptr;
         }
 
         void PrepareForDispatch(VulkanCommandBuffer* cmd)
         {
-            if (bDirtyPipelineState) {
-                CurrentPipeline->Bind(cmd);
-                bDirtyPipelineState = false;
+            if (m_bDirtyPipelineState) {
+                m_CurrentPipeline->Bind(cmd);
+                m_bDirtyPipelineState = false;
             }
-            CurrentState->FlushAndBind(cmd);
+            m_CurrentState->FlushAndBind(cmd);
         }
 
     private:
-        VulkanDevice* Device;
+        VulkanDevice* m_Device;
         friend class VulkanCommandContext;
-        bool bDirtyPipelineState = false;
-        VkStridedDeviceAddressRegionKHR EmptyRegion{};
-        VulkanComputePipelineState* CurrentPipeline = nullptr;
-        VulkanComputePipelineDescriptorState* CurrentState = nullptr;
-		VulkanCommandContext* Context = nullptr;
+        bool m_bDirtyPipelineState = false;
+        VkStridedDeviceAddressRegionKHR m_EmptyRegion{};
+        VulkanComputePipelineState* m_CurrentPipeline = nullptr;
+        VulkanComputePipelineDescriptorState* m_CurrentState = nullptr;
+		VulkanCommandContext* m_Context = nullptr;
 
         std::unordered_map<
             VulkanComputePipelineState*,
-            std::unique_ptr<VulkanComputePipelineDescriptorState>> States;
+            std::unique_ptr<VulkanComputePipelineDescriptorState>> m_States;
     };
 
     class VulkanPendingGfxState
     {
     public:
         VulkanPendingGfxState(VulkanDevice* device,VulkanCommandContext* context)
-            : Device(device)
-			, Context(context)
+            : m_Device(device)
+			, m_Context(context)
         {
             Reset();
         }
 
         void Reset()
         {
-            Viewports.clear();
-            Scissors.clear();
+            m_Viewports.clear();
+            m_Scissors.clear();
             
-            StencilRef = 0;
-            PrimitiveType = PT_Num;
-            bDirtyVertexStreams = true;
+            m_StencilRef = 0;
+            m_PrimitiveType = PT_Num;
+            m_bDirtyVertexStreams = true;
 
-            CurrentPipeline = nullptr;
-            CurrentState = nullptr;
-            bDirtyPipelineState = false;
-            CurrentPipeline = nullptr;
-            CurrentState = nullptr;
-            for (auto& state : States) {
+            m_CurrentPipeline = nullptr;
+            m_CurrentState = nullptr;
+            m_bDirtyPipelineState = false;
+            m_CurrentPipeline = nullptr;
+            m_CurrentState = nullptr;
+            for (auto& state : m_States) {
                 state.second->Reset();
             }
         }
@@ -989,185 +989,185 @@ namespace RHIVulkan {
         void SetPipeline(VulkanGraphicsPipelineState* pipeline)
         {
             
-            if (CurrentPipeline == pipeline)
+            if (m_CurrentPipeline == pipeline)
                 return;
-            bDirtyPipelineState = true;
-            CurrentPipeline = pipeline;
-            auto it = States.find(pipeline);
-            if (it == States.end())
+            m_bDirtyPipelineState = true;
+            m_CurrentPipeline = pipeline;
+            auto it = m_States.find(pipeline);
+            if (it == m_States.end())
             {
                 auto state = std::make_unique<VulkanGraphicsPipelineDescriptorState>(
-                    Device, pipeline,Context);
-                CurrentState = state.get();
-                States[pipeline] = std::move(state);
+                    m_Device, pipeline,m_Context);
+                m_CurrentState = state.get();
+                m_States[pipeline] = std::move(state);
             }
             else
             {
-                CurrentState = it->second.get();
+                m_CurrentState = it->second.get();
             }
         }
 
-        // �� VulkanPendingGfxState ��
+        // Graphics pipeline resource bindings.
         //--------------------------------------------------------
-        // ʹ�� ShaderFrequency + parameterId ���� Texture
+        // Bind a texture by shader frequency and parameter ID.
         //--------------------------------------------------------
         void SetTexture(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanTexture* texture)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->SetTexture(setIndex, binding,elementId, texture);
+                m_CurrentState->SetTexture(setIndex, binding,elementId, texture);
             }
         }
 
         //--------------------------------------------------------
-        // ʹ�� ShaderFrequency + parameterId ���� sampler
+        // Bind a sampler by shader frequency and parameter ID.
         //--------------------------------------------------------
 		void SetSampler(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanSampler* sampler)
 		{
-			if (!CurrentState)
+			if (!m_CurrentState)
 				return;
 			uint32_t setIndex = 0;
 			uint32_t binding = 0;
-			if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+			if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
 			{
-				CurrentState->SetSampler(setIndex, binding,elementId, sampler);
+				m_CurrentState->SetSampler(setIndex, binding,elementId, sampler);
 			}
 		}
 
         //--------------------------------------------------------
-        // ʹ�� ShaderFrequency + parameterId ���� SRV
+        // Bind an SRV by shader frequency and parameter ID.
         //--------------------------------------------------------
         void SetSRV(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanShaderResourceView* srv)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->SetSRV(setIndex, binding,elementId, srv);
+                m_CurrentState->SetSRV(setIndex, binding,elementId, srv);
             }
         }
 
         //--------------------------------------------------------
-        // ʹ�� ShaderFrequency + parameterId ���� UAV
+        // Bind a UAV by shader frequency and parameter ID.
         //--------------------------------------------------------
         void SetUAV(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanUnorderedAccessView* uav)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->SetUAV(setIndex, binding,elementId, uav);
+                m_CurrentState->SetUAV(setIndex, binding,elementId, uav);
             }
         }
 
         //--------------------------------------------------------
-        // ʹ�� ShaderFrequency + parameterId ���� UniformBuffer
+        // Bind a uniform buffer by shader frequency and parameter ID.
         //--------------------------------------------------------
         void SetUniformBuffer(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanBuffer* uniformBuffer)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->MarkUiformBufferUseExternal(frequency,setIndex,binding);
-                CurrentState->SetUniformBuffer(setIndex, binding,elementId, uniformBuffer->GetHandle(), 0, uniformBuffer->GetSize());
+                m_CurrentState->MarkUiformBufferUseExternal(frequency,setIndex,binding);
+                m_CurrentState->SetUniformBuffer(setIndex, binding,elementId, uniformBuffer->GetHandle(), 0, uniformBuffer->GetSize());
             }
         }
-        void SetShaderParameter(ERHIShaderFrequency frequency,uint32_t BufferIndex, uint32_t BaseIndex, uint32_t NumBytes, const void* NewValue) {
-            if (!CurrentState)
+        void SetShaderParameter(ERHIShaderFrequency frequency,uint32_t bufferIndex, uint32_t baseIndex, uint32_t numBytes, const void* newValue) {
+            if (!m_CurrentState)
                 return;
-            CurrentState->SetPackedGlobalParameter(frequency,BufferIndex, BaseIndex, NumBytes, NewValue);
+            m_CurrentState->SetPackedGlobalParameter(frequency,bufferIndex, baseIndex, numBytes, newValue);
         }
 
         bool HasPipeline() const
         {
-            return CurrentPipeline != nullptr;
+            return m_CurrentPipeline != nullptr;
         }
 
         // Dynamic states
         void SetViewport(const VkViewport& viewport)
         {
-            Viewports.clear();
+            m_Viewports.clear();
             auto revertViewport = viewport;
             revertViewport.y =
                 revertViewport.y + revertViewport.height;
 
             revertViewport.height =
                 -revertViewport.height;
-            Viewports.push_back(revertViewport);
-            ViewportDiry = true;
+            m_Viewports.push_back(revertViewport);
+            m_bViewportDiry = true;
         }
 
         void SetScissor(const VkRect2D& scissor)
         {
-            Scissors.clear();
-            Scissors.push_back(scissor);
-            ScissorDirty = true;
+            m_Scissors.clear();
+            m_Scissors.push_back(scissor);
+            m_bScissorDirty = true;
         }
 
         void SetStencilRef(uint32_t ref)
         {
-            StencilRef = ref;
+            m_StencilRef = ref;
         }
 
         void SetVertexStream(uint32_t index, VkBuffer buffer, uint32_t offset)
         {
-            PendingStreams[index].Stream = buffer;
-            PendingStreams[index].BufferOffset = offset;
-            bDirtyVertexStreams = true;
+            m_PendingStreams[index].Stream = buffer;
+            m_PendingStreams[index].BufferOffset = offset;
+            m_bDirtyVertexStreams = true;
         }
 
-        // Drawǰ��
+        // Prepare pipeline and resources before drawing.
         void PrepareForDraw(VulkanCommandBuffer* cmd)
         {
-            if (bDirtyPipelineState) {
+            if (m_bDirtyPipelineState) {
                 // 1. Bind pipeline
-                CurrentPipeline->Bind(cmd);
-                bDirtyPipelineState = false;
+                m_CurrentPipeline->Bind(cmd);
+                m_bDirtyPipelineState = false;
             }
             // 2. Bind descriptor sets
-            CurrentState->FlushAndBind(cmd);
+            m_CurrentState->FlushAndBind(cmd);
             // 3. Bind vertex buffers
-            if (bDirtyVertexStreams)
+            if (m_bDirtyVertexStreams)
             {
-                for (uint32_t i = 0; i < MaxVertexElementCount; ++i)
+                for (uint32_t i = 0; i < m_MaxVertexElementCount; ++i)
                 {
-                    auto& stream = PendingStreams[i];
+                    auto& stream = m_PendingStreams[i];
                     if (stream.Stream != VK_NULL_HANDLE)
                     {
                         VkDeviceSize offsets[1] = { stream.BufferOffset };
                         VKFunc::CmdBindVertexBuffers(cmd->GetHandle(), i, 1, &stream.Stream, offsets);
                     }
                 }
-                bDirtyVertexStreams = false;
+                m_bDirtyVertexStreams = false;
             }
 
             // 4. Set viewport / scissor
-            if (!Viewports.empty() && ViewportDiry)
+            if (!m_Viewports.empty() && m_bViewportDiry)
             {
-                VKFunc::CmdSetViewport(cmd->GetHandle(), 0, (uint32_t)Viewports.size(), Viewports.data());
-				ViewportDiry = false;
+                VKFunc::CmdSetViewport(cmd->GetHandle(), 0, (uint32_t)m_Viewports.size(), m_Viewports.data());
+				m_bViewportDiry = false;
             }
                 
 
-            if (!Scissors.empty() && ScissorDirty)
+            if (!m_Scissors.empty() && m_bScissorDirty)
             {
-                VKFunc::CmdSetScissor(cmd->GetHandle(), 0, (uint32_t)Scissors.size(), Scissors.data());
-				ScissorDirty = false;
+                VKFunc::CmdSetScissor(cmd->GetHandle(), 0, (uint32_t)m_Scissors.size(), m_Scissors.data());
+				m_bScissorDirty = false;
             }
                 
 
@@ -1177,206 +1177,206 @@ namespace RHIVulkan {
 
     private:
         friend class VulkanCommandContext;
-        VulkanDevice* Device;
-        bool bDirtyPipelineState = false;
-        VulkanGraphicsPipelineState* CurrentPipeline = nullptr;
-        VulkanGraphicsPipelineDescriptorState* CurrentState = nullptr;
+        VulkanDevice* m_Device;
+        bool m_bDirtyPipelineState = false;
+        VulkanGraphicsPipelineState* m_CurrentPipeline = nullptr;
+        VulkanGraphicsPipelineDescriptorState* m_CurrentState = nullptr;
 
-        std::unordered_map<VulkanGraphicsPipelineState*, std::unique_ptr<VulkanGraphicsPipelineDescriptorState>> States;
+        std::unordered_map<VulkanGraphicsPipelineState*, std::unique_ptr<VulkanGraphicsPipelineDescriptorState>> m_States;
 
         // Dynamic states
-        std::vector<VkViewport> Viewports;
-        std::vector<VkRect2D> Scissors;
-        bool ViewportDiry = false;
-        bool ScissorDirty = false;
-        uint32_t StencilRef = 0;
+        std::vector<VkViewport> m_Viewports;
+        std::vector<VkRect2D> m_Scissors;
+        bool m_bViewportDiry = false;
+        bool m_bScissorDirty = false;
+        uint32_t m_StencilRef = 0;
 
-        enum EPrimitiveType { PT_Num } PrimitiveType;
+        enum EPrimitiveType { PT_Num } m_PrimitiveType;
 
         struct FVertexStream
         {
             VkBuffer Stream = VK_NULL_HANDLE;
             uint32_t BufferOffset = 0;
         };
-        constexpr static uint32_t MaxVertexElementCount = 8;
-        FVertexStream PendingStreams[MaxVertexElementCount];
-        bool bDirtyVertexStreams = true;
-		VulkanCommandContext* Context = nullptr;
+        constexpr static uint32_t m_MaxVertexElementCount = 8;
+        FVertexStream m_PendingStreams[m_MaxVertexElementCount];
+        bool m_bDirtyVertexStreams = true;
+		VulkanCommandContext* m_Context = nullptr;
     };
 
     class VulkanPendingRayTracingState
     {
     public:
         VulkanPendingRayTracingState(VulkanDevice* device, VulkanCommandContext* context)
-            : Device(device)
-            , Context(context)
+            : m_Device(device)
+            , m_Context(context)
         {
         }
 
         void Reset()
         {
-            CurrentPipeline = nullptr;
-            CurrentState = nullptr;
-            RetiredScratchBuffers.clear();
-            CurrentAccelerationStructure = nullptr;
-            ScratchBuffer.reset();
-            ScratchBufferSize = 0;
+            m_CurrentPipeline = nullptr;
+            m_CurrentState = nullptr;
+            m_RetiredScratchBuffers.clear();
+            m_CurrentAccelerationStructure = nullptr;
+            m_ScratchBuffer.reset();
+            m_ScratchBufferSize = 0;
         }
 
         void SetPipeline(VulkanRayTracingPipeline* pipeline)
         {
-            CurrentPipeline = pipeline;
-            auto it = States.find(pipeline);
-            if (it == States.end())
+            m_CurrentPipeline = pipeline;
+            auto it = m_States.find(pipeline);
+            if (it == m_States.end())
             {
                 auto state = std::make_unique<VulkanRayTracingPipelineDescriptorState>(
-                    Device, pipeline, Context);
-                CurrentState = state.get();
-                States[pipeline] = std::move(state);
+                    m_Device, pipeline, m_Context);
+                m_CurrentState = state.get();
+                m_States[pipeline] = std::move(state);
             }
             else
             {
-                CurrentState = it->second.get();
+                m_CurrentState = it->second.get();
             }
         }
 
-        // �� VulkanPendingGfxState ��
+        // Ray tracing pipeline resource bindings.
 //--------------------------------------------------------
-// ʹ�� ShaderFrequency + parameterId ���� Texture
+// Bind a texture by shader frequency and parameter ID.
 //--------------------------------------------------------
         void SetTexture(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanTexture* texture)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->SetTexture(setIndex, binding, elementId, texture);
+                m_CurrentState->SetTexture(setIndex, binding, elementId, texture);
             }
         }
 
         //--------------------------------------------------------
-        // ʹ�� ShaderFrequency + parameterId ���� sampler
+        // Bind a sampler by shader frequency and parameter ID.
         //--------------------------------------------------------
         void SetSampler(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanSampler* sampler)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->SetSampler(setIndex, binding, elementId, sampler);
+                m_CurrentState->SetSampler(setIndex, binding, elementId, sampler);
             }
         }
 
         //--------------------------------------------------------
-        // ʹ�� ShaderFrequency + parameterId ���� SRV
+        // Bind an SRV by shader frequency and parameter ID.
         //--------------------------------------------------------
         void SetSRV(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanShaderResourceView* srv)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->SetSRV(setIndex, binding, elementId, srv);
+                m_CurrentState->SetSRV(setIndex, binding, elementId, srv);
             }
         }
 
         //--------------------------------------------------------
-        // ʹ�� ShaderFrequency + parameterId ���� UAV
+        // Bind a UAV by shader frequency and parameter ID.
         //--------------------------------------------------------
         void SetUAV(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanUnorderedAccessView* uav)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->SetUAV(setIndex, binding, elementId, uav);
+                m_CurrentState->SetUAV(setIndex, binding, elementId, uav);
             }
         }
 
         //--------------------------------------------------------
-        // ʹ�� ShaderFrequency + parameterId ���� UniformBuffer
+        // Bind a uniform buffer by shader frequency and parameter ID.
         //--------------------------------------------------------
         void SetUniformBuffer(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanBuffer* uniformBuffer)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->MarkUiformBufferUseExternal(frequency, setIndex, binding);
-                CurrentState->SetUniformBuffer(setIndex, binding, elementId, uniformBuffer->GetHandle(), 0, uniformBuffer->GetSize());
+                m_CurrentState->MarkUiformBufferUseExternal(frequency, setIndex, binding);
+                m_CurrentState->SetUniformBuffer(setIndex, binding, elementId, uniformBuffer->GetHandle(), 0, uniformBuffer->GetSize());
             }
         }
-        void SetShaderParameter(ERHIShaderFrequency frequency, uint32_t BufferIndex, uint32_t BaseIndex, uint32_t NumBytes, const void* NewValue) {
-            if (!CurrentState)
+        void SetShaderParameter(ERHIShaderFrequency frequency, uint32_t bufferIndex, uint32_t baseIndex, uint32_t numBytes, const void* newValue) {
+            if (!m_CurrentState)
                 return;
-            CurrentState->SetPackedGlobalParameter(frequency, BufferIndex, BaseIndex, NumBytes, NewValue);
+            m_CurrentState->SetPackedGlobalParameter(frequency, bufferIndex, baseIndex, numBytes, newValue);
         }
 
         void SetAccelerationStructure(VulkanRayTracingInstance* accelerationStructure)
         {
-            CurrentAccelerationStructure = accelerationStructure;
+            m_CurrentAccelerationStructure = accelerationStructure;
         }
 
         void SetAccelerationStructure(ERHIShaderFrequency frequency, uint32_t parameterId, uint32_t elementId, VulkanRayTracingInstance* accelerationStructure)
         {
-            if (!CurrentState)
+            if (!m_CurrentState)
                 return;
 
             uint32_t setIndex = 0;
             uint32_t binding = 0;
-            if (CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
+            if (m_CurrentState->GetBinding(frequency, parameterId, setIndex, binding))
             {
-                CurrentState->SetAccelerationStructure(setIndex, binding, elementId, accelerationStructure);
+                m_CurrentState->SetAccelerationStructure(setIndex, binding, elementId, accelerationStructure);
             }
         }
 
         bool HasPipeline() const
         {
-            return CurrentPipeline != nullptr;
+            return m_CurrentPipeline != nullptr;
         }
 
         bool HasAccelerationStructure() const
         {
-            return CurrentAccelerationStructure != nullptr;
+            return m_CurrentAccelerationStructure != nullptr;
         }
 
         const VkStridedDeviceAddressRegionKHR& GetRayGenShaderBindingTableRegion() const
         {
-            return CurrentPipeline ? CurrentPipeline->GetRayGenShaderBindingTableRegion() : EmptyRegion;
+            return m_CurrentPipeline ? m_CurrentPipeline->GetRayGenShaderBindingTableRegion() : m_EmptyRegion;
         }
 
         const VkStridedDeviceAddressRegionKHR& GetMissShaderBindingTableRegion() const
         {
-            return CurrentPipeline ? CurrentPipeline->GetMissShaderBindingTableRegion() : EmptyRegion;
+            return m_CurrentPipeline ? m_CurrentPipeline->GetMissShaderBindingTableRegion() : m_EmptyRegion;
         }
 
         const VkStridedDeviceAddressRegionKHR& GetHitShaderBindingTableRegion() const
         {
-            return CurrentPipeline ? CurrentPipeline->GetHitShaderBindingTableRegion() : EmptyRegion;
+            return m_CurrentPipeline ? m_CurrentPipeline->GetHitShaderBindingTableRegion() : m_EmptyRegion;
         }
 
         const VkStridedDeviceAddressRegionKHR& GetCallableShaderBindingTableRegion() const
         {
-            return CurrentPipeline ? CurrentPipeline->GetCallableShaderBindingTableRegion() : EmptyRegion;
+            return m_CurrentPipeline ? m_CurrentPipeline->GetCallableShaderBindingTableRegion() : m_EmptyRegion;
         }
 
         void PrepareForTraceRays(VulkanCommandBuffer* cmd)
         {
-            if (!cmd || !CurrentPipeline)
+            if (!cmd || !m_CurrentPipeline)
             {
                 return;
             }
@@ -1384,14 +1384,14 @@ namespace RHIVulkan {
             VKFunc::CmdBindPipeline(
                 cmd->GetHandle(),
                 VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-                CurrentPipeline->GetHandle());
+                m_CurrentPipeline->GetHandle());
             // 2. Bind descriptor sets
-            CurrentState->FlushAndBind(cmd);
+            m_CurrentState->FlushAndBind(cmd);
         }
 
         void BuildAccelerationStructure(VulkanCommandBuffer* cmd, RHIRayTracingAccelerationStructure* accelerationStructure, bool bUpdate)
         {
-            if (!cmd || !accelerationStructure || !Device)
+            if (!cmd || !accelerationStructure || !m_Device)
             {
                 return;
             }
@@ -1444,18 +1444,18 @@ namespace RHIVulkan {
                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR };
             VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
             properties.pNext = &asProperties;
-            VKFunc::GetPhysicalDeviceProperties2(Device->GetPhysicalDevice(), &properties);
+            VKFunc::GetPhysicalDeviceProperties2(m_Device->GetPhysicalDevice(), &properties);
             const VkDeviceSize alignment = asProperties.minAccelerationStructureScratchOffsetAlignment;
             EnsureScratchBuffer(requiredScratchSize + alignment - 1);
-            if (!ScratchBuffer)
+            if (!m_ScratchBuffer)
             {
                 return;
             }
 
             VkBufferDeviceAddressInfo addressInfo{};
             addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-            addressInfo.buffer = ScratchBuffer->GetHandle();
-            buildInfo.scratchData.deviceAddress = VKFunc::GetBufferDeviceAddress(Device->GetHandle(), &addressInfo);
+            addressInfo.buffer = m_ScratchBuffer->GetHandle();
+            buildInfo.scratchData.deviceAddress = VKFunc::GetBufferDeviceAddress(m_Device->GetHandle(), &addressInfo);
             if (buildInfo.scratchData.deviceAddress == 0)
             {
                 return;
@@ -1480,7 +1480,7 @@ namespace RHIVulkan {
     private:
         void EnsureScratchBuffer(VkDeviceSize requiredSize)
         {
-            if (ScratchBuffer && ScratchBufferSize >= requiredSize)
+            if (m_ScratchBuffer && m_ScratchBufferSize >= requiredSize)
             {
                 return;
             }
@@ -1496,22 +1496,22 @@ namespace RHIVulkan {
             desc.bCPUAccessible = false;
             desc.InitialQueueType = EQueueType::Graphics;
 
-            if (ScratchBuffer) RetiredScratchBuffers.push_back(ScratchBuffer);
-            ScratchBuffer = std::make_shared<VulkanBuffer>(Device, desc);
-            ScratchBufferSize = requiredSize;
+            if (m_ScratchBuffer) m_RetiredScratchBuffers.push_back(m_ScratchBuffer);
+            m_ScratchBuffer = std::make_shared<VulkanBuffer>(m_Device, desc);
+            m_ScratchBufferSize = requiredSize;
         }
 
     private:
-        VulkanDevice* Device = nullptr;
-        VulkanCommandContext* Context = nullptr;
-        VulkanRayTracingPipeline* CurrentPipeline = nullptr;
-        VulkanRayTracingPipelineDescriptorState* CurrentState = nullptr;
-        VulkanRayTracingInstance* CurrentAccelerationStructure = nullptr;
-		VkStridedDeviceAddressRegionKHR EmptyRegion{};
-        std::unordered_map<VulkanRayTracingPipeline*, std::unique_ptr<VulkanRayTracingPipelineDescriptorState>> States;
-        std::shared_ptr < VulkanBuffer> ScratchBuffer;
-        VkDeviceSize ScratchBufferSize = 0;
-        std::vector<std::shared_ptr<VulkanBuffer>> RetiredScratchBuffers;
+        VulkanDevice* m_Device = nullptr;
+        VulkanCommandContext* m_Context = nullptr;
+        VulkanRayTracingPipeline* m_CurrentPipeline = nullptr;
+        VulkanRayTracingPipelineDescriptorState* m_CurrentState = nullptr;
+        VulkanRayTracingInstance* m_CurrentAccelerationStructure = nullptr;
+		VkStridedDeviceAddressRegionKHR m_EmptyRegion{};
+        std::unordered_map<VulkanRayTracingPipeline*, std::unique_ptr<VulkanRayTracingPipelineDescriptorState>> m_States;
+        std::shared_ptr < VulkanBuffer> m_ScratchBuffer;
+        VkDeviceSize m_ScratchBufferSize = 0;
+        std::vector<std::shared_ptr<VulkanBuffer>> m_RetiredScratchBuffers;
     };
 
 }

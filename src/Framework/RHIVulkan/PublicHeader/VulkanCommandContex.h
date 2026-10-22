@@ -26,21 +26,21 @@ public:
 
     void Begin() override;
     void End() override;
-    void BeginTransitions(std::vector<const RHITransition*> Transitions) override;
-    void EndTransitions(std::vector<const RHITransition*> Transitions) override;
+    void BeginTransitions(std::vector<const RHITransition*> transitions) override;
+    void EndTransitions(std::vector<const RHITransition*> transitions) override;
     void CopyTexture(RHITexture* src, RHITexture* dst, const RHICopyTextureDesc& copyDesc) override;
     void BlitTexture(RHITexture* src, RHITexture* dst, const RHIBlitTextureDesc& blitDesc) override;
 
-    VulkanQueue* GetQueue() const { return queue; }
-    VulkanCommandBufferManager* GetCommandBufferManager() const { return commandBufferManager; }
-    VulkanDevice* GetDevice() const { return device; }
-    VulkanCommandBuffer* GetRecordedCommandBuffer() const { return RecordedCommandBuffer; }
+    VulkanQueue* GetQueue() const { return _queue; }
+    VulkanCommandBufferManager* GetCommandBufferManager() const { return _commandBufferManager; }
+    VulkanDevice* GetDevice() const { return _device; }
+    VulkanCommandBuffer* GetRecordedCommandBuffer() const { return _recordedCommandBuffer; }
 protected:
     virtual void InnerBegin() {}
-    VulkanDevice* device = nullptr;
-    VulkanQueue* queue = nullptr;
-    VulkanCommandBufferManager* commandBufferManager = nullptr;
-    VulkanCommandBuffer* RecordedCommandBuffer = nullptr;
+    VulkanDevice* _device = nullptr;
+    VulkanQueue* _queue = nullptr;
+    VulkanCommandBufferManager* _commandBufferManager = nullptr;
+    VulkanCommandBuffer* _recordedCommandBuffer = nullptr;
        
 
 
@@ -54,7 +54,7 @@ public:
     VulkanComputeContext(VulkanDevice* device, VulkanQueue* queue);
     ~VulkanComputeContext() override;
 
-    VulkanLooseUniformDataUploader* GetLooseUniformDataUploader() const { return LooseUniformDataUploader; }
+    VulkanLooseUniformDataUploader* GetLooseUniformDataUploader() const { return m_LooseUniformDataUploader; }
 
     void SetBatchedShaderParameters(RHIComputeShader* shader, const RHIBatchedShaderParameters& parameter) override;
     void SetComputePipelineState(RHIComputePipelineState* pipelineState) override;
@@ -63,8 +63,8 @@ public:
 private:
     void InnerBegin() override;
     friend class VulkanCommandContext;
-    VulkanPendingComputeState* PendingCompute = nullptr;
-    VulkanLooseUniformDataUploader* LooseUniformDataUploader = nullptr;
+    VulkanPendingComputeState* m_PendingCompute = nullptr;
+    VulkanLooseUniformDataUploader* m_LooseUniformDataUploader = nullptr;
 };
 
 class RHIVULKAN_API VulkanGraphicContext : public VulkanCommandContext, public RHI::RHIGraphicContex
@@ -75,10 +75,10 @@ public:
     VulkanGraphicContext(VulkanDevice* device, VulkanQueue* queue);
     ~VulkanGraphicContext() override;
 
-    VulkanLooseUniformDataUploader* GetLooseUniformDataUploader() const { return LooseUniformDataUploader; }
+    VulkanLooseUniformDataUploader* GetLooseUniformDataUploader() const { return m_LooseUniformDataUploader; }
 
     void SetBatchedShaderParameters(RHIGraphicShader* shader, const RHIBatchedShaderParameters& parameter) override;
-    void SetStreamSource(uint32_t streamIndex, RHIBuffer* VertexBuffer, uint32_t Offset) override;
+    void SetStreamSource(uint32_t streamIndex, RHIBuffer* vertexBuffer, uint32_t offset) override;
     void SetGraphicPipelineState(RHIGraphicsPipelineState* pipelineState) override;
     void SetViewport(float x, float y, float w, float h, float minDepth, float maxDepth) override;
     void SetScissor(int32_t x, int32_t y, uint32_t w, uint32_t h) override;
@@ -102,19 +102,19 @@ protected:
 private:
     void InnerBegin() override;
     friend class VulkanCommandContext;
-    VulkanPendingGfxState* PendingGfx = nullptr;
-    VulkanPendingRayTracingState* PendingRayTracing = nullptr;
-    VulkanLooseUniformDataUploader* LooseUniformDataUploader = nullptr;
+    VulkanPendingGfxState* m_PendingGfx = nullptr;
+    VulkanPendingRayTracingState* m_PendingRayTracing = nullptr;
+    VulkanLooseUniformDataUploader* m_LooseUniformDataUploader = nullptr;
 };
 
 struct VulkanCommandUpdateTexture : public RHICommandBase
 {
-    VulkanTexture* texture;
-    std::shared_ptr<VulkanStagingBuffer> staging;
-    VkBufferImageCopy copyRegion{};
+    VulkanTexture* Texture;
+    std::shared_ptr<VulkanStagingBuffer> Staging;
+    VkBufferImageCopy CopyRegion{};
 
     VulkanCommandUpdateTexture(VulkanTexture* texture, std::shared_ptr<VulkanStagingBuffer> buffer, VkBufferImageCopy region)
-        : texture(texture), staging(buffer), copyRegion(region) {}
+        : Texture(texture), Staging(buffer), CopyRegion(region) {}
 
     void Execute(RHICommandListBase& cmdList) override {
         auto* vulkanContex = dynamic_cast<VulkanCommandContext*>(cmdList.GetCommandContex());
@@ -122,27 +122,27 @@ struct VulkanCommandUpdateTexture : public RHICommandBase
 
         VKFunc::CmdCopyBufferToImage(
             cmdBuffer->GetHandle(),
-            staging->GetHandle(),
-            texture->GetImage(),
+            Staging->GetHandle(),
+            Texture->GetImage(),
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1,
-            &copyRegion
+            &CopyRegion
         );
-        vulkanContex->GetDevice()->GetStagingManager()->ReleaseToCmdBuffer(cmdBuffer, staging);
+        vulkanContex->GetDevice()->GetStagingManager()->ReleaseToCmdBuffer(cmdBuffer, Staging);
     }
 };
 
 struct VulkanCommandUpdateBuffer : public RHICommandBase
 {
-    VulkanBuffer* buffer;
-    std::shared_ptr<VulkanStagingBuffer> staging;
-    VkBufferCopy copyRegion{};
+    VulkanBuffer* Buffer;
+    std::shared_ptr<VulkanStagingBuffer> Staging;
+    VkBufferCopy CopyRegion{};
 
     VulkanCommandUpdateBuffer(
         VulkanBuffer* buffer,
         std::shared_ptr<VulkanStagingBuffer> stagingBuffer,
         VkBufferCopy region)
-        : buffer(buffer), staging(stagingBuffer), copyRegion(region) {
+        : Buffer(buffer), Staging(stagingBuffer), CopyRegion(region) {
     }
 
     void Execute(RHICommandListBase& cmdList) override
@@ -154,29 +154,29 @@ struct VulkanCommandUpdateBuffer : public RHICommandBase
 
         VKFunc::CmdCopyBuffer(
             cmdBuffer->GetHandle(),
-            staging->GetHandle(),
-            buffer->GetHandle(),
+            Staging->GetHandle(),
+            Buffer->GetHandle(),
             1,
-            &copyRegion
+            &CopyRegion
         );
 
-        vulkanContext->GetDevice()->GetStagingManager()->ReleaseToCmdBuffer(cmdBuffer, staging);
+        vulkanContext->GetDevice()->GetStagingManager()->ReleaseToCmdBuffer(cmdBuffer, Staging);
     }
 };
 
 struct VulkanCommandReadTexture : public RHICommandBase
 {
-    VulkanTexture* texture;
-    std::shared_ptr<VulkanStagingBuffer> staging;
-    VkBufferImageCopy copyRegion{};
+    VulkanTexture* Texture;
+    std::shared_ptr<VulkanStagingBuffer> Staging;
+    VkBufferImageCopy CopyRegion{};
 
     VulkanCommandReadTexture(
         VulkanTexture* texture,
         std::shared_ptr<VulkanStagingBuffer> buffer,
         VkBufferImageCopy region)
-        : texture(texture)
-        , staging(buffer)
-        , copyRegion(region)
+        : Texture(texture)
+        , Staging(buffer)
+        , CopyRegion(region)
     {
     }
 
@@ -192,11 +192,11 @@ struct VulkanCommandReadTexture : public RHICommandBase
             ->GetActiveCommandBuffer();
         VKFunc::CmdCopyImageToBuffer(
             cmdBuffer->GetHandle(),
-            texture->GetImage(),
+            Texture->GetImage(),
             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            staging->GetHandle(),
+            Staging->GetHandle(),
             1,
-            &copyRegion
+            &CopyRegion
         );
 
         vulkanContext
@@ -204,23 +204,23 @@ struct VulkanCommandReadTexture : public RHICommandBase
             ->GetStagingManager()
             ->ReleaseToCmdBuffer(
                 cmdBuffer,
-                staging);
+                Staging);
     }
 };
 
 struct VulkanCommandReadBuffer : public RHICommandBase
 {
-    VulkanBuffer* buffer;
-    std::shared_ptr<VulkanStagingBuffer> staging;
-    VkBufferCopy copyRegion{};
+    VulkanBuffer* Buffer;
+    std::shared_ptr<VulkanStagingBuffer> Staging;
+    VkBufferCopy CopyRegion{};
 
     VulkanCommandReadBuffer(
         VulkanBuffer* buffer,
         std::shared_ptr<VulkanStagingBuffer> stagingBuffer,
         VkBufferCopy region)
-        : buffer(buffer)
-        , staging(stagingBuffer)
-        , copyRegion(region)
+        : Buffer(buffer)
+        , Staging(stagingBuffer)
+        , CopyRegion(region)
     {
     }
 
@@ -237,10 +237,10 @@ struct VulkanCommandReadBuffer : public RHICommandBase
 
         VKFunc::CmdCopyBuffer(
             cmdBuffer->GetHandle(),
-            buffer->GetHandle(),
-            staging->GetHandle(),
+            Buffer->GetHandle(),
+            Staging->GetHandle(),
             1,
-            &copyRegion
+            &CopyRegion
         );
 
         vulkanContext
@@ -248,7 +248,7 @@ struct VulkanCommandReadBuffer : public RHICommandBase
             ->GetStagingManager()
             ->ReleaseToCmdBuffer(
                 cmdBuffer,
-                staging);
+                Staging);
     }
 };
 

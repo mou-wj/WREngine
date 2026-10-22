@@ -49,54 +49,54 @@ namespace RHIVulkan {
 
 
 
-    VkImageUsageFlags TransformTextureUsageFlagsFrom(ERHITextureCreateFlags Flags)
+    VkImageUsageFlags TransformTextureUsageFlagsFrom(ERHITextureCreateFlags flags)
     {
-        VkImageUsageFlags Usage = 0;
+        VkImageUsageFlags usage = 0;
 
-        if (EnumHasAnyFlags(Flags, ERHITextureCreateFlag::ShaderResource))
+        if (EnumHasAnyFlags(flags, ERHITextureCreateFlag::ShaderResource))
         {
             // sampled image / combined image sampler
-            Usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+            usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
         }
 
-        if (EnumHasAnyFlags(Flags, ERHITextureCreateFlag::RenderTarget))
+        if (EnumHasAnyFlags(flags, ERHITextureCreateFlag::RenderTarget))
         {
             // color attachment
-            Usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+            usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         }
 
-        if (EnumHasAnyFlags(Flags, ERHITextureCreateFlag::UAV))
+        if (EnumHasAnyFlags(flags, ERHITextureCreateFlag::UAV))
         {
             // storage image
-            Usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+            usage |= VK_IMAGE_USAGE_STORAGE_BIT;
         }
 
-        if (EnumHasAnyFlags(Flags, ERHITextureCreateFlag::DepthStencil))
+        if (EnumHasAnyFlags(flags, ERHITextureCreateFlag::DepthStencil))
         {
-            Usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+            usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         }
 
-        if (EnumHasAnyFlags(Flags, ERHITextureCreateFlag::TransferSrc))
+        if (EnumHasAnyFlags(flags, ERHITextureCreateFlag::TransferSrc))
         {
-            Usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+            usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         }
 
-        if (EnumHasAnyFlags(Flags, ERHITextureCreateFlag::TransferDest))
+        if (EnumHasAnyFlags(flags, ERHITextureCreateFlag::TransferDest))
         {
-            Usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         }
 
-        if (EnumHasAnyFlags(Flags, ERHITextureCreateFlag::Presentable))
+        if (EnumHasAnyFlags(flags, ERHITextureCreateFlag::Presentable))
         {
             // swapchain images *must* have this
-            Usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+            usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         }
-        if (EnumHasAnyFlags(Flags, ERHITextureCreateFlag::DepthStencil))
+        if (EnumHasAnyFlags(flags, ERHITextureCreateFlag::DepthStencil))
         {
             // swapchain images *must* have this
-            Usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+            usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         }
-        return Usage;
+        return usage;
     }
     VkSampleCountFlagBits TransformSampleCountFrom(uint32_t sampleCount)
     {
@@ -262,9 +262,9 @@ namespace RHIVulkan {
     }
 
     // 辅助函数：将自定义枚举转换为 Vulkan VkPrimitiveTopology
-    VkPrimitiveTopology TransformPrimitiveTopology(EPrimitiveTopology Topology)
+    VkPrimitiveTopology TransformPrimitiveTopology(EPrimitiveTopology topology)
     {
-        switch (Topology)
+        switch (topology)
         {
         case EPrimitiveTopology::PointList:                 return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
         case EPrimitiveTopology::LineList:                  return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
@@ -297,53 +297,53 @@ namespace RHIVulkan {
         return result;
     }
 
-    VkBufferUsageFlags TransformBufferUsageFlagsFrom(ERHIBufferUsageFlags Flags)
+    VkBufferUsageFlags TransformBufferUsageFlagsFrom(ERHIBufferUsageFlags flags)
     {
         VkBufferUsageFlags usage = 0;
 
         // 1. 基础类型（显式指定的用途）
-        if (EnumHasAnyFlags(Flags, ERHIBufferUsageFlag::Vertex))
+        if (EnumHasAnyFlags(flags, ERHIBufferUsageFlag::Vertex))
             usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 
-        if (EnumHasAnyFlags(Flags, ERHIBufferUsageFlag::Index))
+        if (EnumHasAnyFlags(flags, ERHIBufferUsageFlag::Index))
             usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
-        if (EnumHasAnyFlags(Flags, ERHIBufferUsageFlag::Constant))
+        if (EnumHasAnyFlags(flags, ERHIBufferUsageFlag::Constant))
             usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
-        if (EnumHasAnyFlags(Flags, ERHIBufferUsageFlag::Indirect))
+        if (EnumHasAnyFlags(flags, ERHIBufferUsageFlag::Indirect))
             usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
 
         // 2. 存储/结构化类型 (UAV/SRV 的物理载体)
-        if (EnumHasAnyFlags(Flags, ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::RawBuffer))
+        if (EnumHasAnyFlags(flags, ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::RawBuffer))
             usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
         // 3. 处理 SRV / UAV (重点改进)
         // 如果是 UAV，必须开启 STORAGE 位
-        if (EnumHasAnyFlags(Flags, ERHIBufferUsageFlag::UnorderedAccess))
+        if (EnumHasAnyFlags(flags, ERHIBufferUsageFlag::UnorderedAccess))
         {
             usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-            if (EnumHasAnyFlags(Flags, ERHIBufferUsageFlag::Texel))
+            if (EnumHasAnyFlags(flags, ERHIBufferUsageFlag::Texel))
                 usage |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
         }
 
         // 如果是 SRV，且不是 Constant，通常也需要作为 Storage 或 Texel 访问
-        if (EnumHasAnyFlags(Flags, ERHIBufferUsageFlag::ShaderResource))
+        if (EnumHasAnyFlags(flags, ERHIBufferUsageFlag::ShaderResource))
         {
             usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-            if (EnumHasAnyFlags(Flags, ERHIBufferUsageFlag::Texel))
+            if (EnumHasAnyFlags(flags, ERHIBufferUsageFlag::Texel))
                 usage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
             // 注意：有些架构下 StructuredBuffer 的 SRV 也要走 STORAGE_BUFFER_BIT
         }
 
         // 4. 数据传输
-        if (EnumHasAnyFlags(Flags, ERHIBufferUsageFlag::TransferSrc | ERHIBufferUsageFlag::Staging))
+        if (EnumHasAnyFlags(flags, ERHIBufferUsageFlag::TransferSrc | ERHIBufferUsageFlag::Staging))
             usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
-        if (EnumHasAnyFlags(Flags, ERHIBufferUsageFlag::TransferDst | ERHIBufferUsageFlag::Staging))
+        if (EnumHasAnyFlags(flags, ERHIBufferUsageFlag::TransferDst | ERHIBufferUsageFlag::Staging))
             usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
-        if (EnumHasAnyFlags(Flags,
+        if (EnumHasAnyFlags(flags,
             ERHIBufferUsageFlag::RawBuffer |
             ERHIBufferUsageFlag::Structured |
             ERHIBufferUsageFlag::ShaderResource |
@@ -352,7 +352,7 @@ namespace RHIVulkan {
         {
             usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         }
-        if (EnumHasAnyFlags(Flags,ERHIBufferUsageFlag::AccelerationStructureBuildInput))
+        if (EnumHasAnyFlags(flags,ERHIBufferUsageFlag::AccelerationStructureBuildInput))
         {
             usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         }

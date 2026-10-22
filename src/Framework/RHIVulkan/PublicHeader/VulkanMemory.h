@@ -12,22 +12,22 @@ class VulkanAllocation
 {
 public:
     VulkanAllocation(VkDeviceMemory memory = VK_NULL_HANDLE, VkDeviceSize offset = 0, VkDeviceSize size = 0, void* mapped = nullptr, VkBuffer buffer = VK_NULL_HANDLE)
-        : memory_(memory), offset_(offset), size_(size), mapped_(mapped), buffer_(buffer) {}
+        : m_Memory(memory), m_Offset(offset), m_Size(size), m_Mapped(mapped), m_Buffer(buffer) {}
 
-    VkDeviceMemory GetMemory() const { return memory_; }
-    VkDeviceSize GetOffset() const { return offset_; }
-    VkDeviceSize GetSize() const { return size_; }
-    void* GetMappedPointer() const { return mapped_; }
-    VkBuffer GetBufferHandle() const { return buffer_; }
+    VkDeviceMemory GetMemory() const { return m_Memory; }
+    VkDeviceSize GetOffset() const { return m_Offset; }
+    VkDeviceSize GetSize() const { return m_Size; }
+    void* GetMappedPointer() const { return m_Mapped; }
+    VkBuffer GetBufferHandle() const { return m_Buffer; }
 
-    void SetBufferHandle(VkBuffer buffer) { buffer_ = buffer; }
+    void SetBufferHandle(VkBuffer buffer) { m_Buffer = buffer; }
 
 private:
-    VkDeviceMemory memory_;
-    VkDeviceSize offset_;
-    VkDeviceSize size_;
-    void* mapped_; // 可选，仅对HOST_VISIBLE内存使用
-    VkBuffer buffer_; // 关联的缓冲区句柄
+    VkDeviceMemory m_Memory;
+    VkDeviceSize m_Offset;
+    VkDeviceSize m_Size;
+    void* m_Mapped; // 可选，仅对HOST_VISIBLE内存使用
+    VkBuffer m_Buffer; // 关联的缓冲区句柄
 };
 
 class VulkanMemoryBlock
@@ -40,23 +40,23 @@ public:
     void Reset(); // 可选：用于帧结束时重置分配
     bool Free(VulkanAllocation& alloc); // 可选：用于释放分配的内存
 
-    uint32_t GetMemoryTypeIndex() const { return memoryTypeIndex_; }
+    uint32_t GetMemoryTypeIndex() const { return m_MemoryTypeIndex; }
 
 private:
     void MergeFreeList();
     struct FreeRegion
     {
-        VkDeviceSize offset;
-        VkDeviceSize size;
+        VkDeviceSize Offset;
+        VkDeviceSize Size;
     };
-    std::vector<FreeRegion> freeList_;
-    VulkanDevice* device_;
-    VkDeviceMemory memory_;
-    VkDeviceSize size_;
-    VkDeviceSize offset_;
-    void* mapped_;
-    uint32_t memoryTypeIndex_;
-    bool mappable_;
+    std::vector<FreeRegion> m_FreeList;
+    VulkanDevice* m_Device;
+    VkDeviceMemory m_Memory;
+    VkDeviceSize m_Size;
+    VkDeviceSize m_Offset;
+    void* m_Mapped;
+    uint32_t m_MemoryTypeIndex;
+    bool m_bMappable;
 };
 
 class VulkanMemoryManager
@@ -69,8 +69,8 @@ public:
     void Reset(); // 重置所有块，释放已分配空间（适用于线性分配）
     bool Free(VulkanAllocation& alloc); // 释放分配的内存
 private:
-    VulkanDevice* device_;
-    std::vector<std::unique_ptr<VulkanMemoryBlock>> blocks_;
+    VulkanDevice* m_Device;
+    std::vector<std::unique_ptr<VulkanMemoryBlock>> m_Blocks;
 
     uint32_t FindMemoryType(uint32_t typeBits, VkMemoryPropertyFlags properties) const;
 };
@@ -81,19 +81,19 @@ public:
     VulkanStagingBuffer(VulkanDevice* device, VulkanMemoryManager* memManager, VkDeviceSize size);
     ~VulkanStagingBuffer();
 
-    VkBuffer GetHandle() const { return buffer_; }
-    VkDeviceSize GetSize() const { return size_; }
-    VulkanAllocation& GetAllocation() { return allocation_; }
-    void* Map(uint32_t Offset, uint32_t NumBytes) override;
+    VkBuffer GetHandle() const { return m_Buffer; }
+    VkDeviceSize GetSize() const { return m_Size; }
+    VulkanAllocation& GetAllocation() { return m_Allocation; }
+    void* Map(uint32_t offset, uint32_t numBytes) override;
     void Unmap() override;
 
 private:
-    VulkanDevice* device_;
-    VulkanMemoryManager* memManager_;
-    VkBuffer buffer_ = VK_NULL_HANDLE;
-    VulkanAllocation allocation_;
-    void* mapped_ = nullptr;
-    VkDeviceSize size_ = 0;
+    VulkanDevice* m_Device;
+    VulkanMemoryManager* m_MemManager;
+    VkBuffer m_Buffer = VK_NULL_HANDLE;
+    VulkanAllocation m_Allocation;
+    void* m_Mapped = nullptr;
+    VkDeviceSize m_Size = 0;
 };
 
 class VulkanCommandBuffer;
@@ -121,19 +121,19 @@ private:
 
     struct PendingEntry
     {
-        std::vector<std::shared_ptr<VulkanStagingBuffer>> pendingBuffers;
+        std::vector<std::shared_ptr<VulkanStagingBuffer>> PendingBuffers;
     };
 
-    VulkanDevice* device_;
-    VulkanMemoryManager* memManager_;
+    VulkanDevice* m_Device;
+    VulkanMemoryManager* m_MemManager;
 
-    std::vector<std::shared_ptr<VulkanStagingBuffer>> freeBuffers_;
-    std::vector<std::shared_ptr<VulkanStagingBuffer>> mapedToFreeBuffers_;
-    std::unordered_map<std::shared_ptr<VulkanStagingBuffer>, bool> mapedToFreeBufferUsed_;
+    std::vector<std::shared_ptr<VulkanStagingBuffer>> m_FreeBuffers;
+    std::vector<std::shared_ptr<VulkanStagingBuffer>> m_MapedToFreeBuffers;
+    std::unordered_map<std::shared_ptr<VulkanStagingBuffer>, bool> m_bMapedToFreeBufferUsed;
     // 记录某个 cmdBuffer 本次录制用了哪些 staging
-    std::unordered_map<VulkanCommandBuffer*, PendingEntry> pendingBufferMap_;
+    std::unordered_map<VulkanCommandBuffer*, PendingEntry> m_PendingBufferMap;
 
-    std::mutex mutex_;
+    std::mutex m_Mutex;
 };
 
 }

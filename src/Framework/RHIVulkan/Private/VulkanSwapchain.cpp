@@ -11,54 +11,54 @@
 namespace RHIVulkan {
 
     VulkanSwapchain::VulkanSwapchain(VulkanDevice* device, const SwapchainDesc& desc, std::vector<VkImage>& outImages)
-        : device_(device)
+        : m_Device(device)
     {
-        VulkanRHIApi* api = device_->GetRhiApi();
+        VulkanRHIApi* api = m_Device->GetRhiApi();
         VkInstance instance = const_cast<VkInstance>(api->GetInstance());
 
         // Create surface from window handle
-        if (!VulkanPlatformSupport::CreateVulkanSurface(instance, desc.windowHandle, &surface_))
+        if (!VulkanPlatformSupport::CreateVulkanSurface(instance, desc.WindowHandle, &m_Surface))
         {
             return;
         }
 
 
-        VkPhysicalDevice physicalDevice = device_->GetPhysicalDevice();
+        VkPhysicalDevice physicalDevice = m_Device->GetPhysicalDevice();
 
         // 1. 获取表面支持细节
         SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(physicalDevice);
 
-        auto preferredFormat = TransformFormatFrom(desc.preferredFormat);
+        auto preferredFormat = TransformFormatFrom(desc.PreferredFormat);
 
         // 2. 选择最佳表面格式和颜色空间
-        VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.formats, preferredFormat);
+        VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.Formats, preferredFormat);
 
         // 3. 选择最佳呈现模式
-        VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.presentModes);
+        VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.PresentModes);
 
         // 4. 选择交换链范围
-        VkExtent2D extent = ChooseSwapExtent(swapChainSupport.capabilities, desc.width, desc.height, desc.windowHandle);
+        VkExtent2D extent = ChooseSwapExtent(swapChainSupport.Capabilities, desc.Width, desc.Height, desc.WindowHandle);
 
         // 5. 确定要使用的图像数量
-        uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
-        if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
-            imageCount = swapChainSupport.capabilities.maxImageCount;
+        uint32_t imageCount = swapChainSupport.Capabilities.minImageCount + 1;
+        if (swapChainSupport.Capabilities.maxImageCount > 0 && imageCount > swapChainSupport.Capabilities.maxImageCount) {
+            imageCount = swapChainSupport.Capabilities.maxImageCount;
         }
 
         // 6. 填充交换链创建信息结构体
         VkSwapchainCreateInfoKHR createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        createInfo.surface = surface_; // Use the created surface
+        createInfo.surface = m_Surface; // Use the created surface
         createInfo.minImageCount = imageCount;
         createInfo.imageFormat = surfaceFormat.format;
         createInfo.imageColorSpace = surfaceFormat.colorSpace;
         createInfo.imageExtent = extent;
         createInfo.imageArrayLayers = 1;
         createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
-        device_->InitPresentQueue(surface_); // Initialize the present queue
+        m_Device->InitPresentQueue(m_Surface); // Initialize the present queue
 
-        uint32_t presentQueueFamilyIndex = device_->GetPresentQueueFamilyIndex();
-        uint32_t graphicQueueFamilyIndex = device_->GetGraphicsQueueFamilyIndex();
+        uint32_t presentQueueFamilyIndex = m_Device->GetPresentQueueFamilyIndex();
+        uint32_t graphicQueueFamilyIndex = m_Device->GetGraphicsQueueFamilyIndex();
         if (presentQueueFamilyIndex != graphicQueueFamilyIndex) {
 			uint32_t queueFamilyIndices[] = { presentQueueFamilyIndex, graphicQueueFamilyIndex };
 			createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
@@ -74,29 +74,29 @@ namespace RHIVulkan {
 
 
 
-        createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+        createInfo.preTransform = swapChainSupport.Capabilities.currentTransform;
         createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         createInfo.presentMode = presentMode;
         createInfo.clipped = VK_TRUE;
         createInfo.oldSwapchain = VK_NULL_HANDLE;
 
         // 7. 创建交换链
-        VkDevice deviceHandle = device_->GetHandle();
-        if (!VKFunc::CreateSwapchainKHR(deviceHandle, &createInfo, &swapchain_)) {
+        VkDevice deviceHandle = m_Device->GetHandle();
+        if (!VKFunc::CreateSwapchainKHR(deviceHandle, &createInfo, &m_Swapchain)) {
             return;
         }
 
         // 8. 检索交换链图像句柄
-        VKFunc::GetSwapchainImagesKHR(deviceHandle, swapchain_, &imageCount, nullptr);
+        VKFunc::GetSwapchainImagesKHR(deviceHandle, m_Swapchain, &imageCount, nullptr);
         std::vector<VkImage>& images = outImages;
         images.resize(imageCount);
-        VKFunc::GetSwapchainImagesKHR(deviceHandle, swapchain_, &imageCount, images.data());
+        VKFunc::GetSwapchainImagesKHR(deviceHandle, m_Swapchain, &imageCount, images.data());
         
 
 
         // 9. 保存图像格式和范围
-        imageFormat_ = surfaceFormat.format;
-        extent_ = extent;
+        m_ImageFormat = surfaceFormat.format;
+        m_Extent = extent;
     }
 
     VulkanSwapchain::~VulkanSwapchain()
@@ -106,24 +106,24 @@ namespace RHIVulkan {
 
     void VulkanSwapchain::Cleanup()
     {
-        VkDevice deviceHandle = device_->GetHandle();
+        VkDevice deviceHandle = m_Device->GetHandle();
 
-        if (swapchain_ != VK_NULL_HANDLE) {
-            VKFunc::DestroySwapchainKHR(deviceHandle, swapchain_);
-            swapchain_ = VK_NULL_HANDLE;
+        if (m_Swapchain != VK_NULL_HANDLE) {
+            VKFunc::DestroySwapchainKHR(deviceHandle, m_Swapchain);
+            m_Swapchain = VK_NULL_HANDLE;
         }
 
         // Destroy the surface
-        if (surface_ != VK_NULL_HANDLE) {
-            VKFunc::DestroySurfaceKHR(device_->GetInstance(), surface_);
-            surface_ = VK_NULL_HANDLE;
+        if (m_Surface != VK_NULL_HANDLE) {
+            VKFunc::DestroySurfaceKHR(m_Device->GetInstance(), m_Surface);
+            m_Surface = VK_NULL_HANDLE;
         }
     }
 
 
     bool VulkanSwapchain::Present(VulkanQueue* presentQueue, VulkanSemaphore* drawDoneSemaphore)
     {
-        VulkanQueue* queue = device_->GetPresentQueue();
+        VulkanQueue* queue = m_Device->GetPresentQueue();
         if (queue == nullptr) {
             return false;
         }
@@ -143,11 +143,11 @@ namespace RHIVulkan {
             presentInfo.pWaitSemaphores = nullptr;
         }
 
-        VkSwapchainKHR swapChains[] = { swapchain_ };
+        VkSwapchainKHR swapChains[] = { m_Swapchain };
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = swapChains;
 
-        presentInfo.pImageIndices = &currentImageIndex_;
+        presentInfo.pImageIndices = &m_CurrentImageIndex;
 
         auto result = VKFunc::QueuePresentKHR(queueHandle, &presentInfo);
 
@@ -158,15 +158,15 @@ namespace RHIVulkan {
         return true;
     }
 
-    void VulkanSwapchain::AcquireNextImage(VulkanSemaphore* signalSemaphore, int* imageIndex)
+    void VulkanSwapchain::AcquireNextImage(VulkanSemaphore* signalSemaphore, int* outImageIndex)
     {
-        uint32_t imageIndex_ = 0;
-        if (VKFunc::AcquireNextImageKHR(device_->GetHandle(), swapchain_, UINT64_MAX, signalSemaphore->GetHandle(), VK_NULL_HANDLE, &imageIndex_)) {
-            *imageIndex = imageIndex_;
-            currentImageIndex_ = imageIndex_;
+        uint32_t imageIndex = 0;
+        if (VKFunc::AcquireNextImageKHR(m_Device->GetHandle(), m_Swapchain, UINT64_MAX, signalSemaphore->GetHandle(), VK_NULL_HANDLE, &imageIndex)) {
+            *outImageIndex = imageIndex;
+            m_CurrentImageIndex = imageIndex;
         }
         else {
-            *imageIndex = -1;
+            *outImageIndex = -1;
         }
 
 
@@ -177,24 +177,24 @@ namespace RHIVulkan {
         SwapChainSupportDetails details;
 
         // Surface capabilities
-        VKFunc::GetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface_, &details.capabilities);
+        VKFunc::GetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_Surface, &details.Capabilities);
 
         // Surface formats
         uint32_t formatCount;
-        VKFunc::GetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &formatCount, nullptr);
+        VKFunc::GetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, nullptr);
 
         if (formatCount != 0) {
-            details.formats.resize(formatCount);
-            VKFunc::GetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &formatCount, details.formats.data());
+            details.Formats.resize(formatCount);
+            VKFunc::GetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, details.Formats.data());
         }
 
         // Present modes
         uint32_t presentModeCount;
-        VKFunc::GetPhysicalDeviceSurfacePresentModesKHR(device, surface_, &presentModeCount, nullptr);
+        VKFunc::GetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, nullptr);
 
         if (presentModeCount != 0) {
-            details.presentModes.resize(presentModeCount);
-            VKFunc::GetPhysicalDeviceSurfacePresentModesKHR(device, surface_, &presentModeCount, details.presentModes.data());
+            details.PresentModes.resize(presentModeCount);
+            VKFunc::GetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &presentModeCount, details.PresentModes.data());
         }
 
         return details;

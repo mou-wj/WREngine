@@ -32,6 +32,6 @@ namespace RHIVulkan
         bool CanRecycle(RHI::RHIViewableResource& resource) override;
 
     private:
-        VulkanDevice* Device;
+        VulkanDevice* m_Device;
     };
 } // namespace RHIVulkan

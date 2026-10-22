@@ -24,41 +24,41 @@ namespace RHIVulkan{
         // ----------------------------
         // 获取信息
         // ----------------------------
-        uint32_t getCompatibleHash() const { return static_cast<uint32_t>(renderPassCompatibleHash); }
-        uint32_t getFullHash() const { return static_cast<uint32_t>(renderPassFullHash); }
+        uint32_t GetCompatibleHash() const { return static_cast<uint32_t>(m_RenderPassCompatibleHash); }
+        uint32_t GetFullHash() const { return static_cast<uint32_t>(m_RenderPassFullHash); }
 
-        const VkAttachmentReference* getColorAttachmentRefs() const { return colorRefs; }
-        const VkAttachmentReference* getResolveAttachmentRefs() const { return hasResolveAttachments ? resolveRefs : nullptr; }
-        const VkAttachmentReference* getDepthAttachmentRef() const { return hasDepthStencil ? &depthRef : nullptr; }
-        const VkAttachmentDescription* getAttachmentDescriptions() const { return attachmentDescs; }
-        const VkAttachmentDescription* getColorAttachmentDescription(int index) { return &attachmentDescs[index]; }
-		const VkAttachmentDescription* getDepthAttachmentDescription() { return hasDepthStencil ? &attachmentDescs[attachmentDescCount - 1] : nullptr; }
-        uint32_t getAttachmentDescriptionCount() const { return attachmentDescCount; }
-        uint32_t getNumColorAttachments() const { return numColorAttachments; }
-        bool hasDepth() const { return hasDepthStencil; }
-        bool hasResolve() const { return hasResolveAttachments; }
-
-    private:
-        void resetAttachments();
-        void parseColorAttachments(const RHIGraphicAttachmentDesc& desc);
-        void parseResolveAttachments(const RHIGraphicAttachmentDesc& desc);
-        void parseDepthAttachment(const RHIGraphicAttachmentDesc& desc);
-        void calculateHashes(const RHIGraphicAttachmentDesc& desc);
+        const VkAttachmentReference* GetColorAttachmentRefs() const { return m_ColorRefs; }
+        const VkAttachmentReference* GetResolveAttachmentRefs() const { return m_bHasResolveAttachments ? m_ResolveRefs : nullptr; }
+        const VkAttachmentReference* GetDepthAttachmentRef() const { return m_bHasDepthStencil ? &m_DepthRef : nullptr; }
+        const VkAttachmentDescription* GetAttachmentDescriptions() const { return m_AttachmentDescs; }
+        const VkAttachmentDescription* GetColorAttachmentDescription(int index) { return &m_AttachmentDescs[index]; }
+		const VkAttachmentDescription* GetDepthAttachmentDescription() { return m_bHasDepthStencil ? &m_AttachmentDescs[m_AttachmentDescCount - 1] : nullptr; }
+        uint32_t GetAttachmentDescriptionCount() const { return m_AttachmentDescCount; }
+        uint32_t GetNumColorAttachments() const { return m_NumColorAttachments; }
+        bool HasDepth() const { return m_bHasDepthStencil; }
+        bool HasResolve() const { return m_bHasResolveAttachments; }
 
     private:
-        VkAttachmentReference colorRefs[MAX_RENDER_TARGETS]{};
-        VkAttachmentReference depthRef{};
-        VkAttachmentReference resolveRefs[MAX_RENDER_TARGETS]{};
+        void ResetAttachments();
+        void ParseColorAttachments(const RHIGraphicAttachmentDesc& desc);
+        void ParseResolveAttachments(const RHIGraphicAttachmentDesc& desc);
+        void ParseDepthAttachment(const RHIGraphicAttachmentDesc& desc);
+        void CalculateHashes(const RHIGraphicAttachmentDesc& desc);
 
-        VkAttachmentDescription attachmentDescs[MAX_RENDER_TARGETS * 2 + 1]{};
-        uint32_t attachmentDescCount = 0;
+    private:
+        VkAttachmentReference m_ColorRefs[MAX_RENDER_TARGETS]{};
+        VkAttachmentReference m_DepthRef{};
+        VkAttachmentReference m_ResolveRefs[MAX_RENDER_TARGETS]{};
 
-        uint8_t numColorAttachments = 0;
-        bool hasDepthStencil = false;
-        bool hasResolveAttachments = false;
+        VkAttachmentDescription m_AttachmentDescs[MAX_RENDER_TARGETS * 2 + 1]{};
+        uint32_t m_AttachmentDescCount = 0;
 
-        size_t renderPassCompatibleHash = 0;
-        size_t renderPassFullHash = 0;
+        uint8_t m_NumColorAttachments = 0;
+        bool m_bHasDepthStencil = false;
+        bool m_bHasResolveAttachments = false;
+
+        size_t m_RenderPassCompatibleHash = 0;
+        size_t m_RenderPassFullHash = 0;
     };
 
     // RenderPass 管理
@@ -68,13 +68,13 @@ namespace RHIVulkan{
         VulkanRenderPass(VulkanDevice* device, const VulkanRenderTargetLayout& layout);
         ~VulkanRenderPass();
 
-        VkRenderPass GetHandle() const { return RenderPass; }
-        const VulkanRenderTargetLayout& GetLayout() const { return Layout; }
+        VkRenderPass GetHandle() const { return m_RenderPass; }
+        const VulkanRenderTargetLayout& GetLayout() const { return m_Layout; }
 
     private:
-        VulkanDevice* Device = nullptr;
-        VkRenderPass RenderPass = VK_NULL_HANDLE;
-        VulkanRenderTargetLayout Layout;
+        VulkanDevice* m_Device = nullptr;
+        VkRenderPass m_RenderPass = VK_NULL_HANDLE;
+        VulkanRenderTargetLayout m_Layout;
     };
 
     // Framebuffer 管理
@@ -84,20 +84,20 @@ namespace RHIVulkan{
         VulkanFramebuffer(VulkanDevice* device, const RHIBoundRenderTargets& targetInfo, VulkanRenderPass* renderPass);
         ~VulkanFramebuffer();
 
-        VkFramebuffer GetHandle() const { return Framebuffer; }
+        VkFramebuffer GetHandle() const { return m_Framebuffer; }
 
     private:
         friend class VulkanRenderPassManager;
-        VulkanDevice* Device = nullptr;
-        VkFramebuffer Framebuffer = VK_NULL_HANDLE;
+        VulkanDevice* m_Device = nullptr;
+        VkFramebuffer m_Framebuffer = VK_NULL_HANDLE;
 
         // 缓存 RenderTarget 的 VkImage
-        std::vector<VkImage> ColorImages;
-        VkImage DepthImage = VK_NULL_HANDLE;
-        std::vector<VulkanTextureView> attachmentViews;
-        VkExtent2D Extent{};
-        uint32_t NumColorAttachments = 0;
-        bool HasDepth;
+        std::vector<VkImage> m_ColorImages;
+        VkImage m_DepthImage = VK_NULL_HANDLE;
+        std::vector<VulkanTextureView> m_AttachmentViews;
+        VkExtent2D m_Extent{};
+        uint32_t m_NumColorAttachments = 0;
+        bool m_bHasDepth;
     };
 
 
@@ -127,14 +127,14 @@ namespace RHIVulkan{
 
 
 
-        VulkanDevice* Device = nullptr;
+        VulkanDevice* m_Device = nullptr;
 
 
-        std::mutex RenderPassMutex;
-        std::mutex FramebufferMutex;
+        std::mutex m_RenderPassMutex;
+        std::mutex m_FramebufferMutex;
 
-        std::unordered_map<uint32_t, VulkanRenderPass*> RenderPassCache;
-        std::unordered_map<uint32_t, VulkanFramebuffer*> FramebufferCache;
+        std::unordered_map<uint32_t, VulkanRenderPass*> m_RenderPassCache;
+        std::unordered_map<uint32_t, VulkanFramebuffer*> m_FramebufferCache;
     };
 
 }

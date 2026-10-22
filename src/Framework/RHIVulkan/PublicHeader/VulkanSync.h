@@ -24,8 +24,8 @@ public:
     VkResult GetStatus() const;
 
 private:
-    VulkanDevice* device_;
-    VkEvent event_;
+    VulkanDevice* m_Device;
+    VkEvent m_Event;
 };
 
 class VulkanEventManager {
@@ -37,15 +37,15 @@ public:
     void Release(std::shared_ptr<VulkanEvent> evt);
 
 private:
-    VulkanDevice* device_;
+    VulkanDevice* m_Device;
 
-    // �أ����пɸ��ö���
-    std::queue<std::shared_ptr<VulkanEvent>> pool_;
+    // Reusable event objects.
+    std::queue<std::shared_ptr<VulkanEvent>> m_Pool;
 
-    // �������д����Ķ������������͵��ԣ�
-    std::vector<std::shared_ptr<VulkanEvent>> managedObjects_;
+    // Keep ownership of every event created by this manager.
+    std::vector<std::shared_ptr<VulkanEvent>> m_ManagedObjects;
 
-    std::mutex mutex_;
+    std::mutex m_Mutex;
 };
 
 
@@ -56,17 +56,17 @@ public:
     ~VulkanSemaphore();
 
     VkSemaphore GetHandle() const;
-    bool IsBinary() const { return isBinary_; }
+    bool IsBinary() const { return m_bIsBinary; }
     // 获取当前 GPU 已经执行到的数值
     uint64_t GetCurrentValue();
     // CPU 端阻塞等待直到达到某个值
-    void Wait(uint64_t Value, uint64_t TimeoutNS = UINT64_MAX);
+    void Wait(uint64_t value, uint64_t timeoutNs = UINT64_MAX);
 
 private:
-    VulkanDevice* device_;
-    VkSemaphore semaphore_;
-    bool isBinary_ = false;
-    uint64_t value_ = 0;
+    VulkanDevice* m_Device;
+    VkSemaphore m_Semaphore;
+    bool m_bIsBinary = false;
+    uint64_t m_Value = 0;
 };
 
 class VulkanSemaphoreManager {
@@ -82,16 +82,16 @@ public:
 private:
     void BatchCreateSemaphores(size_t count);
 
-    VulkanDevice* device_;
-    std::mutex mutex_;
+    VulkanDevice* m_Device;
+    std::mutex m_Mutex;
 
-    static constexpr size_t BatchSize = 100;
+    static constexpr size_t m_BatchSize = 100;
 
     // 空闲池：存放全新 vkCreate 出来的干净信号量
-    std::set<VulkanSemaphore*> freePool_;
+    std::set<VulkanSemaphore*> m_FreePool;
 
     // 已用池：存放外部归还的、确定已空闲的信号量，攒满即砸碎
-    std::set<VulkanSemaphore*> allAllocateds_;
+    std::set<VulkanSemaphore*> m_AllAllocateds;
 };
 
 // Vulkan Fence
@@ -99,14 +99,14 @@ class VulkanFence {
 public:
     VulkanFence(VulkanDevice* device);
     ~VulkanFence();
-    VkFence GetHandle() const { return Fence; }
+    VkFence GetHandle() const { return m_Fence; }
 
     bool IsSignaled() const;
     void Reset();
     void Wait();
 private:
-    VkFence Fence = VK_NULL_HANDLE;
-    VulkanDevice* Device = nullptr;
+    VkFence m_Fence = VK_NULL_HANDLE;
+    VulkanDevice* m_Device = nullptr;
 };
 
 class VulkanFenceManager
@@ -120,10 +120,10 @@ public:
     void GarbageCollect();
 
 private:
-    VulkanDevice* device = nullptr;
-    std::vector<std::unique_ptr<VulkanFence>> allFences;
-    std::deque<VulkanFence*> availableFences;
-    std::deque<VulkanFence*> pendingFences;
+    VulkanDevice* m_Device = nullptr;
+    std::vector<std::unique_ptr<VulkanFence>> m_AllFences;
+    std::deque<VulkanFence*> m_AvailableFences;
+    std::deque<VulkanFence*> m_PendingFences;
 };
 
 
@@ -134,25 +134,25 @@ public:
     VulkanRHISyncPoint(VulkanDevice* device, RHI::EQueueType queueType, VulkanSemaphore* semaphore);
     ~VulkanRHISyncPoint();
     void SetSemaphore(VulkanSemaphore* semaphore) { 
-        if (!ownSemaphore_) {
-            semaphore_ = semaphore;
+        if (!m_bOwnSemaphore) {
+            m_Semaphore = semaphore;
             }
         }
 
     // 获取当前 GPU 已经执行到的数值
     uint64_t GetCurrentValue() override;
     // CPU 端阻塞等待直到达到某个值
-    void Wait(uint64_t Value, uint64_t TimeoutNS = UINT64_MAX) override;
+    void Wait(uint64_t value, uint64_t timeoutNs = UINT64_MAX) override;
 
     // 获取VkSemaphore句柄（如有需要跨API用）
-    VulkanSemaphore* GetSemaphore() const { return semaphore_; }
+    VulkanSemaphore* GetSemaphore() const { return m_Semaphore; }
 
-    bool IsBinary() const { return semaphore_->IsBinary(); }
+    bool IsBinary() const { return m_Semaphore->IsBinary(); }
 
 
 private:
-    bool ownSemaphore_ = true;
-    VulkanDevice* device_ = nullptr;
-    VulkanSemaphore* semaphore_ = nullptr;
+    bool m_bOwnSemaphore = true;
+    VulkanDevice* m_Device = nullptr;
+    VulkanSemaphore* m_Semaphore = nullptr;
 };
 }

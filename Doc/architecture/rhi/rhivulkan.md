@@ -41,7 +41,7 @@ void VulkanRHIModule::StartupModule()
 {
     RHI::GRHIApi = CreateRHIApi();
     RHI::GRHIApi->Init();
-    bLoaded = true;
+    m_bLoaded = true;
 }
 ```
 
@@ -67,10 +67,10 @@ class RHIVULKAN_API VulkanRHIApi : public RHIApi
 
 它的核心成员包括：
 
-- `VkInstance Instance`
-- `VkPhysicalDevice PhysicalDevice`
-- `VulkanDevice* Device`
-- `MappedStagingBuffers`
+- `VkInstance m_Instance`
+- `VkPhysicalDevice m_PhysicalDevice`
+- `VulkanDevice* m_Device`
+- `m_MappedStagingBuffers`
 
 这里可以看出，`VulkanRHIApi` 本身不是一个单独的设备对象，而是整个 Vulkan 后端实现的统一入口对象。
 
@@ -94,11 +94,11 @@ RHIBuffer
 
 `VulkanTexture` 继承自 `RHITexture`，负责映射到 Vulkan 的：
 
-- `VkImage Image`
-- `VkImageView DefaltView`
-- `VkFormat Format`
-- `VulkanAllocation Allocation`
-- `VulkanTransientAllocation TransientAllocation`
+- `VkImage m_Image`
+- `VkImageView m_DefaltView`
+- `VkFormat m_Format`
+- `VulkanAllocation m_Allocation`
+- `m_TransientAllocation`
 
 它还负责：
 
@@ -110,9 +110,9 @@ RHIBuffer
 
 `VulkanBuffer` 继承自 `RHIBuffer`，负责映射到 Vulkan 的：
 
-- `VkBuffer Buffer`
-- `VkDeviceSize Size`
-- `VulkanAllocation Allocation`
+- `VkBuffer m_Buffer`
+- `VkDeviceSize m_Size`
+- `VulkanAllocation m_Allocation`
 
 它也同样支持资源视图管理，并具备 transient allocation 处理能力。
 
@@ -164,16 +164,16 @@ VulkanViewBase
 ```cpp
 class VulkanPipelineBase {
 public:
-    VkPipeline GetHandle() const { return pipeline; }
-    VulkanPipelineLayout* GetLayout() const { return pipelineLayout; }
+    VkPipeline GetHandle() const { return _pipeline; }
+    VulkanPipelineLayout* GetLayout() const { return _pipelineLayout; }
 };
 ```
 
 它持有：
 
-- `VkPipeline pipeline`
-- `VulkanPipelineLayout* pipelineLayout`
-- `VulkanRenderPass* renderPass`
+- `VkPipeline _pipeline`
+- `VulkanPipelineLayout* _pipelineLayout`
+- `VulkanRenderPass* _renderPass`
 
 其职责是统一管理 Vulkan 管线对象和对应的 pipeline layout。
 

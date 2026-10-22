@@ -5,18 +5,18 @@ namespace RHIVulkan {
 
     void VulkanCommonPipelineDescriptorState::FlushAndBind(VulkanCommandBuffer* cmd)
     {
-        const auto& sets = pipeline->GetLayout()->GetInfo().GetAllLayouts();
+        const auto& sets = _pipeline->GetLayout()->GetInfo().GetAllLayouts();
 
         // 首先处理PackedUniformBuffer的更新
         bool bWrapAroundDetected = false;
         uint64_t lastAllocationOffset = 0;
         
         VulkanLooseUniformDataUploader* uploader = nullptr;
-        if (auto* computeContext = dynamic_cast<VulkanComputeContext*>(Context))
+        if (auto* computeContext = dynamic_cast<VulkanComputeContext*>(_context))
         {
             uploader = computeContext->GetLooseUniformDataUploader();
         }
-        else if (auto* graphicContext = dynamic_cast<VulkanGraphicContext*>(Context))
+        else if (auto* graphicContext = dynamic_cast<VulkanGraphicContext*>(_context))
         {
             uploader = graphicContext->GetLooseUniformDataUploader();
         }
@@ -27,7 +27,7 @@ namespace RHIVulkan {
         }
         
         // 遍历每个shader frequency的PackedUniformBuffer
-        for (auto& pair : PackedUniformBuffersByFrequency)
+        for (auto& pair : _packedUniformBuffersByFrequency)
         {
             ERHIShaderFrequency freq = pair.first;
             PackedUniformBuffer& buffer = pair.second;
@@ -47,7 +47,7 @@ namespace RHIVulkan {
                     bWrapAroundDetected = true;
                     
                     // 如果发生了环绕，标记所有其他buffer为dirty，需要重新上载
-                    for (auto& otherPair : PackedUniformBuffersByFrequency)
+                    for (auto& otherPair : _packedUniformBuffersByFrequency)
                     {
                         otherPair.second.MarkDirty();
                     }
@@ -68,23 +68,23 @@ namespace RHIVulkan {
                 buffer.MarkClean();
             }
             // 从GlobalUniformBufferInfo中查找该frequency对应的set和binding
-            for (auto& BindingInfos : buffer.Bindings) {
-                if (BindingInfos.bUseExternalBuffer)
+            for (auto& bindingInfos : buffer.Bindings) {
+                if (bindingInfos.bUseExternalBuffer)
                 {
-                    BindingInfos.bUseExternalBuffer=false;
+                    bindingInfos.bUseExternalBuffer=false;
                     continue;
                 }
 
-                uint32_t setIndex = BindingInfos.SetIndex;
-                uint32_t binding = BindingInfos.Binding;
+                uint32_t setIndex = bindingInfos.SetIndex;
+                uint32_t binding = bindingInfos.Binding;
 
                 SetUniformBuffer(
                     setIndex,
                     binding,
                     0,
                     uploader->GetCPUBufferHandle(),
-                    BindingInfos.GPUOffset,
-                    BindingInfos.Size);
+                    bindingInfos.GPUOffset,
+                    bindingInfos.Size);
             }
         }
 
@@ -102,7 +102,7 @@ namespace RHIVulkan {
         for (uint32_t i = 0; i < sets.size(); i++)
             vkSets.push_back(GetDescriptorSet(i));
 
-        Device->GetDescriptorSetManager()->BindDescriptorSets(cmd, pipeline->GetLayout()->GetHandle(), pipelineBindingPoint, vkSets);
+        _device->GetDescriptorSetManager()->BindDescriptorSets(cmd, _pipeline->GetLayout()->GetHandle(), _pipelineBindingPoint, vkSets);
 
     }
 

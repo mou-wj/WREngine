@@ -67,9 +67,9 @@ VkPipelineStageFlags ToVkPipelineStage(RHI::ERHIPipelineStage stage)
 // -------------------------------------------------------------------------------------------------
 
 VulkanQueue::VulkanQueue(VulkanDevice* device, VkQueue queue, uint32_t familyIndex,EQueueType queueType)
-	: device_(device), queue_(queue), familyIndex_(familyIndex), QueueType_(queueType)
+	: m_Device(device), m_Queue(queue), m_FamilyIndex(familyIndex), m_QueueType(queueType)
 {
-    SubmitSyncPoint_ = new VulkanRHISyncPoint(device, queueType);
+    m_SubmitSyncPoint = new VulkanRHISyncPoint(device, queueType);
 #ifdef DEBUG_INFO
 	std::string queueTypeName;
 	switch (queueType)
@@ -84,41 +84,41 @@ VulkanQueue::VulkanQueue(VulkanDevice* device, VkQueue queue, uint32_t familyInd
 		queueTypeName = "Unknown";
 		break;
 	}
-    std::string str1 = std::format("{:#x}", uint64_t(queue_));
+    std::string str1 = std::format("{:#x}", uint64_t(m_Queue));
     
-	VKFunc::SetDebugName(device_->GetHandle(), VK_OBJECT_TYPE_QUEUE, (uint64_t)queue_, ("VulkanQueue:" + queueTypeName + " " + str1).c_str());
+	VKFunc::SetDebugName(m_Device->GetHandle(), VK_OBJECT_TYPE_QUEUE, (uint64_t)m_Queue, ("VulkanQueue:" + queueTypeName + " " + str1).c_str());
     LOG_INFO("Create VulkanQueue: %s %s", queueTypeName.c_str(), str1.c_str());
 #endif
 }
 
 VulkanQueue::~VulkanQueue()
 {
-    for (VulkanCommandContext* ctx : AllContexts_)
+    for (VulkanCommandContext* ctx : m_AllContexts)
     {
         delete ctx;
     }
-    AllContexts_.clear();
-    FreeContexts_.clear();
-    delete SubmitSyncPoint_;
+    m_AllContexts.clear();
+    m_FreeContexts.clear();
+    delete m_SubmitSyncPoint;
 }
 
 void VulkanQueue::WaitIdle()
 {
-    VKFunc::QueueWaitIdle(queue_);
+    VKFunc::QueueWaitIdle(m_Queue);
 
 }
 
 uint64_t VulkanQueue::GetCurrentTimelineValue()
 {
-	return SubmitSyncPoint_->GetCurrentValue();
+	return m_SubmitSyncPoint->GetCurrentValue();
 }
 
 void VulkanQueue::GarbageCollect() 
 {
-    uint64_t CurrentTime = SubmitSyncPoint_->GetCurrentValue();
-    while (!PendingInfos.empty()) {
-        auto& front = PendingInfos.front();
-        if (front.FinishedTimelineValue <= CurrentTime) {
+    uint64_t currentTime = m_SubmitSyncPoint->GetCurrentValue();
+    while (!m_PendingInfos.empty()) {
+        auto& front = m_PendingInfos.front();
+        if (front.FinishedTimelineValue <= currentTime) {
             for (auto cmd : front.Cmds) {
                 cmd->MarkState(VulkanCommandBuffer::NeedRecycle);
             }
@@ -126,9 +126,9 @@ void VulkanQueue::GarbageCollect()
 				ReleaseCommandContext(contex);
             }
             for (auto sem : front.PendingBinarySemaphores) {
-                device_->GetSemaphoreManager()->ReleaseBinary(sem);
+                m_Device->GetSemaphoreManager()->ReleaseBinary(sem);
             }
-            PendingInfos.pop();
+            m_PendingInfos.pop();
             continue;
         }
         break;
@@ -137,49 +137,49 @@ void VulkanQueue::GarbageCollect()
 
 void VulkanQueue::InitContextPool(uint32_t poolSize)
 {
-    std::lock_guard<std::mutex> lock(ContextPoolMutex_);
+    std::lock_guard<std::mutex> lock(m_ContextPoolMutex);
     for (uint32_t i = 0; i < poolSize; ++i)
     {
-        VulkanCommandContext* ctx = CreateQueueContext(device_, this, QueueType_);
-        AllContexts_.push_back(ctx);
-        FreeContexts_.push_back(ctx);
+        VulkanCommandContext* ctx = CreateQueueContext(m_Device, this, m_QueueType);
+        m_AllContexts.push_back(ctx);
+        m_FreeContexts.push_back(ctx);
     }
 }
 
 RHI::EQueueType VulkanQueue::GetType() const
 {
-    return QueueType_;
+    return m_QueueType;
 }
 
 RHI::RHIContextBase* VulkanQueue::AcquireCommandContext()
 {
-    std::lock_guard<std::mutex> lock(ContextPoolMutex_);
+    std::lock_guard<std::mutex> lock(m_ContextPoolMutex);
     //LOG_INFO("duration time %f s", Core::Timer::GetGlobalInstance().GetDelta());
-    if (!FreeContexts_.empty())
+    if (!m_FreeContexts.empty())
     {
-        VulkanCommandContext* ctx = FreeContexts_.back();
-        FreeContexts_.pop_back();
+        VulkanCommandContext* ctx = m_FreeContexts.back();
+        m_FreeContexts.pop_back();
         return ctx;
     }
-    if (QueueType_ == EQueueType::Graphics) {
+    if (m_QueueType == EQueueType::Graphics) {
         LOG_INFO("%s", "create context");
     }
    
-    VulkanCommandContext* ctx = CreateQueueContext(device_, this, QueueType_);
-    AllContexts_.push_back(ctx);
+    VulkanCommandContext* ctx = CreateQueueContext(m_Device, this, m_QueueType);
+    m_AllContexts.push_back(ctx);
     return ctx;
 }
 
-RHI::RHIContextBase* VulkanQueue::ReleaseCommandContext(RHI::RHIContextBase* Context)
+RHI::RHIContextBase* VulkanQueue::ReleaseCommandContext(RHI::RHIContextBase* context)
 {
-    if (!Context)
+    if (!context)
     {
         return nullptr;
     }
 
-    VulkanCommandContext* vulkanCtx = dynamic_cast<VulkanCommandContext*>(Context);
-    std::lock_guard<std::mutex> lock(ContextPoolMutex_);
-    FreeContexts_.push_back(vulkanCtx);
+    VulkanCommandContext* vulkanCtx = dynamic_cast<VulkanCommandContext*>(context);
+    std::lock_guard<std::mutex> lock(m_ContextPoolMutex);
+    m_FreeContexts.push_back(vulkanCtx);
     return nullptr;
 }
 
@@ -188,9 +188,9 @@ uint64_t VulkanQueue::ExecuteContext(RHI::RHIContextBase* contextBase)
     return ExecuteContext({ contextBase }, {});
 }
 
-uint64_t VulkanQueue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& Contexts, const std::vector<RHI::RHIWaitInfo>& WaitInfos)
+uint64_t VulkanQueue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& contexts, const std::vector<RHI::RHIWaitInfo>& waitInfos)
 {
-    std::lock_guard<std::mutex> lock(FlushContextMutex_);
+    std::lock_guard<std::mutex> lock(m_FlushContextMutex);
 
     // 1. 准备所有的 Wait 信息 (Timeline Semaphore 模式)
     std::vector<VkSemaphore> waitHandles;
@@ -198,23 +198,23 @@ uint64_t VulkanQueue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& Co
     std::vector<VkPipelineStageFlags> waitStages;
     std::vector<VulkanSemaphore*> pendingSeamphores;
 
-    for (const auto& waitInfo : WaitInfos)
+    for (const auto& waitInfo : waitInfos)
     {
         RHISyncPoint* rhivkSyncPoint = nullptr;
         if (waitInfo.SyncPoint) {
 			rhivkSyncPoint = waitInfo.SyncPoint;
         } else {
             // 优先判断QueueType是否和当前queue一致
-            if (waitInfo.QueueType == QueueType_) {
-                rhivkSyncPoint = SubmitSyncPoint_;
+            if (waitInfo.QueueType == m_QueueType) {
+                rhivkSyncPoint = m_SubmitSyncPoint;
             } else {
                 switch (waitInfo.QueueType)
                 {
                 case EQueueType::Graphics:
-                    rhivkSyncPoint = device_->GetGraphicsQueue()->GetSyncPoint();
+                    rhivkSyncPoint = m_Device->GetGraphicsQueue()->GetSyncPoint();
 					break;
                 case EQueueType::Compute:
-                    rhivkSyncPoint = device_->GetComputeQueue()->GetSyncPoint();
+                    rhivkSyncPoint = m_Device->GetComputeQueue()->GetSyncPoint();
 					break;
                 default:
                     break;
@@ -244,12 +244,12 @@ uint64_t VulkanQueue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& Co
 
     // 2. 确定本次提交的 Signal Value (自增)
     // 假设 SubmitSyncPoint_ 是当前 Queue 对应的时间轴信号量
-    uint64_t signalValue = ++currentTimelineValue_;
+    uint64_t signalValue = ++m_CurrentTimelineValue;
     // 3. 收集所有的 Command Buffers
     std::vector<VkCommandBuffer> cmdHandles;
     std::vector<VulkanCommandBuffer*> cmdBuffers;
     std::vector<VulkanCommandContext*> vkcontexts;
-    for (auto* context : Contexts)
+    for (auto* context : contexts)
     {
 		
         VulkanCommandContext* vkCtx = dynamic_cast<VulkanCommandContext*>(context);
@@ -279,10 +279,10 @@ uint64_t VulkanQueue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& Co
     submitInfo.commandBufferCount = cmdHandles.size();
     submitInfo.pCommandBuffers = cmdHandles.data();
     submitInfo.signalSemaphoreCount = 1;
-    VkSemaphore signalHandle = SubmitSyncPoint_->GetSemaphore()->GetHandle();
+    VkSemaphore signalHandle = m_SubmitSyncPoint->GetSemaphore()->GetHandle();
     submitInfo.pSignalSemaphores = &signalHandle;
 
-    bool suc =VKFunc::QueueSubmit(queue_, 1, &submitInfo, VK_NULL_HANDLE);
+    bool suc =VKFunc::QueueSubmit(m_Queue, 1, &submitInfo, VK_NULL_HANDLE);
     
     VkDeviceFaultCountsEXT faultCounts{ VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT };
     //if (!suc) {
@@ -300,7 +300,7 @@ uint64_t VulkanQueue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& Co
 
 
 
-    device_->GetStagingManager()->GarbageCollect();
+    m_Device->GetStagingManager()->GarbageCollect();
     //for (auto cmdBuffer : cmdBuffers)
     //{
     //    cmdBuffer->GetImageLayoutManager()->TransferTo(imageLayoutManager_);
@@ -310,17 +310,17 @@ uint64_t VulkanQueue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& Co
     //imageLayoutManager_.PrintLayoutInfo();
 
     // 5. 资源回收与状态更新
-    device_->ReleaseDeferredResources();
+    m_Device->ReleaseDeferredResources();
     GarbageCollect();
     PendingInfo pendingInfo{};
     pendingInfo.Cmds = cmdBuffers;
     pendingInfo.FinishedTimelineValue = signalValue;
     pendingInfo.Contexts = vkcontexts;
     pendingInfo.PendingBinarySemaphores = pendingSeamphores;
-    PendingInfos.push(pendingInfo);
+    m_PendingInfos.push(pendingInfo);
     // 6. 返回 Fence：它本质上是同步点和数值的组合
     RHI::RHIFence result{};
-    result.QueueType = SubmitSyncPoint_->GetQueueType();
+    result.QueueType = m_SubmitSyncPoint->GetQueueType();
     result.Value = signalValue;
 
     return result.Value;
@@ -329,8 +329,8 @@ uint64_t VulkanQueue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& Co
 
 VulkanSemaphore* VulkanQueue::SubmitEmptyWithDependency(VkSemaphore timelineWait, uint64_t waitValue)
 {
-    auto sigSemaphore = device_->GetSemaphoreManager()->AcquireBinary();
-    uint64_t signalValue = ++currentTimelineValue_;
+    auto sigSemaphore = m_Device->GetSemaphoreManager()->AcquireBinary();
+    uint64_t signalValue = ++m_CurrentTimelineValue;
     std::array<uint64_t, 2> signalValues = {1,signalValue };
     VkTimelineSemaphoreSubmitInfo timelineInfo{ VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO };
     timelineInfo.waitSemaphoreValueCount = 1;
@@ -349,12 +349,12 @@ VulkanSemaphore* VulkanQueue::SubmitEmptyWithDependency(VkSemaphore timelineWait
     // 触发 Binary
     submitInfo.signalSemaphoreCount = 1;
     VkSemaphore sigVKSemaphore = sigSemaphore->GetHandle();
-    VkSemaphore curTimeLineSemaphore = SubmitSyncPoint_->GetSemaphore()->GetHandle();
+    VkSemaphore curTimeLineSemaphore = m_SubmitSyncPoint->GetSemaphore()->GetHandle();
     std::array<VkSemaphore,2> sigSemaphores = { sigVKSemaphore,curTimeLineSemaphore };
     submitInfo.pSignalSemaphores = sigSemaphores.data();
     
     // 提交空命令
-    VKFunc::QueueSubmit(queue_, 1, &submitInfo, VK_NULL_HANDLE);
+    VKFunc::QueueSubmit(m_Queue, 1, &submitInfo, VK_NULL_HANDLE);
     
 
     PendingInfo pendingInfo{};
@@ -362,18 +362,18 @@ VulkanSemaphore* VulkanQueue::SubmitEmptyWithDependency(VkSemaphore timelineWait
     pendingInfo.FinishedTimelineValue = signalValue;
     pendingInfo.Contexts = {};
     pendingInfo.PendingBinarySemaphores = { sigSemaphore };
-    PendingInfos.push(pendingInfo);
+    m_PendingInfos.push(pendingInfo);
     return sigSemaphore;
 }
 
 
-void VulkanQueue::WaitValue(uint64_t FenceValue)
+void VulkanQueue::WaitValue(uint64_t fenceValue)
 {
-	if (FenceValue == 0)
+	if (fenceValue == 0)
 	{
 		return;
 	}
-    SubmitSyncPoint_->Wait(FenceValue);
+    m_SubmitSyncPoint->Wait(fenceValue);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -381,18 +381,18 @@ void VulkanQueue::WaitValue(uint64_t FenceValue)
 // -------------------------------------------------------------------------------------------------
 
 VulkanPresentExecutor::VulkanPresentExecutor(VulkanQueue* queue)
-    : Queue(queue)
+    : m_Queue(queue)
 {
 }
 
-void VulkanPresentExecutor::Present(RHI::RHISwapchain* Swapchain, const RHI::RHIWaitInfo& WaitDependency)
+void VulkanPresentExecutor::Present(RHI::RHISwapchain* swapchain, const RHI::RHIWaitInfo& waitDependency)
 {
-    auto* vulkanSwapchain = dynamic_cast<VulkanRHISwapchain*>(Swapchain);
-    if (!vulkanSwapchain || !Queue)
+    auto* vulkanSwapchain = dynamic_cast<VulkanRHISwapchain*>(swapchain);
+    if (!vulkanSwapchain || !m_Queue)
     {
         return;
     }
     
-    vulkanSwapchain->Present(Queue, WaitDependency);
+    vulkanSwapchain->Present(m_Queue, waitDependency);
 }
 }

@@ -44,16 +44,16 @@ public:
 
     bool Initialize(const std::vector<char>& packedCode);
     void Cleanup();
-	RenderCore::SPIRVCompiledBinaryResultPacker::Header GetShaderReflection() const { return Reflection; }
-	VkShaderModule  GetShaderModule() const { return shaderModule; }
-	const std::string& GetEntryPoint() const { return EntryPoint; }
-    VkShaderStageFlagBits GetShaderStage() const { return ShaderStage; }
+	RenderCore::SPIRVCompiledBinaryResultPacker::Header GetShaderReflection() const { return _reflection; }
+	VkShaderModule  GetShaderModule() const { return _shaderModule; }
+	const std::string& GetEntryPoint() const { return _entryPoint; }
+    VkShaderStageFlagBits GetShaderStage() const { return _shaderStage; }
 protected:
-	RenderCore::SPIRVCompiledBinaryResultPacker::Header Reflection;
-    VkShaderModule shaderModule = VK_NULL_HANDLE;
-    VulkanDevice* Device = nullptr;
-    std::string EntryPoint;
-    VkShaderStageFlagBits ShaderStage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
+	RenderCore::SPIRVCompiledBinaryResultPacker::Header _reflection;
+    VkShaderModule _shaderModule = VK_NULL_HANDLE;
+    VulkanDevice* _device = nullptr;
+    std::string _entryPoint;
+    VkShaderStageFlagBits _shaderStage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
 };
 
 // 各具体Shader类型，继承对应RHIShader和VulkanRHIShader
@@ -176,7 +176,7 @@ inline size_t HashShaderCode(const std::vector<char>& code)
 class VulkanShaderManager
 {
 public:
-    VulkanShaderManager(VulkanDevice* device) : Device(device) {}
+    VulkanShaderManager(VulkanDevice* device) : m_Device(device) {}
     ~VulkanShaderManager() { Cleanup(); }
 
     // -----------------------
@@ -191,16 +191,16 @@ public:
 
         // 先查缓存
         {
-            std::lock_guard<std::mutex> lg(ShaderMutex);
-            auto it = ShaderCache.find(hash);
-            if (it != ShaderCache.end())
+            std::lock_guard<std::mutex> lg(m_ShaderMutex);
+            auto it = m_ShaderCache.find(hash);
+            if (it != m_ShaderCache.end())
             {
                 return std::static_pointer_cast<ShaderType>(it->second);
             }
         }
 
         // 创建新的 shader
-        auto shader = std::make_shared<ShaderType>(Device);
+        auto shader = std::make_shared<ShaderType>(m_Device);
 
 
 
@@ -211,8 +211,8 @@ public:
 
         // 加入缓存
         {
-            std::lock_guard<std::mutex> lg(ShaderMutex);
-            ShaderCache[hash] = shader;
+            std::lock_guard<std::mutex> lg(m_ShaderMutex);
+            m_ShaderCache[hash] = shader;
         }
 
         return shader;
@@ -220,20 +220,20 @@ public:
 
     void Cleanup()
     {
-        std::lock_guard<std::mutex> lg(ShaderMutex);
-        for (auto& kv : ShaderCache)
+        std::lock_guard<std::mutex> lg(m_ShaderMutex);
+        for (auto& kv : m_ShaderCache)
         {
             if (kv.second)
                 kv.second->Cleanup();
         }
-        ShaderCache.clear();
+        m_ShaderCache.clear();
     }
 
 private:
-    VulkanDevice* Device = nullptr;
+    VulkanDevice* m_Device = nullptr;
 
-    std::unordered_map<size_t, std::shared_ptr<VulkanRHIShader>> ShaderCache;
-    std::mutex ShaderMutex;
+    std::unordered_map<size_t, std::shared_ptr<VulkanRHIShader>> m_ShaderCache;
+    std::mutex m_ShaderMutex;
 };
 
 

@@ -7,152 +7,152 @@
 namespace RHIVulkan {
 
 	static void GetVulkanBarrierMasksByLayout(
-		VkImageLayout InLayout,
-		VkAccessFlags& OutAccessMask,
-		VkPipelineStageFlags& OutStageMask)
+		VkImageLayout inLayout,
+		VkAccessFlags& outAccessMask,
+		VkPipelineStageFlags& outStageMask)
 	{
-		switch (InLayout)
+		switch (inLayout)
 		{
 		case VK_IMAGE_LAYOUT_UNDEFINED:
-			OutAccessMask = 0;
-			OutStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			outAccessMask = 0;
+			outStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			break;
 
 		case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-			OutAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			OutStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			outAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			outStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			break;
 
 		case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-			OutAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-			OutStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			outAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			outStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
 			break;
 
 		case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-			OutAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-			OutStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			outAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			outStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 			break;
 
 		case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-			OutAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			// ��������ڶ�������ؽ׶ζ�ȡ��ȡ��������ȫ
-			OutStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			outAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			// Cover both vertex and fragment reads for this access.
+			outStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			break;
 
 		case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-			OutAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-			OutStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+			outAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+			outStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 			break;
 
 		case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
-			OutAccessMask = 0;
-			OutStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+			outAccessMask = 0;
+			outStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 			break;
 
 		default:
-			OutAccessMask = 0;
-			OutStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+			outAccessMask = 0;
+			outStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 			break;
 		}
 	}
 	
 	void GetVulkanBarrierInfo(
 		bool bIsTexture,
-		ERHIResourceAccess InAccess,
-		EQueueType InQueueType,
-		VkImageLayout& OutLayout,
-		VkAccessFlags& OutAccessMask,
-		VkPipelineStageFlags& OutStageMask)
+		ERHIResourceAccess inAccess,
+		EQueueType inQueueType,
+		VkImageLayout& outLayout,
+		VkAccessFlags& outAccessMask,
+		VkPipelineStageFlags& outStageMask)
 	{
-		OutLayout = VK_IMAGE_LAYOUT_GENERAL;
-		OutAccessMask = 0;
-		OutStageMask = 0;
+		outLayout = VK_IMAGE_LAYOUT_GENERAL;
+		outAccessMask = 0;
+		outStageMask = 0;
 
-		if (InAccess == ERHIResourceAccess::Unknown)
+		if (inAccess == ERHIResourceAccess::Unknown)
 		{
-			OutLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			OutAccessMask = 0;
-			OutStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			outLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			outAccessMask = 0;
+			outStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			return;
 		}
 
-		// --- ֻ����֧ ---
-		if (EnumHasAnyFlags(InAccess, ERHIResourceAccess::SRV))
+		// Read-only image access.
+		if (EnumHasAnyFlags(inAccess, ERHIResourceAccess::SRV))
 		{
-			OutLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			OutAccessMask |= VK_ACCESS_SHADER_READ_BIT;
-			OutStageMask |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			outLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			outAccessMask |= VK_ACCESS_SHADER_READ_BIT;
+			outStageMask |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		}
-		if (EnumHasAnyFlags(InAccess, ERHIResourceAccess::SRV))
+		if (EnumHasAnyFlags(inAccess, ERHIResourceAccess::SRV))
 		{
-			OutLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			OutAccessMask |= VK_ACCESS_SHADER_READ_BIT;
-			OutStageMask |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			outLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			outAccessMask |= VK_ACCESS_SHADER_READ_BIT;
+			outStageMask |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 		}
-		if (EnumHasAnyFlags(InAccess, ERHIResourceAccess::TransferSrc))
+		if (EnumHasAnyFlags(inAccess, ERHIResourceAccess::TransferSrc))
 		{
-			OutLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			OutAccessMask |= VK_ACCESS_TRANSFER_READ_BIT;
-			OutStageMask |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+			outLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			outAccessMask |= VK_ACCESS_TRANSFER_READ_BIT;
+			outStageMask |= VK_PIPELINE_STAGE_TRANSFER_BIT;
 		}
-		if (EnumHasAnyFlags(InAccess, ERHIResourceAccess::DSVRead))
+		if (EnumHasAnyFlags(inAccess, ERHIResourceAccess::DSVRead))
 		{
-			OutLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-			OutAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-			OutStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+			outLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+			outAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+			outStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 		}
 
-		// --- д���֧ ---
-		if (EnumHasAnyFlags(InAccess, ERHIResourceAccess::RenderTargetView))
+		// Writable image access.
+		if (EnumHasAnyFlags(inAccess, ERHIResourceAccess::RenderTargetView))
 		{
-			OutLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			OutAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-			OutStageMask |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			outLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			outAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			outStageMask |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		}
-		if (EnumHasAnyFlags(InAccess, ERHIResourceAccess::UAV))
+		if (EnumHasAnyFlags(inAccess, ERHIResourceAccess::UAV))
 		{
-			OutLayout = VK_IMAGE_LAYOUT_GENERAL;
-			OutAccessMask |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-			if (InQueueType == EQueueType::Graphics) {
-				OutStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-			}else if (InQueueType == EQueueType::Compute) {
-				OutStageMask |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			outLayout = VK_IMAGE_LAYOUT_GENERAL;
+			outAccessMask |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+			if (inQueueType == EQueueType::Graphics) {
+				outStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			}else if (inQueueType == EQueueType::Compute) {
+				outStageMask |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 			}
 		}
-		if (EnumHasAnyFlags(InAccess, ERHIResourceAccess::DSVWrite))
+		if (EnumHasAnyFlags(inAccess, ERHIResourceAccess::DSVWrite))
 		{
-			OutLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-			OutAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-			OutStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+			outLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			outAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+			outStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 		}
-		if (EnumHasAnyFlags(InAccess, ERHIResourceAccess::TransferDest))
+		if (EnumHasAnyFlags(inAccess, ERHIResourceAccess::TransferDest))
 		{
-			OutLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			OutAccessMask |= VK_ACCESS_TRANSFER_WRITE_BIT;
-			OutStageMask |= VK_PIPELINE_STAGE_TRANSFER_BIT;
-		}
-
-		// --- Buffer ����״̬�Ƶ� ---
-		if (EnumHasAnyFlags(InAccess, ERHIResourceAccess::VertexOrIndexBuffer))
-		{
-			OutAccessMask |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_INDEX_READ_BIT;
-			OutStageMask |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
-		}
-		if (EnumHasAnyFlags(InAccess, ERHIResourceAccess::IndirectArgs))
-		{
-			OutAccessMask |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-			OutStageMask |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
-		}
-		if (EnumHasAnyFlags(InAccess, ERHIResourceAccess::Present))
-		{
-			OutLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-			OutStageMask |= VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+			outLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			outAccessMask |= VK_ACCESS_TRANSFER_WRITE_BIT;
+			outStageMask |= VK_PIPELINE_STAGE_TRANSFER_BIT;
 		}
 
-		// ��Է�������Դ������
+		// Buffer access and pipeline stage masks.
+		if (EnumHasAnyFlags(inAccess, ERHIResourceAccess::VertexOrIndexBuffer))
+		{
+			outAccessMask |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_INDEX_READ_BIT;
+			outStageMask |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+		}
+		if (EnumHasAnyFlags(inAccess, ERHIResourceAccess::IndirectArgs))
+		{
+			outAccessMask |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+			outStageMask |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+		}
+		if (EnumHasAnyFlags(inAccess, ERHIResourceAccess::Present))
+		{
+			outLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			outStageMask |= VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+		}
+
+		// Buffers have no image layout.
 		if (!bIsTexture)
 		{
-			OutLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			outLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		}
 	}
 
@@ -161,9 +161,9 @@ namespace RHIVulkan {
 		uint32_t numMips,
 		uint32_t numLayers,
 		VkImageAspectFlags)
-		: NumMips(numMips)
-		, NumLayers(numLayers)
-		, MainLayout(initial)
+		: m_NumMips(numMips)
+		, m_NumLayers(numLayers)
+		, m_MainLayout(initial)
 	{
 
 	}
@@ -171,23 +171,23 @@ namespace RHIVulkan {
 
 	bool VulkanImageLayout::IsUniform() const
 	{
-		return SubresourceLayouts.empty();
+		return m_SubresourceLayouts.empty();
 	}
 
 
 	uint32_t VulkanImageLayout::Index(uint32_t mip, uint32_t layer) const
 	{
-		return layer * NumMips + mip;
+		return layer * m_NumMips + mip;
 	}
 
 
 	VkImageLayout VulkanImageLayout::Get(uint32_t mip, uint32_t layer) const
 	{
-		if (SubresourceLayouts.empty())
-			return MainLayout;
+		if (m_SubresourceLayouts.empty())
+			return m_MainLayout;
 
 
-		return SubresourceLayouts[Index(mip, layer)];
+		return m_SubresourceLayouts[Index(mip, layer)];
 	}
 
 
@@ -195,25 +195,25 @@ namespace RHIVulkan {
 	{
 		uint32_t baseMip = range.baseMipLevel;
 		uint32_t mipCount = range.levelCount == VK_REMAINING_MIP_LEVELS
-			? NumMips - baseMip
+			? m_NumMips - baseMip
 			: range.levelCount;
 
 
 		uint32_t baseLayer = range.baseArrayLayer;
 		uint32_t layerCount = range.layerCount == VK_REMAINING_ARRAY_LAYERS
-			? NumLayers - baseLayer
+			? m_NumLayers - baseLayer
 			: range.layerCount;
 
 
-		if (SubresourceLayouts.empty())
+		if (m_SubresourceLayouts.empty())
 		{
-			SubresourceLayouts.resize(NumMips * NumLayers, MainLayout);
+			m_SubresourceLayouts.resize(m_NumMips * m_NumLayers, m_MainLayout);
 		}
 
 
 		for (uint32_t l = 0; l < layerCount; ++l)
 			for (uint32_t m = 0; m < mipCount; ++m)
-				SubresourceLayouts[Index(baseMip + m, baseLayer + l)] = layout;
+				m_SubresourceLayouts[Index(baseMip + m, baseLayer + l)] = layout;
 
 
 		CollapseIfPossible();
@@ -222,37 +222,37 @@ namespace RHIVulkan {
 
 	void VulkanImageLayout::CollapseIfPossible()
 	{
-		if (SubresourceLayouts.empty())
+		if (m_SubresourceLayouts.empty())
 			return;
 
 
-		VkImageLayout first = SubresourceLayouts[0];
-		for (auto l : SubresourceLayouts)
+		VkImageLayout first = m_SubresourceLayouts[0];
+		for (auto l : m_SubresourceLayouts)
 		{
 			if (l != first)
 				return;
 		}
 
 
-		MainLayout = first;
-		SubresourceLayouts.clear();
+		m_MainLayout = first;
+		m_SubresourceLayouts.clear();
 	}
 
 
 
 	VulkanImageLayoutManager::VulkanImageLayoutManager(VulkanImageLayoutManager* fallback)
-		: Fallback(fallback)
+		: m_Fallback(fallback)
 	{
 	}
 
 
 	const VulkanImageLayout* VulkanImageLayoutManager::GetFullLayout(VkImage image) const
 	{
-		auto it = Layouts.find(image);
-		if (it != Layouts.end())
+		auto it = m_Layouts.find(image);
+		if (it != m_Layouts.end())
 			return &it->second;
 
-		return Fallback ? Fallback->GetFullLayout(image) : nullptr;
+		return m_Fallback ? m_Fallback->GetFullLayout(image) : nullptr;
 	}
 
 
@@ -264,7 +264,7 @@ namespace RHIVulkan {
 
 	void VulkanImageLayoutManager::SetFullLayout(VkImage image, const VulkanImageLayout& layout)
 	{
-		Layouts[image] = layout;
+		m_Layouts[image] = layout;
 	}
 
 
@@ -290,21 +290,21 @@ namespace RHIVulkan {
 		VkImageLayout layout,
 		const VkImageSubresourceRange& range)
 	{
-		auto& imgLayout = Layouts[texture->GetImage()];
+		auto& imgLayout = m_Layouts[texture->GetImage()];
 		imgLayout.Set(layout, range);
 	}
 
 
 	void VulkanImageLayoutManager::TransferTo(VulkanImageLayoutManager& dst)
 	{
-		for (auto& it : Layouts)
-			dst.Layouts[it.first] = it.second;
+		for (auto& it : m_Layouts)
+			dst.m_Layouts[it.first] = it.second;
 	}
 
 
 	void VulkanImageLayoutManager::Remove(VkImage image)
 	{
-		Layouts.erase(image);
+		m_Layouts.erase(image);
 	}
 
 	void VulkanImageLayoutManager::NotifyDeletedImage(VkImage image)
@@ -314,7 +314,7 @@ namespace RHIVulkan {
 #ifdef DEBUG_INFO
 	void VulkanImageLayoutManager::PrintLayoutInfo()
 	{
-		for (const auto& pair : Layouts)
+		for (const auto& pair : m_Layouts)
 		{
 			VkImage image = pair.first;
 			const VulkanImageLayout& layout = pair.second;
@@ -333,7 +333,7 @@ namespace RHIVulkan {
 #endif
 	void VulkanPipelineBarrier::Push(const VkImageMemoryBarrier& barrier)
 	{
-		ImageBarriers.push_back(barrier);
+		m_ImageBarriers.push_back(barrier);
 	}
 
 	void VulkanPipelineBarrier::TransitionLayout(
@@ -504,26 +504,26 @@ namespace RHIVulkan {
         VkMemoryBarrier barrier{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
         barrier.srcAccessMask = TransformResourceAccess(before);
         barrier.dstAccessMask = TransformResourceAccess(after);
-        MemoryBarriers.push_back(barrier);
+        m_MemoryBarriers.push_back(barrier);
     }
 
 	void VulkanPipelineBarrier::Execute(
 		VulkanCommandBuffer* cmd)
 	{
-		if (ImageBarriers.empty() && MemoryBarriers.empty())
+		if (m_ImageBarriers.empty() && m_MemoryBarriers.empty())
 			return;
 		VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 		VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
-		for (int i = 0; i < ImageBarriers.size(); i++) 
+		for (int i = 0; i < m_ImageBarriers.size(); i++)
 		{
 			VkAccessFlags srcAccess;
 			VkAccessFlags dstAccess;
 			VkPipelineStageFlags srcCurStage;
             VkPipelineStageFlags dstCurStage;
 				
-			GetVulkanBarrierMasksByLayout(ImageBarriers[i].oldLayout, srcAccess, srcCurStage);
-			GetVulkanBarrierMasksByLayout(ImageBarriers[i].newLayout, dstAccess, dstCurStage);
+			GetVulkanBarrierMasksByLayout(m_ImageBarriers[i].oldLayout, srcAccess, srcCurStage);
+			GetVulkanBarrierMasksByLayout(m_ImageBarriers[i].newLayout, dstAccess, dstCurStage);
 			srcStage |= srcCurStage;
             dstStage |= dstCurStage;
 
@@ -533,23 +533,23 @@ namespace RHIVulkan {
 			srcStage,
 			dstStage,
 			0,
-			static_cast<uint32_t>(MemoryBarriers.size()), MemoryBarriers.data(),
+			static_cast<uint32_t>(m_MemoryBarriers.size()), m_MemoryBarriers.data(),
 			0, nullptr,
-			static_cast<uint32_t>(ImageBarriers.size()),
-			ImageBarriers.data());
-		ImageBarriers.clear();
-        MemoryBarriers.clear();
+			static_cast<uint32_t>(m_ImageBarriers.size()),
+			m_ImageBarriers.data());
+		m_ImageBarriers.clear();
+        m_MemoryBarriers.clear();
 	}
 
 	VkImageSubresourceRange VulkanPipelineBarrier::MakeSubresourceRange(VkImageAspectFlags aspectMask, uint32_t baseMip, uint32_t mipCount, uint32_t baseLayer, uint32_t layerCount)
 	{
-		VkImageSubresourceRange Range;
-		Range.aspectMask = aspectMask;
-		Range.baseMipLevel = baseMip;
-		Range.levelCount = mipCount;
-		Range.baseArrayLayer = baseLayer;
-		Range.layerCount = layerCount;
-		return Range;
+		VkImageSubresourceRange range;
+		range.aspectMask = aspectMask;
+		range.baseMipLevel = baseMip;
+		range.levelCount = mipCount;
+		range.baseArrayLayer = baseLayer;
+		range.layerCount = layerCount;
+		return range;
 	}
 
 	VkImageLayout DetermineImageLayout(ERHIResourceAccess access, bool bIsDepthStencil)

@@ -48,7 +48,7 @@ namespace RHIVulkan {
 
     inline VkDescriptorType GetDescriptorTypeByPoolIndex(uint32_t index)
     {
-        static const std::array<VkDescriptorType, VK_DESCRIPTOR_TYPE_POOL_INDEX_COUNT> DescriptorTypePoolIndexMap = {
+        static const std::array<VkDescriptorType, VK_DESCRIPTOR_TYPE_POOL_INDEX_COUNT> descriptorTypePoolIndexMap = {
             VK_DESCRIPTOR_TYPE_SAMPLER,
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -63,7 +63,7 @@ namespace RHIVulkan {
             VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
         };
 
-        return index < DescriptorTypePoolIndexMap.size() ? DescriptorTypePoolIndexMap[index] : VK_DESCRIPTOR_TYPE_MAX_ENUM;
+        return index < descriptorTypePoolIndexMap.size() ? descriptorTypePoolIndexMap[index] : VK_DESCRIPTOR_TYPE_MAX_ENUM;
     }
     class VulkanCommandBuffer;
     //------------------------------------------------------------
@@ -83,7 +83,7 @@ namespace RHIVulkan {
     //------------------------------------------------------------
     struct DescriptorSetLayoutInfo
     {
-        std::vector<DescriptorSetBinding> bindings;
+        std::vector<DescriptorSetBinding> Bindings;
         static uint64_t CalculateHash(const DescriptorSetLayoutInfo& info);
         void AddBinding(uint32_t binding, VkDescriptorType type, uint32_t count, VkShaderStageFlags stageFlags);
     };
@@ -115,11 +115,11 @@ namespace RHIVulkan {
     private:
         friend class TypedDescriptorPool;
 		friend class VulkanDescriptorSetManager;
-        VulkanDevice* Device;
-        uint32_t MaxDescriptorSets;
-        std::array<float, VK_DESCRIPTOR_TYPE_POOL_INDEX_COUNT> PoolSizes{};
-        VkDescriptorPool Pool = VK_NULL_HANDLE;
-        uint32_t AllocatedCount = 0;
+        VulkanDevice* m_Device;
+        uint32_t m_MaxDescriptorSets;
+        std::array<float, VK_DESCRIPTOR_TYPE_POOL_INDEX_COUNT> m_PoolSizes{};
+        VkDescriptorPool m_Pool = VK_NULL_HANDLE;
+        uint32_t m_AllocatedCount = 0;
     };
 
     class TypedDescriptorPool
@@ -134,12 +134,12 @@ namespace RHIVulkan {
 
         VkDescriptorSet Allocate();
     private:
-        VulkanDevice* Device;
-        VkDescriptorSetLayout Layout;
-        DescriptorSetLayoutInfo LayoutInfo;
-        uint32_t MaxSetsPerPool;
+        VulkanDevice* m_Device;
+        VkDescriptorSetLayout m_Layout;
+        DescriptorSetLayoutInfo m_LayoutInfo;
+        uint32_t m_MaxSetsPerPool;
         friend class VulkanDescriptorSetManager;
-        std::vector<std::unique_ptr<VulkanDescriptorPool>> Pools;
+        std::vector<std::unique_ptr<VulkanDescriptorPool>> m_Pools;
     };
  
 
@@ -154,8 +154,8 @@ namespace RHIVulkan {
         VkDescriptorSetLayout GetOrCreateLayout(const DescriptorSetLayoutInfo& info);
 
     private:
-        VulkanDevice* Device;
-        std::unordered_map<uint64_t, VkDescriptorSetLayout> LayoutMap;
+        VulkanDevice* m_Device;
+        std::unordered_map<uint64_t, VkDescriptorSetLayout> m_LayoutMap;
     };
 
 
@@ -175,8 +175,8 @@ namespace RHIVulkan {
         
     private:
         struct PendingDescriptorSetsInfo {
-            std::vector<VkDescriptorSet> pendingSets;
-            std::vector<uint32_t> pendingDynamicOffsets;
+            std::vector<VkDescriptorSet> PendingSets;
+            std::vector<uint32_t> PendingDynamicOffsets;
             VulkanCommandBuffer* CmdBuffer = nullptr;
         };
         struct AllocatedSets {
@@ -184,13 +184,13 @@ namespace RHIVulkan {
             std::set<VkDescriptorSet> FreeSets;
         };
 
-        VulkanDevice* Device;
-        VulkanDescriptorSetLayoutManager* LayoutCache;
-        std::unordered_map<uint64_t, AllocatedSets> LayoutAllocatedSetsMap;
-        std::unordered_map<VkDescriptorSet, uint64_t> DescriptorSetLayoutHashMap;
+        VulkanDevice* m_Device;
+        VulkanDescriptorSetLayoutManager* m_LayoutCache;
+        std::unordered_map<uint64_t, AllocatedSets> m_LayoutAllocatedSetsMap;
+        std::unordered_map<VkDescriptorSet, uint64_t> m_DescriptorSetLayoutHashMap;
 
-        std::list<PendingDescriptorSetsInfo> PendingFreeSetInfos;
-        std::unordered_map<uint64_t, std::unique_ptr<TypedDescriptorPool>> LayoutDescriptorPoolMap;
+        std::list<PendingDescriptorSetsInfo> m_PendingFreeSetInfos;
+        std::unordered_map<uint64_t, std::unique_ptr<TypedDescriptorPool>> m_LayoutDescriptorPoolMap;
     };
 
     class VulkanDescriptorWriter
@@ -198,13 +198,13 @@ namespace RHIVulkan {
     public:
         void Reset()
         {
-            Writes.clear();
-            ImageInfos.clear();
-            BufferInfos.clear();
-            BufferViews.clear();
-            AccelerationStructureInfos.clear();
-            AccelerationStructures.clear();
-            Dirty = false;
+            m_Writes.clear();
+            m_ImageInfos.clear();
+            m_BufferInfos.clear();
+            m_BufferViews.clear();
+            m_AccelerationStructureInfos.clear();
+            m_AccelerationStructures.clear();
+            m_bDirty = false;
         }
 
         void WriteImage(VkDescriptorSet set,
@@ -215,7 +215,7 @@ namespace RHIVulkan {
             VkImageLayout layout,
             VkSampler sampler = VK_NULL_HANDLE)
         {
-            VkDescriptorImageInfo& info = ImageInfos.emplace_back();
+            VkDescriptorImageInfo& info = m_ImageInfos.emplace_back();
             info.imageView = view;
             info.imageLayout = layout;
             info.sampler = sampler;
@@ -228,8 +228,8 @@ namespace RHIVulkan {
             write.descriptorCount = 1;
             write.pImageInfo = &info;
 
-            Writes.push_back(write);
-            Dirty = true;
+            m_Writes.push_back(write);
+            m_bDirty = true;
         }
 
         void WriteBuffer(VkDescriptorSet set,
@@ -240,7 +240,7 @@ namespace RHIVulkan {
             VkDeviceSize offset,
             VkDeviceSize range)
         {
-            VkDescriptorBufferInfo& info = BufferInfos.emplace_back();
+            VkDescriptorBufferInfo& info = m_BufferInfos.emplace_back();
             info.buffer = buffer;
             info.offset = offset;
             info.range = range;
@@ -253,8 +253,8 @@ namespace RHIVulkan {
             write.descriptorCount = 1;
             write.pBufferInfo = &info;
 
-            Writes.push_back(write);
-            Dirty = true;
+            m_Writes.push_back(write);
+            m_bDirty = true;
         }
         void WriteTexelBuffer(VkDescriptorSet set,uint32_t binding, uint32_t element, VkDescriptorType type, VkBufferView view)
         {
@@ -264,10 +264,10 @@ namespace RHIVulkan {
             write.dstArrayElement = element;
             write.descriptorType = type;
             write.descriptorCount = 1;
-            BufferViews.push_back(view);
-            write.pTexelBufferView = &BufferViews.back();
-            Writes.push_back(write);
-            Dirty = true;
+            m_BufferViews.push_back(view);
+            write.pTexelBufferView = &m_BufferViews.back();
+            m_Writes.push_back(write);
+            m_bDirty = true;
         }
 
         void WriteAccelerationStructure(VkDescriptorSet set, uint32_t binding, uint32_t element, VkDescriptorType type, VkAccelerationStructureKHR accelerationStructure)
@@ -279,38 +279,38 @@ namespace RHIVulkan {
             write.descriptorType = type;
             write.descriptorCount = 1;
 
-            auto& structure = AccelerationStructures.emplace_back(accelerationStructure);
-            auto& info = AccelerationStructureInfos.emplace_back();
+            auto& structure = m_AccelerationStructures.emplace_back(accelerationStructure);
+            auto& info = m_AccelerationStructureInfos.emplace_back();
             info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
             info.accelerationStructureCount = 1;
             info.pAccelerationStructures = &structure;
             write.pNext = &info;
 
-            Writes.push_back(write);
-            Dirty = true;
+            m_Writes.push_back(write);
+            m_bDirty = true;
         }
 
         void Update(VkDevice device)
         {
 
             VKFunc::UpdateDescriptorSets(device,
-                (uint32_t)Writes.size(),
-                Writes.data(),
+                (uint32_t)m_Writes.size(),
+                m_Writes.data(),
                 0, nullptr);
 
-            Dirty = false;
+            m_bDirty = false;
         }
 
-        bool IsDirty() const { return Dirty; }
+        bool IsDirty() const { return m_bDirty; }
 
     private:
-        std::vector<VkWriteDescriptorSet> Writes;
-        std::deque<VkDescriptorImageInfo> ImageInfos;
-        std::deque<VkDescriptorBufferInfo> BufferInfos;
-        std::deque<VkBufferView> BufferViews;
-        std::deque<VkWriteDescriptorSetAccelerationStructureKHR> AccelerationStructureInfos;
-        std::deque<VkAccelerationStructureKHR> AccelerationStructures;
-        bool Dirty = false;
+        std::vector<VkWriteDescriptorSet> m_Writes;
+        std::deque<VkDescriptorImageInfo> m_ImageInfos;
+        std::deque<VkDescriptorBufferInfo> m_BufferInfos;
+        std::deque<VkBufferView> m_BufferViews;
+        std::deque<VkWriteDescriptorSetAccelerationStructureKHR> m_AccelerationStructureInfos;
+        std::deque<VkAccelerationStructureKHR> m_AccelerationStructures;
+        bool m_bDirty = false;
     };
 
 

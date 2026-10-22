@@ -57,33 +57,33 @@ namespace RHIVulkan
         if (Memory)
             VKFunc::FreeMemory(Device, Memory);
     }
-    VulkanTransientResourceManager::VulkanTransientResourceManager(VulkanDevice* device) : Device(device)
+    VulkanTransientResourceManager::VulkanTransientResourceManager(VulkanDevice* device) : m_Device(device)
     {
     }
     VulkanTransientResourceManager::~VulkanTransientResourceManager()
     {
-        WaitForGPU(Device);
+        WaitForGPU(m_Device);
         ClearResources();
     }
     std::shared_ptr<RHI::RHITransientHeap> VulkanTransientResourceManager::CreateHeap(uint64_t size,
                                                                                       uint64_t memoryClass)
     {
-        return std::make_shared<VulkanTransientHeap>(Device, size, memoryClass);
+        return std::make_shared<VulkanTransientHeap>(m_Device, size, memoryClass);
     }
     RHI::RHITextureSP VulkanTransientResourceManager::CreateTextureInternal(const RHI::RHITextureDesc& desc)
     {
-        std::shared_ptr<VulkanTexture> texture(new VulkanTexture(Device, desc, true),
-                                               DeleteTransientResource<VulkanTexture>{Device});
+        std::shared_ptr<VulkanTexture> texture(new VulkanTexture(m_Device, desc, true),
+                                               DeleteTransientResource<VulkanTexture>{m_Device});
         if (!texture->GetImage())
             throw std::runtime_error("Failed to create transient Vulkan image");
         VkMemoryRequirements requirements{};
-        VKFunc::GetImageMemoryRequirements(Device->GetHandle(), texture->GetImage(), &requirements);
+        VKFunc::GetImageMemoryRequirements(m_Device->GetHandle(), texture->GetImage(), &requirements);
         const uint64_t memoryClass =
-            ImageClass | Device->FindMemoryType(requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+            ImageClass | m_Device->FindMemoryType(requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         const auto allocation =
             NativeAllocation(AllocateMemory(requirements.size, requirements.alignment, memoryClass));
         texture->SetTransientAllocation(allocation);
-        if (!VKFunc::BindImageMemory(Device->GetHandle(), texture->GetImage(), allocation.Heap->Memory,
+        if (!VKFunc::BindImageMemory(m_Device->GetHandle(), texture->GetImage(), allocation.Heap->Memory,
                                      allocation.Offset))
             throw std::runtime_error("Failed to bind transient Vulkan image");
         texture->CreateDefaultView();
@@ -93,29 +93,29 @@ namespace RHIVulkan
     }
     RHI::RHIBufferSP VulkanTransientResourceManager::CreateBufferInternal(const RHI::RHIBufferDesc& desc)
     {
-        std::shared_ptr<VulkanBuffer> buffer(new VulkanBuffer(Device, desc, true),
-                                             DeleteTransientResource<VulkanBuffer>{Device});
+        std::shared_ptr<VulkanBuffer> buffer(new VulkanBuffer(m_Device, desc, true),
+                                             DeleteTransientResource<VulkanBuffer>{m_Device});
         if (!buffer->GetHandle())
             throw std::runtime_error("Failed to create transient Vulkan buffer");
         VkMemoryRequirements requirements{};
-        VKFunc::GetBufferMemoryRequirements(Device->GetHandle(), buffer->GetHandle(), &requirements);
+        VKFunc::GetBufferMemoryRequirements(m_Device->GetHandle(), buffer->GetHandle(), &requirements);
         const bool host = desc.bCPUAccessible || EnumHasAnyFlags(desc.Usage, RHI::ERHIBufferUsageFlag::Staging);
         const auto properties = host ? VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
                                      : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        uint64_t memoryClass = Device->FindMemoryType(requirements.memoryTypeBits, properties);
+        uint64_t memoryClass = m_Device->FindMemoryType(requirements.memoryTypeBits, properties);
         if (TransformBufferUsageFlagsFrom(desc.Usage) & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
             memoryClass |= AddressClass;
         const auto allocation =
             NativeAllocation(AllocateMemory(requirements.size, requirements.alignment, memoryClass));
         buffer->SetTransientAllocation(allocation);
-        if (!VKFunc::BindBufferMemory(Device->GetHandle(), buffer->GetHandle(), allocation.Heap->Memory,
+        if (!VKFunc::BindBufferMemory(m_Device->GetHandle(), buffer->GetHandle(), allocation.Heap->Memory,
                                       allocation.Offset))
             throw std::runtime_error("Failed to bind transient Vulkan buffer");
         return buffer;
     }
     bool VulkanTransientResourceManager::CanRecycle(RHI::RHIViewableResource&)
     {
-        WaitForGPU(Device);
+        WaitForGPU(m_Device);
         return true;
     }
 } // namespace RHIVulkan

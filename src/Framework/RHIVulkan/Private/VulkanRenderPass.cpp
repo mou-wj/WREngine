@@ -3,7 +3,7 @@
 #include "VulkanRHIUtils.h"
 #include "VulkanCommandBuffer.h"
 namespace RHIVulkan {
-    // Helper: �� ERenderTargetActions ת��Ϊ VkAttachmentLoadOp / VkAttachmentStoreOp
+    // Map render target actions to Vulkan load and store operations.
     inline VkAttachmentLoadOp RTActionToLoadOp(ERenderTargetActions action)
     {
         uint8_t load = uint8_t(action) >> uint8_t(ERenderTargetActions::LoadOpShift);
@@ -23,7 +23,7 @@ namespace RHIVulkan {
         {
         case uint8_t(ERenderTargetStoreOp::DontCare): return VK_ATTACHMENT_STORE_OP_DONT_CARE;
         case uint8_t(ERenderTargetStoreOp::Store):    return VK_ATTACHMENT_STORE_OP_STORE;
-        case uint8_t(ERenderTargetStoreOp::Resolve):  return VK_ATTACHMENT_STORE_OP_STORE; // Resolve ���� resolve attachment
+        case uint8_t(ERenderTargetStoreOp::Resolve):  return VK_ATTACHMENT_STORE_OP_STORE; // Resolve targets use a separate attachment.
         default: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
         }
     }
@@ -31,16 +31,16 @@ namespace RHIVulkan {
     // ----------------------------
 // Reset
 // ----------------------------
-    void VulkanRenderTargetLayout::resetAttachments()
+    void VulkanRenderTargetLayout::ResetAttachments()
     {
-        attachmentDescCount = 0;
-        numColorAttachments = 0;
-        hasDepthStencil = false;
-        hasResolveAttachments = false;
+        m_AttachmentDescCount = 0;
+        m_NumColorAttachments = 0;
+        m_bHasDepthStencil = false;
+        m_bHasResolveAttachments = false;
 
-        std::fill(std::begin(colorRefs), std::end(colorRefs), VkAttachmentReference{ VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED });
-        std::fill(std::begin(resolveRefs), std::end(resolveRefs), VkAttachmentReference{ VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED });
-        depthRef = { VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED };
+        std::fill(std::begin(m_ColorRefs), std::end(m_ColorRefs), VkAttachmentReference{ VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED });
+        std::fill(std::begin(m_ResolveRefs), std::end(m_ResolveRefs), VkAttachmentReference{ VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED });
+        m_DepthRef = { VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED };
     }
 
     // ----------------------------
@@ -48,24 +48,24 @@ namespace RHIVulkan {
     // ----------------------------
     VulkanRenderTargetLayout::VulkanRenderTargetLayout(const RHIGraphicAttachmentDesc& desc)
     {
-        resetAttachments();
-        numColorAttachments = desc.ColorAttachmentCount;
+        ResetAttachments();
+        m_NumColorAttachments = desc.ColorAttachmentCount;
 
-        parseColorAttachments(desc);
-        parseResolveAttachments(desc);
-        parseDepthAttachment(desc);
-        calculateHashes(desc);
+        ParseColorAttachments(desc);
+        ParseResolveAttachments(desc);
+        ParseDepthAttachment(desc);
+        CalculateHashes(desc);
     }
 
     // ----------------------------
     // Color Attachments
     // ----------------------------
-    void VulkanRenderTargetLayout::parseColorAttachments(const RHIGraphicAttachmentDesc& desc)
+    void VulkanRenderTargetLayout::ParseColorAttachments(const RHIGraphicAttachmentDesc& desc)
     {
         for (uint32_t i = 0; i < desc.ColorAttachmentCount; ++i)
         {
             const auto& src = desc.ColorAttachments[i];
-            VkAttachmentDescription& dst = attachmentDescs[attachmentDescCount];
+            VkAttachmentDescription& dst = m_AttachmentDescs[m_AttachmentDescCount];
 
             dst.flags = 0;
             dst.format =  TransformFormatFrom(src.Format);
@@ -80,27 +80,27 @@ namespace RHIVulkan {
             dst.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             dst.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-            colorRefs[i].attachment = attachmentDescCount;
-            colorRefs[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            m_ColorRefs[i].attachment = m_AttachmentDescCount;
+            m_ColorRefs[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-            attachmentDescCount++;
+            m_AttachmentDescCount++;
         }
     }
 
     // ----------------------------
     // Resolve Attachments
     // ----------------------------
-    void VulkanRenderTargetLayout::parseResolveAttachments(const RHIGraphicAttachmentDesc& desc)
+    void VulkanRenderTargetLayout::ParseResolveAttachments(const RHIGraphicAttachmentDesc& desc)
     {
         for (uint32_t i = 0; i < desc.ColorAttachmentCount; ++i)
         {
             const auto& src = desc.ColorAttachments[i];
             if (src.bEnableResolve)
             {
-                VkAttachmentDescription& dst = attachmentDescs[attachmentDescCount];
+                VkAttachmentDescription& dst = m_AttachmentDescs[m_AttachmentDescCount];
 
                 dst.flags = 0;
-                dst.format = static_cast<VkFormat>(src.Format); // ����Ϊ resolve Ŀ���ʽ
+                dst.format = static_cast<VkFormat>(src.Format); // Format of the resolve target.
                 dst.samples = VK_SAMPLE_COUNT_1_BIT;
                 dst.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 dst.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -109,15 +109,15 @@ namespace RHIVulkan {
                 dst.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
                 dst.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-                resolveRefs[i].attachment = attachmentDescCount;
-                resolveRefs[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                m_ResolveRefs[i].attachment = m_AttachmentDescCount;
+                m_ResolveRefs[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-                hasResolveAttachments = true;
-                attachmentDescCount++;
+                m_bHasResolveAttachments = true;
+                m_AttachmentDescCount++;
             }
             else
             {
-                resolveRefs[i].attachment = VK_ATTACHMENT_UNUSED;
+                m_ResolveRefs[i].attachment = VK_ATTACHMENT_UNUSED;
             }
         }
     }
@@ -125,11 +125,11 @@ namespace RHIVulkan {
     // ----------------------------
     // Depth Attachment
     // ----------------------------
-    void VulkanRenderTargetLayout::parseDepthAttachment(const RHIGraphicAttachmentDesc& desc)
+    void VulkanRenderTargetLayout::ParseDepthAttachment(const RHIGraphicAttachmentDesc& desc)
     {
         if (desc.bEnableDepth || desc.bEnableStencil)
         {
-            VkAttachmentDescription& dst = attachmentDescs[attachmentDescCount];
+            VkAttachmentDescription& dst = m_AttachmentDescs[m_AttachmentDescCount];
 
             dst.flags = 0;
             dst.format = TransformFormatFrom(desc.DepthStencilFormat);
@@ -144,64 +144,64 @@ namespace RHIVulkan {
             dst.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             dst.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-            depthRef.attachment = attachmentDescCount;
-            depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            m_DepthRef.attachment = m_AttachmentDescCount;
+            m_DepthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-            hasDepthStencil = true;
-            attachmentDescCount++;
+            m_bHasDepthStencil = true;
+            m_AttachmentDescCount++;
         }
     }
 
     // ----------------------------
-    // Hash ����
+    // Calculate render pass hashes.
     // ----------------------------
-    void VulkanRenderTargetLayout::calculateHashes(const RHIGraphicAttachmentDesc& desc)
+    void VulkanRenderTargetLayout::CalculateHashes(const RHIGraphicAttachmentDesc& desc)
     {
-        // Compatible Hash��ֻ�� format / count / samples��
+        // Compatibility hash: attachment count, formats and sample counts.
         size_t hash = 14695981039346656037ull;
-        hash ^= static_cast<uint64_t>(numColorAttachments); hash *= 1099511628211ull;
-        for (uint32_t i = 0; i < numColorAttachments; ++i)
+        hash ^= static_cast<uint64_t>(m_NumColorAttachments); hash *= 1099511628211ull;
+        for (uint32_t i = 0; i < m_NumColorAttachments; ++i)
             hash ^= RHIColorAttachmentDesc::CalculateHash(desc.ColorAttachments[i]), hash *= 1099511628211ull;
 
-        hash ^= static_cast<uint64_t>(hasDepthStencil); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(m_bHasDepthStencil); hash *= 1099511628211ull;
         hash ^= static_cast<uint64_t>(desc.DepthStencilFormat); hash *= 1099511628211ull;
         hash ^= static_cast<uint64_t>(desc.NumSamples); hash *= 1099511628211ull;
 
-        renderPassCompatibleHash = hash;
+        m_RenderPassCompatibleHash = hash;
 
-        // Full Hash������ Load/Store/Resolve��
+        // Full hash includes load, store and resolve actions.
         hash = 14695981039346656037ull;
-        hash ^= static_cast<uint64_t>(numColorAttachments); hash *= 1099511628211ull;
-        for (uint32_t i = 0; i < numColorAttachments; ++i)
+        hash ^= static_cast<uint64_t>(m_NumColorAttachments); hash *= 1099511628211ull;
+        for (uint32_t i = 0; i < m_NumColorAttachments; ++i)
             hash ^= RHIColorAttachmentDesc::CalculateHash(desc.ColorAttachments[i]), hash *= 1099511628211ull;
 
-        hash ^= static_cast<uint64_t>(hasDepthStencil); hash *= 1099511628211ull;
+        hash ^= static_cast<uint64_t>(m_bHasDepthStencil); hash *= 1099511628211ull;
         hash ^= static_cast<uint64_t>(desc.DepthActions); hash *= 1099511628211ull;
         hash ^= static_cast<uint64_t>(desc.StencilActions); hash *= 1099511628211ull;
         hash ^= static_cast<uint64_t>(desc.DepthStencilFormat); hash *= 1099511628211ull;
         hash ^= static_cast<uint64_t>(desc.NumSamples); hash *= 1099511628211ull;
 
-        renderPassFullHash = hash;
+        m_RenderPassFullHash = hash;
     }
 
     // ---------------------------------------------------
     // VulkanRenderPass
     // ---------------------------------------------------
     VulkanRenderPass::VulkanRenderPass(VulkanDevice* device, const VulkanRenderTargetLayout& layout)
-        : Device(device), Layout(layout)
+        : m_Device(device), m_Layout(layout)
     {
-        assert(Device);
+        assert(m_Device);
 
-        auto attachments = layout.getAttachmentDescriptions();
-        auto attachmentCount = layout.getAttachmentDescriptionCount();
+        auto attachments = layout.GetAttachmentDescriptions();
+        auto attachmentCount = layout.GetAttachmentDescriptionCount();
 
 
         VkSubpassDescription subpass{};
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = layout.getNumColorAttachments();
-        subpass.pColorAttachments = layout.getColorAttachmentRefs();
-        if (layout.hasDepth())
-            subpass.pDepthStencilAttachment = layout.getDepthAttachmentRef();
+        subpass.colorAttachmentCount = layout.GetNumColorAttachments();
+        subpass.pColorAttachments = layout.GetColorAttachmentRefs();
+        if (layout.HasDepth())
+            subpass.pDepthStencilAttachment = layout.GetDepthAttachmentRef();
 
         VkRenderPassCreateInfo rpInfo{};
         rpInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -210,45 +210,45 @@ namespace RHIVulkan {
         rpInfo.subpassCount = 1;
         rpInfo.pSubpasses = &subpass;
 
-        bool result = VKFunc::CreateRenderPass(Device->GetHandle(), &rpInfo, &RenderPass);
+        bool result = VKFunc::CreateRenderPass(m_Device->GetHandle(), &rpInfo, &m_RenderPass);
         assert(result == true);
     }
 
     VulkanRenderPass::~VulkanRenderPass()
     {
-        if (RenderPass != VK_NULL_HANDLE && Device)
-            Device->EnqueueRenderPassForDeletion(RenderPass);
+        if (m_RenderPass != VK_NULL_HANDLE && m_Device)
+            m_Device->EnqueueRenderPassForDeletion(m_RenderPass);
     }
 
     // ---------------------------------------------------
     // VulkanFramebuffer
     // ---------------------------------------------------
     VulkanFramebuffer::VulkanFramebuffer(VulkanDevice* device, const RHIBoundRenderTargets& targetInfo, VulkanRenderPass* renderPass)
-        : Device(device)
+        : m_Device(device)
     {
 
-        NumColorAttachments = targetInfo.NumColorAttachments;
+        m_NumColorAttachments = targetInfo.NumColorAttachments;
         auto dimens = targetInfo.Dimensions;
-        Extent.width = dimens.X;
-        Extent.height = dimens.Y;
+        m_Extent.width = dimens.X;
+        m_Extent.height = dimens.Y;
 
         std::vector<VkImageView> vkViews;
 		VkImageViewCreateInfo viewInfo{};
-        vkViews.resize(NumColorAttachments + (targetInfo.HasDepth() ? 1 : 0));
-        attachmentViews.resize(NumColorAttachments + (targetInfo.HasDepth() ? 1 : 0));
-        // ���� ColorAttachments
-        for (uint32_t i = 0; i < NumColorAttachments; ++i)
+        vkViews.resize(m_NumColorAttachments + (targetInfo.HasDepth() ? 1 : 0));
+        m_AttachmentViews.resize(m_NumColorAttachments + (targetInfo.HasDepth() ? 1 : 0));
+        // Create views for color attachments.
+        for (uint32_t i = 0; i < m_NumColorAttachments; ++i)
         {
             VulkanTexture* tex = static_cast<VulkanTexture*>(targetInfo.ColorAttachments[i].Texture);
             assert(tex);
 
-            ColorImages.push_back(tex->GetImage());
-            // �½� FVulkanTextureView ������ ImageView
-            VulkanTextureView& view = attachmentViews[i];
+            m_ColorImages.push_back(tex->GetImage());
+            // Create an image view for this attachment.
+            VulkanTextureView& view = m_AttachmentViews[i];
             view.Create(
-                Device,                                 // fvulkan_device&
+                m_Device,                                 // fvulkan_device&
                 tex->GetImage(),                          // VkImage
-                VK_IMAGE_VIEW_TYPE_2D,                    // view type�����������
+                VK_IMAGE_VIEW_TYPE_2D,                    // Use a 2D image view.
                 VK_IMAGE_ASPECT_COLOR_BIT,   // aspect mask
                 TransformFormatFrom(tex->GetDesc().Format),    // VkFormat
                 targetInfo.ColorAttachments[i].MipIndex,                                        // first mip
@@ -267,10 +267,10 @@ namespace RHIVulkan {
             VulkanTexture* depthTex = static_cast<VulkanTexture*>(targetInfo.DepthStencil.Texture);
             assert(depthTex);
 
-            DepthImage = depthTex->GetImage();
-            VulkanTextureView& view = attachmentViews[NumColorAttachments];
+            m_DepthImage = depthTex->GetImage();
+            VulkanTextureView& view = m_AttachmentViews[m_NumColorAttachments];
             view.Create(
-                Device,
+                m_Device,
                 depthTex->GetImage(),
                 VK_IMAGE_VIEW_TYPE_2D,
                 VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -282,30 +282,30 @@ namespace RHIVulkan {
                 true
             );
 
-            vkViews[NumColorAttachments] = view.View;
+            vkViews[m_NumColorAttachments] = view.View;
         }
 
-        // ���� VkFramebuffer
+        // Create the Vulkan framebuffer.
         VkFramebufferCreateInfo fbInfo{};
         fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         fbInfo.renderPass = renderPass->GetHandle();
         fbInfo.attachmentCount = static_cast<uint32_t>(vkViews.size());
         fbInfo.pAttachments = vkViews.data();
-        fbInfo.width = Extent.width;
-        fbInfo.height = Extent.height;
+        fbInfo.width = m_Extent.width;
+        fbInfo.height = m_Extent.height;
         fbInfo.layers = 1;
 
-        bool result = VKFunc::CreateFramebuffer(Device->GetHandle(), &fbInfo, &Framebuffer);
+        bool result = VKFunc::CreateFramebuffer(m_Device->GetHandle(), &fbInfo, &m_Framebuffer);
         assert(result);
     }
 
     VulkanFramebuffer::~VulkanFramebuffer()
     {
-        if (Framebuffer != VK_NULL_HANDLE && Device)
-            Device->EnqueueFramebufferForDeletion(Framebuffer);
-        for (auto& view : attachmentViews) 
+        if (m_Framebuffer != VK_NULL_HANDLE && m_Device)
+            m_Device->EnqueueFramebufferForDeletion(m_Framebuffer);
+        for (auto& view : m_AttachmentViews)
         {
-            view.Destroy(Device);
+            view.Destroy(m_Device);
         }
 
 
@@ -317,50 +317,50 @@ namespace RHIVulkan {
     // VulkanRenderPassManager
     // ---------------------------------------------------
     VulkanRenderPassManager::VulkanRenderPassManager(VulkanDevice* device)
-        : Device(device)
+        : m_Device(device)
     {
     }
 
     VulkanRenderPassManager::~VulkanRenderPassManager()
     {
-        for (auto& kv : RenderPassCache)
+        for (auto& kv : m_RenderPassCache)
             delete kv.second;
-        for (auto& kv : FramebufferCache)
+        for (auto& kv : m_FramebufferCache)
             delete kv.second;
     }
 
     VulkanRenderPass* VulkanRenderPassManager::GetOrCreateRenderPass(const VulkanRenderTargetLayout& layout)
     {
-        std::lock_guard<std::mutex> lg(RenderPassMutex);
-        auto it = RenderPassCache.find(layout.getFullHash());
-        if (it != RenderPassCache.end())
+        std::lock_guard<std::mutex> lg(m_RenderPassMutex);
+        auto it = m_RenderPassCache.find(layout.GetFullHash());
+        if (it != m_RenderPassCache.end())
             return it->second;
 
-        VulkanRenderPass* rp = new VulkanRenderPass(Device, layout);
-        RenderPassCache[layout.getFullHash()] = rp;
+        VulkanRenderPass* rp = new VulkanRenderPass(m_Device, layout);
+        m_RenderPassCache[layout.GetFullHash()] = rp;
         return rp;
     }
 
     VulkanFramebuffer* VulkanRenderPassManager::GetOrCreateFramebuffer(const RHIBoundRenderTargets& passInfo, VulkanRenderPass* renderPass)
     {
-        std::lock_guard<std::mutex> lg(FramebufferMutex);
+        std::lock_guard<std::mutex> lg(m_FramebufferMutex);
         auto hash = CalcFramebufferHash(passInfo, renderPass);
-        auto it = FramebufferCache.find(hash);
-        if (it != FramebufferCache.end())
+        auto it = m_FramebufferCache.find(hash);
+        if (it != m_FramebufferCache.end())
             return it->second;
 
-        VulkanFramebuffer* fb = new VulkanFramebuffer(Device, passInfo,renderPass);
-        FramebufferCache[hash] = fb;
+        VulkanFramebuffer* fb = new VulkanFramebuffer(m_Device, passInfo,renderPass);
+        m_FramebufferCache[hash] = fb;
         return fb;
     }
-    std::vector<VkClearValue> GenerateClearValues(const RHIBoundRenderTargets& RenderTargets)
+    std::vector<VkClearValue> GenerateClearValues(const RHIBoundRenderTargets& renderTargets)
     {
-        std::vector<VkClearValue> ClearValues;
+        std::vector<VkClearValue> clearValues;
 
-        // 1. �������� color attachments
-        for (uint8_t i = 0; i < RenderTargets.NumColorAttachments; ++i)
+        // Collect clear values for color attachments.
+        for (uint8_t i = 0; i < renderTargets.NumColorAttachments; ++i)
         {
-            const auto& colorAtt = RenderTargets.ColorAttachments[i];
+            const auto& colorAtt = renderTargets.ColorAttachments[i];
             VkClearValue clearValue{};
 
             if (colorAtt.ClearBinding.Binding == RHIClearValueBinding::ClearValueBinding::Color)
@@ -372,19 +372,19 @@ namespace RHIVulkan {
             }
             else
             {
-                // �������Ҫ����������䣨Vulkan ����ԣ�
+                // Provide a clear-value slot even when the attachment does not clear.
                 clearValue.color.float32[0] = 0.f;
                 clearValue.color.float32[1] = 0.f;
                 clearValue.color.float32[2] = 0.f;
                 clearValue.color.float32[3] = 0.f;
             }
 
-            ClearValues.push_back(clearValue);
+            clearValues.push_back(clearValue);
         }
 
         // 2. Depth / Stencil attachment
         VkClearValue dsClear{};
-        const auto& dsAtt = RenderTargets.DepthStencil;
+        const auto& dsAtt = renderTargets.DepthStencil;
         if (dsAtt.ClearBinding.Binding == RHIClearValueBinding::ClearValueBinding::DepthStencil)
         {
             dsClear.depthStencil.depth = dsAtt.ClearBinding.Depth;
@@ -396,9 +396,9 @@ namespace RHIVulkan {
             dsClear.depthStencil.stencil = 0;
         }
 
-        ClearValues.push_back(dsClear);
+        clearValues.push_back(dsClear);
 
-        return ClearValues;
+        return clearValues;
     }
 
     RHIGraphicAttachmentDesc GetAttachmentDesc(const RHIBoundRenderTargets& renderTargets) {
@@ -506,7 +506,7 @@ namespace RHIVulkan {
         renderPassBeginInfo.framebuffer = frameBuffer->GetHandle();
         renderPassBeginInfo.renderArea.offset = { renderPassInfo.RenderArea.X, renderPassInfo.RenderArea.Y };
         renderPassBeginInfo.renderArea.extent = { renderPassInfo.RenderArea.Width, renderPassInfo.RenderArea.Height };
-        renderPassBeginInfo.clearValueCount = renderTargrtInfo.getAttachmentDescriptionCount();
+        renderPassBeginInfo.clearValueCount = renderTargrtInfo.GetAttachmentDescriptionCount();
 		auto clearValues = GenerateClearValues(renderPassInfo.RenderTargets);
         renderPassBeginInfo.pClearValues = clearValues.data();
 
@@ -520,15 +520,15 @@ namespace RHIVulkan {
 
     void VulkanRenderPassManager::NotifyDeletedImage(VkImage image)
     {
-        std::lock_guard<std::mutex> lg(FramebufferMutex);
-        for (auto it = FramebufferCache.begin(); it != FramebufferCache.end();)
+        std::lock_guard<std::mutex> lg(m_FramebufferMutex);
+        for (auto it = m_FramebufferCache.begin(); it != m_FramebufferCache.end();)
         {
             VulkanFramebuffer* fb = it->second;
-            auto found = std::find(fb->ColorImages.begin(), fb->ColorImages.end(), image);
-            if (found != fb->ColorImages.end() || fb->DepthImage == image)
+            auto found = std::find(fb->m_ColorImages.begin(), fb->m_ColorImages.end(), image);
+            if (found != fb->m_ColorImages.end() || fb->m_DepthImage == image)
             {
                 delete fb;
-                it = FramebufferCache.erase(it);
+                it = m_FramebufferCache.erase(it);
             }
             else
             {
@@ -551,15 +551,15 @@ namespace RHIVulkan {
                 }
             };
 
-        // 1. RenderPass pointer ��Ϊ identity
+        // Include render pass identity.
         uintptr_t rpPtr = reinterpret_cast<uintptr_t>(renderPass);
         fnHashBytes(&rpPtr, sizeof(rpPtr));
 
-        // 2. BoundRenderTargets ������ hash
+        // Include the bound render target hash.
         size_t rtHash = RHIBoundRenderTargets::CalculateHash(renderTargetsInfo);
         fnHashBytes(&rtHash, sizeof(rtHash));
 
-        // 3. ���� 32-bit hash������ map / cache
+        // Fold the hash to the cache key width.
         return static_cast<uint32_t>(hash);
     }
 }

@@ -9,7 +9,7 @@ namespace RHIVulkan {
 
     VkShaderStageFlagBits TransformShaderStageFrom(ERHIShaderFrequency shaderType) ;
 
-    VkImageUsageFlags TransformTextureUsageFlagsFrom(ERHITextureCreateFlags Flags);
+    VkImageUsageFlags TransformTextureUsageFlagsFrom(ERHITextureCreateFlags flags);
 
 	VkSampleCountFlagBits TransformSampleCountFrom(uint32_t sampleCount);
 
@@ -25,9 +25,9 @@ namespace RHIVulkan {
 
 	VkShaderStageFlagBits TransformShaderFrequencyToStage(ERHIShaderFrequency frequency);
 
-    VkPrimitiveTopology TransformPrimitiveTopology(EPrimitiveTopology Topology);
+    VkPrimitiveTopology TransformPrimitiveTopology(EPrimitiveTopology topology);
 
-    VkBufferUsageFlags TransformBufferUsageFlagsFrom(ERHIBufferUsageFlags Flags);
+    VkBufferUsageFlags TransformBufferUsageFlagsFrom(ERHIBufferUsageFlags flags);
 
     VkAccessFlags TransformResourceAccess(ERHIResourceAccess access);
 

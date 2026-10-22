@@ -13,15 +13,15 @@ using namespace RHI;
 namespace RHIVulkan {
 
 VulkanPipelineBase::VulkanPipelineBase(VulkanDevice* device)
-: device(device), pipeline(VK_NULL_HANDLE)
+: _device(device), _pipeline(VK_NULL_HANDLE)
 {
 
 }
 VulkanPipelineBase::~VulkanPipelineBase() {
-    VkDevice deviceHandle = device->GetHandle();
-    if (pipeline != VK_NULL_HANDLE) {
-        device->EnqueuePipelineForDeletion(pipeline);
-        pipeline = VK_NULL_HANDLE;
+    VkDevice deviceHandle = _device->GetHandle();
+    if (_pipeline != VK_NULL_HANDLE) {
+        _device->EnqueuePipelineForDeletion(_pipeline);
+        _pipeline = VK_NULL_HANDLE;
     }
 
 }
@@ -31,14 +31,14 @@ VulkanPipelineBase::~VulkanPipelineBase() {
 VulkanGraphicsPipelineState::VulkanGraphicsPipelineState(VulkanDevice* device, const RHIGraphicsPipelineStateDesc& pipelineDesc)
     : VulkanPipelineBase(device), RHIGraphicsPipelineState(pipelineDesc) {
     // Convert RHI desc to Vulkan create info
-    createInfo = {}; // Initialize createInfo
-    createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    m_CreateInfo = {}; // Initialize createInfo
+    m_CreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     VulkanRenderTargetLayout layout(pipelineDesc.AttachmentDesc);
     auto renderPass = device->GetRenderPassManager()->GetOrCreateRenderPass(layout);
-    createInfo.renderPass = renderPass->GetHandle();
-    createInfo.subpass = pipelineDesc.AttachmentDesc.SubpassIndex;
+    m_CreateInfo.renderPass = renderPass->GetHandle();
+    m_CreateInfo.subpass = pipelineDesc.AttachmentDesc.SubpassIndex;
 	auto layoutInfo = BuildPipelineLayoutInfo(pipelineDesc);
-    pipelineLayout = device->GetPipelineLayoutCache()->GetOrCreateLayout(layoutInfo);
+    _pipelineLayout = device->GetPipelineLayoutCache()->GetOrCreateLayout(layoutInfo);
     
     CreatePipeline();
 }
@@ -48,7 +48,7 @@ VulkanGraphicsPipelineState::~VulkanGraphicsPipelineState() {
 
 void VulkanGraphicsPipelineState::Bind(VulkanCommandBuffer* cmdBuffer)
 {
-    VKFunc::CmdBindPipeline(cmdBuffer->GetHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    VKFunc::CmdBindPipeline(cmdBuffer->GetHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
 }
 
 PipelineLayoutInfo VulkanGraphicsPipelineState::BuildPipelineLayoutInfo(const RHIGraphicsPipelineStateDesc& pipelineDesc)
@@ -69,7 +69,7 @@ PipelineLayoutInfo VulkanGraphicsPipelineState::BuildPipelineLayoutInfo(const RH
             // 获取或创建该着色器频率对应的 ShaderFrequencyLayoutInfo
             uint32_t freqKey = static_cast<uint32_t>(frequency);
             PipelineLayoutInfo::ShaderFrequencyLayoutInfo& freqInfo = 
-                layoutInfo.setLayoutsByFrequency[freqKey];
+                layoutInfo.SetLayoutsByFrequency[freqKey];
 
             auto ensureSet = [&](uint32_t set)
                 {
@@ -118,12 +118,12 @@ PipelineLayoutInfo VulkanGraphicsPipelineState::BuildPipelineLayoutInfo(const RH
 
             if (header.HasPushConstant)
             {
-                layoutInfo.hasPushConstant = true;
+                layoutInfo.bHasPushConstant = true;
 
-                layoutInfo.pushConstant.offset = 0;
-                layoutInfo.pushConstant.size = header.PushConstant.Size;
+                layoutInfo.PushConstant.offset = 0;
+                layoutInfo.PushConstant.size = header.PushConstant.Size;
 
-                layoutInfo.pushConstant.stageFlags |=
+                layoutInfo.PushConstant.stageFlags |=
                     stageMask;
             }
         };
@@ -141,26 +141,26 @@ PipelineLayoutInfo VulkanGraphicsPipelineState::BuildPipelineLayoutInfo(const RH
 void VulkanGraphicsPipelineState::CreatePipeline() {
     // 设置VkGraphicsPipelineCreateInfo的其他成员
     // 这里仅提供一个示例，具体成员需要根据pipelineDesc填充
-    VkPipelineVertexInputStateCreateInfo &vertexInputInfo = dynamic_cast<VulkanVertexDescState*>(_desc.VertexDescState)->vertexInputInfo;
+    VkPipelineVertexInputStateCreateInfo &vertexInputInfo = dynamic_cast<VulkanVertexDescState*>(_desc.VertexDescState)->VertexInputInfo;
 
-    VkPipelineRasterizationStateCreateInfo rasterizer = dynamic_cast<VulkanRasterizerState*>(_desc.RasterizerState)->rasterizerInfo;
+    VkPipelineRasterizationStateCreateInfo rasterizer = dynamic_cast<VulkanRasterizerState*>(_desc.RasterizerState)->RasterizerInfo;
 
-    VkPipelineColorBlendStateCreateInfo colorBlending = dynamic_cast<VulkanColorBlendState*>(_desc.ColorBlendState)->colorBlendInfo;
+    VkPipelineColorBlendStateCreateInfo colorBlending = dynamic_cast<VulkanColorBlendState*>(_desc.ColorBlendState)->ColorBlendInfo;
 
-    VkPipelineDepthStencilStateCreateInfo depthStencil = dynamic_cast<VulkanDepthStencilState*>(_desc.DepthStencilState)->depthStencilInfo;
+    VkPipelineDepthStencilStateCreateInfo depthStencil = dynamic_cast<VulkanDepthStencilState*>(_desc.DepthStencilState)->DepthStencilInfo;
 
     // 设置管线布局
-    createInfo.layout = pipelineLayout->GetHandle();
+    m_CreateInfo.layout = _pipelineLayout->GetHandle();
 
 
     
-    dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
-    dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
+    m_DynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
+    m_DynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
 
     VkPipelineDynamicStateCreateInfo dynamicState = {};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = dynamicStates.size();
-    dynamicState.pDynamicStates = dynamicStates.data();
+    dynamicState.dynamicStateCount = m_DynamicStates.size();
+    dynamicState.pDynamicStates = m_DynamicStates.data();
 
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -186,14 +186,14 @@ void VulkanGraphicsPipelineState::CreatePipeline() {
 
 
         // 设置createInfo的各个成员
-    createInfo.pVertexInputState = &vertexInputInfo;
-    createInfo.pInputAssemblyState = &inputAssembly;
-    createInfo.pViewportState = &viewportState;
-    createInfo.pColorBlendState = &colorBlending;
-    createInfo.pDepthStencilState = &depthStencil;
-    createInfo.pRasterizationState = &rasterizer;
-    createInfo.pMultisampleState = &multisample;
-    createInfo.pDynamicState = &dynamicState;
+    m_CreateInfo.pVertexInputState = &vertexInputInfo;
+    m_CreateInfo.pInputAssemblyState = &inputAssembly;
+    m_CreateInfo.pViewportState = &viewportState;
+    m_CreateInfo.pColorBlendState = &colorBlending;
+    m_CreateInfo.pDepthStencilState = &depthStencil;
+    m_CreateInfo.pRasterizationState = &rasterizer;
+    m_CreateInfo.pMultisampleState = &multisample;
+    m_CreateInfo.pDynamicState = &dynamicState;
 
 
 
@@ -218,11 +218,11 @@ void VulkanGraphicsPipelineState::CreatePipeline() {
         shaderStageInfo.pName = vulkanShaderSP->GetEntryPoint().c_str();
         shaderStages[i] = shaderStageInfo;
     }
-    createInfo.stageCount = shaderStages.size();
-    createInfo.pStages = shaderStages.data();
+    m_CreateInfo.stageCount = shaderStages.size();
+    m_CreateInfo.pStages = shaderStages.data();
 
     // 创建图形管线
-    if (!VKFunc::CreateGraphicsPipelines(device->GetHandle(), VK_NULL_HANDLE, 1, &createInfo, &pipeline)) {
+    if (!VKFunc::CreateGraphicsPipelines(_device->GetHandle(), VK_NULL_HANDLE, 1, &m_CreateInfo, &_pipeline)) {
         throw std::runtime_error("无法创建图形管线!");
     }
 }
@@ -231,17 +231,17 @@ void VulkanGraphicsPipelineState::CreatePipeline() {
 VulkanComputePipelineState::VulkanComputePipelineState(VulkanDevice* device, const RHIComputePipelineStateDesc& pipelineDesc)
     : VulkanPipelineBase(device), RHIComputePipelineState(pipelineDesc) {
     // Convert RHI desc to Vulkan create info
-    createInfo = {}; // Initialize createInfo
-    createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    createInfo.flags = 0;
-    createInfo.pNext = nullptr;
-    createInfo.basePipelineHandle = VK_NULL_HANDLE;
-    createInfo.basePipelineIndex = -1;
+    m_CreateInfo = {}; // Initialize createInfo
+    m_CreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    m_CreateInfo.flags = 0;
+    m_CreateInfo.pNext = nullptr;
+    m_CreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+    m_CreateInfo.basePipelineIndex = -1;
 
     // Build layout and cache it
     PipelineLayoutInfo layoutInfo = BuildPipelineLayoutInfo(pipelineDesc);
-    pipelineLayout = device->GetPipelineLayoutCache()->GetOrCreateLayout(layoutInfo);
-    createInfo.layout = pipelineLayout->GetHandle();
+    _pipelineLayout = device->GetPipelineLayoutCache()->GetOrCreateLayout(layoutInfo);
+    m_CreateInfo.layout = _pipelineLayout->GetHandle();
 
     CreatePipeline();
 }
@@ -251,7 +251,7 @@ VulkanComputePipelineState::~VulkanComputePipelineState() {
 
 void VulkanComputePipelineState::Bind(VulkanCommandBuffer* cmdBuffer)
 {
-    VKFunc::CmdBindPipeline(cmdBuffer->GetHandle(), VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+    VKFunc::CmdBindPipeline(cmdBuffer->GetHandle(), VK_PIPELINE_BIND_POINT_COMPUTE, _pipeline);
 }
 
 PipelineLayoutInfo VulkanComputePipelineState::BuildPipelineLayoutInfo(const RHIComputePipelineStateDesc& pipelineDesc)
@@ -269,7 +269,7 @@ PipelineLayoutInfo VulkanComputePipelineState::BuildPipelineLayoutInfo(const RHI
     // 获取该着色器频率对应的 ShaderFrequencyLayoutInfo
     uint32_t freqKey = static_cast<uint32_t>(frequency);
     PipelineLayoutInfo::ShaderFrequencyLayoutInfo& freqInfo = 
-        layoutInfo.setLayoutsByFrequency[freqKey];
+        layoutInfo.SetLayoutsByFrequency[freqKey];
 
     auto ensureSet = [&](uint32_t set)
         {
@@ -317,12 +317,12 @@ PipelineLayoutInfo VulkanComputePipelineState::BuildPipelineLayoutInfo(const RHI
 
     if (header.HasPushConstant)
     {
-        layoutInfo.hasPushConstant = true;
+        layoutInfo.bHasPushConstant = true;
 
-        layoutInfo.pushConstant.offset = 0;
-        layoutInfo.pushConstant.size = header.PushConstant.Size;
+        layoutInfo.PushConstant.offset = 0;
+        layoutInfo.PushConstant.size = header.PushConstant.Size;
 
-        layoutInfo.pushConstant.stageFlags = stageMask;
+        layoutInfo.PushConstant.stageFlags = stageMask;
     }
 
     return layoutInfo;
@@ -344,10 +344,10 @@ void VulkanComputePipelineState::CreatePipeline() {
     shaderStageInfo.module = vulkanShaderSP->GetShaderModule();
     shaderStageInfo.pName = vulkanShaderSP->GetEntryPoint().c_str();
 
-    createInfo.stage = shaderStageInfo;
+    m_CreateInfo.stage = shaderStageInfo;
 
     // 创建计算管线
-    if (!VKFunc::CreateComputePipelines(device->GetHandle(), VK_NULL_HANDLE, 1, &createInfo, &pipeline)) {
+    if (!VKFunc::CreateComputePipelines(_device->GetHandle(), VK_NULL_HANDLE, 1, &m_CreateInfo, &_pipeline)) {
         throw std::runtime_error("无法创建计算管线!");
     }
 }
@@ -355,35 +355,35 @@ void VulkanComputePipelineState::CreatePipeline() {
 VulkanRayTracingPipeline::VulkanRayTracingPipeline(VulkanDevice* device, const RHIRayTracingPipelineStateDesc& pipelineDesc)
     : VulkanPipelineBase(device), RHIRayTracingPipelineState(pipelineDesc) {
     // Convert RHI desc to Vulkan create info
-    createInfo = {}; // Initialize createInfo
-    createInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
-    createInfo.flags = 0;
-    createInfo.pNext = nullptr;
-    createInfo.pLibraryInfo = nullptr;
-    createInfo.pLibraryInterface = nullptr;
-    createInfo.pDynamicState = nullptr;
-    createInfo.layout = VK_NULL_HANDLE;
-    createInfo.basePipelineHandle = VK_NULL_HANDLE;
-    createInfo.basePipelineIndex = -1;
+    m_CreateInfo = {}; // Initialize createInfo
+    m_CreateInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
+    m_CreateInfo.flags = 0;
+    m_CreateInfo.pNext = nullptr;
+    m_CreateInfo.pLibraryInfo = nullptr;
+    m_CreateInfo.pLibraryInterface = nullptr;
+    m_CreateInfo.pDynamicState = nullptr;
+    m_CreateInfo.layout = VK_NULL_HANDLE;
+    m_CreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+    m_CreateInfo.basePipelineIndex = -1;
 
     PipelineLayoutInfo layoutInfo = BuildPipelineLayoutInfo(pipelineDesc);
-    pipelineLayout = device->GetPipelineLayoutCache()->GetOrCreateLayout(layoutInfo);
-    createInfo.layout = pipelineLayout->GetHandle();
+    _pipelineLayout = device->GetPipelineLayoutCache()->GetOrCreateLayout(layoutInfo);
+    m_CreateInfo.layout = _pipelineLayout->GetHandle();
 
     CreatePipeline();
 }
 
 VulkanRayTracingPipeline::~VulkanRayTracingPipeline() {
-    if (shaderBindingTableBuffer != VK_NULL_HANDLE)
+    if (m_ShaderBindingTableBuffer != VK_NULL_HANDLE)
     {
-        device->EnqueueBufferForDeletion(shaderBindingTableBuffer);
-        shaderBindingTableBuffer = VK_NULL_HANDLE;
+        _device->EnqueueBufferForDeletion(m_ShaderBindingTableBuffer);
+        m_ShaderBindingTableBuffer = VK_NULL_HANDLE;
     }
 
-    if (shaderBindingTableAllocation.GetMemory() != VK_NULL_HANDLE)
+    if (m_ShaderBindingTableAllocation.GetMemory() != VK_NULL_HANDLE)
     {
-        device->GetMemoryManager()->Free(shaderBindingTableAllocation);
-        shaderBindingTableAllocation = VulkanAllocation{};
+        _device->GetMemoryManager()->Free(m_ShaderBindingTableAllocation);
+        m_ShaderBindingTableAllocation = VulkanAllocation{};
     }
 }
 
@@ -402,7 +402,7 @@ PipelineLayoutInfo VulkanRayTracingPipeline::BuildPipelineLayoutInfo(const RHIRa
 
             uint32_t freqKey = static_cast<uint32_t>(frequency);
             PipelineLayoutInfo::ShaderFrequencyLayoutInfo& freqInfo =
-                layoutInfo.setLayoutsByFrequency[freqKey];
+                layoutInfo.SetLayoutsByFrequency[freqKey];
 
             auto ensureSet = [&](uint32_t set)
                 {
@@ -452,10 +452,10 @@ PipelineLayoutInfo VulkanRayTracingPipeline::BuildPipelineLayoutInfo(const RHIRa
 
             if (header.HasPushConstant)
             {
-                layoutInfo.hasPushConstant = true;
-                layoutInfo.pushConstant.offset = 0;
-                layoutInfo.pushConstant.size = header.PushConstant.Size;
-                layoutInfo.pushConstant.stageFlags |= stageMask;
+                layoutInfo.bHasPushConstant = true;
+                layoutInfo.PushConstant.offset = 0;
+                layoutInfo.PushConstant.size = header.PushConstant.Size;
+                layoutInfo.PushConstant.stageFlags |= stageMask;
             }
         };
 
@@ -561,22 +561,22 @@ void VulkanRayTracingPipeline::CreatePipeline() {
         throw std::runtime_error("Ray tracing pipeline has no valid shaders or groups");
     }
 
-    createInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
-    createInfo.pStages = shaderStages.data();
-    createInfo.groupCount = static_cast<uint32_t>(shaderGroups.size());
-    createInfo.pGroups = shaderGroups.data();
-    createInfo.maxPipelineRayRecursionDepth = 1;
+    m_CreateInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+    m_CreateInfo.pStages = shaderStages.data();
+    m_CreateInfo.groupCount = static_cast<uint32_t>(shaderGroups.size());
+    m_CreateInfo.pGroups = shaderGroups.data();
+    m_CreateInfo.maxPipelineRayRecursionDepth = 1;
 
     if (_desc.RayGenTable.size() != 1)
         throw std::runtime_error("The RHI trace command requires exactly one ray-generation shader");
-    if (!VKFunc::CreateRayTracingPipelinesKHR(device->GetHandle(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &createInfo, &pipeline))
+    if (!VKFunc::CreateRayTracingPipelinesKHR(_device->GetHandle(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &m_CreateInfo, &_pipeline))
         throw std::runtime_error("Failed to create the ray tracing pipeline");
 
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtProperties{
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
     VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
     properties.pNext = &rtProperties;
-    VKFunc::GetPhysicalDeviceProperties2(device->GetPhysicalDevice(), &properties);
+    VKFunc::GetPhysicalDeviceProperties2(_device->GetPhysicalDevice(), &properties);
     const auto alignUp = [](VkDeviceSize value, VkDeviceSize alignment) {
         return (value + alignment - 1) / alignment * alignment;
     };
@@ -595,7 +595,7 @@ void VulkanRayTracingPipeline::CreatePipeline() {
         tableSize += counts[i] * stride;
     }
     std::vector<uint8_t> handles(shaderGroups.size() * rtProperties.shaderGroupHandleSize);
-    if (!VKFunc::GetRayTracingShaderGroupHandlesKHR(device->GetHandle(), pipeline, 0,
+    if (!VKFunc::GetRayTracingShaderGroupHandlesKHR(_device->GetHandle(), _pipeline, 0,
         static_cast<uint32_t>(shaderGroups.size()), handles.size(), handles.data()))
         throw std::runtime_error("Failed to retrieve ray tracing shader group handles");
 
@@ -603,32 +603,32 @@ void VulkanRayTracingPipeline::CreatePipeline() {
     bufferInfo.size = tableSize + alignment - 1;
     bufferInfo.usage = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    if (!VKFunc::CreateBuffer(device->GetHandle(), &bufferInfo, &shaderBindingTableBuffer))
+    if (!VKFunc::CreateBuffer(_device->GetHandle(), &bufferInfo, &m_ShaderBindingTableBuffer))
         throw std::runtime_error("Failed to create the shader binding table buffer");
     VkMemoryRequirements requirements{};
-    VKFunc::GetBufferMemoryRequirements(device->GetHandle(), shaderBindingTableBuffer, &requirements);
-    if (!device->GetMemoryManager()->Allocate(requirements,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, shaderBindingTableAllocation))
+    VKFunc::GetBufferMemoryRequirements(_device->GetHandle(), m_ShaderBindingTableBuffer, &requirements);
+    if (!_device->GetMemoryManager()->Allocate(requirements,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_ShaderBindingTableAllocation))
         throw std::runtime_error("Failed to allocate the shader binding table");
-    VKFunc::BindBufferMemory(device->GetHandle(), shaderBindingTableBuffer,
-        shaderBindingTableAllocation.GetMemory(), shaderBindingTableAllocation.GetOffset());
+    VKFunc::BindBufferMemory(_device->GetHandle(), m_ShaderBindingTableBuffer,
+        m_ShaderBindingTableAllocation.GetMemory(), m_ShaderBindingTableAllocation.GetOffset());
     VkBufferDeviceAddressInfo addressInfo{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO };
-    addressInfo.buffer = shaderBindingTableBuffer;
-    const VkDeviceAddress address = VKFunc::GetBufferDeviceAddress(device->GetHandle(), &addressInfo);
-    shaderBindingTableDeviceAddress = alignUp(address, alignment);
-    auto* mapped = static_cast<uint8_t*>(shaderBindingTableAllocation.GetMappedPointer());
+    addressInfo.buffer = m_ShaderBindingTableBuffer;
+    const VkDeviceAddress address = VKFunc::GetBufferDeviceAddress(_device->GetHandle(), &addressInfo);
+    m_ShaderBindingTableDeviceAddress = alignUp(address, alignment);
+    auto* mapped = static_cast<uint8_t*>(m_ShaderBindingTableAllocation.GetMappedPointer());
     if (!mapped || !address)
         throw std::runtime_error("The shader binding table has no mapped memory or device address");
     memset(mapped, 0, static_cast<size_t>(bufferInfo.size));
-    mapped += shaderBindingTableDeviceAddress - address;
-    VkStridedDeviceAddressRegionKHR* regions[] = { &rayGenShaderBindingTableRegion,
-        &missShaderBindingTableRegion, &hitShaderBindingTableRegion, &callableShaderBindingTableRegion };
+    mapped += m_ShaderBindingTableDeviceAddress - address;
+    VkStridedDeviceAddressRegionKHR* regions[] = { &m_RayGenShaderBindingTableRegion,
+        &m_MissShaderBindingTableRegion, &m_HitShaderBindingTableRegion, &m_CallableShaderBindingTableRegion };
     uint32_t group = 0;
     for (uint32_t table = 0; table < 4; ++table)
     {
         *regions[table] = {};
         if (!counts[table]) continue;
-        regions[table]->deviceAddress = shaderBindingTableDeviceAddress + offsets[table];
+        regions[table]->deviceAddress = m_ShaderBindingTableDeviceAddress + offsets[table];
         regions[table]->stride = stride;
         regions[table]->size = counts[table] * stride;
         for (uint32_t record = 0; record < counts[table]; ++record, ++group)

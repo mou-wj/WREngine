@@ -6,7 +6,7 @@
 namespace RHIVulkan {
 
 VulkanRHIShader::VulkanRHIShader(VulkanDevice* device)
-    : Device(device)
+    : _device(device)
 {
 }
 
@@ -19,25 +19,25 @@ bool VulkanRHIShader::Initialize(const std::vector<char>& packedCode)
 {
 	RenderCore::SPIRVCompiledBinaryResultPacker packer;
 	packer.Depack(packedCode);
-	Reflection = packer.DepackedData.header;
-    EntryPoint = packer.DepackedData.header.EntryPoint;
+	_reflection = packer.DepackedData.header;
+    _entryPoint = packer.DepackedData.header.EntryPoint;
     auto spirvCode = packer.DepackedData.SpirvCode;
-    ShaderStage = TransformShaderStageFrom(packer.DepackedData.header.Frequency);
+    _shaderStage = TransformShaderStageFrom(packer.DepackedData.header.Frequency);
     VkShaderModuleCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = spirvCode.size() * sizeof(uint32_t);
     createInfo.pCode = spirvCode.data();
 
-    bool result = VKFunc::CreateShaderModule(Device->GetHandle(), &createInfo,  &shaderModule);
+    bool result = VKFunc::CreateShaderModule(_device->GetHandle(), &createInfo,  &_shaderModule);
     return result;
 }
 
 void VulkanRHIShader::Cleanup()
 {
-    if (shaderModule != VK_NULL_HANDLE && Device)
+    if (_shaderModule != VK_NULL_HANDLE && _device)
     {
-        VKFunc::DestroyShaderModule(Device->GetHandle(), shaderModule);
-        shaderModule = VK_NULL_HANDLE;
+        VKFunc::DestroyShaderModule(_device->GetHandle(), _shaderModule);
+        _shaderModule = VK_NULL_HANDLE;
     }
 
 }

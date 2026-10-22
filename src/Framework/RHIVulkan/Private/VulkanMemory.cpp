@@ -13,37 +13,37 @@ constexpr VkDeviceSize DEFAULT_BLOCK_SIZE = 64 * 1024 * 1024; // 64 MB
 
 // VulkanMemoryBlock
 VulkanMemoryBlock::VulkanMemoryBlock(VulkanDevice* device, uint32_t memoryTypeIndex, VkDeviceSize blockSize, bool mappable)
-    : device_(device), memoryTypeIndex_(memoryTypeIndex), size_(blockSize), offset_(0), mappable_(mappable), mapped_(nullptr)
+    : m_Device(device), m_MemoryTypeIndex(memoryTypeIndex), m_Size(blockSize), m_Offset(0), m_bMappable(mappable), m_Mapped(nullptr)
 {
     VkMemoryAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-    allocInfo.allocationSize = size_;
+    allocInfo.allocationSize = m_Size;
     allocInfo.memoryTypeIndex = memoryTypeIndex;
 	VkMemoryAllocateFlagsInfo flagsInfo{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO };
     flagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
 	allocInfo.pNext = &flagsInfo;
-    if (!VKFunc::AllocateMemory(device_->GetHandle(), &allocInfo, &memory_))
+    if (!VKFunc::AllocateMemory(m_Device->GetHandle(), &allocInfo, &m_Memory))
         throw std::runtime_error("Failed to allocate Vulkan memory block");
 
-    if (mappable_)
-        VKFunc::MapMemory(device_->GetHandle(), memory_, 0, VK_WHOLE_SIZE, 0, &mapped_);
-    freeList_.push_back({ 0, size_ });
+    if (m_bMappable)
+        VKFunc::MapMemory(m_Device->GetHandle(), m_Memory, 0, VK_WHOLE_SIZE, 0, &m_Mapped);
+    m_FreeList.push_back({ 0, m_Size });
 }
 
 VulkanMemoryBlock::~VulkanMemoryBlock()
 {
-    if (mapped_)
-        VKFunc::UnmapMemory(device_->GetHandle(), memory_);
-    VKFunc::FreeMemory(device_->GetHandle(), memory_);
+    if (m_Mapped)
+        VKFunc::UnmapMemory(m_Device->GetHandle(), m_Memory);
+    VKFunc::FreeMemory(m_Device->GetHandle(), m_Memory);
 }
 
 bool VulkanMemoryBlock::Allocate(VkDeviceSize size, VkDeviceSize alignment, VulkanAllocation& outAlloc)
 {
     // 1. 先在 free list 找合适的块
-    for (auto it = freeList_.begin(); it != freeList_.end(); ++it)
+    for (auto it = m_FreeList.begin(); it != m_FreeList.end(); ++it)
     {
         // 命中 free block
-        VkDeviceSize start = it->offset;
-        VkDeviceSize end = it->offset + it->size;
+        VkDeviceSize start = it->Offset;
+        VkDeviceSize end = it->Offset + it->Size;
     
         VkDeviceSize alignedOffset =
             (start + alignment - 1) & ~(alignment - 1);
@@ -59,22 +59,22 @@ bool VulkanMemoryBlock::Allocate(VkDeviceSize size, VkDeviceSize alignment, Vulk
         VkDeviceSize afterSize = end - allocEnd;
     
         // 先删掉当前 block
-        it = freeList_.erase(it);
+        it = m_FreeList.erase(it);
     
         // 插入 before
         if (beforeSize > 0)
-            freeList_.push_back({ start, beforeSize });
+            m_FreeList.push_back({ start, beforeSize });
     
         // 插入 after
         if (afterSize > 0)
-            freeList_.push_back({ afterOffset, afterSize });
+            m_FreeList.push_back({ afterOffset, afterSize });
     
         // 返回分配
         outAlloc = VulkanAllocation(
-            memory_,
+            m_Memory,
             alignedOffset,
             size,
-            mapped_ ? static_cast<char*>(mapped_) + alignedOffset : nullptr
+            m_Mapped ? static_cast<char*>(m_Mapped) + alignedOffset : nullptr
         );
     
         return true;
@@ -86,17 +86,17 @@ bool VulkanMemoryBlock::Allocate(VkDeviceSize size, VkDeviceSize alignment, Vulk
 
 void VulkanMemoryBlock::Reset()
 {
-    offset_ = 0;
-    freeList_.clear();
-    freeList_.push_back({ 0, size_ });
+    m_Offset = 0;
+    m_FreeList.clear();
+    m_FreeList.push_back({ 0, m_Size });
 }
 
 bool VulkanMemoryBlock::Free(VulkanAllocation& alloc)
 {
-    if (alloc.GetMemory() != memory_)
+    if (alloc.GetMemory() != m_Memory)
         return false;
     
-    freeList_.push_back({
+    m_FreeList.push_back({
         alloc.GetOffset(),
         alloc.GetSize()
         });
@@ -108,12 +108,12 @@ bool VulkanMemoryBlock::Free(VulkanAllocation& alloc)
 }
 void VulkanMemoryBlock::MergeFreeList()
 {
-    std::sort(freeList_.begin(), freeList_.end(),
-        [](auto& a, auto& b) { return a.offset < b.offset; });
+    std::sort(m_FreeList.begin(), m_FreeList.end(),
+        [](auto& a, auto& b) { return a.Offset < b.Offset; });
 
     std::vector<FreeRegion> merged;
 
-    for (auto& r : freeList_)
+    for (auto& r : m_FreeList)
     {
         if (merged.empty())
         {
@@ -123,9 +123,9 @@ void VulkanMemoryBlock::MergeFreeList()
 
         auto& last = merged.back();
 
-        if (last.offset + last.size == r.offset)
+        if (last.Offset + last.Size == r.Offset)
         {
-            last.size += r.size;
+            last.Size += r.Size;
         }
         else
         {
@@ -133,22 +133,22 @@ void VulkanMemoryBlock::MergeFreeList()
         }
     }
 
-    freeList_ = std::move(merged);
+    m_FreeList = std::move(merged);
 }
 
 // VulkanMemoryManager
 VulkanMemoryManager::VulkanMemoryManager(VulkanDevice* device)
-    : device_(device) {}
+    : m_Device(device) {}
 
 VulkanMemoryManager::~VulkanMemoryManager()
 {
-    blocks_.clear();
+    m_Blocks.clear();
 }
 
 uint32_t VulkanMemoryManager::FindMemoryType(uint32_t typeBits, VkMemoryPropertyFlags properties) const
 {
     VkPhysicalDeviceMemoryProperties memProps;
-    VKFunc::GetPhysicalDeviceMemoryProperties(device_->GetPhysicalDevice(), &memProps);
+    VKFunc::GetPhysicalDeviceMemoryProperties(m_Device->GetPhysicalDevice(), &memProps);
 
     for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i)
     {
@@ -161,7 +161,7 @@ uint32_t VulkanMemoryManager::FindMemoryType(uint32_t typeBits, VkMemoryProperty
 bool VulkanMemoryManager::Allocate(const VkMemoryRequirements& memReqs, VkMemoryPropertyFlags props, VulkanAllocation& outAlloc)
 {
     uint32_t typeIndex = FindMemoryType(memReqs.memoryTypeBits, props);
-    for (auto& block : blocks_)
+    for (auto& block : m_Blocks)
     {
         if (block->GetMemoryTypeIndex() == typeIndex)
         {
@@ -171,18 +171,18 @@ bool VulkanMemoryManager::Allocate(const VkMemoryRequirements& memReqs, VkMemory
     }
 
     // Allocate new block
-    auto newBlock = std::make_unique<VulkanMemoryBlock>(device_, typeIndex, std::max(DEFAULT_BLOCK_SIZE, memReqs.size), (props & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0);
+    auto newBlock = std::make_unique<VulkanMemoryBlock>(m_Device, typeIndex, std::max(DEFAULT_BLOCK_SIZE, memReqs.size), (props & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0);
     bool success = newBlock->Allocate(memReqs.size, memReqs.alignment, outAlloc);
     if (!success)
         return false;
 
-    blocks_.push_back(std::move(newBlock));
+    m_Blocks.push_back(std::move(newBlock));
     return true;
 }
 
 void VulkanMemoryManager::Reset()
 {
-    for (auto& block : blocks_)
+    for (auto& block : m_Blocks)
         block->Reset();
 }
 
@@ -192,7 +192,7 @@ bool VulkanMemoryManager::Free( VulkanAllocation& alloc)
         return true;
 
     // 找到分配所在的内存块
-    for (auto& block : blocks_)
+    for (auto& block : m_Blocks)
     {
         if (block->Free(alloc))
         {
@@ -206,143 +206,143 @@ bool VulkanMemoryManager::Free( VulkanAllocation& alloc)
 
 
 VulkanStagingBuffer::VulkanStagingBuffer(VulkanDevice* device, VulkanMemoryManager* memManager, VkDeviceSize size)
-    : RHI::RHIStagingBuffer(size), device_(device), memManager_(memManager), size_(size)
+    : RHI::RHIStagingBuffer(size), m_Device(device), m_MemManager(memManager), m_Size(size)
 {
     // 创建 buffer
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size_;
+    bufferInfo.size = m_Size;
     bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 
-    VKFunc::CreateBuffer(device_->GetHandle(), &bufferInfo, &buffer_);
+    VKFunc::CreateBuffer(m_Device->GetHandle(), &bufferInfo, &m_Buffer);
 #ifdef DEBUG_INFO
     std::string debugName;
     char buf[64];
-    snprintf(buf, sizeof(buf), "VulkanStagingBuffer:0x%llx", (unsigned long long)buffer_);
+    snprintf(buf, sizeof(buf), "VulkanStagingBuffer:0x%llx", (unsigned long long)m_Buffer);
     debugName = buf;
-	VKFunc::SetDebugName(device_->GetHandle(), VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer_, debugName.c_str());
+	VKFunc::SetDebugName(m_Device->GetHandle(), VK_OBJECT_TYPE_BUFFER, (uint64_t)m_Buffer, debugName.c_str());
 #endif
 
     // 查询 memory requirements
     VkMemoryRequirements memReq;
-    VKFunc::GetBufferMemoryRequirements(device_->GetHandle(), buffer_, &memReq);
+    VKFunc::GetBufferMemoryRequirements(m_Device->GetHandle(), m_Buffer, &memReq);
 
 
     // 分配 HostVisible 内存
-    memManager_->Allocate(memReq, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocation_);
+    m_MemManager->Allocate(memReq, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_Allocation);
 
 
-    VKFunc::BindBufferMemory(device_->GetHandle(), buffer_, allocation_.GetMemory(), allocation_.GetOffset());
+    VKFunc::BindBufferMemory(m_Device->GetHandle(), m_Buffer, m_Allocation.GetMemory(), m_Allocation.GetOffset());
 
 
     // 映射内存
-    mapped_ = allocation_.GetMappedPointer();
+    m_Mapped = m_Allocation.GetMappedPointer();
 }
 
 
 VulkanStagingBuffer::~VulkanStagingBuffer()
 {
-    if (buffer_)
+    if (m_Buffer)
     {
-        device_->EnqueueBufferForDeletion(buffer_);
-        buffer_ = VK_NULL_HANDLE;
+        m_Device->EnqueueBufferForDeletion(m_Buffer);
+        m_Buffer = VK_NULL_HANDLE;
     }
 
 
     // VulkanMemoryManager 可以管理释放 allocation，或者这里不做事
 }
-void* VulkanStagingBuffer::Map(uint32_t Offset, uint32_t NumBytes)
+void* VulkanStagingBuffer::Map(uint32_t offset, uint32_t numBytes)
 {
-    return mapped_;
+    return m_Mapped;
 }
 void VulkanStagingBuffer::Unmap()
 {
 
 }
 VulkanStagingManager::VulkanStagingManager(VulkanDevice* device, VulkanMemoryManager* memManager)
-    : device_(device), memManager_(memManager)
+    : m_Device(device), m_MemManager(memManager)
 {
 }
 
 
 VulkanStagingManager::~VulkanStagingManager()
 {
-    freeBuffers_.clear();
+    m_FreeBuffers.clear();
 }
 
 
 std::shared_ptr<VulkanStagingBuffer> VulkanStagingManager::Acquire(VkDeviceSize size)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(m_Mutex);
 
-    for (auto it = freeBuffers_.begin(); it != freeBuffers_.end(); ++it)
+    for (auto it = m_FreeBuffers.begin(); it != m_FreeBuffers.end(); ++it)
     {
         if ((*it)->GetSize() >= size)
         {
             auto buf = *it;
-            freeBuffers_.erase(it);
+            m_FreeBuffers.erase(it);
             return buf;
         }
     }
 
-    return std::make_shared<VulkanStagingBuffer>(device_, memManager_, size);
+    return std::make_shared<VulkanStagingBuffer>(m_Device, m_MemManager, size);
 }
 
 void VulkanStagingManager::ReleaseToCmdBuffer(
     VulkanCommandBuffer* cmd,
     std::shared_ptr<VulkanStagingBuffer> buffer)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(m_Mutex);
 
-    auto& entry = pendingBufferMap_[cmd];
-    entry.pendingBuffers.push_back(buffer);
+    auto& entry = m_PendingBufferMap[cmd];
+    entry.PendingBuffers.push_back(buffer);
 }
 
 void VulkanStagingManager::MarkMappedBuffersUsed(std::shared_ptr<VulkanStagingBuffer> buffer, bool used)
 {
-	std::lock_guard<std::mutex> lock(mutex_);
-	mapedToFreeBufferUsed_[buffer] = used;
+	std::lock_guard<std::mutex> lock(m_Mutex);
+	m_bMapedToFreeBufferUsed[buffer] = used;
 }
 
 void VulkanStagingManager::GarbageCollect()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(m_Mutex);
 	std::vector<VulkanCommandBuffer*> completedCmds;
 	std::vector<std::shared_ptr<VulkanStagingBuffer>> buffersToFree; 
-	for (auto& entry : pendingBufferMap_)
+	for (auto& entry : m_PendingBufferMap)
 	{
 		if (entry.first->GetState() == VulkanCommandBuffer::NeedRecycle)
 		{
 			completedCmds.push_back(entry.first);
-			for (auto& buf : entry.second.pendingBuffers)
+			for (auto& buf : entry.second.PendingBuffers)
 			{
-                if (mapedToFreeBufferUsed_.find(buf) != mapedToFreeBufferUsed_.end()) {
-                    if (mapedToFreeBufferUsed_[buf] = true) {
-                        mapedToFreeBuffers_.push_back(buf);
+                if (m_bMapedToFreeBufferUsed.find(buf) != m_bMapedToFreeBufferUsed.end()) {
+                    if (m_bMapedToFreeBufferUsed[buf] = true) {
+                        m_MapedToFreeBuffers.push_back(buf);
                     }
                     else {
-                        freeBuffers_.push_back(buf);
-                        mapedToFreeBufferUsed_.erase(buf);
+                        m_FreeBuffers.push_back(buf);
+                        m_bMapedToFreeBufferUsed.erase(buf);
                     }
                     continue;
                 }
-                freeBuffers_.push_back(buf);
+                m_FreeBuffers.push_back(buf);
 			}
 		}
 	}
-    for (auto& buf : mapedToFreeBuffers_) {
-        if (mapedToFreeBufferUsed_.find(buf) != mapedToFreeBufferUsed_.end()) {
-            if (mapedToFreeBufferUsed_[buf] = false) {
-                freeBuffers_.push_back(buf);
-                mapedToFreeBufferUsed_.erase(buf);
+    for (auto& buf : m_MapedToFreeBuffers) {
+        if (m_bMapedToFreeBufferUsed.find(buf) != m_bMapedToFreeBufferUsed.end()) {
+            if (m_bMapedToFreeBufferUsed[buf] = false) {
+                m_FreeBuffers.push_back(buf);
+                m_bMapedToFreeBufferUsed.erase(buf);
             }
         }
     }
     for (auto& cmd : completedCmds)
 	{
-        pendingBufferMap_.erase(cmd);
+        m_PendingBufferMap.erase(cmd);
 	}
 
 }
