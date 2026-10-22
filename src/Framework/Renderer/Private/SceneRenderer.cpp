@@ -31,18 +31,18 @@ namespace Renderer {
                 RHIRenderPassInfo passInfo;
                 passInfo.RenderTargets = boundRenderTarget;
                 passInfo.RenderTargets.DepthStencil.ClearBinding.Depth = 1.0f;
-                passInfo.RenderArea.Width = boundRenderTarget.Dimensions.x;
-                passInfo.RenderArea.Height = boundRenderTarget.Dimensions.y;
+                passInfo.RenderArea.Width = boundRenderTarget.Dimensions.X;
+                passInfo.RenderArea.Height = boundRenderTarget.Dimensions.Y;
 
                 cmd.BeginRenderPass(passInfo);
                 cmd.SetViewport(
                     0,
                     0,
-                    boundRenderTarget.Dimensions.x,
-                    boundRenderTarget.Dimensions.y,
+                    boundRenderTarget.Dimensions.X,
+                    boundRenderTarget.Dimensions.Y,
                     0.0f,
                     1.0f);
-                cmd.SetScissor(0, 0, boundRenderTarget.Dimensions.x, boundRenderTarget.Dimensions.y);
+                cmd.SetScissor(0, 0, boundRenderTarget.Dimensions.X, boundRenderTarget.Dimensions.Y);
                 cmd.EndRenderPass();
             });
 
@@ -100,7 +100,7 @@ namespace Renderer {
 
                     shadowInfo.ShadowMatrices.resize(1);
                     auto proj =
-                        Core::PerspectiveRH_ZO(
+                        Core::PerspectiveRhZo(
                             spotLight->GetOuterConeAngle() * 2.0f,
                             1.0f,
                             0.1f,
@@ -119,7 +119,7 @@ namespace Renderer {
                     
                     Core::Float4 test = viewMat * Core::Float4(3, 3, 3, 1).Data;
                     Core::Float4 restest = proj * test.Data;
-                    float z = restest.z / restest.w;
+                    float z = restest.Z / restest.W;
                     view.TargetHeight = allocator.GetDesc().SpotShadowAtlas.Width;
                     view.TargetWidth = allocator.GetDesc().SpotShadowAtlas.Height;
                     shadowRenderViews.push_back(view);
@@ -179,7 +179,7 @@ namespace Renderer {
 
                     float radius = pointLight->GetAttenuationRadius();
                     auto proj =
-                        Core::PerspectiveRH_ZO(
+                        Core::PerspectiveRhZo(
                             Core::DegToRad(90.0f),
                             1.0f,
                             0.1f,
@@ -212,7 +212,7 @@ namespace Renderer {
                         auto clipPos = proj * viewMat * Core::Float4(-1, -1, -1, 1).Data;
                         Core::Float4 test = view.ViewProjection * Core::Float4(3, 3, 3, 1).Data;
 
-                        float z = test.z / test.w;
+                        float z = test.Z / test.W;
                         shadowInfo.ShadowMatrices[i] = view.ViewProjection;
                         view.CameraPos = pointLight->GetPosition();
                         view.wantRawDepth = true;
@@ -355,7 +355,7 @@ namespace Renderer {
                                 Core::Float4(corner, 1.0f).Data;
 
                             bounds.ExpandBy(
-                                Core::Float3(p.x, p.y, p.z));
+                                Core::Float3(p.X, p.Y, p.Z));
                         }
                         //bounds.Min.z -= ExtendNear;
                         //bounds.Min.z -= 10;
@@ -363,13 +363,13 @@ namespace Renderer {
                         //得到的z一定是负数，且最远的负数越小，最近的直接设置为0，所以投影需要将越大的映射为0，所以线性平行投影映射需要将
                         //翻转min和max
                         auto proj =
-                            Core::OrthoRHBounds_ZO(
-                                bounds.Min.x,
-                                bounds.Max.x,
-                                bounds.Min.y,
-                                bounds.Max.y,
+                            Core::OrthoRhBoundsZo(
+                                bounds.Min.X,
+                                bounds.Max.X,
+                                bounds.Min.Y,
+                                bounds.Max.Y,
                                 0,
-                                bounds.Min.z);
+                                bounds.Min.Z);
                         Core::Float4 proj1 = lightView * Core::Float4(0, 0, 0, 1).Data;
                         Core::Float4 proj2 = lightView * Core::Float4(3, 3, 3, 1).Data;
 
@@ -864,8 +864,8 @@ namespace Renderer {
                         passInfo.RenderArea.Height = slice.Height;
                         if (shadowView.TargetHeight != 0 && shadowView.TargetWidth != 0) {
                             //重新设置dimention
-                            passInfo.RenderTargets.Dimensions.x = shadowView.TargetWidth;
-                            passInfo.RenderTargets.Dimensions.y = shadowView.TargetHeight;
+                            passInfo.RenderTargets.Dimensions.X = shadowView.TargetWidth;
+                            passInfo.RenderTargets.Dimensions.Y = shadowView.TargetHeight;
                         }
                         cmd.BeginRenderPass(passInfo);
                         cmd.SetViewport(

@@ -747,7 +747,7 @@ namespace RHIOpenGL
             }
 
             glEnable(GL_SCISSOR_TEST);
-            glScissor(0, 0, renderPassInfo.RenderTargets.Dimensions.x, renderPassInfo.RenderTargets.Dimensions.y);
+            glScissor(0, 0, renderPassInfo.RenderTargets.Dimensions.X, renderPassInfo.RenderTargets.Dimensions.Y);
 
             bool hasColorClear = false;
             float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };

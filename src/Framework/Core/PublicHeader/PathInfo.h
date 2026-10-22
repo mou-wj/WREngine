@@ -9,59 +9,59 @@ namespace Core {
     CORE_API std::string GetShaderFilesRootDir();
 
     // =========================
-// Path »ù´¡²ğ·Ö
+// Path åŸºç¡€æ‹†åˆ†
 // =========================
 
-// »ñÈ¡ÎÄ¼şÃû£¨º¬ºó×º£©
+// è·å–æ–‡ä»¶åï¼ˆå«åç¼€ï¼‰
     CORE_API std::string GetFileName(const std::string& path);
 
-    // »ñÈ¡ÎÄ¼şÃû£¨²»º¬ºó×º£©
+    // è·å–æ–‡ä»¶åï¼ˆä¸å«åç¼€ï¼‰
     CORE_API std::string GetBaseName(const std::string& path);
 
-    // »ñÈ¡À©Õ¹Ãû£¨²»º¬µã£©
+    // è·å–æ‰©å±•åï¼ˆä¸å«ç‚¹ï¼‰
     CORE_API std::string GetExtension(const std::string& path);
 
-    // »ñÈ¡Ä¿Â¼Â·¾¶£¨È¥µôÎÄ¼şÃû£©
+    // è·å–ç›®å½•è·¯å¾„ï¼ˆå»æ‰æ–‡ä»¶åï¼‰
     CORE_API std::string GetDirectory(const std::string& path);
 
     // =========================
-    // Â·¾¶Æ´½Ó / ¹æ·¶»¯
+    // è·¯å¾„æ‹¼æ¥ / è§„èŒƒåŒ–
     // =========================
 
-    // Æ´½ÓÂ·¾¶
+    // æ‹¼æ¥è·¯å¾„
     CORE_API std::string JoinPath(const std::string& a, const std::string& b);
 
     CORE_API std::string JoinPath(const std::string& a,
         const std::string& b,
         const std::string& c);
 
-    // ¹æ·¶»¯Â·¾¶£¨´¦Àí ../ ./ ÒÔ¼° / \ »ìÓÃ£©
+    // è§„èŒƒåŒ–è·¯å¾„ï¼ˆå¤„ç† ../ ./ ä»¥åŠ / \ æ··ç”¨ï¼‰
     CORE_API std::string NormalizePath(const std::string& path);
 
     // =========================
-    // Â·¾¶ÅĞ¶Ï
+    // è·¯å¾„åˆ¤æ–­
     // =========================
 
-    // ÊÇ·ñÊÇ¾ø¶ÔÂ·¾¶
+    // æ˜¯å¦æ˜¯ç»å¯¹è·¯å¾„
     CORE_API bool IsAbsolutePath(const std::string& path);
 
-    // ÊÇ·ñ´æÔÚÀ©Õ¹Ãû
+    // æ˜¯å¦å­˜åœ¨æ‰©å±•å
     CORE_API bool HasExtension(const std::string& path);
 
-    // ÊÇ·ñÊÇÄ³¸öÀ©Õ¹Ãû
+    // æ˜¯å¦æ˜¯æŸä¸ªæ‰©å±•å
     CORE_API bool IsExtension(const std::string& path, const std::string& ext);
 
     // =========================
-    // ±ã½İ¹¤¾ß
+    // ä¾¿æ·å·¥å…·
     // =========================
 
-    // Ìæ»»À©Õ¹Ãû
+    // æ›¿æ¢æ‰©å±•å
     CORE_API std::string ReplaceExtension(const std::string& path, const std::string& newExt);
 
-    // Ö»±£ÁôÄ¿Â¼£¨È·±£Ä©Î²´ø / »ò \ Í³Ò»£©
+    // åªä¿ç•™ç›®å½•ï¼ˆç¡®ä¿æœ«å°¾å¸¦ / æˆ– \ ç»Ÿä¸€ï¼‰
     CORE_API std::string EnsureTrailingSlash(const std::string& path);
 
-    // Ïà¶ÔÂ·¾¶×ª¾ø¶ÔÂ·¾¶£¨»ùÓÚ project »ò exe£©
+    // ç›¸å¯¹è·¯å¾„è½¬ç»å¯¹è·¯å¾„ï¼ˆåŸºäº project æˆ– exeï¼‰
     CORE_API std::string AbsoluteFromProject(const std::string& relativePath);
 
 }

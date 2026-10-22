@@ -12,23 +12,23 @@ TaskPool::TaskPool(size_t threads) {
         if (threads == 0) threads = 1;
     }
 
-    bShutdown.store(false);
-    Workers.reserve(threads);
+    m_bShutdown.store(false);
+    m_Workers.reserve(threads);
     for (size_t i = 0; i < threads; ++i) {
-        Workers.emplace_back(&TaskPool::WorkerLoop, this);
+        m_Workers.emplace_back(&TaskPool::WorkerLoop, this);
     }
 }
 
 TaskPool::~TaskPool() {
     // Initiate shutdown
     {
-        std::lock_guard<std::mutex> lock(QueueMutex);
-        bShutdown.store(true);
+        std::lock_guard<std::mutex> lock(m_QueueMutex);
+        m_bShutdown.store(true);
     }
-    QueueCV.notify_all();
+    m_QueueCv.notify_all();
 
     // Join all workers
-    for (auto& t : Workers) {
+    for (auto& t : m_Workers) {
         if (t.joinable()) t.join();
     }
 
@@ -44,7 +44,7 @@ TaskHandle TaskPool::AddTask(std::function<void()> task) {
     auto promisePtr = std::make_shared<std::promise<void>>();
     std::shared_future<void> sf = promisePtr->get_future().share();
 
-    uint64_t id = NextId.fetch_add(1, std::memory_order_relaxed);
+    uint64_t id = m_NextId.fetch_add(1, std::memory_order_relaxed);
 
     TaskItem item;
     item.Id = id;
@@ -52,12 +52,12 @@ TaskHandle TaskPool::AddTask(std::function<void()> task) {
     item.PromisePtr = promisePtr;
 
     {
-        std::lock_guard<std::mutex> lock(QueueMutex);
-        Queue.push(std::move(item));
-        PendingTasks.fetch_add(1, std::memory_order_relaxed);
+        std::lock_guard<std::mutex> lock(m_QueueMutex);
+        m_Queue.push(std::move(item));
+        m_PendingTasks.fetch_add(1, std::memory_order_relaxed);
     }
 
-    QueueCV.notify_one();
+    m_QueueCv.notify_one();
 
     return TaskHandle{ id, sf };
 }
@@ -67,7 +67,7 @@ std::vector<TaskHandle> TaskPool::AddTasks(const std::vector<std::function<void(
     handles.reserve(tasks.size());
 
     // Reserve: we will hold lock briefly to push all tasks
-    std::lock_guard<std::mutex> lock(QueueMutex);
+    std::lock_guard<std::mutex> lock(m_QueueMutex);
     for (const auto& task : tasks) {
         if (!task) {
             handles.push_back(TaskHandle{ 0, std::shared_future<void>() });
@@ -76,17 +76,17 @@ std::vector<TaskHandle> TaskPool::AddTasks(const std::vector<std::function<void(
         auto promisePtr = std::make_shared<std::promise<void>>();
         std::shared_future<void> sf = promisePtr->get_future().share();
 
-        uint64_t id = NextId.fetch_add(1, std::memory_order_relaxed);
+        uint64_t id = m_NextId.fetch_add(1, std::memory_order_relaxed);
         TaskItem item;
         item.Id = id;
         item.Func = task;
         item.PromisePtr = promisePtr;
 
-        Queue.push(std::move(item));
+        m_Queue.push(std::move(item));
         handles.push_back(TaskHandle{ id, sf });
-        PendingTasks.fetch_add(1, std::memory_order_relaxed);
+        m_PendingTasks.fetch_add(1, std::memory_order_relaxed);
     }
-    QueueCV.notify_all();
+    m_QueueCv.notify_all();
     return handles;
 }
 
@@ -103,9 +103,9 @@ void TaskPool::WaitAll(const std::vector<TaskHandle>& handles) const {
 }
 
 void TaskPool::WaitAll() const {
-    std::unique_lock<std::mutex> lock(QueueMutex);
-    PendingCV.wait(lock, [this]() {
-        return PendingTasks.load(std::memory_order_relaxed) == 0;
+    std::unique_lock<std::mutex> lock(m_QueueMutex);
+    m_PendingCv.wait(lock, [this]() {
+        return m_PendingTasks.load(std::memory_order_relaxed) == 0;
     });
 }
 
@@ -118,21 +118,21 @@ void TaskPool::WorkerLoop() {
     while (true) {
         TaskItem taskItem;
         {
-            std::unique_lock<std::mutex> lock(QueueMutex);
-            QueueCV.wait(lock, [this]() {
-                return bShutdown.load() || !Queue.empty();
+            std::unique_lock<std::mutex> lock(m_QueueMutex);
+            m_QueueCv.wait(lock, [this]() {
+                return m_bShutdown.load() || !m_Queue.empty();
             });
 
-            if (bShutdown.load() && Queue.empty()) {
+            if (m_bShutdown.load() && m_Queue.empty()) {
                 return; // clean exit
             }
 
-            if (Queue.empty()) {
+            if (m_Queue.empty()) {
                 continue;
             }
 
-            taskItem = std::move(Queue.front());
-            Queue.pop();
+            taskItem = std::move(m_Queue.front());
+            m_Queue.pop();
         }
 
         // Execute outside lock
@@ -150,8 +150,8 @@ void TaskPool::WorkerLoop() {
         }
 
         // Decrement pending count and notify any waiting WaitAll
-        PendingTasks.fetch_sub(1, std::memory_order_relaxed);
-        PendingCV.notify_all();
+        m_PendingTasks.fetch_sub(1, std::memory_order_relaxed);
+        m_PendingCv.notify_all();
     }
 }
 

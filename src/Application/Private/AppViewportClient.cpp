@@ -304,14 +304,14 @@ namespace App {
 		forward = camera.GetTarget() - camera.GetPosition();
 
         
-        forward.x =
+        forward.X =
             std::cos(Yaw) *
             cosPitch;
         
-        forward.y =
+        forward.Y =
             std::sin(Pitch);
         
-        forward.z =
+        forward.Z =
             std::sin(Yaw) *
             cosPitch;
         

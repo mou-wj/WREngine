@@ -26,8 +26,8 @@ namespace Core
         static constexpr std::size_t RowCount = Rows;
         static constexpr std::size_t ColCount = Cols;
 
-        // Row-major storage: data[row][col]
-        std::array<T, Rows* Cols> data{};
+        // Row-major storage: Elements[row][col]
+        std::array<T, Rows* Cols> Elements{};
 
     public:
         // ------------------------------------------------------------
@@ -39,7 +39,7 @@ namespace Core
         constexpr explicit Matrix(T value)
         {
             for (std::size_t i = 0; i < Rows * Cols; ++i)
-                data[i] = value;
+                Elements[i] = value;
         }
 
         // Construct from initializer list (row-major)
@@ -49,7 +49,7 @@ namespace Core
             for (T v : init)
             {
                 if (i < Rows * Cols)
-                    data[i++] = v;
+                    Elements[i++] = v;
             }
         }
         void Print(
@@ -90,25 +90,25 @@ namespace Core
 
         constexpr T& operator()(std::size_t row, std::size_t col)
         {
-            return data[row * Cols + col];
+            return Elements[row * Cols + col];
         }
 
         constexpr const T& operator()(std::size_t row, std::size_t col) const
         {
-            return data[row * Cols + col];
+            return Elements[row * Cols + col];
         }
 
-        constexpr T* Data() { return data.data(); }
-        constexpr const T* Data() const { return data.data(); }
+        constexpr T* Data() { return Elements.data(); }
+        constexpr const T* Data() const { return Elements.data(); }
 
         constexpr T* operator[](std::size_t row)
         {
-            return data.data() + row * Cols;
+            return Elements.data() + row * Cols;
         }
 
         constexpr const T* operator[](std::size_t row) const
         {
-            return data.data() + row * Cols;
+            return Elements.data() + row * Cols;
         }
 
         // ------------------------------------------------------------
@@ -152,7 +152,7 @@ namespace Core
         const Matrix<T, Rows, Cols>& a, const Matrix<T, Rows, Cols>& b) {
         Matrix<T, Rows, Cols> result;
         for (std::size_t i = 0; i < Rows * Cols; ++i)
-            result.data[i] = a.data[i] + b.data[i];
+            result.Elements[i] = a.Elements[i] + b.Elements[i];
         return result;
     }
 
@@ -162,7 +162,7 @@ namespace Core
         const Matrix<T, Rows, Cols>& a, const Matrix<T, Rows, Cols>& b) {
         Matrix<T, Rows, Cols> result;
         for (std::size_t i = 0; i < Rows * Cols; ++i)
-            result.data[i] = a.data[i] - b.data[i];
+            result.Elements[i] = a.Elements[i] - b.Elements[i];
         return result;
     }
 
@@ -171,7 +171,7 @@ namespace Core
     constexpr Matrix<T, Rows, Cols> operator*(const Matrix<T, Rows, Cols>& m, T scalar) {
         Matrix<T, Rows, Cols> result;
         for (std::size_t i = 0; i < Rows * Cols; ++i)
-            result.data[i] = m.data[i] * scalar;
+            result.Elements[i] = m.Elements[i] * scalar;
         return result;
     }
 
@@ -186,7 +186,7 @@ namespace Core
     constexpr Matrix<T, Rows, Cols> operator/(const Matrix<T, Rows, Cols>& m, T scalar) {
         Matrix<T, Rows, Cols> result;
         for (std::size_t i = 0; i < Rows * Cols; ++i)
-            result.data[i] = m.data[i] / scalar;
+            result.Elements[i] = m.Elements[i] / scalar;
         return result;
     }
 
@@ -232,7 +232,7 @@ namespace Core
     template<typename T, std::size_t Rows, std::size_t Cols>
     constexpr bool operator==(const Matrix<T, Rows, Cols>& a, const Matrix<T, Rows, Cols>& b) {
         for (std::size_t i = 0; i < Rows * Cols; ++i)
-            if (a.data[i] != b.data[i])
+            if (a.Elements[i] != b.Elements[i])
                 return false;
         return true;
     }
@@ -272,7 +272,7 @@ constexpr T Determinant(const Matrix<T, 3, 3>& m) {
 // 4x4 Determinant
 template<typename T>
 constexpr T Determinant(const Matrix<T, 4, 4>& m) {
-    const T* a = m.data.data();
+    const T* a = m.Elements.data();
     T det =
         a[3] * a[6] * a[9] * a[12] - a[2] * a[7] * a[9] * a[12] - a[3] * a[5] * a[10] * a[12] + a[1] * a[7] * a[10] * a[12]
       + a[2] * a[5] * a[11] * a[12] - a[1] * a[6] * a[11] * a[12] - a[3] * a[6] * a[8] * a[13] + a[2] * a[7] * a[8] * a[13]

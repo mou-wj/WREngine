@@ -303,9 +303,9 @@ void* VulkanRHIApi::MapReadTexture(RHICommandListBase& cmdList, RHITexture* text
 
 	// mip size
 	auto mipsize = texture->GetMipSize(info.MipLevel);
-	const uint32_t width = mipsize.x;
-	const uint32_t height = mipsize.y;
-	const uint32_t depth = mipsize.z;
+	const uint32_t width = mipsize.X;
+	const uint32_t height = mipsize.Y;
+	const uint32_t depth = mipsize.Z;
 
 	//---------------------------------------
 	// Vulkan row pitch alignment

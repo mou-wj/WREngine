@@ -474,8 +474,8 @@ private:
 		ERHIFormat format = ERHIFormat::B8G8R8A8_UNorm;
         Swapchain = api->CreateSwapchain(windowHandle, width, height, format);
         auto frameSize = Window->GetFramebufferSize();
-        FrameWidth = frameSize.x;
-        FrameHeight = frameSize.y;
+        FrameWidth = frameSize.X;
+        FrameHeight = frameSize.Y;
 
 	}
 

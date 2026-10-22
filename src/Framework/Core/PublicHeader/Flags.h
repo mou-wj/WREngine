@@ -6,68 +6,68 @@ public:
     using StorageType = std::underlying_type_t<EnumType>;
 
     constexpr TFlags() = default;
-    constexpr TFlags(EnumType value) : Bits(static_cast<StorageType>(value)) {}
-    explicit constexpr TFlags(StorageType value) : Bits(value) {}
+    constexpr TFlags(EnumType value) : m_Bits(static_cast<StorageType>(value)) {}
+    explicit constexpr TFlags(StorageType value) : m_Bits(value) {}
 
-    constexpr StorageType GetBits() const { return Bits; }
-    constexpr bool HasAny(TFlags rhs) const { return (Bits & rhs.Bits) != 0; }
-    constexpr bool HasAll(TFlags rhs) const { return (Bits & rhs.Bits) == rhs.Bits; }
-    constexpr bool IsEmpty() const { return Bits == 0; }
-    constexpr EnumType ToEnum() const { return static_cast<EnumType>(Bits); }
+    constexpr StorageType GetBits() const { return m_Bits; }
+    constexpr bool HasAny(TFlags rhs) const { return (m_Bits & rhs.m_Bits) != 0; }
+    constexpr bool HasAll(TFlags rhs) const { return (m_Bits & rhs.m_Bits) == rhs.m_Bits; }
+    constexpr bool IsEmpty() const { return m_Bits == 0; }
+    constexpr EnumType ToEnum() const { return static_cast<EnumType>(m_Bits); }
 
-    constexpr TFlags operator|(TFlags rhs) const { return TFlags(static_cast<StorageType>(Bits | rhs.Bits)); }
-    constexpr TFlags operator&(TFlags rhs) const { return TFlags(static_cast<StorageType>(Bits & rhs.Bits)); }
-    constexpr TFlags operator~() const { return TFlags(static_cast<StorageType>(~Bits)); }
+    constexpr TFlags operator|(TFlags rhs) const { return TFlags(static_cast<StorageType>(m_Bits | rhs.m_Bits)); }
+    constexpr TFlags operator&(TFlags rhs) const { return TFlags(static_cast<StorageType>(m_Bits & rhs.m_Bits)); }
+    constexpr TFlags operator~() const { return TFlags(static_cast<StorageType>(~m_Bits)); }
 
     constexpr TFlags& operator|=(TFlags rhs)
     {
-        Bits = static_cast<StorageType>(Bits | rhs.Bits);
+        m_Bits = static_cast<StorageType>(m_Bits | rhs.m_Bits);
         return *this;
     }
 
     constexpr TFlags& operator&=(TFlags rhs)
     {
-        Bits = static_cast<StorageType>(Bits & rhs.Bits);
+        m_Bits = static_cast<StorageType>(m_Bits & rhs.m_Bits);
         return *this;
     }
 
 
     constexpr bool operator==(TFlags rhs) const
     {
-        return Bits == rhs.Bits;
+        return m_Bits == rhs.m_Bits;
     }
 
     constexpr bool operator!=(TFlags rhs) const
     {
-        return Bits != rhs.Bits;
+        return m_Bits != rhs.m_Bits;
     }
 
 private:
-    StorageType Bits = 0;
+    StorageType m_Bits = 0;
 };
 
 template<typename EnumType>
-inline constexpr bool EnumHasAnyFlags(TFlags<EnumType> Flags, TFlags<EnumType> Contains)
+inline constexpr bool EnumHasAnyFlags(TFlags<EnumType> flags, TFlags<EnumType> contains)
 {
-    return Flags.HasAny(Contains);
+    return flags.HasAny(contains);
 }
 
 template<typename EnumType>
-inline constexpr bool EnumHasAnyFlags(EnumType Flags, EnumType Contains)
+inline constexpr bool EnumHasAnyFlags(EnumType flags, EnumType contains)
 {
-    return EnumHasAnyFlags(TFlags<EnumType>(Flags), TFlags<EnumType>(Contains));
+    return EnumHasAnyFlags(TFlags<EnumType>(flags), TFlags<EnumType>(contains));
 }
 
 template<typename EnumType>
-inline constexpr bool EnumHasAnyFlags(EnumType Flags, TFlags<EnumType> Contains)
+inline constexpr bool EnumHasAnyFlags(EnumType flags, TFlags<EnumType> contains)
 {
-    return EnumHasAnyFlags(TFlags<EnumType>(Flags), Contains);
+    return EnumHasAnyFlags(TFlags<EnumType>(flags), contains);
 }
 
 template<typename EnumType>
-inline constexpr bool EnumHasAnyFlags(TFlags<EnumType> Flags, EnumType Contains)
+inline constexpr bool EnumHasAnyFlags(TFlags<EnumType> flags, EnumType contains)
 {
-    return EnumHasAnyFlags(Flags, TFlags<EnumType>(Contains));
+    return EnumHasAnyFlags(flags, TFlags<EnumType>(contains));
 }
 
 #define ENUM_CLASS_FLAGS(Enum, FlagsType) \

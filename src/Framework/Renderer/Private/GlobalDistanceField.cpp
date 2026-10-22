@@ -174,9 +174,9 @@ namespace Renderer
 
         SetShaderParameters(cmd, shader, &params);
 
-        const uint32_t groupX = (static_cast<uint32_t>(OutputResolution.x)) / 8u;
-        const uint32_t groupY = (static_cast<uint32_t>(OutputResolution.y)) / 8u;
-        const uint32_t groupZ = (static_cast<uint32_t>(OutputResolution.z)) / 8u;
+        const uint32_t groupX = (static_cast<uint32_t>(OutputResolution.X)) / 8u;
+        const uint32_t groupY = (static_cast<uint32_t>(OutputResolution.Y)) / 8u;
+        const uint32_t groupZ = (static_cast<uint32_t>(OutputResolution.Z)) / 8u;
         cmd.Dispatch(groupX, groupY, groupZ);
 
         cmd.End();
@@ -282,17 +282,17 @@ namespace Renderer
 
         X =
             static_cast<int32_t>(
-                std::floor(delta.x / BlockWorldSize));
+                std::floor(delta.X / BlockWorldSize));
 
 
         Y =
             static_cast<int32_t>(
-                std::floor(delta.y / BlockWorldSize));
+                std::floor(delta.Y / BlockWorldSize));
 
 
         Z =
             static_cast<int32_t>(
-                std::floor(delta.z / BlockWorldSize));
+                std::floor(delta.Z / BlockWorldSize));
     }
 
 

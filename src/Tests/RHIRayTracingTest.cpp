@@ -323,8 +323,8 @@ private:
         Swapchain = api->CreateSwapchain(windowHandle, static_cast<uint32_t>(WindowWidth), static_cast<uint32_t>(WindowHeight), RHI::ERHIFormat::B8G8R8A8_UNorm);
 
         auto frameSize = Window->GetFramebufferSize();
-        FrameWidth = frameSize.x;
-        FrameHeight = frameSize.y;
+        FrameWidth = frameSize.X;
+        FrameHeight = frameSize.Y;
         std::cout << "RHIRayTracingTest dispatch extent: " << FrameWidth << "x" << FrameHeight << std::endl;
     }
 

@@ -238,9 +238,9 @@ void RenderTexture::ReadData(void* data, uint32_t mipIndex, uint32_t arraySlice,
 		.BytesPerPixel;
 
 	size_t totalSize =
-		mipSize.x *
-		mipSize.y *
-		mipSize.z *
+		mipSize.X *
+		mipSize.Y *
+		mipSize.Z *
 		bpp;
 
 	memcpy(
@@ -660,10 +660,10 @@ void SaveTexture(RenderTexture* texture,const std::string& path, uint32_t array,
 		texture->GetRHI()->GetMipSize(mip);
 
 	const uint32_t width =
-		mipSize.x;
+		mipSize.X;
 
 	const uint32_t height =
-		mipSize.y;
+		mipSize.Y;
 
 	//--------------------------------------
 	// format

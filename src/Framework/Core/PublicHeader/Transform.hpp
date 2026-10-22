@@ -3,7 +3,7 @@
 #include "Math.hpp"
 namespace Core{
 
-    // LookAt (right-handed) 看向z轴负方向
+    // LookAt (right-handed) 鐪嬪悜z杞磋礋鏂瑰悜
     inline Mat4 LookAtRH(const Float3& eye, const Float3& center, const Float3& up) {
         Float3 f =
             Normalize(center - eye);
@@ -17,26 +17,26 @@ namespace Core{
         Mat4 m =
             Mat4::Identity();
 
-        m(0, 0) = s.x;
-        m(0, 1) = s.y;
-        m(0, 2) = s.z;
+        m(0, 0) = s.X;
+        m(0, 1) = s.Y;
+        m(0, 2) = s.Z;
         m(0, 3) = -Dot(s, eye);
 
-        m(1, 0) = u.x;
-        m(1, 1) = u.y;
-        m(1, 2) = u.z;
+        m(1, 0) = u.X;
+        m(1, 1) = u.Y;
+        m(1, 2) = u.Z;
         m(1, 3) = -Dot(u, eye);
 
-        m(2, 0) = -f.x;
-        m(2, 1) = -f.y;
-        m(2, 2) = -f.z;
+        m(2, 0) = -f.X;
+        m(2, 1) = -f.Y;
+        m(2, 2) = -f.Z;
         m(2, 3) = Dot(f, eye);
 
         return m;
     }
 
     // Perspective projection (right-handed)
-    inline Mat4 PerspectiveRH_NO(float fovy, float aspect, float zNear, float zFar) {
+    inline Mat4 PerspectiveRhNo(float fovy, float aspect, float zNear, float zFar) {
         float tanHalfFovy = std::tan(fovy / 2.0f);
         Mat4 result{};
         result(0, 0) = 1.0f / (aspect * tanHalfFovy);
@@ -46,7 +46,7 @@ namespace Core{
         result(3, 2) = -1.0f;
         return result;
     }
-    inline Mat4 PerspectiveRH_ZO(
+    inline Mat4 PerspectiveRhZo(
         float fovy,
         float aspect,
         float zNear,
@@ -67,7 +67,7 @@ namespace Core{
         return result;
     }
     // Orthographic projection (right-handed)
-    inline Mat4 OrthoRH_NO(float left, float right, float bottom, float top, float zNear, float zFar) {
+    inline Mat4 OrthoRhNo(float left, float right, float bottom, float top, float zNear, float zFar) {
         Mat4 result = Mat4::Identity();
         result(0, 0) = 2.0f / (right - left);
         result(1, 1) = 2.0f / (top - bottom);
@@ -77,7 +77,7 @@ namespace Core{
         result(2, 3) = -(zFar + zNear) / (zFar - zNear);
         return result;
     }
-    inline Mat4 OrthoRHBounds_NO(
+    inline Mat4 OrthoRhBoundsNo(
         float left,
         float right,
         float bottom,
@@ -96,7 +96,7 @@ namespace Core{
         return result;
     }
 
-    inline Mat4 OrthoRH_ZO(
+    inline Mat4 OrthoRhZo(
         float left,
         float right,
         float bottom,
@@ -116,7 +116,7 @@ namespace Core{
 
         return result;
     }
-    inline Mat4 OrthoRHBounds_ZO(
+    inline Mat4 OrthoRhBoundsZo(
         float left,
         float right,
         float bottom,
@@ -144,9 +144,9 @@ namespace Core{
         Matrix<T, 4, 4> result =
             Matrix<T, 4, 4>::Identity();
 
-        result(0, 3) = translation.x;
-        result(1, 3) = translation.y;
-        result(2, 3) = translation.z;
+        result(0, 3) = translation.X;
+        result(1, 3) = translation.Y;
+        result(2, 3) = translation.Z;
 
         return result;
     }
@@ -158,9 +158,9 @@ namespace Core{
         Matrix<T, 4, 4> result =
             Matrix<T, 4, 4>::Identity();
 
-        result(0, 0) = scale.x;
-        result(1, 1) = scale.y;
-        result(2, 2) = scale.z;
+        result(0, 0) = scale.X;
+        result(1, 1) = scale.Y;
+        result(2, 2) = scale.Z;
 
         return result;
     }
@@ -169,18 +169,18 @@ namespace Core{
     Matrix<T, 4, 4> MakeRotationMatrix(
         const Vec3<T>& rotation)
     {
-        constexpr T DegToRad =
+        constexpr T degToRad =
             static_cast<T>(
                 0.017453292519943295769f);
 
         T pitch =
-            rotation.x * DegToRad;
+            rotation.X * degToRad;
 
         T yaw =
-            rotation.z * DegToRad;
+            rotation.Z * degToRad;
 
         T roll =
-            rotation.y * DegToRad;
+            rotation.Y * degToRad;
 
         T cp = std::cos(pitch);
         T sp = std::sin(pitch);
@@ -273,19 +273,19 @@ namespace Core{
             GetScale(matrix);
 
         T m00 =
-            matrix(0, 0) / scale.x;
+            matrix(0, 0) / scale.X;
 
         T m10 =
-            matrix(1, 0) / scale.x;
+            matrix(1, 0) / scale.X;
 
         T m20 =
-            matrix(2, 0) / scale.x;
+            matrix(2, 0) / scale.X;
 
         T m21 =
-            matrix(2, 1) / scale.y;
+            matrix(2, 1) / scale.Y;
 
         T m22 =
-            matrix(2, 2) / scale.z;
+            matrix(2, 2) / scale.Z;
 
         T pitch =
             std::atan2(m21, m22);
@@ -300,14 +300,14 @@ namespace Core{
         T roll =
             std::atan2(m10, m00);
 
-        constexpr T RadToDeg =
+        constexpr T radToDeg =
             static_cast<T>(
                 57.295779513082320876f);
 
         return Vec3<T>(
-            pitch * RadToDeg,
-            roll * RadToDeg,
-            yaw * RadToDeg);
+            pitch * radToDeg,
+            roll * radToDeg,
+            yaw * radToDeg);
     }
 
     template<typename T>
@@ -316,19 +316,19 @@ namespace Core{
         const Vec3<T>& point)
     {
         return Vec3<T>(
-            matrix(0, 0) * point.x +
-            matrix(0, 1) * point.y +
-            matrix(0, 2) * point.z +
+            matrix(0, 0) * point.X +
+            matrix(0, 1) * point.Y +
+            matrix(0, 2) * point.Z +
             matrix(0, 3),
 
-            matrix(1, 0) * point.x +
-            matrix(1, 1) * point.y +
-            matrix(1, 2) * point.z +
+            matrix(1, 0) * point.X +
+            matrix(1, 1) * point.Y +
+            matrix(1, 2) * point.Z +
             matrix(1, 3),
 
-            matrix(2, 0) * point.x +
-            matrix(2, 1) * point.y +
-            matrix(2, 2) * point.z +
+            matrix(2, 0) * point.X +
+            matrix(2, 1) * point.Y +
+            matrix(2, 2) * point.Z +
             matrix(2, 3));
     }
 
@@ -338,17 +338,17 @@ namespace Core{
         const Vec3<T>& vector)
     {
         return Vec3<T>(
-            matrix(0, 0) * vector.x +
-            matrix(0, 1) * vector.y +
-            matrix(0, 2) * vector.z,
+            matrix(0, 0) * vector.X +
+            matrix(0, 1) * vector.Y +
+            matrix(0, 2) * vector.Z,
 
-            matrix(1, 0) * vector.x +
-            matrix(1, 1) * vector.y +
-            matrix(1, 2) * vector.z,
+            matrix(1, 0) * vector.X +
+            matrix(1, 1) * vector.Y +
+            matrix(1, 2) * vector.Z,
 
-            matrix(2, 0) * vector.x +
-            matrix(2, 1) * vector.y +
-            matrix(2, 2) * vector.z);
+            matrix(2, 0) * vector.X +
+            matrix(2, 1) * vector.Y +
+            matrix(2, 2) * vector.Z);
     }
 
 

@@ -123,10 +123,10 @@ namespace RenderCore {
                     DestSlot.Actions = SourceSlot.Action;
                     // 设置清除标记类型
                     DestSlot.ClearBinding.Binding = RHI::RHIClearValueBinding::ClearValueBinding::Color;
-                    DestSlot.ClearBinding.Color[0] = SourceSlot.ClearValue.x;
-                    DestSlot.ClearBinding.Color[1] = SourceSlot.ClearValue.y;
-                    DestSlot.ClearBinding.Color[2] = SourceSlot.ClearValue.z;
-                    DestSlot.ClearBinding.Color[3] = SourceSlot.ClearValue.w;
+                    DestSlot.ClearBinding.Color[0] = SourceSlot.ClearValue.X;
+                    DestSlot.ClearBinding.Color[1] = SourceSlot.ClearValue.Y;
+                    DestSlot.ClearBinding.Color[2] = SourceSlot.ClearValue.Z;
+                    DestSlot.ClearBinding.Color[3] = SourceSlot.ClearValue.W;
                 }
             }
 

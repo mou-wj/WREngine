@@ -13,7 +13,7 @@ namespace Renderer
     {
         inline float SafeLengthSquared(const Core::Float3& V)
         {
-            return V.x * V.x + V.y * V.y + V.z * V.z;
+            return V.X * V.X + V.Y * V.Y + V.Z * V.Z;
         }
 
         inline Core::Float3 NormalizeSafe(const Core::Float3& V)
@@ -49,7 +49,7 @@ namespace Renderer
         inline Core::Float3 SampleEnvironmentMapLDR(const Core::Float3& Direction, const RenderCore::RenderTexture* EnvironmentMap)
         {
             (void)EnvironmentMap;
-            const float NdotL = std::max(0.0f, Direction.y);
+            const float NdotL = std::max(0.0f, Direction.Y);
             return Core::Float3(1.0f, 1.0f, 1.0f) * (0.3f + 0.7f * NdotL);
         }
     }
@@ -108,12 +108,12 @@ namespace Renderer
             const Core::Float3 VoxelExtents(Settings_.VoxelSize, Settings_.VoxelSize, Settings_.VoxelSize);
             const Core::Float3 MinCell = MeshBounds.Box.Min;
             const Core::Float3 MaxCell = MeshBounds.Box.Max;
-            const int32_t MinX = static_cast<int32_t>(std::floor(MinCell.x / Settings_.VoxelSize));
-            const int32_t MinY = static_cast<int32_t>(std::floor(MinCell.y / Settings_.VoxelSize));
-            const int32_t MinZ = static_cast<int32_t>(std::floor(MinCell.z / Settings_.VoxelSize));
-            const int32_t MaxX = static_cast<int32_t>(std::floor(MaxCell.x / Settings_.VoxelSize));
-            const int32_t MaxY = static_cast<int32_t>(std::floor(MaxCell.y / Settings_.VoxelSize));
-            const int32_t MaxZ = static_cast<int32_t>(std::floor(MaxCell.z / Settings_.VoxelSize));
+            const int32_t MinX = static_cast<int32_t>(std::floor(MinCell.X / Settings_.VoxelSize));
+            const int32_t MinY = static_cast<int32_t>(std::floor(MinCell.Y / Settings_.VoxelSize));
+            const int32_t MinZ = static_cast<int32_t>(std::floor(MinCell.Z / Settings_.VoxelSize));
+            const int32_t MaxX = static_cast<int32_t>(std::floor(MaxCell.X / Settings_.VoxelSize));
+            const int32_t MaxY = static_cast<int32_t>(std::floor(MaxCell.Y / Settings_.VoxelSize));
+            const int32_t MaxZ = static_cast<int32_t>(std::floor(MaxCell.Z / Settings_.VoxelSize));
 
             for (int32_t Z = MinZ; Z <= MaxZ; ++Z)
             {
@@ -157,13 +157,13 @@ namespace Renderer
         if (Settings_.AutoExpandBounds)
         {
             const Core::Float3 Min = Core::Float3(
-                std::min(Bounds.Min.x, Settings_.WorldMin.x),
-                std::min(Bounds.Min.y, Settings_.WorldMin.y),
-                std::min(Bounds.Min.z, Settings_.WorldMin.z));
+                std::min(Bounds.Min.X, Settings_.WorldMin.X),
+                std::min(Bounds.Min.Y, Settings_.WorldMin.Y),
+                std::min(Bounds.Min.Z, Settings_.WorldMin.Z));
             const Core::Float3 Max = Core::Float3(
-                std::max(Bounds.Max.x, Settings_.WorldMax.x),
-                std::max(Bounds.Max.y, Settings_.WorldMax.y),
-                std::max(Bounds.Max.z, Settings_.WorldMax.z));
+                std::max(Bounds.Max.X, Settings_.WorldMax.X),
+                std::max(Bounds.Max.Y, Settings_.WorldMax.Y),
+                std::max(Bounds.Max.Z, Settings_.WorldMax.Z));
             Bounds = Core::AABB(Min, Max);
         }
 
@@ -249,7 +249,7 @@ namespace Renderer
             SceneVoxelOctreeNode& Node = Nodes[Index];
             Node.Bounds = TreeNode.Bounds.Box;
             Node.Children = TreeNode.Children;
-            Node.IsLeaf = TreeNode.IsLeaf;
+            Node.IsLeaf = TreeNode.bLeaf;
             Node.Parent = Core::OctreeInvalidNode;
             Node.Level = 0;
             Node.FirstVoxel = Core::OctreeInvalidNode;

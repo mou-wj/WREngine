@@ -20,7 +20,7 @@ struct CORE_API AABB {
 		Max = Float3(-inf, -inf, -inf);
 	}
 
-	AABB(const Float3& InMin, const Float3& InMax) : Min(InMin), Max(InMax) {}
+	AABB(const Float3& inMin, const Float3& inMax) : Min(inMin), Max(inMax) {}
 
 	// Mark as empty
 	void SetEmpty() {
@@ -30,90 +30,90 @@ struct CORE_API AABB {
 	}
 
 	bool IsEmpty() const {
-		return Min.x > Max.x || Min.y > Max.y || Min.z > Max.z;
+		return Min.X > Max.X || Min.Y > Max.Y || Min.Z > Max.Z;
 	}
 
 	// Expand the bounds to include a point
-	void ExpandBy(const Float3& Point) {
+	void ExpandBy(const Float3& point) {
 		if (IsEmpty()) {
-			Min = Point; Max = Point; return;
+			Min = point; Max = point; return;
 		}
-		Min = Float3(CORE_MIN(Min.x, Point.x), CORE_MIN(Min.y, Point.y), CORE_MIN(Min.z, Point.z));
-		Max = Float3(CORE_MAX(Max.x, Point.x), CORE_MAX(Max.y, Point.y), CORE_MAX(Max.z, Point.z));
+		Min = Float3(CORE_MIN(Min.X, point.X), CORE_MIN(Min.Y, point.Y), CORE_MIN(Min.Z, point.Z));
+		Max = Float3(CORE_MAX(Max.X, point.X), CORE_MAX(Max.Y, point.Y), CORE_MAX(Max.Z, point.Z));
 	}
 
 	// Expand to include another AABB
-	void Merge(const AABB& Other) {
-		if (Other.IsEmpty()) return;
-		if (IsEmpty()) { *this = Other; return; }
-		Min = Float3(CORE_MIN(Min.x, Other.Min.x), CORE_MIN(Min.y, Other.Min.y), CORE_MIN(Min.z, Other.Min.z));
-		Max = Float3(CORE_MAX(Max.x, Other.Max.x), CORE_MAX(Max.y, Other.Max.y), CORE_MAX(Max.z, Other.Max.z));
+	void Merge(const AABB& other) {
+		if (other.IsEmpty()) return;
+		if (IsEmpty()) { *this = other; return; }
+		Min = Float3(CORE_MIN(Min.X, other.Min.X), CORE_MIN(Min.Y, other.Min.Y), CORE_MIN(Min.Z, other.Min.Z));
+		Max = Float3(CORE_MAX(Max.X, other.Max.X), CORE_MAX(Max.Y, other.Max.Y), CORE_MAX(Max.Z, other.Max.Z));
 	}
 
 	// Center and extent
-	Float3 GetCenter() const { return Float3((Min.x+Max.x)*0.5f, (Min.y+Max.y)*0.5f, (Min.z+Max.z)*0.5f); }
-	Float3 GetExtent() const { return Float3((Max.x-Min.x)*0.5f, (Max.y-Min.y)*0.5f, (Max.z-Min.z)*0.5f); }
-	// ¼ÆËãµãµ½ AABB µÄ×î½ü¾àÀë
-	float Distance(const Float3& Position) const
+	Float3 GetCenter() const { return Float3((Min.X+Max.X)*0.5f, (Min.Y+Max.Y)*0.5f, (Min.Z+Max.Z)*0.5f); }
+	Float3 GetExtent() const { return Float3((Max.X-Min.X)*0.5f, (Max.Y-Min.Y)*0.5f, (Max.Z-Min.Z)*0.5f); }
+	// è®¡ç®—ç‚¹åˆ° AABB çš„æœ€è¿‘è·ç¦»
+	float Distance(const Float3& position) const
 	{
-		return std::sqrt(DistanceSquared(Position));
+		return std::sqrt(DistanceSquared(position));
 	}
 
-	// Í¨³£ÓÅÏÈ¼ÆËãÆ½·½¾àÀë£¬±ÜÃâ²»±ØÒªµÄ¿ª·½£¨ÊÓ¹¤³ÌĞèÒª£¬±¾´¦Ìá¹©Æ½·½°æ±¾£©
-	float DistanceSquared(const Float3& Position) const
+	// é€šå¸¸ä¼˜å…ˆè®¡ç®—å¹³æ–¹è·ç¦»ï¼Œé¿å…ä¸å¿…è¦çš„å¼€æ–¹ï¼ˆè§†å·¥ç¨‹éœ€è¦ï¼Œæœ¬å¤„æä¾›å¹³æ–¹ç‰ˆæœ¬ï¼‰
+	float DistanceSquared(const Float3& position) const
 	{
 		float sqDist = 0.0f;
 
-		// ±éÀú X, Y, Z Èı¸öÖá
-		// Öá X
-		if (Position.x < Min.x)
+		// éå† X, Y, Z ä¸‰ä¸ªè½´
+		// è½´ X
+		if (position.X < Min.X)
 		{
-			float diff = Min.x - Position.x;
+			float diff = Min.X - position.X;
 			sqDist += diff * diff;
 		}
-		else if (Position.x > Max.x)
+		else if (position.X > Max.X)
 		{
-			float diff = Position.x - Max.x;
-			sqDist += diff * diff;
-		}
-
-		// Öá Y
-		if (Position.y < Min.y)
-		{
-			float diff = Min.y - Position.y;
-			sqDist += diff * diff;
-		}
-		else if (Position.y > Max.y)
-		{
-			float diff = Position.y - Max.y;
+			float diff = position.X - Max.X;
 			sqDist += diff * diff;
 		}
 
-		// Öá Z
-		if (Position.z < Min.z)
+		// è½´ Y
+		if (position.Y < Min.Y)
 		{
-			float diff = Min.z - Position.z;
+			float diff = Min.Y - position.Y;
 			sqDist += diff * diff;
 		}
-		else if (Position.z > Max.z)
+		else if (position.Y > Max.Y)
 		{
-			float diff = Position.z - Max.z;
+			float diff = position.Y - Max.Y;
+			sqDist += diff * diff;
+		}
+
+		// è½´ Z
+		if (position.Z < Min.Z)
+		{
+			float diff = Min.Z - position.Z;
+			sqDist += diff * diff;
+		}
+		else if (position.Z > Max.Z)
+		{
+			float diff = position.Z - Max.Z;
 			sqDist += diff * diff;
 		}
 
 		return sqDist;
 	}
-	bool Intersects(const AABB& Other) const
+	bool Intersects(const AABB& other) const
 	{
-		return !(Max.x < Other.Min.x || Min.x > Other.Max.x ||
-			Max.y < Other.Min.y || Min.y > Other.Max.y ||
-			Max.z < Other.Min.z || Min.z > Other.Max.z);
+		return !(Max.X < other.Min.X || Min.X > other.Max.X ||
+			Max.Y < other.Min.Y || Min.Y > other.Max.Y ||
+			Max.Z < other.Min.Z || Min.Z > other.Max.Z);
 	}
-	bool Contains(const AABB& Other) const
+	bool Contains(const AABB& other) const
 	{
-		return Other.Min.x >= Min.x && Other.Max.x <= Max.x &&
-			Other.Min.y >= Min.y && Other.Max.y <= Max.y &&
-			Other.Min.z >= Min.z && Other.Max.z <= Max.z;
+		return other.Min.X >= Min.X && other.Max.X <= Max.X &&
+			other.Min.Y >= Min.Y && other.Max.Y <= Max.Y &&
+			other.Min.Z >= Min.Z && other.Max.Z <= Max.Z;
 	}
 };
 
@@ -123,41 +123,41 @@ struct CORE_API BoundingSphere {
 	float Radius;
 
 	BoundingSphere() : Center(0.0f,0.0f,0.0f), Radius(0.0f) {}
-	BoundingSphere(const Float3& InCenter, float InRadius) : Center(InCenter), Radius(InRadius) {}
+	BoundingSphere(const Float3& inCenter, float inRadius) : Center(inCenter), Radius(inRadius) {}
 
 	// Build sphere from AABB (sphere that encloses box)
-	static BoundingSphere FromAABB(const AABB& Box) {
-		Float3 c = Box.GetCenter();
-		Float3 e = Box.GetExtent();
-		float r = std::sqrt(e.x*e.x + e.y*e.y + e.z*e.z);
+	static BoundingSphere FromAABB(const AABB& box) {
+		Float3 c = box.GetCenter();
+		Float3 e = box.GetExtent();
+		float r = std::sqrt(e.X*e.X + e.Y*e.Y + e.Z*e.Z);
 		return BoundingSphere(c, r);
 	}
-	bool Intersects(const BoundingSphere& Other) const
+	bool Intersects(const BoundingSphere& other) const
 	{
-		const Float3 Delta = Center - Other.Center;
+		const Float3 delta = Center - other.Center;
 
-		float DistanceSquared =
-			Delta.x * Delta.x +
-			Delta.y * Delta.y +
-			Delta.z * Delta.z;
+		float distanceSquared =
+			delta.X * delta.X +
+			delta.Y * delta.Y +
+			delta.Z * delta.Z;
 
-		float RadiusSum = Radius + Other.Radius;
+		float radiusSum = Radius + other.Radius;
 
-		return DistanceSquared <= RadiusSum * RadiusSum;
+		return distanceSquared <= radiusSum * radiusSum;
 	}
 
-	bool Contains(const BoundingSphere& Other) const
+	bool Contains(const BoundingSphere& other) const
 	{
-		const Float3 Delta = Other.Center - Center;
+		const Float3 delta = other.Center - Center;
 
-		float Distance =
+		float distance =
 			std::sqrt(
-				Delta.x * Delta.x +
-				Delta.y * Delta.y +
-				Delta.z * Delta.z);
+				delta.X * delta.X +
+				delta.Y * delta.Y +
+				delta.Z * delta.Z);
 
 
-		return Distance + Other.Radius <= Radius;
+		return distance + other.Radius <= Radius;
 	}
 };
 
@@ -168,22 +168,22 @@ struct CORE_API BoxSphereBounds {
 
 	BoxSphereBounds() : Box(), Sphere() {}
 
-	explicit BoxSphereBounds(const AABB& InBox) : Box(InBox), Sphere(BoundingSphere::FromAABB(InBox)) {}
+	explicit BoxSphereBounds(const AABB& inBox) : Box(inBox), Sphere(BoundingSphere::FromAABB(inBox)) {}
 
-	void UpdateFromAABB(const AABB& InBox) {
-		Box = InBox;
-		Sphere = BoundingSphere::FromAABB(InBox);
+	void UpdateFromAABB(const AABB& inBox) {
+		Box = inBox;
+		Sphere = BoundingSphere::FromAABB(inBox);
 	}
 
 	// Expand bounds to include a point
-	void ExpandBy(const Float3& Point) {
-		Box.ExpandBy(Point);
+	void ExpandBy(const Float3& point) {
+		Box.ExpandBy(point);
 		Sphere = BoundingSphere::FromAABB(Box);
 	}
 
 	// Merge with another bounds
-	void Merge(const BoxSphereBounds& Other) {
-		Box.Merge(Other.Box);
+	void Merge(const BoxSphereBounds& other) {
+		Box.Merge(other.Box);
 		Sphere = BoundingSphere::FromAABB(Box);
 	}
 
@@ -192,40 +192,40 @@ struct CORE_API BoxSphereBounds {
         Sphere = BoundingSphere();
      }
 
-	void Transform(const Mat4& Transform) {
+	void Transform(const Mat4& transform) {
 		if (Box.IsEmpty()) {
 			SetEmpty();
 			return;
 		}
 
-		const Float3 Center = Box.GetCenter();
-		const Float3 Extent = Box.GetExtent();
+		const Float3 center = Box.GetCenter();
+		const Float3 extent = Box.GetExtent();
 
-		const Float3 NewCenter(
-			Transform(0, 0) * Center.x + Transform(0, 1) * Center.y + Transform(0, 2) * Center.z + Transform(0, 3),
-			Transform(1, 0) * Center.x + Transform(1, 1) * Center.y + Transform(1, 2) * Center.z + Transform(1, 3),
-			Transform(2, 0) * Center.x + Transform(2, 1) * Center.y + Transform(2, 2) * Center.z + Transform(2, 3));
+		const Float3 newCenter(
+			transform(0, 0) * center.X + transform(0, 1) * center.Y + transform(0, 2) * center.Z + transform(0, 3),
+			transform(1, 0) * center.X + transform(1, 1) * center.Y + transform(1, 2) * center.Z + transform(1, 3),
+			transform(2, 0) * center.X + transform(2, 1) * center.Y + transform(2, 2) * center.Z + transform(2, 3));
 
-		const Float3 NewExtent(
-			std::fabs(Transform(0, 0)) * Extent.x + std::fabs(Transform(0, 1)) * Extent.y + std::fabs(Transform(0, 2)) * Extent.z,
-			std::fabs(Transform(1, 0)) * Extent.x + std::fabs(Transform(1, 1)) * Extent.y + std::fabs(Transform(1, 2)) * Extent.z,
-			std::fabs(Transform(2, 0)) * Extent.x + std::fabs(Transform(2, 1)) * Extent.y + std::fabs(Transform(2, 2)) * Extent.z);
+		const Float3 newExtent(
+			std::fabs(transform(0, 0)) * extent.X + std::fabs(transform(0, 1)) * extent.Y + std::fabs(transform(0, 2)) * extent.Z,
+			std::fabs(transform(1, 0)) * extent.X + std::fabs(transform(1, 1)) * extent.Y + std::fabs(transform(1, 2)) * extent.Z,
+			std::fabs(transform(2, 0)) * extent.X + std::fabs(transform(2, 1)) * extent.Y + std::fabs(transform(2, 2)) * extent.Z);
 
 		Box = AABB(
-			Float3(NewCenter.x - NewExtent.x, NewCenter.y - NewExtent.y, NewCenter.z - NewExtent.z),
-			Float3(NewCenter.x + NewExtent.x, NewCenter.y + NewExtent.y, NewCenter.z + NewExtent.z));
+			Float3(newCenter.X - newExtent.X, newCenter.Y - newExtent.Y, newCenter.Z - newExtent.Z),
+			Float3(newCenter.X + newExtent.X, newCenter.Y + newExtent.Y, newCenter.Z + newExtent.Z));
 
 		Sphere = BoundingSphere::FromAABB(Box);
 	}
-	bool Intersects(const BoxSphereBounds& Other) const
+	bool Intersects(const BoxSphereBounds& other) const
 	{
-		return Box.Intersects(Other.Box);
+		return Box.Intersects(other.Box);
 	}
 
 
-	bool Contains(const BoxSphereBounds& Other) const
+	bool Contains(const BoxSphereBounds& other) const
 	{
-		return Box.Contains(Other.Box);
+		return Box.Contains(other.Box);
 	}
 };
 

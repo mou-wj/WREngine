@@ -67,10 +67,10 @@ std::shared_ptr<ImGUISlate::ImMainWindow> Application::CreateWindowSP(int Width,
     {
         SceneSlateWidget = std::make_unique<SlateCore::SlateWidget>(NewWindow.get());
     }
-    SceneSlateWidget->SetSize(framebufferSize.x - 200, framebufferSize.y);
+    SceneSlateWidget->SetSize(framebufferSize.X - 200, framebufferSize.Y);
     Core::Int2 slateWidgetSize;
-    slateWidgetSize.x = framebufferSize.x - 200;
-    slateWidgetSize.y = framebufferSize.y;
+    slateWidgetSize.X = framebufferSize.X - 200;
+    slateWidgetSize.Y = framebufferSize.Y;
     // 同步创建 SceneViewport
     if (!SceneMainViewport)
     {
@@ -106,10 +106,10 @@ std::shared_ptr<ImGUISlate::ImMainWindow> Application::CreateWindowSP(int Width,
     }
 
     ImGuiWidget->SetGeometry(
-        static_cast<float>(framebufferSize.x - 100),
+        static_cast<float>(framebufferSize.X - 100),
         0.0f,
         100.0f,
-        static_cast<float>(framebufferSize.y));
+        static_cast<float>(framebufferSize.Y));
     layoutParams.Weight = 1;
     NewWindow->AddWidget(ImGuiWidget.get(), layoutParams);
     

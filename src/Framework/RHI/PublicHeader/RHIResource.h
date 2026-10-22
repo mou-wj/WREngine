@@ -710,8 +710,8 @@ struct RHIBoundRenderTargets
         DepthStencil.ClearBinding.Depth = 1.0f;
         DepthStencil.ClearBinding.Stencil = 0;
         
-        Dimensions.x = Width;
-        Dimensions.y = Height;
+        Dimensions.X = Width;
+        Dimensions.Y = Height;
         
 
     }
@@ -769,8 +769,8 @@ struct RHIBoundRenderTargets
             if (att.Texture)
             {
                 Core::Int3 size = att.Texture->GetMipSize(att.MipIndex);
-                Dimensions.x = size.x;
-                Dimensions.y = size.y;
+                Dimensions.X = size.X;
+                Dimensions.Y = size.Y;
             }
         }
 
@@ -778,8 +778,8 @@ struct RHIBoundRenderTargets
         if (DepthStencil.Texture)
         {
             auto size = DepthStencil.Texture->GetMipSize(DepthStencil.MipIndex);
-            Dimensions.x = size.x;
-            Dimensions.y = size.y;
+            Dimensions.X = size.X;
+            Dimensions.Y = size.Y;
         }
         for (uint8_t i = 0; i < NumColorAttachments; ++i)
         {
@@ -787,7 +787,7 @@ struct RHIBoundRenderTargets
             if (att.Texture)
             {
                 Core::Int3 size = att.Texture->GetMipSize(att.MipIndex);
-                if (size.x != Dimensions.x || size.y != Dimensions.y) {
+                if (size.X != Dimensions.X || size.Y != Dimensions.Y) {
                     assert(0);
                 }
             }
@@ -797,7 +797,7 @@ struct RHIBoundRenderTargets
         if (DepthStencil.Texture)
         {
             auto size = DepthStencil.Texture->GetMipSize(DepthStencil.MipIndex);
-            if (size.x != Dimensions.x || size.y != Dimensions.y) {
+            if (size.X != Dimensions.X || size.Y != Dimensions.Y) {
                 assert(0);
             }
         }

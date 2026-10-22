@@ -224,8 +224,8 @@ namespace Renderer {
             auto* paramss = builder.AllocateParameter<StaticMeshMaterialDefferedShadingCSParameters>();
             paramss->InvViewProj = view.InvViewProjectionMatrix;
             paramss->CameraPos = view.CameraWorldPos;
-            paramss->ScreenSize.x = width;
-            paramss->ScreenSize.y = height;
+            paramss->ScreenSize.X = width;
+            paramss->ScreenSize.Y = height;
             paramss->GBuffer.GBufferInput.GBufferA = SceneTextures.GBufferA;
             paramss->GBuffer.GBufferInput.GBufferB = SceneTextures.GBufferB;
             paramss->GBuffer.GBufferInput.GBufferC = SceneTextures.GBufferC;

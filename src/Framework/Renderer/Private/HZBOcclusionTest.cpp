@@ -24,26 +24,26 @@ namespace Renderer {
 
     static inline bool IsInsideClipSpace(const Core::Float4& Clip)
     {
-        return Clip.w > 0.0f &&
-            Clip.x >= -Clip.w && Clip.x <= Clip.w &&
-            Clip.y >= -Clip.w && Clip.y <= Clip.w &&
-            Clip.z >= -Clip.w && Clip.z <= Clip.w;
+        return Clip.W > 0.0f &&
+            Clip.X >= -Clip.W && Clip.X <= Clip.W &&
+            Clip.Y >= -Clip.W && Clip.Y <= Clip.W &&
+            Clip.Z >= -Clip.W && Clip.Z <= Clip.W;
     }
 
     static inline Core::Float4 TransformPoint(const Core::Float4x4& Matrix, const Core::Float3& Point)
     {
-        const float x = Matrix(0, 0) * Point.x + Matrix(0, 1) * Point.y + Matrix(0, 2) * Point.z + Matrix(0, 3);
-        const float y = Matrix(1, 0) * Point.x + Matrix(1, 1) * Point.y + Matrix(1, 2) * Point.z + Matrix(1, 3);
-        const float z = Matrix(2, 0) * Point.x + Matrix(2, 1) * Point.y + Matrix(2, 2) * Point.z + Matrix(2, 3);
-        const float w = Matrix(3, 0) * Point.x + Matrix(3, 1) * Point.y + Matrix(3, 2) * Point.z + Matrix(3, 3);
+        const float x = Matrix(0, 0) * Point.X + Matrix(0, 1) * Point.Y + Matrix(0, 2) * Point.Z + Matrix(0, 3);
+        const float y = Matrix(1, 0) * Point.X + Matrix(1, 1) * Point.Y + Matrix(1, 2) * Point.Z + Matrix(1, 3);
+        const float z = Matrix(2, 0) * Point.X + Matrix(2, 1) * Point.Y + Matrix(2, 2) * Point.Z + Matrix(2, 3);
+        const float w = Matrix(3, 0) * Point.X + Matrix(3, 1) * Point.Y + Matrix(3, 2) * Point.Z + Matrix(3, 3);
         return Core::Float4(x, y, z, w);
     }
 
     static inline void AddAABBPoint(const Core::Float3& P, float& MinX, float& MinY, float& MinZ, float& MaxX, float& MaxY, float& MaxZ)
     {
-        MinX = std::min(MinX, P.x); MaxX = std::max(MaxX, P.x);
-        MinY = std::min(MinY, P.y); MaxY = std::max(MaxY, P.y);
-        MinZ = std::min(MinZ, P.z); MaxZ = std::max(MaxZ, P.z);
+        MinX = std::min(MinX, P.X); MaxX = std::max(MaxX, P.X);
+        MinY = std::min(MinY, P.Y); MaxY = std::max(MaxY, P.Y);
+        MinZ = std::min(MinZ, P.Z); MaxZ = std::max(MaxZ, P.Z);
     }
 
     HZBProjectedBox ProjectAABBToScreenSpace(const Core::Float4x4& ViewProjection, const Core::Float2& ScreenSize, const HZBInstanceAABB& Instance)
@@ -52,14 +52,14 @@ namespace Renderer {
         Projected.bIsValid = false;
 
         const Core::Float3 corners[8] = {
-            Core::Float3(Instance.Min.x, Instance.Min.y, Instance.Min.z),
-            Core::Float3(Instance.Max.x, Instance.Min.y, Instance.Min.z),
-            Core::Float3(Instance.Min.x, Instance.Max.y, Instance.Min.z),
-            Core::Float3(Instance.Max.x, Instance.Max.y, Instance.Min.z),
-            Core::Float3(Instance.Min.x, Instance.Min.y, Instance.Max.z),
-            Core::Float3(Instance.Max.x, Instance.Min.y, Instance.Max.z),
-            Core::Float3(Instance.Min.x, Instance.Max.y, Instance.Max.z),
-            Core::Float3(Instance.Max.x, Instance.Max.y, Instance.Max.z),
+            Core::Float3(Instance.Min.X, Instance.Min.Y, Instance.Min.Z),
+            Core::Float3(Instance.Max.X, Instance.Min.Y, Instance.Min.Z),
+            Core::Float3(Instance.Min.X, Instance.Max.Y, Instance.Min.Z),
+            Core::Float3(Instance.Max.X, Instance.Max.Y, Instance.Min.Z),
+            Core::Float3(Instance.Min.X, Instance.Min.Y, Instance.Max.Z),
+            Core::Float3(Instance.Max.X, Instance.Min.Y, Instance.Max.Z),
+            Core::Float3(Instance.Min.X, Instance.Max.Y, Instance.Max.Z),
+            Core::Float3(Instance.Max.X, Instance.Max.Y, Instance.Max.Z),
         };
 
         float minX = std::numeric_limits<float>::max();
@@ -74,15 +74,15 @@ namespace Renderer {
         for (int i = 0; i < 8; ++i)
         {
             Core::Float4 p = TransformPoint(Instance.Transform, corners[i]);
-            Core::Float4 clip = TransformPoint(ViewProjection, Core::Float3(p.x, p.y, p.z));
+            Core::Float4 clip = TransformPoint(ViewProjection, Core::Float3(p.X, p.Y, p.Z));
 
-            if (clip.w <= 0.0f)
+            if (clip.W <= 0.0f)
             {
                 continue;
             }
 
-            const float ndcX = clip.x / clip.w;
-            const float ndcY = clip.y / clip.w;
+            const float ndcX = clip.X / clip.W;
+            const float ndcY = clip.Y / clip.W;
 
             if (ndcX < -1.0f || ndcX > 1.0f || ndcY < -1.0f || ndcY > 1.0f)
             {
@@ -90,15 +90,15 @@ namespace Renderer {
             }
 
             anyInside = true;
-            const float screenX = (ndcX * 0.5f + 0.5f) * ScreenSize.x;
-            const float screenY = (ndcY * 0.5f + 0.5f) * ScreenSize.y;
+            const float screenX = (ndcX * 0.5f + 0.5f) * ScreenSize.X;
+            const float screenY = (ndcY * 0.5f + 0.5f) * ScreenSize.Y;
 
             minX = std::min(minX, screenX);
             maxX = std::max(maxX, screenX);
             minY = std::min(minY, screenY);
             maxY = std::max(maxY, screenY);
-            minZ = std::min(minZ, clip.z / clip.w);
-            maxZ = std::max(maxZ, clip.z / clip.w);
+            minZ = std::min(minZ, clip.Z / clip.W);
+            maxZ = std::max(maxZ, clip.Z / clip.W);
         }
 
         if (!anyInside)

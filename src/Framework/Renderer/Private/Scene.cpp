@@ -97,8 +97,8 @@ namespace Renderer {
         auto Compare = [Axis](Engine::PrimitiveSceneProxy* A, Engine::PrimitiveSceneProxy* B) {
             const Core::AABB& ABox = A->GetBounds().Box;
             const Core::AABB& BBox = B->GetBounds().Box;
-            float ACenter = (Axis == 0 ? (ABox.Min.x + ABox.Max.x) : (Axis == 1 ? (ABox.Min.y + ABox.Max.y) : (ABox.Min.z + ABox.Max.z)));
-            float BCenter = (Axis == 0 ? (BBox.Min.x + BBox.Max.x) : (Axis == 1 ? (BBox.Min.y + BBox.Max.y) : (BBox.Min.z + BBox.Max.z)));
+            float ACenter = (Axis == 0 ? (ABox.Min.X + ABox.Max.X) : (Axis == 1 ? (ABox.Min.Y + ABox.Max.Y) : (ABox.Min.Z + ABox.Max.Z)));
+            float BCenter = (Axis == 0 ? (BBox.Min.X + BBox.Max.X) : (Axis == 1 ? (BBox.Min.Y + BBox.Max.Y) : (BBox.Min.Z + BBox.Max.Z)));
             return ACenter < BCenter;
         };
 
@@ -132,8 +132,8 @@ namespace Renderer {
 
         Core::Float3 Extent = Current.Bounds.Box.GetExtent();
         int Axis = 0;
-        if (Extent.y > Extent.x) Axis = 1;
-        if (Extent.z > ((Axis == 0) ? Extent.x : Extent.y)) Axis = 2;
+        if (Extent.Y > Extent.X) Axis = 1;
+        if (Extent.Z > ((Axis == 0) ? Extent.X : Extent.Y)) Axis = 2;
 
         int Mid = Partition(Start, Count, Axis);
         if (Mid <= Start || Mid >= Start + Count)

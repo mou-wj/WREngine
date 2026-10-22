@@ -6,148 +6,148 @@ namespace Core
 {
 
 template<typename Primitive, typename Traits>
-void BVH<Primitive, Traits>::Build(const std::vector<Primitive>& InPrimitives)
+void BVH<Primitive, Traits>::Build(const std::vector<Primitive>& inPrimitives)
 {
     Clear();
 
-    if (InPrimitives.empty())
+    if (inPrimitives.empty())
     {
         return;
     }
 
-    Primitives = &InPrimitives;
+    _primitives = &inPrimitives;
 
-    PrimitiveIndices.resize(InPrimitives.size());
+    _primitiveIndices.resize(inPrimitives.size());
 
-    for (uint32_t i = 0; i < static_cast<uint32_t>(InPrimitives.size()); i++)
+    for (uint32_t i = 0; i < static_cast<uint32_t>(inPrimitives.size()); i++)
     {
-        PrimitiveIndices[i] = i;
+        _primitiveIndices[i] = i;
     }
 
-    Nodes.reserve(InPrimitives.size() * 2);
+    _nodes.reserve(inPrimitives.size() * 2);
 
-    BuildRecursive(0, static_cast<uint32_t>(PrimitiveIndices.size()));
+    BuildRecursive(0, static_cast<uint32_t>(_primitiveIndices.size()));
 }
 
 
 
 template<typename Primitive, typename Traits>
-uint32_t BVH<Primitive, Traits>::BuildRecursive(uint32_t Begin, uint32_t End)
+uint32_t BVH<Primitive, Traits>::BuildRecursive(uint32_t begin, uint32_t end)
 {
-    const uint32_t PrimitiveCount = End - Begin;
+    const uint32_t primitiveCount = end - begin;
 
 
-    constexpr uint32_t LeafPrimitiveCount = 4;
+    constexpr uint32_t leafPrimitiveCount = 4;
 
 
-    if (PrimitiveCount <= LeafPrimitiveCount)
+    if (primitiveCount <= leafPrimitiveCount)
     {
-        return CreateLeaf(Begin, End);
+        return CreateLeaf(begin, end);
     }
 
 
-    BoxSphereBounds Bounds = ComputeBounds(Begin, End);
+    BoxSphereBounds bounds = ComputeBounds(begin, end);
 
 
-    int Axis = GetLongestAxis(Bounds);
+    int axis = GetLongestAxis(bounds);
 
 
-    uint32_t Middle = Begin + PrimitiveCount / 2;
+    uint32_t middle = begin + primitiveCount / 2;
 
 
     std::nth_element(
-        PrimitiveIndices.begin() + Begin,
-        PrimitiveIndices.begin() + Middle,
-        PrimitiveIndices.begin() + End,
-        [&](uint32_t A, uint32_t B)
+        _primitiveIndices.begin() + begin,
+        _primitiveIndices.begin() + middle,
+        _primitiveIndices.begin() + end,
+        [&](uint32_t a, uint32_t b)
         {
-            Float3 CenterA =
-                Traits::GetCentroid((*Primitives)[A]);
+            Float3 centerA =
+                Traits::GetCentroid((*_primitives)[a]);
 
-            Float3 CenterB =
-                Traits::GetCentroid((*Primitives)[B]);
-
-
-            float ValueA = 0.0f;
-            float ValueB = 0.0f;
+            Float3 centerB =
+                Traits::GetCentroid((*_primitives)[b]);
 
 
-            if (Axis == 0)
+            float valueA = 0.0f;
+            float valueB = 0.0f;
+
+
+            if (axis == 0)
             {
-                ValueA = CenterA.x;
-                ValueB = CenterB.x;
+                valueA = centerA.X;
+                valueB = centerB.X;
             }
-            else if (Axis == 1)
+            else if (axis == 1)
             {
-                ValueA = CenterA.y;
-                ValueB = CenterB.y;
+                valueA = centerA.Y;
+                valueB = centerB.Y;
             }
             else
             {
-                ValueA = CenterA.z;
-                ValueB = CenterB.z;
+                valueA = centerA.Z;
+                valueB = centerB.Z;
             }
 
 
-            return ValueA < ValueB;
+            return valueA < valueB;
         });
 
 
-    uint32_t NodeIndex = CreateInternalNode();
+    uint32_t nodeIndex = CreateInternalNode();
 
 
-    uint32_t LeftChild =
-        BuildRecursive(Begin, Middle);
+    uint32_t leftChild =
+        BuildRecursive(begin, middle);
 
 
-    uint32_t RightChild =
-        BuildRecursive(Middle, End);
-
-
-
-    BVHNode& Node = Nodes[NodeIndex];
-
-
-    Node.LeftChild = LeftChild;
-    Node.RightChild = RightChild;
-
-
-    Node.Bounds = Nodes[LeftChild].Bounds;
-
-    Node.Bounds.Merge(
-        Nodes[RightChild].Bounds);
+    uint32_t rightChild =
+        BuildRecursive(middle, end);
 
 
 
-    return NodeIndex;
+    BVHNode& node = _nodes[nodeIndex];
+
+
+    node.LeftChild = leftChild;
+    node.RightChild = rightChild;
+
+
+    node.Bounds = _nodes[leftChild].Bounds;
+
+    node.Bounds.Merge(
+        _nodes[rightChild].Bounds);
+
+
+
+    return nodeIndex;
 }
 
 
 
 template<typename Primitive, typename Traits>
 uint32_t BVH<Primitive, Traits>::CreateLeaf(
-    uint32_t Begin,
-    uint32_t End)
+    uint32_t begin,
+    uint32_t end)
 {
-    BVHNode Node;
+    BVHNode node;
 
 
-    Node.Bounds =
-        ComputeBounds(Begin, End);
+    node.Bounds =
+        ComputeBounds(begin, end);
 
 
-    Node.LeftChild = BVHInvalidNode;
-    Node.RightChild = BVHInvalidNode;
+    node.LeftChild = BVHInvalidNode;
+    node.RightChild = BVHInvalidNode;
 
 
-    Node.FirstPrimitive = Begin;
-    Node.PrimitiveCount = End - Begin;
+    node.FirstPrimitive = begin;
+    node.PrimitiveCount = end - begin;
 
 
-    Nodes.push_back(Node);
+    _nodes.push_back(node);
 
 
-    return static_cast<uint32_t>(Nodes.size() - 1);
+    return static_cast<uint32_t>(_nodes.size() - 1);
 }
 
 
@@ -155,60 +155,60 @@ uint32_t BVH<Primitive, Traits>::CreateLeaf(
 template<typename Primitive, typename Traits>
 uint32_t BVH<Primitive, Traits>::CreateInternalNode()
 {
-    BVHNode Node;
+    BVHNode node;
 
-    Node.LeftChild = BVHInvalidNode;
-    Node.RightChild = BVHInvalidNode;
+    node.LeftChild = BVHInvalidNode;
+    node.RightChild = BVHInvalidNode;
 
-    Nodes.push_back(Node);
+    _nodes.push_back(node);
 
-    return static_cast<uint32_t>(Nodes.size() - 1);
+    return static_cast<uint32_t>(_nodes.size() - 1);
 }
 
 
 
 template<typename Primitive, typename Traits>
 BoxSphereBounds BVH<Primitive, Traits>::ComputeBounds(
-    uint32_t Begin,
-    uint32_t End) const
+    uint32_t begin,
+    uint32_t end) const
 {
-    BoxSphereBounds Bounds;
+    BoxSphereBounds bounds;
 
-    Bounds.SetEmpty();
+    bounds.SetEmpty();
 
 
-    for (uint32_t i = Begin; i < End; i++)
+    for (uint32_t i = begin; i < end; i++)
     {
-        const Primitive& PrimitiveI =
-            (*Primitives)[PrimitiveIndices[i]];
+        const Primitive& primitiveI =
+            (*_primitives)[_primitiveIndices[i]];
 
 
-        Bounds.Merge(
-            Traits::GetBounds(PrimitiveI));
+        bounds.Merge(
+            Traits::GetBounds(primitiveI));
     }
 
 
-    return Bounds;
+    return bounds;
 }
 
 
 
 template<typename Primitive, typename Traits>
 int BVH<Primitive, Traits>::GetLongestAxis(
-    const BoxSphereBounds& Bounds) const
+    const BoxSphereBounds& bounds) const
 {
-    Float3 Extent =
-        Bounds.Box.GetExtent();
+    Float3 extent =
+        bounds.Box.GetExtent();
 
 
-    if (Extent.x > Extent.y &&
-        Extent.x > Extent.z)
+    if (extent.X > extent.Y &&
+        extent.X > extent.Z)
     {
         return 0;
     }
 
 
-    if (Extent.y > Extent.z)
+    if (extent.Y > extent.Z)
     {
         return 1;
     }
@@ -218,56 +218,56 @@ int BVH<Primitive, Traits>::GetLongestAxis(
 }
 
 template<typename Primitive, typename Traits>
-float BVH<Primitive,Traits>::ClosestDistance(const Float3& Position) const
+float BVH<Primitive,Traits>::ClosestDistance(const Float3& position) const
 {
-    float MinDistance = std::numeric_limits<float>::max();
+    float minDistance = std::numeric_limits<float>::max();
 
     ClosestDistanceRecursive(
         0,
-        Position,
-        MinDistance);
+        position,
+        minDistance);
 
-    return MinDistance;
+    return minDistance;
 }
 template<typename Primitive, typename Traits>
 void BVH<Primitive,Traits>::ClosestDistanceRecursive(
-    uint32_t NodeIndex,
-    const Float3& Position,
-    float& MinDistance) const
+    uint32_t nodeIndex,
+    const Float3& position,
+    float& minDistance) const
 {
-    const BVHNode& Node = Nodes[NodeIndex];
+    const BVHNode& node = _nodes[nodeIndex];
 
 
-    float BoundsDistance =
-        Node.Bounds.Box.Distance(Position);
+    float boundsDistance =
+        node.Bounds.Box.Distance(position);
 
 
-    if (BoundsDistance > MinDistance)
+    if (boundsDistance > minDistance)
     {
         return;
     }
 
 
 
-    if (Node.IsLeaf())
+    if (node.IsLeaf())
     {
-        for(uint32_t i=0;i<Node.PrimitiveCount;i++)
+        for(uint32_t i=0;i<node.PrimitiveCount;i++)
         {
-            uint32_t PrimitiveIndex =
-                PrimitiveIndices[
-                    Node.FirstPrimitive+i];
+            uint32_t primitiveIndex =
+                _primitiveIndices[
+                    node.FirstPrimitive+i];
 
 
-            float Distance =
+            float distance =
                 Traits::ClosestDistance(
-                    (*Primitives)[PrimitiveIndex],
-                    Position);
+                    (*_primitives)[primitiveIndex],
+                    position);
 
 
-            MinDistance =
+            minDistance =
                 std::min(
-                    MinDistance,
-                    Distance);
+                    minDistance,
+                    distance);
         }
 
         return;
@@ -276,63 +276,63 @@ void BVH<Primitive,Traits>::ClosestDistanceRecursive(
 
 
     ClosestDistanceRecursive(
-        Node.LeftChild,
-        Position,
-        MinDistance);
+        node.LeftChild,
+        position,
+        minDistance);
 
 
     ClosestDistanceRecursive(
-        Node.RightChild,
-        Position,
-        MinDistance);
+        node.RightChild,
+        position,
+        minDistance);
 }
 
 template<typename Primitive, typename Traits>
 void BVH<Primitive, Traits>::RayIntersect(
-    const Ray& Ray,
-    std::set<uint32_t>& IntersectPrimitiveIds) const
+    const Ray& ray,
+    std::set<uint32_t>& intersectPrimitiveIds) const
 {
-    IntersectPrimitiveIds.clear();
+    intersectPrimitiveIds.clear();
 
-    if (Nodes.empty())
+    if (_nodes.empty())
     {
         return;
     }
 
     RayIntersectNode(
         0,
-        Ray,
-        IntersectPrimitiveIds);
+        ray,
+        intersectPrimitiveIds);
 }
 template<typename Primitive, typename Traits>
 void BVH<Primitive, Traits>::RayIntersectNode(
-    uint32_t NodeIndex,
-    const Ray& Ray,
-    std::set<uint32_t>& OutPrimitiveIds) const
+    uint32_t nodeIndex,
+    const Ray& ray,
+    std::set<uint32_t>& outPrimitiveIds) const
 {
-    const BVHNode& Node = Nodes[NodeIndex];
+    const BVHNode& node = _nodes[nodeIndex];
 
 
-    if (!Ray.RayIntersectAABB(Node.Bounds.Box))
+    if (!ray.RayIntersectAABB(node.Bounds.Box))
     {
         return;
     }
 
 
-    if (Node.IsLeaf())
+    if (node.IsLeaf())
     {
-        for (uint32_t i = 0; i < Node.PrimitiveCount; i++)
+        for (uint32_t i = 0; i < node.PrimitiveCount; i++)
         {
-            uint32_t InternalIndex =
-                Node.FirstPrimitive + i;
+            uint32_t internalIndex =
+                node.FirstPrimitive + i;
 
 
-            uint32_t PrimitiveId =
-                PrimitiveIndices[InternalIndex];
+            uint32_t primitiveId =
+                _primitiveIndices[internalIndex];
             float dis = 0;
-            if (Traits::RayIntersect((*Primitives)[PrimitiveId], Ray, dis)) {
-                OutPrimitiveIds.insert(
-                    PrimitiveId);
+            if (Traits::RayIntersect((*_primitives)[primitiveId], ray, dis)) {
+                outPrimitiveIds.insert(
+                    primitiveId);
             }
 
         }
@@ -342,65 +342,65 @@ void BVH<Primitive, Traits>::RayIntersectNode(
 
 
     RayIntersectNode(
-        Node.LeftChild,
-        Ray,
-        OutPrimitiveIds);
+        node.LeftChild,
+        ray,
+        outPrimitiveIds);
 
 
     RayIntersectNode(
-        Node.RightChild,
-        Ray,
-        OutPrimitiveIds);
+        node.RightChild,
+        ray,
+        outPrimitiveIds);
 }
 
 template<typename Primitive, typename Traits>
-void BVH<Primitive, Traits>::GetPrimitiveIdsInsideBounds(const BoxSphereBounds& Box, std::set<uint32_t>& OutPrimitiveIds) const
+void BVH<Primitive, Traits>::GetPrimitiveIdsInsideBounds(const BoxSphereBounds& box, std::set<uint32_t>& outPrimitiveIds) const
 {
-    OutPrimitiveIds.clear();
+    outPrimitiveIds.clear();
 
-    if (Nodes.empty())
+    if (_nodes.empty())
     {
         return;
     }
 
-    QueryBoundsRecursive(0, Box, OutPrimitiveIds);
+    QueryBoundsRecursive(0, box, outPrimitiveIds);
 }
 
 
 template<typename Primitive, typename Traits>
-void BVH<Primitive, Traits>::QueryBoundsRecursive(uint32_t NodeIndex, const BoxSphereBounds& Box, std::set<uint32_t>& OutPrimitiveIds) const
+void BVH<Primitive, Traits>::QueryBoundsRecursive(uint32_t nodeIndex, const BoxSphereBounds& box, std::set<uint32_t>& outPrimitiveIds) const
 {
-    const BVHNode& Node = Nodes[NodeIndex];
+    const BVHNode& node = _nodes[nodeIndex];
 
 
-    if (!Node.Bounds.Intersects(Box))
+    if (!node.Bounds.Intersects(box))
     {
         return;
     }
 
 
-    if (Node.IsLeaf())
+    if (node.IsLeaf())
     {
-        for (uint32_t i = 0; i < Node.PrimitiveCount; i++)
+        for (uint32_t i = 0; i < node.PrimitiveCount; i++)
         {
-            uint32_t PrimitiveIndex = PrimitiveIndices[Node.FirstPrimitive + i];
+            uint32_t primitiveIndex = _primitiveIndices[node.FirstPrimitive + i];
 
-            OutPrimitiveIds.insert(PrimitiveIndex);
+            outPrimitiveIds.insert(primitiveIndex);
         }
 
         return;
     }
 
 
-    if (Node.LeftChild != BVHInvalidNode)
+    if (node.LeftChild != BVHInvalidNode)
     {
-        QueryBoundsRecursive(Node.LeftChild, Box, OutPrimitiveIds);
+        QueryBoundsRecursive(node.LeftChild, box, outPrimitiveIds);
     }
 
 
-    if (Node.RightChild != BVHInvalidNode)
+    if (node.RightChild != BVHInvalidNode)
     {
-        QueryBoundsRecursive(Node.RightChild, Box, OutPrimitiveIds);
+        QueryBoundsRecursive(node.RightChild, box, outPrimitiveIds);
     }
 }
 

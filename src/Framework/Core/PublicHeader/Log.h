@@ -26,16 +26,16 @@ namespace Core {
             return instance;
         }
 
-        // ÉèÖÃÈÕÖ¾Êä³öÎÄ¼ş£¬Èç¹ûÎª¿ÕÔòÖ»Êä³ö¿ØÖÆÌ¨
+        // è®¾ç½®æ—¥å¿—è¾“å‡ºæ–‡ä»¶ï¼Œå¦‚æœä¸ºç©ºåˆ™åªè¾“å‡ºæ§åˆ¶å°
         void SetLogFile(const std::string& filename);
 
-        // ÉèÖÃÈÕÖ¾µÈ¼¶
-        void SetLevel(Level level) { m_level = level; }
+        // è®¾ç½®æ—¥å¿—ç­‰çº§
+        void SetLevel(Level level) { m_Level = level; }
 
-        // ºËĞÄ´òÓ¡º¯Êı
+        // æ ¸å¿ƒæ‰“å°å‡½æ•°
         void Log(Level level, const char* fmt, ...);
 
-        // ±ã½İºêº¯Êı
+        // ä¾¿æ·å®å‡½æ•°
         void Debug(const char* fmt, ...);
         void Info(const char* fmt, ...);
         void Warn(const char* fmt, ...);
@@ -43,7 +43,7 @@ namespace Core {
 
     private:
         Logger() = default;
-        ~Logger() { if (m_file.is_open()) m_file.close(); }
+        ~Logger() { if (m_File.is_open()) m_File.close(); }
 
         Logger(const Logger&) = delete;
         Logger& operator=(const Logger&) = delete;
@@ -51,26 +51,26 @@ namespace Core {
         std::string GetTimeString();
         std::string LevelToString(Level level);
 
-        std::mutex m_mutex;
-        std::ofstream m_file;
-        Level m_level = Level::Debug;
+        std::mutex m_Mutex;
+        std::ofstream m_File;
+        Level m_Level = Level::Debug;
     };
 
 
 
 }
 
-// ºËĞÄºê
+// æ ¸å¿ƒå®
 #define LOG_INTERNAL(level, fmt, ...) \
     ::Core::Logger::Get().Log(::Core::Level::level, fmt, ##__VA_ARGS__)
 
-// ±ã½İºê
+// ä¾¿æ·å®
 #define LOG_DEBUG(fmt, ...) LOG_INTERNAL(Debug, fmt, ##__VA_ARGS__)
 #define LOG_INFO(fmt, ...)  LOG_INTERNAL(Info, fmt, ##__VA_ARGS__)
 #define LOG_WARN(fmt, ...)  LOG_INTERNAL(Warn, fmt, ##__VA_ARGS__)
 #define LOG_ERROR(fmt, ...) LOG_INTERNAL(Error, fmt, ##__VA_ARGS__)
 
-// DEBUG ÈÕÖ¾¿É¿ª¹Ø
+// DEBUG æ—¥å¿—å¯å¼€å…³
 #ifdef ENABLE_DEBUG_LOG
 #define DLOG(fmt, ...) LOG_DEBUG(fmt, ##__VA_ARGS__)
 #else

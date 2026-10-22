@@ -12,8 +12,8 @@ namespace Engine{
         Core::Int2 inSize
     )
         : Viewport(inClient)
-        , m_Width(inSize.x)
-        , m_Height(inSize.y)
+        , m_Width(inSize.X)
+        , m_Height(inSize.Y)
     {
         _client = inClient;
 

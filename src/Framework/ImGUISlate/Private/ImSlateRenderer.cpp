@@ -266,8 +266,8 @@ namespace ImGUISlate {
 
         io.DisplaySize =
             ImVec2(
-                geometry.x,
-                geometry.y);
+                geometry.X,
+                geometry.Y);
     }
 
     ImSlateRenderer* CreateSlateRenderer(SlateCore::Window* window)

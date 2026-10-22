@@ -110,7 +110,7 @@ namespace Renderer {
         auto skyboxEnvMap = builder.RegisterExternalTexture("SkyboxEnvMap", envMap);
         params->vsParam.View = view.ViewMatrix;
 
-        auto project = Core::PerspectiveRH_NO(
+        auto project = Core::PerspectiveRhNo(
             Core::DegToRad(90.f),
             1,
             0.1,

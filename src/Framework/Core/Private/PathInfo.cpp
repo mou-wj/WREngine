@@ -24,11 +24,11 @@ namespace Core {
 
     static std::string ToStr(const std::filesystem::path& p)
     {
-        return p.generic_string(); // Í³Ò»ÓÃ /
+        return p.generic_string(); // ç»Ÿä¸€ç”¨ /
     }
 
     // =========================
-    // »ù´¡Â·¾¶
+    // åŸºç¡€è·¯å¾„
     // =========================
 
     std::string GetFileName(const std::string& path)
@@ -55,7 +55,7 @@ namespace Core {
     }
 
     // =========================
-    // Æ´½ÓÂ·¾¶
+    // æ‹¼æ¥è·¯å¾„
     // =========================
 
     std::string JoinPath(const std::string& a, const std::string& b)
@@ -71,7 +71,7 @@ namespace Core {
     }
 
     // =========================
-    // ¹æ·¶»¯Â·¾¶
+    // è§„èŒƒåŒ–è·¯å¾„
     // =========================
 
     std::string NormalizePath(const std::string& path)
@@ -80,13 +80,13 @@ namespace Core {
             return ToStr(std::filesystem::weakly_canonical(ToFs(path)));
         }
         catch (...) {
-            // fallback£º±ÜÃâ·Ç·¨Â·¾¶±ÀÀ£
+            // fallbackï¼šé¿å…éæ³•è·¯å¾„å´©æºƒ
             return ToStr(ToFs(path));
         }
     }
 
     // =========================
-    // ÅĞ¶ÏÀà
+    // åˆ¤æ–­ç±»
     // =========================
 
     bool IsAbsolutePath(const std::string& path)
@@ -113,7 +113,7 @@ namespace Core {
     }
 
     // =========================
-    // Ìæ»»ºó×º
+    // æ›¿æ¢åç¼€
     // =========================
 
     std::string ReplaceExtension(const std::string& path, const std::string& newExt)
@@ -129,7 +129,7 @@ namespace Core {
     }
 
     // =========================
-    // ½áÎ²Ğ±¸Ü
+    // ç»“å°¾æ–œæ 
     // =========================
 
     std::string EnsureTrailingSlash(const std::string& path)
@@ -144,7 +144,7 @@ namespace Core {
     }
 
     // =========================
-    // ¾ø¶ÔÂ·¾¶£¨Project£©
+    // ç»å¯¹è·¯å¾„ï¼ˆProjectï¼‰
     // =========================
 
     std::string AbsoluteFromProject(const std::string& relativePath)

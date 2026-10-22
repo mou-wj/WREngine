@@ -48,8 +48,8 @@ class CORE_API ModuleManager
 public:
     static ModuleManager& Get()
     {
-        static ModuleManager Instance;
-        return Instance;
+        static ModuleManager instance;
+        return instance;
     }
 
     //加载模块
@@ -67,27 +67,27 @@ public:
     void RegisterModule(const std::string& name, ModulePtr module)
     {
         if (!module) return;
-        std::lock_guard<std::recursive_mutex> lg(Mutex);
-        Modules[name] = module;
+        std::lock_guard<std::recursive_mutex> lg(m_Mutex);
+        m_Modules[name] = module;
     }
 
     // 注销模块
     void UnregisterModule(const std::string& name)
     {
-        std::lock_guard<std::recursive_mutex> lg(Mutex);
-        Modules.erase(name);
+        std::lock_guard<std::recursive_mutex> lg(m_Mutex);
+        m_Modules.erase(name);
     }
 
     // 新增接口：为已注册模块添加依赖
-    void AddModuleDependency(const std::string& ModuleName, const std::string& DependencyName)
+    void AddModuleDependency(const std::string& moduleName, const std::string& dependencyName)
     {
-        auto it = Modules.find(ModuleName);
-        if (it != Modules.end())
+        auto it = m_Modules.find(moduleName);
+        if (it != m_Modules.end())
         {
-            auto& deps = ModuleDependencies[ModuleName];
-            if (std::find(deps.begin(), deps.end(), DependencyName) == deps.end())
+            auto& deps = m_ModuleDependencies[moduleName];
+            if (std::find(deps.begin(), deps.end(), dependencyName) == deps.end())
             {
-                deps.push_back(DependencyName);
+                deps.push_back(dependencyName);
             }
         }
     }
@@ -95,24 +95,24 @@ public:
     // 获取已注册模块（未找到返回 nullptr）
     ModulePtr GetModule(const std::string& name)
     {
-        std::lock_guard<std::recursive_mutex> lg(Mutex);
-        auto it = Modules.find(name);
-        return it != Modules.end() ? it->second : nullptr;
+        std::lock_guard<std::recursive_mutex> lg(m_Mutex);
+        auto it = m_Modules.find(name);
+        return it != m_Modules.end() ? it->second : nullptr;
     }
 
     // 启动所有已注册模块
     void StartupAll()
     {
-        std::lock_guard<std::recursive_mutex> lg(Mutex);
+        std::lock_guard<std::recursive_mutex> lg(m_Mutex);
         
-        std::unordered_set<std::string> Visited;
-        std::unordered_set<std::string> Visiting;
+        std::unordered_set<std::string> visited;
+        std::unordered_set<std::string> visiting;
 
-        for (auto& kv : Modules)
+        for (auto& kv : m_Modules)
         {
-            if (Visited.find(kv.first) == Visited.end())
+            if (visited.find(kv.first) == visited.end())
             {
-                if (!TopologicalSort(kv.first, Visited, Visiting, SortedOrderedModules))
+                if (!TopologicalSort(kv.first, visited, visiting, m_SortedOrderedModules))
                 {
                     printf("Failed to sort modules due to circular dependency.\n");
                     return;
@@ -121,11 +121,11 @@ public:
         }
 
         // 按拓扑排序顺序启动模块
-        for (const auto& Name : SortedOrderedModules)
+        for (const auto& name : m_SortedOrderedModules)
         {
-            auto& Mod = Modules[Name];
-            if (Mod && !Mod->IsLoaded())
-                Mod->StartupModule();
+            auto& mod = m_Modules[name];
+            if (mod && !mod->IsLoaded())
+                mod->StartupModule();
         }
 
     }
@@ -133,13 +133,13 @@ public:
     // 关闭所有已注册模块
     void ShutdownAll()
     {
-        std::lock_guard<std::recursive_mutex> lg(Mutex);
-        for (auto it = SortedOrderedModules.rbegin(); it != SortedOrderedModules.rend(); ++it)
+        std::lock_guard<std::recursive_mutex> lg(m_Mutex);
+        for (auto it = m_SortedOrderedModules.rbegin(); it != m_SortedOrderedModules.rend(); ++it)
         {
-            auto& Mod = Modules[*it];
-            if (Mod && Mod->IsLoaded())
+            auto& mod = m_Modules[*it];
+            if (mod && mod->IsLoaded())
             {
-                Mod->ShutdownModule();
+                mod->ShutdownModule();
 
             }
                 
@@ -151,41 +151,41 @@ private:
     ~ModuleManager() = default;
 
     // 拓扑排序递归函数
-    bool TopologicalSort(const std::string& Name,
-        std::unordered_set<std::string>& Visited,
-        std::unordered_set<std::string>& Visiting,
-        std::vector<std::string>& SortedModules)
+    bool TopologicalSort(const std::string& name,
+        std::unordered_set<std::string>& visited,
+        std::unordered_set<std::string>& visiting,
+        std::vector<std::string>& sortedModules)
     {
-        if (Visiting.find(Name) != Visiting.end())
+        if (visiting.find(name) != visiting.end())
         {
-            printf("Circular dependency detected at module: %s\n", Name.c_str());
+            printf("Circular dependency detected at module: %s\n", name.c_str());
             return false;
         }
 
-        if (Visited.find(Name) != Visited.end())
+        if (visited.find(name) != visited.end())
             return true;
 
-        Visiting.insert(Name);
+        visiting.insert(name);
 
-        auto it = Modules.find(Name);
-        if (it != Modules.end())
+        auto it = m_Modules.find(name);
+        if (it != m_Modules.end())
         {
-            for (const auto& DepName : ModuleDependencies[Name])
+            for (const auto& depName : m_ModuleDependencies[name])
             {
-                if (!TopologicalSort(DepName, Visited, Visiting, SortedModules))
+                if (!TopologicalSort(depName, visited, visiting, sortedModules))
                     return false;
             }
         }
 
-        Visiting.erase(Name);
-        Visited.insert(Name);
-        SortedModules.push_back(Name); // 拓扑排序完成后加入
+        visiting.erase(name);
+        visited.insert(name);
+        sortedModules.push_back(name); // 拓扑排序完成后加入
         return true;
     }
-    std::vector<std::string> SortedOrderedModules;
-    std::unordered_map<std::string, ModulePtr> Modules;
-    std::unordered_map<std::string, std::vector<std::string>> ModuleDependencies;
-    std::recursive_mutex Mutex;
+    std::vector<std::string> m_SortedOrderedModules;
+    std::unordered_map<std::string, ModulePtr> m_Modules;
+    std::unordered_map<std::string, std::vector<std::string>> m_ModuleDependencies;
+    std::recursive_mutex m_Mutex;
 };
 
 // 方便宏：在模块实现文件中快速注册一个模块实例

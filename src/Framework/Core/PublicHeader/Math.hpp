@@ -12,72 +12,72 @@ namespace Core {
         union
         {
             std::array<T, 2> Data;
-            struct { T x, y; };
+            struct { T X, Y; };
         };
 
         Vec2() : Data{ T(0), T(0) } {}
-        Vec2(T x, T y) : x(x), y(y) {}
+        Vec2(T x, T y) : X(x), Y(y) {}
 
         T& operator[](size_t i) { return Data[i]; }
         const T& operator[](size_t i) const { return Data[i]; }
 
         Vec2 operator+(const Vec2& rhs) const
         {
-            return { x + rhs.x, y + rhs.y };
+            return { X + rhs.X, Y + rhs.Y };
         }
 
         Vec2 operator-(const Vec2& rhs) const
         {
-            return { x - rhs.x, y - rhs.y };
+            return { X - rhs.X, Y - rhs.Y };
         }
 
         Vec2 operator*(T scalar) const
         {
-            return { x * scalar, y * scalar };
+            return { X * scalar, Y * scalar };
         }
 
         Vec2 operator/(T scalar) const
         {
-            return { x / scalar, y / scalar };
+            return { X / scalar, Y / scalar };
         }
 
         Vec2& operator+=(const Vec2& rhs)
         {
-            x += rhs.x;
-            y += rhs.y;
+            X += rhs.X;
+            Y += rhs.Y;
             return *this;
         }
 
         Vec2& operator-=(const Vec2& rhs)
         {
-            x -= rhs.x;
-            y -= rhs.y;
+            X -= rhs.X;
+            Y -= rhs.Y;
             return *this;
         }
 
         Vec2& operator*=(T scalar)
         {
-            x *= scalar;
-            y *= scalar;
+            X *= scalar;
+            Y *= scalar;
             return *this;
         }
 
         Vec2& operator/=(T scalar)
         {
-            x /= scalar;
-            y /= scalar;
+            X /= scalar;
+            Y /= scalar;
             return *this;
         }
 
         Vec2 operator-() const
         {
-            return { -x, -y };
+            return { -X, -Y };
         }
 
         bool operator==(const Vec2& rhs) const
         {
-            return x == rhs.x &&
-                y == rhs.y;
+            return X == rhs.X &&
+                Y == rhs.Y;
         }
 
         bool operator!=(const Vec2& rhs) const
@@ -87,31 +87,31 @@ namespace Core {
 
         bool operator<(const Vec2& rhs) const
         {
-            return x < rhs.x &&
-                y < rhs.y;
+            return X < rhs.X &&
+                Y < rhs.Y;
         }
 
         bool operator>(const Vec2& rhs) const
         {
-            return x > rhs.x &&
-                y > rhs.y;
+            return X > rhs.X &&
+                Y > rhs.Y;
         }
 
         bool operator<=(const Vec2& rhs) const
         {
-            return x <= rhs.x &&
-                y <= rhs.y;
+            return X <= rhs.X &&
+                Y <= rhs.Y;
         }
 
         bool operator>=(const Vec2& rhs) const
         {
-            return x >= rhs.x &&
-                y >= rhs.y;
+            return X >= rhs.X &&
+                Y >= rhs.Y;
         }
 
         T LengthSquared() const
         {
-            return x * x + y * y;
+            return X * X + Y * Y;
         }
 
         T Length() const
@@ -127,12 +127,12 @@ namespace Core {
         union
         {
             std::array<T, 3> Data;
-            struct { T x, y, z; };
+            struct { T X, Y, Z; };
         };
 
         Vec3() : Data{ T(0), T(0), T(0) } {}
         Vec3(T x, T y, T z)
-            : x(x), y(y), z(z)
+            : X(x), Y(y), Z(z)
         {
         }
 
@@ -142,81 +142,81 @@ namespace Core {
         Vec3 operator+(const Vec3& rhs) const
         {
             return {
-                x + rhs.x,
-                y + rhs.y,
-                z + rhs.z
+                X + rhs.X,
+                Y + rhs.Y,
+                Z + rhs.Z
             };
         }
 
         Vec3 operator-(const Vec3& rhs) const
         {
             return {
-                x - rhs.x,
-                y - rhs.y,
-                z - rhs.z
+                X - rhs.X,
+                Y - rhs.Y,
+                Z - rhs.Z
             };
         }
 
         Vec3 operator*(T scalar) const
         {
             return {
-                x * scalar,
-                y * scalar,
-                z * scalar
+                X * scalar,
+                Y * scalar,
+                Z * scalar
             };
         }
 
         Vec3 operator/(T scalar) const
         {
             return {
-                x / scalar,
-                y / scalar,
-                z / scalar
+                X / scalar,
+                Y / scalar,
+                Z / scalar
             };
         }
 
         Vec3 operator-() const
         {
-            return { -x, -y, -z };
+            return { -X, -Y, -Z };
         }
 
         Vec3& operator+=(const Vec3& rhs)
         {
-            x += rhs.x;
-            y += rhs.y;
-            z += rhs.z;
+            X += rhs.X;
+            Y += rhs.Y;
+            Z += rhs.Z;
             return *this;
         }
 
         Vec3& operator-=(const Vec3& rhs)
         {
-            x -= rhs.x;
-            y -= rhs.y;
-            z -= rhs.z;
+            X -= rhs.X;
+            Y -= rhs.Y;
+            Z -= rhs.Z;
             return *this;
         }
 
         Vec3& operator*=(T scalar)
         {
-            x *= scalar;
-            y *= scalar;
-            z *= scalar;
+            X *= scalar;
+            Y *= scalar;
+            Z *= scalar;
             return *this;
         }
 
         Vec3& operator/=(T scalar)
         {
-            x /= scalar;
-            y /= scalar;
-            z /= scalar;
+            X /= scalar;
+            Y /= scalar;
+            Z /= scalar;
             return *this;
         }
 
         bool operator==(const Vec3& rhs) const
         {
-            return x == rhs.x &&
-                y == rhs.y &&
-                z == rhs.z;
+            return X == rhs.X &&
+                Y == rhs.Y &&
+                Z == rhs.Z;
         }
 
         bool operator!=(const Vec3& rhs) const
@@ -226,37 +226,37 @@ namespace Core {
 
         bool operator<(const Vec3& rhs) const
         {
-            return x < rhs.x &&
-                y < rhs.y &&
-                z < rhs.z;
+            return X < rhs.X &&
+                Y < rhs.Y &&
+                Z < rhs.Z;
         }
 
         bool operator>(const Vec3& rhs) const
         {
-            return x > rhs.x &&
-                y > rhs.y &&
-                z > rhs.z;
+            return X > rhs.X &&
+                Y > rhs.Y &&
+                Z > rhs.Z;
         }
 
         bool operator<=(const Vec3& rhs) const
         {
-            return x <= rhs.x &&
-                y <= rhs.y &&
-                z <= rhs.z;
+            return X <= rhs.X &&
+                Y <= rhs.Y &&
+                Z <= rhs.Z;
         }
 
         bool operator>=(const Vec3& rhs) const
         {
-            return x >= rhs.x &&
-                y >= rhs.y &&
-                z >= rhs.z;
+            return X >= rhs.X &&
+                Y >= rhs.Y &&
+                Z >= rhs.Z;
         }
 
         T LengthSquared() const
         {
-            return x * x +
-                y * y +
-                z * z;
+            return X * X +
+                Y * Y +
+                Z * Z;
         }
 
         T Length() const
@@ -273,13 +273,13 @@ namespace Core {
         union
         {
             std::array<T, 4> Data;
-            struct { T x, y, z, w; };
+            struct { T X, Y, Z, W; };
         };
 
         Vec4() : Data{ T(0), T(0), T(0), T(0) } {}
 
         Vec4(T ix, T iy, T iz, T iw)
-            : x(ix), y(iy), z(iz), w(iw)
+            : X(ix), Y(iy), Z(iz), W(iw)
         {
         }
         Vec4(const std::array<T, 4>& data)
@@ -287,7 +287,7 @@ namespace Core {
         {
         }
         Vec4(const Vec3<T>& v3,T iw)
-            : x(v3.x), y(v3.y), z(v3.z), w(iw)
+            : X(v3.X), Y(v3.Y), Z(v3.Z), W(iw)
         {
         }
         T& operator[](size_t i) { return Data[i]; }
@@ -295,71 +295,71 @@ namespace Core {
 
         Vec4 operator+(const Vec4& rhs) const
         {
-            return { x + rhs.x, y + rhs.y, z + rhs.z, w + rhs.w };
+            return { X + rhs.X, Y + rhs.Y, Z + rhs.Z, W + rhs.W };
         }
 
         Vec4 operator-(const Vec4& rhs) const
         {
-            return { x - rhs.x, y - rhs.y, z - rhs.z, w - rhs.w };
+            return { X - rhs.X, Y - rhs.Y, Z - rhs.Z, W - rhs.W };
         }
 
         Vec4 operator*(T scalar) const
         {
-            return { x * scalar, y * scalar, z * scalar, w * scalar };
+            return { X * scalar, Y * scalar, Z * scalar, W * scalar };
         }
 
         Vec4 operator/(T scalar) const
         {
-            return { x / scalar, y / scalar, z / scalar, w / scalar };
+            return { X / scalar, Y / scalar, Z / scalar, W / scalar };
         }
 
         Vec4 operator-() const
         {
-            return { -x, -y, -z, -w };
+            return { -X, -Y, -Z, -W };
         }
 
         Vec4& operator+=(const Vec4& rhs)
         {
-            x += rhs.x;
-            y += rhs.y;
-            z += rhs.z;
-            w += rhs.w;
+            X += rhs.X;
+            Y += rhs.Y;
+            Z += rhs.Z;
+            W += rhs.W;
             return *this;
         }
 
         Vec4& operator-=(const Vec4& rhs)
         {
-            x -= rhs.x;
-            y -= rhs.y;
-            z -= rhs.z;
-            w -= rhs.w;
+            X -= rhs.X;
+            Y -= rhs.Y;
+            Z -= rhs.Z;
+            W -= rhs.W;
             return *this;
         }
 
         Vec4& operator*=(T scalar)
         {
-            x *= scalar;
-            y *= scalar;
-            z *= scalar;
-            w *= scalar;
+            X *= scalar;
+            Y *= scalar;
+            Z *= scalar;
+            W *= scalar;
             return *this;
         }
 
         Vec4& operator/=(T scalar)
         {
-            x /= scalar;
-            y /= scalar;
-            z /= scalar;
-            w /= scalar;
+            X /= scalar;
+            Y /= scalar;
+            Z /= scalar;
+            W /= scalar;
             return *this;
         }
 
         bool operator==(const Vec4& rhs) const
         {
-            return x == rhs.x &&
-                y == rhs.y &&
-                z == rhs.z &&
-                w == rhs.w;
+            return X == rhs.X &&
+                Y == rhs.Y &&
+                Z == rhs.Z &&
+                W == rhs.W;
         }
 
         bool operator!=(const Vec4& rhs) const
@@ -369,42 +369,42 @@ namespace Core {
 
         bool operator<(const Vec4& rhs) const
         {
-            return x < rhs.x &&
-                y < rhs.y &&
-                z < rhs.z &&
-                w < rhs.w;
+            return X < rhs.X &&
+                Y < rhs.Y &&
+                Z < rhs.Z &&
+                W < rhs.W;
         }
 
         bool operator>(const Vec4& rhs) const
         {
-            return x > rhs.x &&
-                y > rhs.y &&
-                z > rhs.z &&
-                w > rhs.w;
+            return X > rhs.X &&
+                Y > rhs.Y &&
+                Z > rhs.Z &&
+                W > rhs.W;
         }
 
         bool operator<=(const Vec4& rhs) const
         {
-            return x <= rhs.x &&
-                y <= rhs.y &&
-                z <= rhs.z &&
-                w <= rhs.w;
+            return X <= rhs.X &&
+                Y <= rhs.Y &&
+                Z <= rhs.Z &&
+                W <= rhs.W;
         }
 
         bool operator>=(const Vec4& rhs) const
         {
-            return x >= rhs.x &&
-                y >= rhs.y &&
-                z >= rhs.z &&
-                w >= rhs.w;
+            return X >= rhs.X &&
+                Y >= rhs.Y &&
+                Z >= rhs.Z &&
+                W >= rhs.W;
         }
 
         T LengthSquared() const
         {
-            return x * x +
-                y * y +
-                z * z +
-                w * w;
+            return X * X +
+                Y * Y +
+                Z * Z +
+                W * W;
         }
 
         T Length() const
@@ -422,17 +422,17 @@ namespace Core {
     T Dot(const Vec2<T>& a,
         const Vec2<T>& b)
     {
-        return a.x * b.x +
-            a.y * b.y;
+        return a.X * b.X +
+            a.Y * b.Y;
     }
 
     template<typename T>
     T Dot(const Vec3<T>& a,
         const Vec3<T>& b)
     {
-        return a.x * b.x +
-            a.y * b.y +
-            a.z * b.z;
+        return a.X * b.X +
+            a.Y * b.Y +
+            a.Z * b.Z;
     }
 
     template<typename T>
@@ -441,14 +441,14 @@ namespace Core {
         const Vec3<T>& b)
     {
         return {
-            a.y * b.z -
-            a.z * b.y,
+            a.Y * b.Z -
+            a.Z * b.Y,
 
-            a.z * b.x -
-            a.x * b.z,
+            a.Z * b.X -
+            a.X * b.Z,
 
-            a.x * b.y -
-            a.y * b.x
+            a.X * b.Y -
+            a.Y * b.X
         };
     }
 

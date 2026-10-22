@@ -45,9 +45,9 @@ namespace Engine {
     static RenderCore::RenderTextureSP CreateTemporarySeedTexture3D(const Core::Int3& resolution, const char* debugName)
     {
         RHI::RHITextureDesc desc;
-        desc.Width = static_cast<uint32_t>(CORE_MAX(1, resolution.x));
-        desc.Height = static_cast<uint32_t>(CORE_MAX(1, resolution.y));
-        desc.Depth = static_cast<uint32_t>(CORE_MAX(1, resolution.z));
+        desc.Width = static_cast<uint32_t>(CORE_MAX(1, resolution.X));
+        desc.Height = static_cast<uint32_t>(CORE_MAX(1, resolution.Y));
+        desc.Depth = static_cast<uint32_t>(CORE_MAX(1, resolution.Z));
         desc.MipLevels = 1;
         desc.ArraySize = 1;
         desc.Type = RHI::ERHITextureType::Texture3D;
@@ -190,12 +190,12 @@ namespace Engine {
         }
 
         Core::Int3 resolution = input.GridResolution;
-        if (resolution.x <= 0 || resolution.y <= 0 || resolution.z <= 0)
+        if (resolution.X <= 0 || resolution.Y <= 0 || resolution.Z <= 0)
         {
             const auto& desc = input.OutputDistanceTexture->GetRHI()->GetDesc();
             resolution = Core::Int3(static_cast<int>(desc.Width), static_cast<int>(desc.Height), static_cast<int>(desc.Depth));
         }
-        if (resolution.x <= 0 || resolution.y <= 0 || resolution.z <= 0)
+        if (resolution.X <= 0 || resolution.Y <= 0 || resolution.Z <= 0)
         {
             return false;
         }
@@ -301,9 +301,9 @@ namespace Engine {
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
         cmd.SetComputePipelineState(pipelineState);
 
-        const uint32_t groupX = (static_cast<uint32_t>(resolution.x) + 3u) / 4u;
-        const uint32_t groupY = (static_cast<uint32_t>(resolution.y) + 3u) / 4u;
-        const uint32_t groupZ = (static_cast<uint32_t>(resolution.z) + 3u) / 4u;
+        const uint32_t groupX = (static_cast<uint32_t>(resolution.X) + 3u) / 4u;
+        const uint32_t groupY = (static_cast<uint32_t>(resolution.Y) + 3u) / 4u;
+        const uint32_t groupZ = (static_cast<uint32_t>(resolution.Z) + 3u) / 4u;
 
         // Pass 0: initialize seed texture from surface mask.
         DistanceFieldJumpFlood3DParameters params;
@@ -318,7 +318,7 @@ namespace Engine {
         SetShaderParameters(cmd, shader, &params);
         cmd.Dispatch(groupX, groupY, groupZ);
 
-        uint32_t maxDim = static_cast<uint32_t>(CORE_MAX(resolution.x, CORE_MAX(resolution.y, resolution.z)));
+        uint32_t maxDim = static_cast<uint32_t>(CORE_MAX(resolution.X, CORE_MAX(resolution.Y, resolution.Z)));
         uint32_t jumpStep = 1;
         while (jumpStep < maxDim)
         {

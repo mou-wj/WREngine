@@ -141,8 +141,8 @@ namespace Renderer {
         IBLPrecomputeParameters params;
         uint32_t roughnessCount = OutDiffuseIBL->GetRHI()->GetDesc().MipLevels;
         Core::Int2 outsize;
-        outsize.x = OutDiffuseIBL->GetRHI()->GetDesc().Width;
-        outsize.y = OutDiffuseIBL->GetRHI()->GetDesc().Height;
+        outsize.X = OutDiffuseIBL->GetRHI()->GetDesc().Width;
+        outsize.Y = OutDiffuseIBL->GetRHI()->GetDesc().Height;
         
         params.EnvironmentMapParameter.SampleCount = 4;
 
@@ -193,8 +193,8 @@ namespace Renderer {
             // Dispatch
             
 
-            int width = params.OutputSize.x;
-            int height = params.OutputSize.y;
+            int width = params.OutputSize.X;
+            int height = params.OutputSize.Y;
             uint32_t groupX = (width + 15) / 16;
             uint32_t groupY = (height + 15) / 16;
             cmdlist.Dispatch(groupX, groupY, 6);
@@ -216,8 +216,8 @@ namespace Renderer {
         params.OutputSize = outsize;
         SetShaderParameters(cmdlist, shader, IBLPrecomputeParameters::GetMetaData(), &params);
         // Dispatch
-        int width = params.OutputSize.x;
-        int height = params.OutputSize.y;
+        int width = params.OutputSize.X;
+        int height = params.OutputSize.Y;
         uint32_t groupX = (width + 15) / 16;
 		uint32_t groupY = (height + 15) / 16;
         cmdlist.Dispatch(groupX, groupY, 6);
@@ -243,8 +243,8 @@ namespace Renderer {
 
         IBLPrecomputeParameters params;
         Core::Int2 outsize;
-        outsize.x = GlobalIBLLutTexture->GetRHI()->GetDesc().Width;
-        outsize.y = GlobalIBLLutTexture->GetRHI()->GetDesc().Height;
+        outsize.X = GlobalIBLLutTexture->GetRHI()->GetDesc().Width;
+        outsize.Y = GlobalIBLLutTexture->GetRHI()->GetDesc().Height;
 
         params.EnvironmentMapParameter.SampleCount = 4;
 
@@ -275,8 +275,8 @@ namespace Renderer {
         SetShaderParameters(cmdlist, shader, IBLPrecomputeParameters::GetMetaData(), &params);
         // Dispatch
         
-        int width = params.OutputSize.x;
-        int height = params.OutputSize.y;
+        int width = params.OutputSize.X;
+        int height = params.OutputSize.Y;
         uint32_t groupX = (width + 15) / 16;
         uint32_t groupY = (height + 15) / 16;
         cmdlist.Dispatch(groupX, groupY, 1);

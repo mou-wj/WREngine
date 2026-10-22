@@ -13,11 +13,11 @@ namespace Core
 		Float3 Origin;
 		Float3 Direction;
 		Ray() = default;
-		Ray(const Float3& InOrigin, const Float3& InDirection)
-			: Origin(InOrigin), Direction(InDirection) {
+		Ray(const Float3& inOrigin, const Float3& inDirection)
+			: Origin(inOrigin), Direction(inDirection) {
 		}
         bool RayIntersectAABB(
-            const AABB& Box) const
+            const AABB& box) const
         {
 
             
@@ -25,21 +25,21 @@ namespace Core
             float tMax = FLT_MAX;
 
 
-            for (int Axis = 0; Axis < 3; Axis++)
+            for (int axis = 0; axis < 3; axis++)
             {
-                float Ori = Origin[Axis];
-                float Dir = Direction[Axis];
+                float ori = Origin[axis];
+                float dir = Direction[axis];
 
 
-                float InvD = 1.0f / Dir;
+                float invD = 1.0f / dir;
 
 
                 float t0 =
-                    (Box.Min[Axis] - Ori) * InvD;
+                    (box.Min[axis] - ori) * invD;
 
 
                 float t1 =
-                    (Box.Max[Axis] - Ori) * InvD;
+                    (box.Max[axis] - ori) * invD;
 
 
                 if (t0 > t1)
@@ -81,15 +81,15 @@ namespace Core
     template<typename Primitive>
     struct BVHTraits
     {
-        static BoxSphereBounds GetBounds(const Primitive& Primitive);
+        static BoxSphereBounds GetBounds(const Primitive& primitive);
 
-        static Float3 GetCentroid(const Primitive& Primitive);
+        static Float3 GetCentroid(const Primitive& primitive);
 
-        static bool RayIntersect(const Primitive& Primitive, const Ray& Ray, float& OutDistance);
+        static bool RayIntersect(const Primitive& primitive, const Ray& ray, float& outDistance);
 
-        static Float3 ClosestPoint(const Primitive& Primitive, const Float3& Position);
+        static Float3 ClosestPoint(const Primitive& primitive, const Float3& position);
 
-        static float ClosestDistance(const Primitive& Primitive, const Float3& Position);
+        static float ClosestDistance(const Primitive& primitive, const Float3& position);
     };
 
     template<typename Primitive, typename Traits = BVHTraits<Primitive>>
@@ -103,91 +103,91 @@ namespace Core
         BVH() = default;
         ~BVH() = default;
 
-        void Build(const std::vector<Primitive>& InPrimitives);
+        void Build(const std::vector<Primitive>& inPrimitives);
 
         void Clear()
         {
-            Nodes.clear();
-            PrimitiveIndices.clear();
-            Primitives = nullptr;
+            _nodes.clear();
+            _primitiveIndices.clear();
+            _primitives = nullptr;
         }
 
         bool IsEmpty() const
         {
-            return Nodes.empty();
+            return _nodes.empty();
         }
 
         const BVHNode& GetRootNode() const
         {
-            return Nodes.front();
+            return _nodes.front();
         }
 
         const std::vector<BVHNode>& GetNodes() const
         {
-            return Nodes;
+            return _nodes;
         }
 
         const std::vector<uint32_t>& GetPrimitiveIndices() const
         {
-            return PrimitiveIndices;
+            return _primitiveIndices;
         }
 
-        const Primitive& GetPrimitive(uint32_t Index) const
+        const Primitive& GetPrimitive(uint32_t index) const
         {
-            return (*Primitives)[Index];
+            return (*_primitives)[index];
         }
 
         const std::vector<Primitive>& GetPrimitives() const
         {
-            return *Primitives;
+            return *_primitives;
         }
 
         uint32_t GetNodeCount() const
         {
-            return static_cast<uint32_t>(Nodes.size());
+            return static_cast<uint32_t>(_nodes.size());
         }
 
         uint32_t GetPrimitiveCount() const
         {
-            return static_cast<uint32_t>(PrimitiveIndices.size());
+            return static_cast<uint32_t>(_primitiveIndices.size());
         }
 
-        float ClosestDistance(const Float3& Position) const;
+        float ClosestDistance(const Float3& position) const;
 
-        void RayIntersect(const Ray& Ray, std::set<uint32_t>& IntersectPrimitiveIds) const;
+        void RayIntersect(const Ray& ray, std::set<uint32_t>& intersectPrimitiveIds) const;
 
-        void GetPrimitiveIdsInsideBounds(const BoxSphereBounds& Box, std::set<uint32_t>& OutPrimitiveIds) const;
+        void GetPrimitiveIdsInsideBounds(const BoxSphereBounds& box, std::set<uint32_t>& outPrimitiveIds) const;
 
     protected:
 
-        uint32_t BuildRecursive(uint32_t Begin, uint32_t End);
+        uint32_t BuildRecursive(uint32_t begin, uint32_t end);
 
-        uint32_t CreateLeaf(uint32_t Begin, uint32_t End);
+        uint32_t CreateLeaf(uint32_t begin, uint32_t end);
 
         uint32_t CreateInternalNode();
 
-        BoxSphereBounds ComputeBounds(uint32_t Begin, uint32_t End) const;
+        BoxSphereBounds ComputeBounds(uint32_t begin, uint32_t end) const;
 
-        int GetLongestAxis(const BoxSphereBounds& Bounds) const;
+        int GetLongestAxis(const BoxSphereBounds& bounds) const;
 
-        void ClosestDistanceRecursive(uint32_t NodeIndex, const Float3& Position, float& MinDistance) const;
+        void ClosestDistanceRecursive(uint32_t nodeIndex, const Float3& position, float& minDistance) const;
 
         void RayIntersectNode(
-            uint32_t NodeIndex,
-            const Ray& Ray,
-            std::set<uint32_t>& OutPrimitiveIds) const;
+            uint32_t nodeIndex,
+            const Ray& ray,
+            std::set<uint32_t>& outPrimitiveIds) const;
 
-        void QueryBoundsRecursive(uint32_t NodeIndex, const BoxSphereBounds& Box, std::set<uint32_t>& OutPrimitiveIds) const;
+        void QueryBoundsRecursive(uint32_t nodeIndex, const BoxSphereBounds& box, std::set<uint32_t>& outPrimitiveIds) const;
     protected:
 
 
 
 
-        const std::vector<Primitive>* Primitives = nullptr;
+        const std::vector<Primitive>* _primitives = nullptr;
 
-        std::vector<uint32_t> PrimitiveIndices;
+        std::vector<uint32_t> _primitiveIndices;
 
-        std::vector<BVHNode> Nodes;
+        std::vector<BVHNode> _nodes;
     };
 
 }

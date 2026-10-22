@@ -120,7 +120,7 @@ namespace Engine
 
     Core::Float3 DistanceFieldTriangleBVHTraits::GetCentroid(const DistanceFieldTriangle& triangle)
     {
-        return Core::Float3((triangle.V0.x + triangle.V1.x + triangle.V2.x) / 3.0f, (triangle.V0.y + triangle.V1.y + triangle.V2.y) / 3.0f, (triangle.V0.z + triangle.V1.z + triangle.V2.z) / 3.0f);
+        return Core::Float3((triangle.V0.X + triangle.V1.X + triangle.V2.X) / 3.0f, (triangle.V0.Y + triangle.V1.Y + triangle.V2.Y) / 3.0f, (triangle.V0.Z + triangle.V1.Z + triangle.V2.Z) / 3.0f);
     }
 
 
@@ -130,7 +130,7 @@ namespace Engine
 
         Core::Float3 delta = point - position;
 
-        return sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
+        return sqrt(delta.X * delta.X + delta.Y * delta.Y + delta.Z * delta.Z);
     }
 
     bool DistanceFieldTriangleBVHTraits::RayIntersect(const DistanceFieldTriangle& primitive, const Core::Ray& ray, float& outDistance)
@@ -216,20 +216,20 @@ namespace Engine
                 return m;
             }
 
-            const float sizeX = CORE_MAX(bounds.Max.x - bounds.Min.x, 1e-4f);
-            const float sizeY = CORE_MAX(bounds.Max.y - bounds.Min.y, 1e-4f);
-            const float sizeZ = CORE_MAX(bounds.Max.z - bounds.Min.z, 1e-4f);
+            const float sizeX = CORE_MAX(bounds.Max.X - bounds.Min.X, 1e-4f);
+            const float sizeY = CORE_MAX(bounds.Max.Y - bounds.Min.Y, 1e-4f);
+            const float sizeZ = CORE_MAX(bounds.Max.Z - bounds.Min.Z, 1e-4f);
 
-            const float sx = static_cast<float>(CORE_MAX(1, resolution.x - 1)) / sizeX;
-            const float sy = static_cast<float>(CORE_MAX(1, resolution.y - 1)) / sizeY;
-            const float sz = static_cast<float>(CORE_MAX(1, resolution.z - 1)) / sizeZ;
+            const float sx = static_cast<float>(CORE_MAX(1, resolution.X - 1)) / sizeX;
+            const float sy = static_cast<float>(CORE_MAX(1, resolution.Y - 1)) / sizeY;
+            const float sz = static_cast<float>(CORE_MAX(1, resolution.Z - 1)) / sizeZ;
 
             m(0, 0) = sx;
             m(1, 1) = sy;
             m(2, 2) = sz;
-            m(0, 3) = -bounds.Min.x * sx;
-            m(1, 3) = -bounds.Min.y * sy;
-            m(2, 3) = -bounds.Min.z * sz;
+            m(0, 3) = -bounds.Min.X * sx;
+            m(1, 3) = -bounds.Min.Y * sy;
+            m(2, 3) = -bounds.Min.Z * sz;
             return m;
         }
 
@@ -338,9 +338,9 @@ namespace Engine
 
 
             outData.Volume.VoxelSize = Core::Float3(
-                size.x / resolution,
-                size.y / resolution,
-                size.z / resolution);
+                size.X / resolution,
+                size.Y / resolution,
+                size.Z / resolution);
 
 
             outData.Resize(
@@ -464,9 +464,9 @@ namespace Engine
     }
 
     Core::Float3 RandomSeed(Core::Float3 center, float radius) {
-        float randomx = center.x + radius * (rand() % 1000 / 1000.0f - 0.5f);
-        float randomy = center.y + radius * (rand() % 1000 / 1000.0f - 0.5f);
-		float randomz = center.z + radius * (rand() % 1000 / 1000.0f - 0.5f);
+        float randomx = center.X + radius * (rand() % 1000 / 1000.0f - 0.5f);
+        float randomy = center.Y + radius * (rand() % 1000 / 1000.0f - 0.5f);
+		float randomz = center.Z + radius * (rand() % 1000 / 1000.0f - 0.5f);
         return Core::Float3(randomx, randomy, randomz);
     }
 
@@ -486,9 +486,9 @@ namespace Engine
 
 
                 Core::Float3 position(
-                    data.Volume.MinBounds.x + x * data.Volume.VoxelSize.x,
-                    data.Volume.MinBounds.y + y * data.Volume.VoxelSize.y,
-                    data.Volume.MinBounds.z + z * data.Volume.VoxelSize.z);
+                    data.Volume.MinBounds.X + x * data.Volume.VoxelSize.X,
+                    data.Volume.MinBounds.Y + y * data.Volume.VoxelSize.Y,
+                    data.Volume.MinBounds.Z + z * data.Volume.VoxelSize.Z);
 
 
 
@@ -553,17 +553,17 @@ namespace Engine
     static Core::Float3 GetVoxelPosition(const DistanceFieldVolumeDesc& volume, uint32_t x, uint32_t y, uint32_t z)
     {
         return Core::Float3(
-            volume.MinBounds.x + (x + 0.5f) * volume.VoxelSize.x,
-            volume.MinBounds.y + (y + 0.5f) * volume.VoxelSize.y,
-            volume.MinBounds.z + (z + 0.5f) * volume.VoxelSize.z
+            volume.MinBounds.X + (x + 0.5f) * volume.VoxelSize.X,
+            volume.MinBounds.Y + (y + 0.5f) * volume.VoxelSize.Y,
+            volume.MinBounds.Z + (z + 0.5f) * volume.VoxelSize.Z
         );
     }
     static Core::AABB GetVoxelBounds(const DistanceFieldVolumeDesc& volume, uint32_t x, uint32_t y, uint32_t z)
     {
         Core::Float3 min(
-            volume.MinBounds.x + x * volume.VoxelSize.x,
-            volume.MinBounds.y + y * volume.VoxelSize.y,
-            volume.MinBounds.z + z * volume.VoxelSize.z
+            volume.MinBounds.X + x * volume.VoxelSize.X,
+            volume.MinBounds.Y + y * volume.VoxelSize.Y,
+            volume.MinBounds.Z + z * volume.VoxelSize.Z
         );
 
         Core::Float3 max = min + volume.VoxelSize;
@@ -605,9 +605,9 @@ namespace Engine
 
         volume.VoxelSize =
             Core::Float3(
-                size.x / resolution,
-                size.y / resolution,
-                size.z / resolution);
+                size.X / resolution,
+                size.Y / resolution,
+                size.Z / resolution);
 
 
 
@@ -634,13 +634,13 @@ namespace Engine
 
                 Core::AABB blockBounds(
                     Core::Float3(
-                        volume.MinBounds.x + startX * volume.VoxelSize.x,
-                        volume.MinBounds.y + startY * volume.VoxelSize.y,
-                        volume.MinBounds.z + startZ * volume.VoxelSize.z),
+                        volume.MinBounds.X + startX * volume.VoxelSize.X,
+                        volume.MinBounds.Y + startY * volume.VoxelSize.Y,
+                        volume.MinBounds.Z + startZ * volume.VoxelSize.Z),
                     Core::Float3(
-                        volume.MinBounds.x + endX * volume.VoxelSize.x,
-                        volume.MinBounds.y + endY * volume.VoxelSize.y,
-                        volume.MinBounds.z + endZ * volume.VoxelSize.z)
+                        volume.MinBounds.X + endX * volume.VoxelSize.X,
+                        volume.MinBounds.Y + endY * volume.VoxelSize.Y,
+                        volume.MinBounds.Z + endZ * volume.VoxelSize.Z)
                 );
 
 

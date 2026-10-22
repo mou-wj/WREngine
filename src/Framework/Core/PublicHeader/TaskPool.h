@@ -53,7 +53,7 @@ public:
     bool IsCompleted(const TaskHandle& handle) const;
 
     // 获取当前仍未完成（已提交但未完成/正在执行）的任务数量
-    size_t GetPendingTaskCount() const { return PendingTasks.load(); }
+    size_t GetPendingTaskCount() const { return m_PendingTasks.load(); }
 
 private:
     struct TaskItem {
@@ -65,18 +65,18 @@ private:
     // Worker loop
     void WorkerLoop();
 
-    std::atomic<uint64_t> NextId{ 1 };
-    std::atomic<size_t> PendingTasks{ 0 };
+    std::atomic<uint64_t> m_NextId{ 1 };
+    std::atomic<size_t> m_PendingTasks{ 0 };
 
-    mutable std::mutex QueueMutex;
-    mutable std::condition_variable QueueCV;
-    std::queue<TaskItem> Queue;
+    mutable std::mutex m_QueueMutex;
+    mutable std::condition_variable m_QueueCv;
+    std::queue<TaskItem> m_Queue;
 
-    std::vector<std::thread> Workers;
-    std::atomic<bool> bShutdown{ false };
+    std::vector<std::thread> m_Workers;
+    std::atomic<bool> m_bShutdown{ false };
 
     // Used by WaitAll() to wait until PendingTasks == 0
-    mutable std::condition_variable PendingCV;
+    mutable std::condition_variable m_PendingCv;
 };
 
 } // namespace Common

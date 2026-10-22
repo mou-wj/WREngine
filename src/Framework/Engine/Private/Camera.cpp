@@ -13,29 +13,29 @@ Core::Float4 Multiply(
 {
     Core::Float4 result;
 
-    result.x =
-        m(0,0) * v.x +
-        m(0,1) * v.y +
-        m(0,2) * v.z +
-        m(0,3) * v.w;
+    result.X =
+        m(0,0) * v.X +
+        m(0,1) * v.Y +
+        m(0,2) * v.Z +
+        m(0,3) * v.W;
 
-    result.y =
-        m(1,0) * v.x +
-        m(1,1) * v.y +
-        m(1,2) * v.z +
-        m(1,3) * v.w;
+    result.Y =
+        m(1,0) * v.X +
+        m(1,1) * v.Y +
+        m(1,2) * v.Z +
+        m(1,3) * v.W;
 
-    result.z =
-        m(2,0) * v.x +
-        m(2,1) * v.y +
-        m(2,2) * v.z +
-        m(2,3) * v.w;
+    result.Z =
+        m(2,0) * v.X +
+        m(2,1) * v.Y +
+        m(2,2) * v.Z +
+        m(2,3) * v.W;
 
-    result.w =
-        m(3,0) * v.x +
-        m(3,1) * v.y +
-        m(3,2) * v.z +
-        m(3,3) * v.w;
+    result.W =
+        m(3,0) * v.X +
+        m(3,1) * v.Y +
+        m(3,2) * v.Z +
+        m(3,3) * v.W;
 
     return result;
 }
@@ -181,14 +181,14 @@ void Camera::UpdateProjectionMatrix() const
         ProjectionType::Perspective)
     {
         if (m_DepthRangeMode == EDepthRangeMode::ZeroToOne) {
-            m_ProjectionMatrix = Core::PerspectiveRH_ZO(
+            m_ProjectionMatrix = Core::PerspectiveRhZo(
                 m_FovY,
                 m_Aspect,
                 m_NearPlane,
                 m_FarPlane);
         }
         else {
-            m_ProjectionMatrix = Core::PerspectiveRH_NO(
+            m_ProjectionMatrix = Core::PerspectiveRhNo(
                 m_FovY,
                 m_Aspect,
                 m_NearPlane,
@@ -205,7 +205,7 @@ void Camera::UpdateProjectionMatrix() const
             m_OrthoHeight * 0.5f;
         if (m_DepthRangeMode == EDepthRangeMode::ZeroToOne) {
             m_ProjectionMatrix =
-                Core::OrthoRH_ZO(
+                Core::OrthoRhZo(
                     -halfW,
                     halfW,
                     -halfH,
@@ -214,7 +214,7 @@ void Camera::UpdateProjectionMatrix() const
                     m_FarPlane);
         }
         else {
-            m_ProjectionMatrix = Core::OrthoRH_NO(
+            m_ProjectionMatrix = Core::OrthoRhNo(
                 -halfW,
                 halfW,
                 -halfH,
@@ -301,9 +301,9 @@ Camera::WorldToClip(
     return Multiply(
         m_ViewProjectionMatrix,
         Core::Float4(
-            worldPos.x,
-            worldPos.y,
-            worldPos.z,
+            worldPos.X,
+            worldPos.Y,
+            worldPos.Z,
             1.f));
 }
 
@@ -314,15 +314,15 @@ Camera::WorldToNdc(
     Core::Float4 clip =
         WorldToClip(worldPos);
 
-    if (std::abs(clip.w) < 1e-6f)
+    if (std::abs(clip.W) < 1e-6f)
     {
         return Core::Float3();
     }
 
     return Core::Float3(
-        clip.x / clip.w,
-        clip.y / clip.w,
-        clip.z / clip.w);
+        clip.X / clip.W,
+        clip.Y / clip.W,
+        clip.Z / clip.W);
 }
 float Camera::GetNearPlane() const
 {

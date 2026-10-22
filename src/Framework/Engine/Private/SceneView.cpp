@@ -93,9 +93,9 @@ namespace Engine {
         for (const auto& plane : CachedFrustum.Planes)
         {
             // 寻找在当前平面法线方向上，AABB 距离平面最近的“最远点 (Positive Vertex)”
-            float pvX = (plane.A > 0.0f) ? box.Max.x : box.Min.x;
-            float pvY = (plane.B > 0.0f) ? box.Max.y : box.Min.y;
-            float pvZ = (plane.C > 0.0f) ? box.Max.z : box.Min.z;
+            float pvX = (plane.A > 0.0f) ? box.Max.X : box.Min.X;
+            float pvY = (plane.B > 0.0f) ? box.Max.Y : box.Min.Y;
+            float pvZ = (plane.C > 0.0f) ? box.Max.Z : box.Min.Z;
 
             // 如果连这个最容易留在平面内部的点都在平面外侧（即算出来的带符号距离 < 0），说明被彻底裁剪
             if (plane.A * pvX + plane.B * pvY + plane.C * pvZ + plane.D < 0.0f)
@@ -113,10 +113,10 @@ namespace Engine {
         outUniforms.InvViewProj = InvViewProjectionMatrix;
 
         // 2. 复制相机位置，并对齐打入 Float4 内存中
-        outUniforms.CameraPos.x = CameraWorldPos.x;
-        outUniforms.CameraPos.y = CameraWorldPos.y;
-        outUniforms.CameraPos.z = CameraWorldPos.z;
-        outUniforms.CameraPos.w = 1.0f; // 常规齐次坐标预留
+        outUniforms.CameraPos.X = CameraWorldPos.X;
+        outUniforms.CameraPos.Y = CameraWorldPos.Y;
+        outUniforms.CameraPos.Z = CameraWorldPos.Z;
+        outUniforms.CameraPos.W = 1.0f; // 常规齐次坐标预留
     }
     static Core::Float3 UnprojectFromNDC(
         const Core::Float4x4& invVP,
@@ -128,14 +128,14 @@ namespace Engine {
 
         Core::Float4 world = invVP * p.Data;
 
-        if (std::abs(world.w) > 1e-6f)
+        if (std::abs(world.W) > 1e-6f)
         {
-            world.x /= world.w;
-            world.y /= world.w;
-            world.z /= world.w;
+            world.X /= world.W;
+            world.Y /= world.W;
+            world.Z /= world.W;
         }
 
-        return Core::Float3(world.x, world.y, world.z);
+        return Core::Float3(world.X, world.Y, world.Z);
     }
     std::array<Core::Float3, 8> SceneView::GetFrustumCornersWS(float nearDepth, float farDepth) const {
         std::array<Core::Float3, 8> corners;

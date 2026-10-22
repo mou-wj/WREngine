@@ -229,8 +229,8 @@ namespace RHIVulkan {
 
         NumColorAttachments = targetInfo.NumColorAttachments;
         auto dimens = targetInfo.Dimensions;
-        Extent.width = dimens.x;
-        Extent.height = dimens.y;
+        Extent.width = dimens.X;
+        Extent.height = dimens.Y;
 
         std::vector<VkImageView> vkViews;
 		VkImageViewCreateInfo viewInfo{};

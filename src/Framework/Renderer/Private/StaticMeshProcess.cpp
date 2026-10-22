@@ -313,7 +313,7 @@ namespace Renderer {
                 //����pixel����
                 SetShaderParameters(cmd, cshader, params);
 
-                cmd.Dispatch(params->ScreenSize.x / 8, params->ScreenSize.y / 8, 1);
+                cmd.Dispatch(params->ScreenSize.X / 8, params->ScreenSize.Y / 8, 1);
             }
         );
     }

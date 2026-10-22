@@ -9,7 +9,7 @@ namespace Core {
         inline static Timer& GetGlobalInstance();
 
     private:
-        std::chrono::steady_clock::time_point last_time;
+        std::chrono::steady_clock::time_point m_LastTime;
 
     };
 } // namespace Core

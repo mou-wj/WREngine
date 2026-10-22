@@ -2,7 +2,7 @@
 #include <cstdint>
 namespace Core {
 
-	//äÖÈ¾Ïß³ÌÖĞµ÷ÓÃ
+	//æ¸²æŸ“çº¿ç¨‹ä¸­è°ƒç”¨
 	CORE_API void InitRenderThreadId();
 	CORE_API bool IsInRenderThread();
 

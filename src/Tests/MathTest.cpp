@@ -119,7 +119,7 @@ namespace Test {
                 << "\n========== Projection Test ==========\n";
 
             Mat4 proj =
-                PerspectiveRH_NO(
+                PerspectiveRhNo(
                     DegToRad(45.0f),
                     1.0f,
                     0.1f,
@@ -187,7 +187,7 @@ namespace Test {
                     up);
 
             Mat4 proj =
-                PerspectiveRH_NO(
+                PerspectiveRhNo(
                     DegToRad(45.0f),
                     1.0f,
                     0.1f,

@@ -3,11 +3,11 @@
 namespace Core {
     void Logger::SetLogFile(const std::string& filename)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_file.is_open())
-            m_file.close();
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        if (m_File.is_open())
+            m_File.close();
         if (!filename.empty())
-            m_file.open(filename, std::ios::out | std::ios::app);
+            m_File.open(filename, std::ios::out | std::ios::app);
     }
 
     std::string Logger::GetTimeString()
@@ -17,14 +17,14 @@ namespace Core {
         auto time = system_clock::to_time_t(now);
         auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
 
-        std::tm tm_time;
+        std::tm tmTime;
 #ifdef _WIN32
-        localtime_s(&tm_time, &time);
+        localtime_s(&tmTime, &time);
 #else
         localtime_r(&time, &tm_time);
 #endif
         std::ostringstream oss;
-        oss << std::put_time(&tm_time, "%Y-%m-%d %H:%M:%S")
+        oss << std::put_time(&tmTime, "%Y-%m-%d %H:%M:%S")
             << "." << std::setw(3) << std::setfill('0') << ms.count();
         return oss.str();
     }
@@ -43,9 +43,9 @@ namespace Core {
 
     void Logger::Log(Level level, const char* fmt, ...)
     {
-        if (level < m_level) return;
+        if (level < m_Level) return;
 
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> lock(m_Mutex);
 
         char buffer[1024];
         va_list args;
@@ -60,17 +60,17 @@ namespace Core {
 
         std::string msg = oss.str();
 
-        // øÿ÷∆Ã® ‰≥ˆ
+        // ÊéßÂà∂Âè∞ËæìÂá∫
         if (level == Level::Error)
             std::cerr << msg << std::endl;
         else
             std::cout << msg << std::endl;
 
-        // Œƒº˛ ‰≥ˆ
-        if (m_file.is_open())
+        // Êñá‰ª∂ËæìÂá∫
+        if (m_File.is_open())
         {
-            m_file << msg << std::endl;
-            m_file.flush();
+            m_File << msg << std::endl;
+            m_File.flush();
         }
     }
 

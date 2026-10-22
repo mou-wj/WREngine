@@ -56,6 +56,7 @@ endif()
 
 # Reasonable compile warnings
 if(MSVC)
+    target_compile_options(${TARGET_NAME} PUBLIC /utf-8)
     target_compile_options(${TARGET_NAME} PRIVATE /W4 /permissive-)
 else()
     target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Wpedantic)
