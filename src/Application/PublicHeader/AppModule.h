@@ -10,6 +10,6 @@ namespace App {
 		void ShutdownModule() override;
 		bool IsLoaded() const override;
 	private:
-		bool isLoaded;
+		bool m_bIsLoaded;
 	};
 }

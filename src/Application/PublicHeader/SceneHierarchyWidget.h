@@ -19,7 +19,7 @@ namespace App
         void Draw() override;
 
     private:
-        std::vector<std::string> SceneObjects;
-        std::string SelectedObject;
+        std::vector<std::string> m_SceneObjects;
+        std::string m_SelectedObject;
     };
 }

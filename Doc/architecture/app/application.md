@@ -59,10 +59,10 @@ class APPLICATION_API Application : public SlateCore::ApplicationBase
 在 `Application::Initialize()` 中，代码执行了以下关键步骤：
 
 ```cpp
-SceneViewportClient = std::make_unique<AppViewportClient>();
+_sceneViewportClient = std::make_unique<AppViewportClient>();
 _renderer = SlateRHIRenderer::GSlateRHIRendererModule->CreateSlateRenderer();
-Window = CreateWindowSP(800, 600, "My Application");
-SceneViewportClient->InitResources();
+_window = CreateWindowSP(800, 600, "My Application");
+_sceneViewportClient->InitResources();
 ```
 
 这里表现出几个关键职责：
@@ -83,12 +83,12 @@ SceneViewportClient->InitResources();
 `Shutdown()` 里清理顺序是：
 
 ```cpp
-ImGuiWidget.reset();
-SceneSlateWidget.reset();
-SceneMainViewport.reset();
-SceneViewportClient->ReleaseResources();
-SceneViewportClient.reset();
-Window = nullptr;
+_imGuiWidget.reset();
+_sceneSlateWidget.reset();
+_sceneMainViewport.reset();
+_sceneViewportClient->ReleaseResources();
+_sceneViewportClient.reset();
+_window = nullptr;
 ```
 
 这说明应用层采用的是“倒序释放”的方式：
@@ -107,23 +107,23 @@ Window = nullptr;
 `Application::CreateWindowSP()` 是实际构建窗口和布局的核心函数：
 
 ```cpp
-std::shared_ptr<ImGUISlate::ImMainWindow> NewWindow =
-    std::make_shared<ImGUISlate::ImMainWindow>(Width, Height, std::string(Title));
-NewWindow->Initialize();
-NewWindow->Show();
+std::shared_ptr<ImGUISlate::ImMainWindow> newWindow =
+    std::make_shared<ImGUISlate::ImMainWindow>(width, height, std::string(title));
+newWindow->Initialize();
+newWindow->Show();
 ```
 
 随后它创建并挂载：
 
-- `SceneSlateWidget`
-- `SceneMainViewport`
-- `ImGuiWidget`
+- `_sceneSlateWidget`
+- `_sceneMainViewport`
+- `_imGuiWidget`
 
 同时用 `LayoutParams` 把组件组织进窗口布局中：
 
 ```cpp
-NewWindow->AddWidget(SceneSlateWidget.get(), layoutParams);
-NewWindow->AddWidget(ImGuiWidget.get(), layoutParams);
+newWindow->AddWidget(_sceneSlateWidget.get(), layoutParams);
+newWindow->AddWidget(_imGuiWidget.get(), layoutParams);
 ```
 
 这是一种“窗口中有主视口 + 右侧面板”的编辑器布局方式。
@@ -132,13 +132,13 @@ NewWindow->AddWidget(ImGuiWidget.get(), layoutParams);
 
 ## 6. 视口与布局管理
 
-### 6.1 `SceneSlateWidget`
+### 6.1 `_sceneSlateWidget`
 
-`SceneSlateWidget` 是用来承载场景视口的 `SlateCore::SlateWidget`：
+`_sceneSlateWidget` 是用来承载场景视口的 `SlateCore::SlateWidget`：
 
 ```cpp
-SceneSlateWidget = std::make_unique<SlateCore::SlateWidget>(NewWindow.get());
-SceneSlateWidget->SetViewportChild(SceneMainViewport.get());
+_sceneSlateWidget = std::make_unique<SlateCore::SlateWidget>(newWindow.get());
+_sceneSlateWidget->SetViewportChild(_sceneMainViewport.get());
 ```
 
 这里可理解为：
@@ -147,26 +147,26 @@ SceneSlateWidget->SetViewportChild(SceneMainViewport.get());
 - 该 widget 的视口子节点指向 `Engine::SceneViewport`
 - 这个 viewport 负责渲染场景区域
 
-### 6.2 `SceneMainViewport`
+### 6.2 `_sceneMainViewport`
 
 `Engine::SceneViewport` 与 `AppViewportClient` 配合，形成 3D 场景渲染区域：
 
 ```cpp
-SceneMainViewport = std::make_unique<Engine::SceneViewport>(SceneViewportClient.get(), slateWidgetSize);
+_sceneMainViewport = std::make_unique<Engine::SceneViewport>(_sceneViewportClient.get(), slateWidgetSize);
 ```
 
 这说明：
 
 - 视口本身是场景展示区域
 - viewport client 负责注册输入与底层资源初始化
-- 调用 `SceneMainViewport->Draw()` 时，会把场景渲染到当前窗口区域
+- 调用 `_sceneMainViewport->Draw()` 时，会把场景渲染到当前窗口区域
 
-### 6.3 `ImGuiWidget`
+### 6.3 `_imGuiWidget`
 
 右侧面板则通过 `ImGUISlate::ImWidget` 实现：
 
 ```cpp
-ImGuiWidget = std::make_unique<ImGUISlate::ImWidget>([](int x, int y, int w, int h) {
+_imGuiWidget = std::make_unique<ImGUISlate::ImWidget>([](int x, int y, int w, int h) {
     ImGui::SetNextWindowPos(...);
     ImGui::SetNextWindowSize(...);
     ImGui::Begin("RightPanel", ...);
@@ -186,26 +186,26 @@ ImGuiWidget = std::make_unique<ImGUISlate::ImWidget>([](int x, int y, int w, int
 ```cpp
 void Application::TickFrame()
 {
-    Window->PollEvents();
+    _window->PollEvents();
 
-    if (SceneMainViewport)
-        SceneMainViewport->Draw();
+    if (_sceneMainViewport)
+        _sceneMainViewport->Draw();
 
-    if (SceneSlateWidget)
+    if (_sceneSlateWidget)
     {
-        Renderer->Render(SceneSlateWidget.get());
+        _renderer->Render(_sceneSlateWidget.get());
     }
 
-    Window->Draw();
+    _window->Draw();
 }
 ```
 
 这里体现了应用层的典型工作流：
 
-1. `Window->PollEvents()`：轮询窗口事件
-2. `SceneMainViewport->Draw()`：绘制场景视口内容
-3. `Renderer->Render(SceneSlateWidget.get())`：把 Slate widget 渲染输出到窗口
-4. `Window->Draw()`：执行真正的窗口绘制刷出帧
+1. `_window->PollEvents()`：轮询窗口事件
+2. `_sceneMainViewport->Draw()`：绘制场景视口内容
+3. `_renderer->Render(_sceneSlateWidget.get())`：把 Slate widget 渲染输出到窗口
+4. `_window->Draw()`：执行真正的窗口绘制刷出帧
 
 这说明 `App::Application` 属于“应用驱动的渲染主循环”，而不是引擎内部的渲染循环本身。
 
@@ -216,14 +216,14 @@ void Application::TickFrame()
 `RequestExit()` 只简单返回：
 
 ```cpp
-return QuitFlag;
+return _bQuitFlag;
 ```
 
-`QuitFlag` 会在窗口关闭回调中被设置：
+`_bQuitFlag` 会在窗口关闭回调中被设置：
 
 ```cpp
-NewWindow->SetCloseCallback([this]() {
-    QuitFlag = true;
+newWindow->SetCloseCallback([this]() {
+    _bQuitFlag = true;
 });
 ```
 
@@ -237,8 +237,8 @@ NewWindow->SetCloseCallback([this]() {
 
 1. 继承自 `SlateCore::ApplicationBase`，遵守统一的应用生命周期接口
 2. 创建 `ImMainWindow` 作为主窗口
-3. 组装 `SceneSlateWidget` 与 `SceneViewport` 形成场景显示区域
-4. 用 `ImGuiWidget` 组合右侧工具栏和编辑器面板
+3. 组装 `_sceneSlateWidget` 与 `SceneViewport` 形成场景显示区域
+4. 用 `_imGuiWidget` 组合右侧工具栏和编辑器面板
 5. 在 `TickFrame()` 中统一处理事件、场景绘制和窗口绘制
 6. 把底层 `SlateRHIRenderer`、`Engine::SceneViewport` 和窗口层组合起来，形成最终应用
 
@@ -250,7 +250,7 @@ NewWindow->SetCloseCallback([this]() {
 Lancher
     -> ApplicationBase
         -> App::Application
-            -> ImMainWindow / SceneViewport / ImGuiWidget
+            -> ImMainWindow / SceneViewport / _imGuiWidget
 ``` 
 
 是从框架到实际业务运行的最终组装点。

@@ -20,7 +20,7 @@ namespace App
         void Draw() override;
 
     private:
-        std::string ComponentName = "No Selection";
-        std::vector<std::pair<std::string, std::string>> Properties;
+        std::string m_ComponentName = "No Selection";
+        std::vector<std::pair<std::string, std::string>> m_Properties;
     };
 }

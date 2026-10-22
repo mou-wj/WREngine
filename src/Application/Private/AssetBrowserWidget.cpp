@@ -7,13 +7,13 @@ namespace App
     AssetBrowserWidget::AssetBrowserWidget() = default;
 
     AssetBrowserWidget::AssetBrowserWidget(std::vector<std::string> assetPaths)
-        : AssetPaths(std::move(assetPaths))
+        : m_AssetPaths(std::move(assetPaths))
     {
     }
 
     void AssetBrowserWidget::SetAssets(std::vector<std::string> assetPaths)
     {
-        AssetPaths = std::move(assetPaths);
+        m_AssetPaths = std::move(assetPaths);
     }
 
     void AssetBrowserWidget::Draw()
@@ -32,13 +32,13 @@ namespace App
             ImGui::TextUnformatted("Imported Assets");
             ImGui::Separator();
 
-            if (AssetPaths.empty())
+            if (m_AssetPaths.empty())
             {
                 ImGui::TextDisabled("No assets loaded");
             }
             else
             {
-                for (const std::string& assetPath : AssetPaths)
+                for (const std::string& assetPath : m_AssetPaths)
                 {
                     if (ImGui::Selectable(assetPath.c_str()))
                     {

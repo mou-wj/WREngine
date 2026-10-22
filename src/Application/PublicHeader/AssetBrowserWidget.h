@@ -17,6 +17,6 @@ namespace App
         void Draw() override;
 
     private:
-        std::vector<std::string> AssetPaths;
+        std::vector<std::string> m_AssetPaths;
     };
 }

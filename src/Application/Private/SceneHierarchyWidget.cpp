@@ -7,26 +7,26 @@ namespace App
     SceneHierarchyWidget::SceneHierarchyWidget() = default;
 
     SceneHierarchyWidget::SceneHierarchyWidget(std::vector<std::string> sceneObjects)
-        : SceneObjects(std::move(sceneObjects))
+        : m_SceneObjects(std::move(sceneObjects))
     {
-        if (!SceneObjects.empty())
+        if (!m_SceneObjects.empty())
         {
-            SelectedObject = SceneObjects.front();
+            m_SelectedObject = m_SceneObjects.front();
         }
     }
 
     void SceneHierarchyWidget::SetSceneObjects(std::vector<std::string> sceneObjects)
     {
-        SceneObjects = std::move(sceneObjects);
-        if (!SceneObjects.empty() && SelectedObject.empty())
+        m_SceneObjects = std::move(sceneObjects);
+        if (!m_SceneObjects.empty() && m_SelectedObject.empty())
         {
-            SelectedObject = SceneObjects.front();
+            m_SelectedObject = m_SceneObjects.front();
         }
     }
 
     void SceneHierarchyWidget::SetSelectedObject(const std::string& objectName)
     {
-        SelectedObject = objectName;
+        m_SelectedObject = objectName;
     }
 
     void SceneHierarchyWidget::Draw()
@@ -42,14 +42,14 @@ namespace App
 
         if (ImGui::Begin("Scene Hierarchy", nullptr, flags))
         {
-            if (!SceneObjects.empty())
+            if (!m_SceneObjects.empty())
             {
-                for (const std::string& objectName : SceneObjects)
+                for (const std::string& objectName : m_SceneObjects)
                 {
-                    const bool isSelected = (SelectedObject == objectName);
+                    const bool isSelected = (m_SelectedObject == objectName);
                     if (ImGui::Selectable(objectName.c_str(), isSelected, ImGuiSelectableFlags_AllowDoubleClick))
                     {
-                        SelectedObject = objectName;
+                        m_SelectedObject = objectName;
                     }
                 }
             }

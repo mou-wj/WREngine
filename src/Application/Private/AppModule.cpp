@@ -2,7 +2,7 @@
 #include "Application.h"
 namespace App {
 	Application* app = nullptr;
-	AppModule::AppModule() : isLoaded(false) {
+	AppModule::AppModule() : m_bIsLoaded(false) {
 	
 	}
     AppModule::~AppModule() {
@@ -10,19 +10,19 @@ namespace App {
 	}
 
 	void AppModule::StartupModule() {
-		// Ä£¿éÆô¶¯Ê±µÄ³õÊ¼»¯Âß¼­
+		// æ¨¡å—å¯åŠ¨æ—¶çš„åˆå§‹åŒ–é€»è¾‘
 		app = new Application();
 		app->Initialize();
 		
-		isLoaded = true;
+		m_bIsLoaded = true;
 
 	}
 	void AppModule::ShutdownModule() {
-		// Ä£¿é¹Ø±ÕÊ±µÄÇåÀíÂß¼­
+		// æ¨¡å—å…³é—­æ—¶çš„æ¸…ç†é€»è¾‘
 		delete app;
 	}
 	bool AppModule::IsLoaded() const {
-		return isLoaded; // ·µ»ØÄ£¿éÊÇ·ñÒÑ¼ÓÔØ
+		return m_bIsLoaded; // è¿”å›æ¨¡å—æ˜¯å¦å·²åŠ è½½
 	}
 
 	IMPLEMENT_SIMPLE_MODULE(AppModule, "Application");

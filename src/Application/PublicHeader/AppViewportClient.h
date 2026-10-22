@@ -18,51 +18,51 @@ namespace App {
         void InitResources();
         void ReleaseResources();
 
-        // ViewportClient ���Ľӿ�
-        void Draw(Engine::Viewport* InViewport) override;
+        // ViewportClient 绘制接口
+        void Draw(Engine::Viewport* inViewport) override;
     public:
         bool OnMouseButton(
             const SlateCore::MouseButtonEvent&
-            Event) override;
+            event) override;
 
         bool OnMouseMove(
             const SlateCore::MouseMoveEvent&
-            Event) override;
+            event) override;
 
         bool OnMouseWheel(
             const SlateCore::MouseWheelEvent&
-            Event) override;
+            event) override;
     private:
-        void BuildSceneViews(Engine::Viewport* InViewport, Engine::SceneViewFamily& OutViews);
+        void BuildSceneViews(Engine::Viewport* inViewport, Engine::SceneViewFamily& outViews);
         void UpdateCameraTransform();
     private:
-        bool bRightMouseDown =
+        bool m_bRightMouseDown =
             false;
 
-        bool bMiddleMouseDown =
+        bool m_bMiddleMouseDown =
             false;
 
-        float CameraDistance =
+        float m_CameraDistance =
             5.0f;
 
-        float Yaw =
+        float m_Yaw =
             Core::DegToRad(90.0f);
 
-        float Pitch =
+        float m_Pitch =
             0.0f;
 
     private:
-        Engine::Camera camera;
-        Engine::SceneInterface* scene;
-        std::shared_ptr<Engine::StaticMeshAsset> staticMeshAsset;
-        Engine::StaticMeshComponent* staticMeshComponent;
-        Engine::StaticMeshComponent* staticMeshComponent2;
-        Engine::SceneViewFamily family;
+        Engine::Camera m_Camera;
+        Engine::SceneInterface* m_Scene;
+        std::shared_ptr<Engine::StaticMeshAsset> m_StaticMeshAsset;
+        Engine::StaticMeshComponent* m_StaticMeshComponent;
+        Engine::StaticMeshComponent* m_StaticMeshComponent2;
+        Engine::SceneViewFamily m_Family;
 
-        Engine::DirectionalLightComponent* directionalLight;
-        Engine::PointLightComponent* pointLight;
-        Engine::SpotLightComponent* spotLight;
-        Engine::SkyLightComponent* skyLight;
+        Engine::DirectionalLightComponent* m_DirectionalLight;
+        Engine::PointLightComponent* m_PointLight;
+        Engine::SpotLightComponent* m_SpotLight;
+        Engine::SkyLightComponent* m_SkyLight;
     };
 
 

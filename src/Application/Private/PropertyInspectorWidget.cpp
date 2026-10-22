@@ -7,18 +7,18 @@ namespace App
     PropertyInspectorWidget::PropertyInspectorWidget() = default;
 
     PropertyInspectorWidget::PropertyInspectorWidget(std::vector<std::pair<std::string, std::string>> properties)
-        : Properties(std::move(properties))
+        : m_Properties(std::move(properties))
     {
     }
 
     void PropertyInspectorWidget::SetComponentProperties(std::vector<std::pair<std::string, std::string>> properties)
     {
-        Properties = std::move(properties);
+        m_Properties = std::move(properties);
     }
 
     void PropertyInspectorWidget::SetComponentName(const std::string& name)
     {
-        ComponentName = name;
+        m_ComponentName = name;
     }
 
     void PropertyInspectorWidget::Draw()
@@ -37,16 +37,16 @@ namespace App
 
         if (ImGui::Begin("Property Inspector", nullptr, flags))
         {
-            ImGui::TextUnformatted(ComponentName.c_str());
+            ImGui::TextUnformatted(m_ComponentName.c_str());
             ImGui::Separator();
 
-            if (Properties.empty())
+            if (m_Properties.empty())
             {
                 ImGui::TextDisabled("No component selected");
             }
             else
             {
-                for (const auto& [key, value] : Properties)
+                for (const auto& [key, value] : m_Properties)
                 {
                     ImGui::TextUnformatted(key.c_str());
                     ImGui::SameLine();

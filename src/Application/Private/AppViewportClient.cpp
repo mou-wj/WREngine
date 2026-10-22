@@ -15,158 +15,158 @@ namespace App {
     {
         AssetManager::Get().LoadSync<MaterialAsset>(Core::GetProjectDir() + "/resources/material/DefaultWhite/material.json");
         auto skyAsset = AssetManager::Get().LoadSync<SkyLightAsset>(Core::GetProjectDir() + "/resources/pic/DaySkyHDRI046A_1K-TONEMAPPED.jpg");
-        staticMeshAsset = AssetManager::Get().LoadSync<StaticMeshAsset>(Core::GetProjectDir() + "/resources/glb/sphere.glb");
-        staticMeshComponent = new StaticMeshComponent();
-        staticMeshComponent->SetStaticMesh(staticMeshAsset->GetMesh());
-        staticMeshComponent2 = new StaticMeshComponent();
-        staticMeshComponent2->SetStaticMesh(staticMeshAsset->GetMesh());
-        scene = GetRenderModuleInstance()->AllocateScene();
-        scene->AddPrimitive(staticMeshComponent);
-        staticMeshComponent2->SetWorldLocation({ 3.0f, 3.0f, 3.0f });
-        scene->AddPrimitive(staticMeshComponent2);
+        m_StaticMeshAsset = AssetManager::Get().LoadSync<StaticMeshAsset>(Core::GetProjectDir() + "/resources/glb/sphere.glb");
+        m_StaticMeshComponent = new StaticMeshComponent();
+        m_StaticMeshComponent->SetStaticMesh(m_StaticMeshAsset->GetMesh());
+        m_StaticMeshComponent2 = new StaticMeshComponent();
+        m_StaticMeshComponent2->SetStaticMesh(m_StaticMeshAsset->GetMesh());
+        m_Scene = GetRenderModuleInstance()->AllocateScene();
+        m_Scene->AddPrimitive(m_StaticMeshComponent);
+        m_StaticMeshComponent2->SetWorldLocation({ 3.0f, 3.0f, 3.0f });
+        m_Scene->AddPrimitive(m_StaticMeshComponent2);
 
         // Create Directional Light
-        directionalLight = new DirectionalLightComponent();
-        directionalLight->SetWorldLocation({ 5.0f, 5.0f, 5.0f });
-        directionalLight->SetDirection({ -1.0f, -1.0f, -1.0f });
-        directionalLight->SetColor({ 1.0f, 1.0f, 1.0f });
-        directionalLight->SetIntensity(1.0f);
-        directionalLight->SetCastShadow(true);
-        scene->AddLight(directionalLight);
+        m_DirectionalLight = new DirectionalLightComponent();
+        m_DirectionalLight->SetWorldLocation({ 5.0f, 5.0f, 5.0f });
+        m_DirectionalLight->SetDirection({ -1.0f, -1.0f, -1.0f });
+        m_DirectionalLight->SetColor({ 1.0f, 1.0f, 1.0f });
+        m_DirectionalLight->SetIntensity(1.0f);
+        m_DirectionalLight->SetCastShadow(true);
+        m_Scene->AddLight(m_DirectionalLight);
 
         // Create Point Light
-        pointLight = new PointLightComponent();
-        pointLight->SetWorldLocation({ 5.0f, 4.0f, 5.0f });
-        pointLight->SetColor({ 1.0f, 0.5f, 0.2f });
-        pointLight->SetIntensity(1.0f);
-        pointLight->SetAttenuationRadius(10.0f);
-        pointLight->SetCastShadow(true);
-        scene->AddLight(pointLight);
+        m_PointLight = new PointLightComponent();
+        m_PointLight->SetWorldLocation({ 5.0f, 4.0f, 5.0f });
+        m_PointLight->SetColor({ 1.0f, 0.5f, 0.2f });
+        m_PointLight->SetIntensity(1.0f);
+        m_PointLight->SetAttenuationRadius(10.0f);
+        m_PointLight->SetCastShadow(true);
+        m_Scene->AddLight(m_PointLight);
 
         // Create Spot Light
-        spotLight = new SpotLightComponent();
-        spotLight->SetWorldLocation({ 3.0f, 2.0f, 0.0f });
-        spotLight->SetDirection({ -1.0f, -0.5f, 0.0f });
-        spotLight->SetColor({ 0.2f, 0.5f, 1.0f });
-        spotLight->SetIntensity(1.0f);
-        spotLight->SetAttenuationRadius(15.0f);
-        spotLight->SetInnerConeAngle(20.0f);
-        spotLight->SetOuterConeAngle(45.0f);
-        spotLight->SetCastShadow(true);
-        scene->AddLight(spotLight);
+        m_SpotLight = new SpotLightComponent();
+        m_SpotLight->SetWorldLocation({ 3.0f, 2.0f, 0.0f });
+        m_SpotLight->SetDirection({ -1.0f, -0.5f, 0.0f });
+        m_SpotLight->SetColor({ 0.2f, 0.5f, 1.0f });
+        m_SpotLight->SetIntensity(1.0f);
+        m_SpotLight->SetAttenuationRadius(15.0f);
+        m_SpotLight->SetInnerConeAngle(20.0f);
+        m_SpotLight->SetOuterConeAngle(45.0f);
+        m_SpotLight->SetCastShadow(true);
+        m_Scene->AddLight(m_SpotLight);
 
         // Create Sky Light
-        skyLight = new SkyLightComponent();
-        skyLight->SetDiffuseIrradiance(skyAsset->GetDiffuseIrradiance());
-        skyLight->SetSpecularIrradiance(skyAsset->GetSpecularPrefilter());
-        scene->AddLight(skyLight);
+        m_SkyLight = new SkyLightComponent();
+        m_SkyLight->SetDiffuseIrradiance(skyAsset->GetDiffuseIrradiance());
+        m_SkyLight->SetSpecularIrradiance(skyAsset->GetSpecularPrefilter());
+        m_Scene->AddLight(m_SkyLight);
 
-        scene->FlushPendingUpdates();
+        m_Scene->FlushPendingUpdates();
 
-        camera.SetPosition({ 2,2,2 });
-        camera.SetTarget({ 0.0f, 0.0f, 0.0f });
-        camera.SetUp({ 0.0f, 1.0f, 0.0f });
-        camera.SetPerspective(Core::DegToRad(45.0f), 1, 0.1f, 1000.0f);
+        m_Camera.SetPosition({ 2,2,2 });
+        m_Camera.SetTarget({ 0.0f, 0.0f, 0.0f });
+        m_Camera.SetUp({ 0.0f, 1.0f, 0.0f });
+        m_Camera.SetPerspective(Core::DegToRad(45.0f), 1, 0.1f, 1000.0f);
     }
 
     void AppViewportClient::ReleaseResources()
     {
-		if (scene) {
-			scene->RemovePrimitive(staticMeshComponent);
-            scene->RemovePrimitive(staticMeshComponent2);
+		if (m_Scene) {
+			m_Scene->RemovePrimitive(m_StaticMeshComponent);
+            m_Scene->RemovePrimitive(m_StaticMeshComponent2);
             // Remove lights from scene
-            if (directionalLight) {
-                scene->RemoveLight(directionalLight);
+            if (m_DirectionalLight) {
+                m_Scene->RemoveLight(m_DirectionalLight);
             }
-            if (pointLight) {
-                scene->RemoveLight(pointLight);
+            if (m_PointLight) {
+                m_Scene->RemoveLight(m_PointLight);
             }
-            if (spotLight) {
-                scene->RemoveLight(spotLight);
+            if (m_SpotLight) {
+                m_Scene->RemoveLight(m_SpotLight);
             }
-            if (skyLight) {
-                scene->RemoveLight(skyLight);
+            if (m_SkyLight) {
+                m_Scene->RemoveLight(m_SkyLight);
             }
 
-            scene->FlushPendingUpdates();
+            m_Scene->FlushPendingUpdates();
 		}
-		delete staticMeshComponent;
-		staticMeshComponent = nullptr;
-		delete staticMeshComponent2;
-		staticMeshComponent2 = nullptr;
+		delete m_StaticMeshComponent;
+		m_StaticMeshComponent = nullptr;
+		delete m_StaticMeshComponent2;
+		m_StaticMeshComponent2 = nullptr;
         
         // Delete lights
-        delete directionalLight;
-        directionalLight = nullptr;
-        delete pointLight;
-        pointLight = nullptr;
-        delete spotLight;
-        spotLight = nullptr;
+        delete m_DirectionalLight;
+        m_DirectionalLight = nullptr;
+        delete m_PointLight;
+        m_PointLight = nullptr;
+        delete m_SpotLight;
+        m_SpotLight = nullptr;
 
-		staticMeshAsset.reset();
-        delete scene;
-		scene = nullptr;
+		m_StaticMeshAsset.reset();
+        delete m_Scene;
+		m_Scene = nullptr;
         AssetManager::Get().Clear();
     }
 
-    void AppViewportClient::Draw(Viewport* InViewport)
+    void AppViewportClient::Draw(Viewport* inViewport)
     {
-        if (!InViewport)
+        if (!inViewport)
             return;
 
-        // ���� SceneViewCollection
+        // 构建场景视图集合
         ;
-        family.RenderTarget = InViewport;
-        BuildSceneViews(InViewport, family);
+        m_Family.RenderTarget = inViewport;
+        BuildSceneViews(inViewport, m_Family);
 
-        // ���� RenderInterface ִ����Ⱦ
-        GetRenderModuleInstance()->BeginRender(&family);
+        // 提交渲染模块执行绘制
+        GetRenderModuleInstance()->BeginRender(&m_Family);
     }
 
-    void AppViewportClient::BuildSceneViews(Engine::Viewport* InViewport, Engine::SceneViewFamily& OutViews)
+    void AppViewportClient::BuildSceneViews(Engine::Viewport* inViewport, Engine::SceneViewFamily& outViews)
     {
 
-        auto view = camera.GetViewMatrix();
-        auto proj = camera.GetProjectionMatrix();
+        auto view = m_Camera.GetViewMatrix();
+        auto proj = m_Camera.GetProjectionMatrix();
 		auto vp = view * proj;
         ;
-        //���Ƴ���
+        // 填充场景视图参数
         SceneView sceneView;
-        sceneView.CameraWorldPos = camera.GetPosition();
-        sceneView.NearClip = camera.GetNearPlane();
-        sceneView.FarClip = camera.GetFarPlane();
+        sceneView.CameraWorldPos = m_Camera.GetPosition();
+        sceneView.NearClip = m_Camera.GetNearPlane();
+        sceneView.FarClip = m_Camera.GetFarPlane();
         sceneView.ViewMatrix = view;
         sceneView.ProjectionMatrix = proj;
         sceneView.ViewProjectionMatrix = proj * view;
 		sceneView.InvViewProjectionMatrix = Core::Inverse(sceneView.ViewProjectionMatrix);
-        sceneView.bDepthRangeZeroToOne = camera.GetDepthRangeMode() == Camera::ZeroToOne;
+        sceneView.bDepthRangeZeroToOne = m_Camera.GetDepthRangeMode() == Camera::ZeroToOne;
         Float4 testPos = { -4.89f, 0.0f, 0.0f, 1.0f };
         Float4 viewProjPos = sceneView.ViewProjectionMatrix * testPos.Data;
         Float4 inverseViewProjPos = sceneView.InvViewProjectionMatrix * viewProjPos.Data;
 
-        sceneView.Viewport.Width = InViewport->GetWidth();
-        sceneView.Viewport.Height = InViewport->GetHeight();
-        family.Scene = scene;
-        family.ClearViews();
-        family.AddView(sceneView);
-        family.BuildAllViews();
+        sceneView.Viewport.Width = inViewport->GetWidth();
+        sceneView.Viewport.Height = inViewport->GetHeight();
+        m_Family.Scene = m_Scene;
+        m_Family.ClearViews();
+        m_Family.AddView(sceneView);
+        m_Family.BuildAllViews();
     }
     bool AppViewportClient::
         OnMouseButton(
             const SlateCore::MouseButtonEvent&
-            Event)
+            event)
     {
         const bool pressed =
-            Event.Event ==
+            event.Event ==
             SlateCore::EInputEvent
             ::Pressed;
 
-        switch (Event.Button)
+        switch (event.Button)
         {
             case SlateCore::EMouseButton
             ::Right:
             {
-                bRightMouseDown =
+                m_bRightMouseDown =
                     pressed;
 
                 return true;
@@ -175,7 +175,7 @@ namespace App {
             case SlateCore::EMouseButton
             ::Middle:
             {
-                bMiddleMouseDown =
+                m_bMiddleMouseDown =
                     pressed;
 
                 return true;
@@ -188,29 +188,29 @@ namespace App {
     bool AppViewportClient::
         OnMouseMove(
             const SlateCore::MouseMoveEvent&
-            Event)
+            event)
     {
         constexpr float
-            RotateSpeed =
+            rotateSpeed =
             0.005f;
 
         constexpr float
-            PanSpeed =
+            panSpeed =
             0.005f;
 
-        if (bRightMouseDown)
+        if (m_bRightMouseDown)
         {
-            Yaw +=
-                Event.DeltaX *
-                RotateSpeed;
+            m_Yaw +=
+                event.DeltaX *
+                rotateSpeed;
 
-            Pitch -=
-                Event.DeltaY *
-                RotateSpeed;
+            m_Pitch -=
+                event.DeltaY *
+                rotateSpeed;
 
-            Pitch =
+            m_Pitch =
                 std::clamp(
-                    Pitch,
+                    m_Pitch,
                     -1.5f,
                     1.5f);
 
@@ -219,13 +219,13 @@ namespace App {
             return true;
         }
         
-        if (bMiddleMouseDown)
+        if (m_bMiddleMouseDown)
         {
             auto position =
-                camera.GetPosition();
+                m_Camera.GetPosition();
 
             auto target =
-                camera.GetTarget();
+                m_Camera.GetTarget();
 
             Float3
                 forward =
@@ -238,7 +238,7 @@ namespace App {
                 Core::Normalize(
                     Core::Cross(
                         forward,
-                        camera.GetUp()));
+                        m_Camera.GetUp()));
 
             const auto
                 up =
@@ -249,11 +249,11 @@ namespace App {
 
             const auto offset =
                 (-right *
-                    Event.DeltaX +
+                    event.DeltaX +
                     up *
-                    Event.DeltaY)
-                * PanSpeed *
-                CameraDistance;
+                    event.DeltaY)
+                * panSpeed *
+                m_CameraDistance;
 
             position +=
                 offset;
@@ -261,10 +261,10 @@ namespace App {
             target +=
                 offset;
 
-            camera.SetPosition(
+            m_Camera.SetPosition(
                 position);
 
-            camera.SetTarget(
+            m_Camera.SetTarget(
                 target);
 
             return true;
@@ -275,19 +275,19 @@ namespace App {
     bool AppViewportClient::
         OnMouseWheel(
             const SlateCore::MouseWheelEvent&
-            Event)
+            event)
     {
         constexpr float
-            ZoomSpeed =
+            zoomSpeed =
             0.25f;
 
-        CameraDistance -=
-            Event.Delta *
-            ZoomSpeed;
+        m_CameraDistance -=
+            event.Delta *
+            zoomSpeed;
 
-        CameraDistance =
+        m_CameraDistance =
             CORE_MAX(
-                CameraDistance,
+                m_CameraDistance,
                 0.1f);
 
         UpdateCameraTransform();
@@ -298,21 +298,21 @@ namespace App {
         UpdateCameraTransform()
     {
         const float cosPitch =
-            std::cos(Pitch);
+            std::cos(m_Pitch);
 
         Core::Float3 forward;
-		forward = camera.GetTarget() - camera.GetPosition();
+		forward = m_Camera.GetTarget() - m_Camera.GetPosition();
 
         
         forward.X =
-            std::cos(Yaw) *
+            std::cos(m_Yaw) *
             cosPitch;
         
         forward.Y =
-            std::sin(Pitch);
+            std::sin(m_Pitch);
         
         forward.Z =
-            std::sin(Yaw) *
+            std::sin(m_Yaw) *
             cosPitch;
         
         forward =
@@ -320,14 +320,14 @@ namespace App {
                 forward);
 
         const auto target =
-            camera.GetTarget();
+            m_Camera.GetTarget();
 
         const auto position =
             target -
             forward *
-            CameraDistance;
+            m_CameraDistance;
 
-        camera.SetPosition(
+        m_Camera.SetPosition(
             position);
 
         //camera.SetUp(

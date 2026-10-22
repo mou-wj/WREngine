@@ -22,69 +22,69 @@ Application::~Application()
 bool Application::Initialize()
 {
     // 可以在这里初始化 Slate / Input / RHI
-    SceneViewportClient = std::make_unique<AppViewportClient>();
+    _sceneViewportClient = std::make_unique<AppViewportClient>();
 	_renderer = SlateRHIRenderer::GSlateRHIRendererModule->CreateSlateRenderer();
 
-    Window =  CreateWindowSP(800, 600, "My Application");
+    _window =  CreateWindowSP(800, 600, "My Application");
     
-	SceneViewportClient->InitResources();
+	_sceneViewportClient->InitResources();
     return true;
 }
 
 bool Application::RequestExit()
 {
-    return QuitFlag;
+    return _bQuitFlag;
 }
 
 // 关闭
 void Application::Shutdown()
 {
-    ImGuiWidget.reset();
-    SceneSlateWidget.reset();
-    SceneMainViewport.reset();
-    SceneViewportClient->ReleaseResources();
-    SceneViewportClient.reset();
-    Window = nullptr;
+    _imGuiWidget.reset();
+    _sceneSlateWidget.reset();
+    _sceneMainViewport.reset();
+    _sceneViewportClient->ReleaseResources();
+    _sceneViewportClient.reset();
+    _window = nullptr;
 }
 
 // 创建窗口
-std::shared_ptr<ImGUISlate::ImMainWindow> Application::CreateWindowSP(int Width, int Height, const char* Title)
+std::shared_ptr<ImGUISlate::ImMainWindow> Application::CreateWindowSP(int width, int height, const char* title)
 {
     // WindowFactory 会根据平台创建对应 Surface 的 Window
-    std::shared_ptr<ImGUISlate::ImMainWindow> NewWindow = std::make_shared<ImGUISlate::ImMainWindow>(Width, Height, std::string(Title));
-    NewWindow->Initialize(); // 初始化 OS 窗口
-    NewWindow->Show();
-    NewWindow->SetResizeCallback([this](int W, int H) {
-        if (SceneMainViewport);
+    std::shared_ptr<ImGUISlate::ImMainWindow> newWindow = std::make_shared<ImGUISlate::ImMainWindow>(width, height, std::string(title));
+    newWindow->Initialize(); // 初始化 OS 窗口
+    newWindow->Show();
+    newWindow->SetResizeCallback([this](int w, int h) {
+        if (_sceneMainViewport);
             //SceneMainViewport->Resize(W, H);
         });
-    NewWindow->SetCloseCallback([this]() {
-        QuitFlag = true;
+    newWindow->SetCloseCallback([this]() {
+        _bQuitFlag = true;
 	});
-    auto framebufferSize = NewWindow->GetFramebufferSize();
+    auto framebufferSize = newWindow->GetFramebufferSize();
 
-    if (!SceneSlateWidget)
+    if (!_sceneSlateWidget)
     {
-        SceneSlateWidget = std::make_unique<SlateCore::SlateWidget>(NewWindow.get());
+        _sceneSlateWidget = std::make_unique<SlateCore::SlateWidget>(newWindow.get());
     }
-    SceneSlateWidget->SetSize(framebufferSize.X - 200, framebufferSize.Y);
+    _sceneSlateWidget->SetSize(framebufferSize.X - 200, framebufferSize.Y);
     Core::Int2 slateWidgetSize;
     slateWidgetSize.X = framebufferSize.X - 200;
     slateWidgetSize.Y = framebufferSize.Y;
     // 同步创建 SceneViewport
-    if (!SceneMainViewport)
+    if (!_sceneMainViewport)
     {
-        SceneMainViewport = std::make_unique<Engine::SceneViewport>(SceneViewportClient.get(), slateWidgetSize);
+        _sceneMainViewport = std::make_unique<Engine::SceneViewport>(_sceneViewportClient.get(), slateWidgetSize);
     }
-    SceneSlateWidget->SetViewportChild(SceneMainViewport.get());
+    _sceneSlateWidget->SetViewportChild(_sceneMainViewport.get());
     //RootSlateWidget->OnResize(static_cast<uint32_t>(framebufferSize.x), static_cast<uint32_t>(framebufferSize.y));
 	ImGUISlate::LayoutParams layoutParams;
     layoutParams.Weight = 2;
-    NewWindow->AddWidget(SceneSlateWidget.get(), layoutParams);
-    _renderer->CreateViewport(SceneSlateWidget.get());
-    if (!ImGuiWidget)
+    newWindow->AddWidget(_sceneSlateWidget.get(), layoutParams);
+    _renderer->CreateViewport(_sceneSlateWidget.get());
+    if (!_imGuiWidget)
     {
-        ImGuiWidget = std::make_unique<ImGUISlate::ImWidget>([](int x, int y, int w, int h) {
+        _imGuiWidget = std::make_unique<ImGUISlate::ImWidget>([](int x, int y, int w, int h) {
             // 1. 强制设定窗口的位置和大小
             ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_Always);
             ImGui::SetNextWindowSize(ImVec2(w, h), ImGuiCond_Always);
@@ -105,15 +105,15 @@ std::shared_ptr<ImGUISlate::ImMainWindow> Application::CreateWindowSP(int Width,
         });
     }
 
-    ImGuiWidget->SetGeometry(
+    _imGuiWidget->SetGeometry(
         static_cast<float>(framebufferSize.X - 100),
         0.0f,
         100.0f,
         static_cast<float>(framebufferSize.Y));
     layoutParams.Weight = 1;
-    NewWindow->AddWidget(ImGuiWidget.get(), layoutParams);
+    newWindow->AddWidget(_imGuiWidget.get(), layoutParams);
     
-    return NewWindow;
+    return newWindow;
 }
 
 
@@ -123,15 +123,15 @@ void Application::TickFrame()
 {
     // Poll Window / Input
 
-    Window->PollEvents();
-    if (SceneMainViewport)
-        SceneMainViewport->Draw();
+    _window->PollEvents();
+    if (_sceneMainViewport)
+        _sceneMainViewport->Draw();
     // Draw 主 SceneViewport
-    if (SceneSlateWidget)
+    if (_sceneSlateWidget)
     {
-        _renderer->Render(SceneSlateWidget.get());
+        _renderer->Render(_sceneSlateWidget.get());
     }
-    Window->Draw();
+    _window->Draw();
 
 }
 
