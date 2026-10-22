@@ -243,7 +243,7 @@ namespace Renderer {
             for (const SectionInfo& Section : LOD.Sections)
             {
                 auto* Material =
-                    StaticMesh->GetMaterial(Section.MaterialIndex);
+                    Mesh->GetStaticMeshComponent()->GetMaterial(Section.MaterialIndex);
 
                 if (!Material)
                 {

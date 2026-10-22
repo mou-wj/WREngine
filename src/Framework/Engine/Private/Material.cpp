@@ -1,6 +1,7 @@
 #include "Material.h"
 #include "RenderResource.h" // 包含你的基类以及 RenderTexture 的定义
-#include "AssetManager.h"
+#include "MaterialAsset.h"
+#include <stdexcept>
 #include "Shader.h"
 #include "MaterialShaderParameter.h"
 #include "RenderGraphBuilder.h"
@@ -36,12 +37,14 @@ namespace Engine {
         if (BlendMode != InMode) {
             BlendMode = InMode;
             bProxyDirty = true;
+            ++Revision;
         }
     }
     void Material::SetShadingModel(EShadingModel InModel) {
 		if (ShadingModel != InModel) {
 			ShadingModel = InModel;
 			bProxyDirty = true;
+            ++Revision;
 		}
     }
 
@@ -58,31 +61,31 @@ namespace Engine {
     }
 
     void Material::SetParameterValueImpl(EMaterialParameterSemantic Semantic, const std::string& Name, std::unique_ptr<MaterialParameter> Param) {
-        DefaultParameters[Name] = std::move(Param);
+        const auto key = Name + ":" + std::to_string(static_cast<int>(Semantic)) + ":" + typeid(*Param).name();
+        DefaultParameters[key] = std::move(Param);
+        ++Revision;
         bProxyDirty = true;
     }
 
     // ============================================================================
     // MaterialInstance 实现
     // ============================================================================
-    MaterialInstance::MaterialInstance(MaterialInterface* InParent)
-        : Parent(InParent) {
-        assert(Parent && "MaterialInstance generated with a null parent!");
+    MaterialInstance::MaterialInstance(std::shared_ptr<MaterialAsset> InParent)
+        : ParentAsset(std::move(InParent))
+    {
+        if (!ParentAsset || !ParentAsset->GetMaterial())
+            throw std::invalid_argument("A material instance requires a loaded parent MaterialAsset");
     }
 
-    const Material* MaterialInstance::GetMaterial() const {
-        return Parent->GetMaterial();
-    }
-
-    EBlendMode MaterialInstance::GetBlendMode() const {
-        return Parent->GetBlendMode();
-    }        
-    EShadingModel MaterialInstance::GetShadingModel() const {
-        return Parent->GetShadingModel();
-    }
+    const Material* MaterialInstance::GetMaterial() const { return ParentAsset->GetMaterial(); }
+    EBlendMode MaterialInstance::GetBlendMode() const { return GetMaterial()->GetBlendMode(); }
+    EShadingModel MaterialInstance::GetShadingModel() const { return GetMaterial()->GetShadingModel(); }
+    uint64_t MaterialInstance::GetRevision() const { return Revision + GetMaterial()->GetRevision(); }
 
     MaterialRenderProxy* MaterialInstance::GetRenderProxy() const {
-        if (bProxyDirty || !CachedProxy) {
+        const auto parentRevision = GetMaterial()->GetRevision();
+        if (bProxyDirty || !CachedProxy || CachedParentRevision != parentRevision) {
+            CachedParentRevision = parentRevision;
             CachedProxy = std::make_unique<MaterialRenderProxy>(this);
 
             const Material* BaseMaterial = GetMaterial();
@@ -106,7 +109,9 @@ namespace Engine {
     }
 
     void MaterialInstance::SetParameterValueImpl(EMaterialParameterSemantic Semantic, const std::string& Name, std::unique_ptr<MaterialParameter> Param) {
-        OverriddenParameters[Name] = std::move(Param);
+        const auto key = Name + ":" + std::to_string(static_cast<int>(Semantic)) + ":" + typeid(*Param).name();
+        OverriddenParameters[key] = std::move(Param);
+        ++Revision;
         bProxyDirty = true;
     }
 

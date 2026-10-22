@@ -4,6 +4,10 @@
 #include "StaticMesh.h"
 #include "StaticMeshProxy.h"
 #include "Material.h"
+#include "MaterialAsset.h"
+#include "StaticMeshAsset.h"
+#include <algorithm>
+#include <stdexcept>
 
 namespace Engine
 {
@@ -12,9 +16,20 @@ namespace Engine
     {
     }
 
+    StaticMeshComponent::~StaticMeshComponent() = default;
+
     void StaticMeshComponent::SetStaticMesh(StaticMesh* InMesh)
     {
-        Mesh = std::move(InMesh);
+        auto asset = InMesh ? InMesh->GetAsset() : nullptr;
+        if (InMesh && !asset)
+            throw std::invalid_argument("StaticMeshComponent requires an asset-owned mesh");
+        if (Mesh != InMesh)
+        {
+            MaterialInstances.clear();
+            OverrideMaterials.clear();
+        }
+        MeshAsset = std::move(asset);
+        Mesh = InMesh;
 
         // Bounds may change
         UpdateWorldTransform();
@@ -27,25 +42,51 @@ namespace Engine
         uint32_t SlotIndex,
         MaterialInterface* Material)
     {
-        if (SlotIndex >= OverrideMaterials.size())
-        {
-            OverrideMaterials.resize(SlotIndex + 1);
-        }
-
-        OverrideMaterials[SlotIndex] = Material;
-
+        auto asset = Material ? Material->GetAsset() : nullptr;
+        if (Material && (!asset || Material != asset->GetMaterial()))
+            throw std::invalid_argument("SetMaterial requires a MaterialAsset's base material");
+        if (SlotIndex >= OverrideMaterials.size()) OverrideMaterials.resize(SlotIndex + 1);
+        if (SlotIndex >= MaterialInstances.size()) MaterialInstances.resize(SlotIndex + 1);
+        MaterialInstances[SlotIndex].reset();
+        OverrideMaterials[SlotIndex] = std::move(asset);
         MarkRenderStateDirty();
     }
 
-    MaterialInterface* StaticMeshComponent::GetMaterial(
-        uint32_t SlotIndex) const
+    MaterialInterface* StaticMeshComponent::GetMaterial(uint32_t slotIndex) const
     {
-        if (SlotIndex >= OverrideMaterials.size())
-        {
-            return nullptr;
-        }
+        if (auto* instance = GetMaterialInstance(slotIndex)) return instance;
+        if (slotIndex < OverrideMaterials.size() && OverrideMaterials[slotIndex])
+            return OverrideMaterials[slotIndex]->GetMaterial();
+        return Mesh ? Mesh->GetMaterial(slotIndex) : nullptr;
+    }
 
-        return OverrideMaterials[SlotIndex];
+    uint32_t StaticMeshComponent::GetNumMaterials() const
+    {
+        return static_cast<uint32_t>(std::max(OverrideMaterials.size(), Mesh ? Mesh->GetNumMaterials() : size_t(0)));
+    }
+
+    MaterialInstance* StaticMeshComponent::GetMaterialInstance(uint32_t slotIndex) const
+    {
+        return slotIndex < MaterialInstances.size() ? MaterialInstances[slotIndex].get() : nullptr;
+    }
+
+    MaterialInstance* StaticMeshComponent::GetOrCreateMaterialInstance(uint32_t slotIndex)
+    {
+        if (auto* instance = GetMaterialInstance(slotIndex)) return instance;
+        auto* material = GetMaterial(slotIndex);
+        if (!material) throw std::out_of_range("Material slot has no base material");
+        auto instance = std::make_unique<MaterialInstance>(material->GetAsset());
+        if (slotIndex >= MaterialInstances.size()) MaterialInstances.resize(slotIndex + 1);
+        auto* result = instance.get();
+        MaterialInstances[slotIndex] = std::move(instance);
+        MarkRenderStateDirty();
+        return result;
+    }
+
+    void StaticMeshComponent::ResetMaterialInstance(uint32_t slotIndex)
+    {
+        if (slotIndex < MaterialInstances.size()) MaterialInstances[slotIndex].reset();
+        MarkRenderStateDirty();
     }
 
     PrimitiveSceneProxy*
@@ -61,22 +102,6 @@ namespace Engine
         if (!RenderData)
         {
             return nullptr;
-        }
-
-        std::vector<const MaterialRenderProxy*> MaterialProxies;
-        MaterialProxies.reserve(OverrideMaterials.size());
-
-        for (MaterialInterface* Material : OverrideMaterials)
-        {
-            if (Material)
-            {
-                MaterialProxies.push_back(
-                    Material->GetRenderProxy());
-            }
-            else
-            {
-                MaterialProxies.push_back(nullptr);
-            }
         }
 
         return new StaticMeshProxy(this);

@@ -1,9 +1,17 @@
 // StaticMesh.cpp
 #include "StaticMesh.h"
+#include "MaterialAsset.h"
+#include "Material.h"
 #include "PrimitiveSceneProxy.h"
 #include "StaticMeshProxy.h"
 #include "RenderResource.h"
 namespace Engine {
+    MaterialInterface* StaticMesh::GetMaterial(size_t index) const
+    {
+        const auto asset = GetMaterialAsset(index);
+        return asset ? asset->GetMaterial() : nullptr;
+    }
+
 	void LODResource::InitializeResources() {
         // -----------------------------
    // 1. Éú³É Vertex Buffer

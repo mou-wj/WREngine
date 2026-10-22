@@ -16,6 +16,7 @@ namespace Engine {
     class Material;
     class MaterialRenderProxy;
     class MaterialInterface;
+    class MaterialAsset;
     class TextureAsset; // 使用你定义的资产类
     // ============================================================================
 // 2. 基础数据类型标签与核心语义定义
@@ -54,7 +55,7 @@ namespace Engine {
     // ============================================================================
     // 4. 材质参数多态核心类
     // ============================================================================
-    class MaterialParameter {
+    class ENGINE_API MaterialParameter {
     public:
         MaterialParameter(const std::string& InName, EMaterialParameterSemantic InSemantic);
         virtual ~MaterialParameter() = default;
@@ -110,7 +111,7 @@ namespace Engine {
     // ============================================================================
     // 5. MaterialRenderProxy (渲染线程数据快照)
     // ============================================================================
-    class MaterialRenderProxy {
+    class ENGINE_API MaterialRenderProxy {
     public:
         MaterialRenderProxy(const MaterialInterface* parent);
         virtual ~MaterialRenderProxy() = default;
@@ -146,13 +147,15 @@ namespace Engine {
     // ============================================================================
     class Material;
 
-    class MaterialInterface {
+    class ENGINE_API MaterialInterface {
     public:
         MaterialInterface() = default;
         virtual ~MaterialInterface() = default;
 
         virtual const Material* GetMaterial() const = 0;
         virtual MaterialRenderProxy* GetRenderProxy() const = 0;
+        virtual std::shared_ptr<MaterialAsset> GetAsset() const = 0;
+        virtual uint64_t GetRevision() const = 0;
         virtual EBlendMode GetBlendMode() const = 0;
         virtual EShadingModel GetShadingModel() const = 0;
 
@@ -167,12 +170,14 @@ namespace Engine {
         virtual void SetParameterValueImpl(EMaterialParameterSemantic Semantic, const std::string& Name, std::unique_ptr<MaterialParameter> Param) = 0;
     };
 
-    class Material : public MaterialInterface {
+    class ENGINE_API Material : public MaterialInterface {
     public:
         Material() = default;
         ~Material() override = default;
 
         const Material* GetMaterial() const override { return this; }
+        std::shared_ptr<MaterialAsset> GetAsset() const override { return OwnerAsset.lock(); }
+        uint64_t GetRevision() const override { return Revision; }
         EBlendMode GetBlendMode() const override { return BlendMode; }
         void SetBlendMode(EBlendMode InMode);
         EShadingModel GetShadingModel() const { return ShadingModel; }
@@ -185,6 +190,9 @@ namespace Engine {
         void SetParameterValueImpl(EMaterialParameterSemantic Semantic, const std::string& Name, std::unique_ptr<MaterialParameter> Param) override;
 
     private:
+        friend class MaterialAsset;
+        std::weak_ptr<MaterialAsset> OwnerAsset;
+        uint64_t Revision = 0;
         EBlendMode BlendMode = EBlendMode::Opaque;
 		EShadingModel ShadingModel = EShadingModel::Unlit;
         std::unordered_map<std::string, std::unique_ptr<MaterialParameter>> DefaultParameters;
@@ -193,12 +201,14 @@ namespace Engine {
         mutable bool bProxyDirty = true;
     };
 
-    class MaterialInstance : public MaterialInterface {
+    class ENGINE_API MaterialInstance : public MaterialInterface {
     public:
-        MaterialInstance(MaterialInterface* InParent);
+        explicit MaterialInstance(std::shared_ptr<MaterialAsset> InParent);
         ~MaterialInstance() override = default;
 
         const Material* GetMaterial() const override;
+        std::shared_ptr<MaterialAsset> GetAsset() const override { return ParentAsset; }
+        uint64_t GetRevision() const override;
         EBlendMode GetBlendMode() const override;
         EShadingModel GetShadingModel() const override;
 
@@ -209,7 +219,9 @@ namespace Engine {
         void SetParameterValueImpl(EMaterialParameterSemantic Semantic, const std::string& Name, std::unique_ptr<MaterialParameter> Param) override;
 
     private:
-        MaterialInterface* Parent = nullptr;
+        std::shared_ptr<MaterialAsset> ParentAsset;
+        uint64_t Revision = 0;
+        mutable uint64_t CachedParentRevision = 0;
         std::unordered_map<std::string, std::unique_ptr<MaterialParameter>> OverriddenParameters;
 
         mutable std::unique_ptr<MaterialRenderProxy> CachedProxy;

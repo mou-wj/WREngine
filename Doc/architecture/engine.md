@@ -317,25 +317,78 @@ SceneComponent* RootComponent = nullptr;
 
 ## 7. 资源管理：`AssetManager` / `AssetRegistry`
 
-`Engine` 模块还包含一套资源管理系统：
+资产管理保留在 Engine 内部，不新增独立编译模块。资产是实际资源的拥有者，管理器负责资产的定位、加载请求与驻留；组件拥有仅供自身使用的运行时材质实例。
 
-- `AssetRegistry`：记录资产信息和索引
-- `AssetManager`：负责同步/异步加载资产
+### 7.1 文件与职责
 
-它们为场景和渲染资源的加载提供基础能力，属于引擎模块的“内容管理”部分。
+| 文件 | 职责 |
+| --- | --- |
+| `Asset.h` | `IAsset`、资产共享引用、`AssetInfo` 元数据 |
+| `AssetRegistry.h/.cpp` | 路径/名称元数据查询，返回快照；不持有实际资源 |
+| `AssetManager.h/.cpp` | 规范化路径、类型检查、请求合并、驻留和关闭；模板只包装通用实现 |
+| `TextureAsset.h/.cpp` | 拥有纹理，封装纹理加载 |
+| `StaticMeshAsset.h/.cpp` | 拥有网格，封装 glTF 加载和材质依赖构建 |
+| `MaterialAsset.h/.cpp` | 独占拥有 `Material`，读取材质 JSON，保留纹理资产依赖 |
+| `SkyLightAsset.h/.cpp` | 拥有环境纹理及 IBL 结果，封装现有预计算流程 |
 
-典型设计是：
+为兼容原调用方，`AssetManager.h` 暂时包含上述资产头；这些头主要使用前置声明，文件解析及图形资源相关依赖位于具体实现中。没有新增 `MaterialInstanceAsset`，也没有引入尚无实际用途的加载器注册框架。
 
-```cpp
-class ENGINE_API AssetManager
-{
-public:
-    template<typename AssetType>
-    std::shared_ptr<AssetType> LoadSync(const std::string& Path);
-};
+### 7.2 资源所有权
+
+```text
+AssetManager --驻留引用--> StaticMeshAsset --拥有--> StaticMesh
+StaticMeshComponent --使用引用--> StaticMeshAsset
+StaticMesh --材质依赖引用--> MaterialAsset --独占拥有--> Material
+MaterialAsset --纹理依赖引用--> TextureAsset --拥有--> RenderTexture
+StaticMeshComponent --独占拥有--> MaterialInstance（按槽位、按需创建）
+MaterialInstance --父资产引用--> MaterialAsset
 ```
 
-这说明引擎不仅负责场景与渲染，还会统一管理资源加载与缓存，方便后续模型、材质、纹理等内容进入运行时系统。
+`StaticMesh` 和 `Material` 到所属 Asset 的反向引用为弱引用，避免所有权环。兼容接口仍允许传入资产资源的裸指针，但组件会据此获取并保留所属资产；不接受无资产归属的网格或材质。
+
+glTF 内嵌材质使用 `MaterialAsset::Create` 创建子资产，由网格保存依赖引用，不创建材质实例。子资产路径形如 `模型路径#material/索引`，当前不单独写盘或注册到全局管理器。缺失材质的 primitive 显式加载并引用默认 `MaterialAsset`，调用方不必预加载默认材质。
+
+### 7.3 网格材质编辑
+
+有效材质按以下优先级选择：组件该槽位的材质实例、组件材质资产覆盖、网格默认材质资产。
+
+```cpp
+// 默认共享网格的材质，不创建实例。
+component.SetStaticMesh(meshAsset->GetMesh());
+
+// 首次编辑创建组件独占实例；后续编辑复用它。
+component.SetMaterialParameterValue<
+    Engine::EMaterialParameterSemantic::Roughness, Engine::FScalarType>(
+        0, "Roughness", 0.8f);
+
+// 丢弃该槽位的实例，恢复共享材质。
+component.ResetMaterialInstance(0);
+```
+
+实例只保存参数覆盖，并强引用父 `MaterialAsset`；父材质版本变化后重建有效参数，保留实例自己的覆盖。参数内部键区分名称、语义和类型，允许同名颜色值与纹理参数共存。材质 JSON 接受旧 `parameters` 和现有分组格式 `scalarParameters/vectorParameters/textureParameters`，常用名称统一映射到渲染侧的 `BaseColor/Roughness/Metallic/Normal`。
+
+`StaticMeshDrawBuild` 从组件 `GetMaterial` 取有效材质，使运行时实例参与实际绘制。编辑器以后应调用组件编辑接口；直接修改 `MaterialAsset::GetMaterial()` 会修改共享母材质，不代表只编辑选中的网格。
+
+DefaultWhite 显式使用金属度 0.8、粗糙度 0.2，保留重构前实际使用的渲染外观。接通新的文件参数解析时，需要迁移原先回退参数的实际效果，不能默认认为修正解析就保持了视觉行为。
+
+当前没有新增选中或属性面板 UI。材质编辑应与帧构建串行执行；现有 `StaticMeshProxy` 仍访问组件，不能据此认为已实现任意跨线程修改及不可变渲染快照。低层纹理参数为借用指针，额外纹理覆盖的调用方必须保留对应 `TextureAsset` 引用。
+
+### 7.4 加载、驻留与关闭
+
+- 路径转换为绝对路径并做词法规范化，相同路径的别名共享加载记录。当前不提供 GUID、移动重定向或完整的 Windows 路径大小写归一。
+- 同一路径只允许一种资产类型，缓存命中和加载中请求均检查类型，避免错误的静态指针转换。
+- 同步与异步请求复用一个加载中记录；相同线程的递归加载环明确报错。普通 `Load()` 返回 false 时保持空结果语义，抛出的异常向同步等待者传播。
+- `LoadAsync` 保存任务 future，所有请求都有各自的完成回调。回调在工作线程、管理器锁外执行，包括缓存命中；失败结果为空。任务异常在回收 future 时记录。
+- `Unload` 和 `Clear` 释放驻留引用，不强制销毁仍由组件或其他资产使用的资源。弱索引允许重新加载仍存活的资产而不创建重复对象；清理前已开始的加载不能重新填充已清理的驻留。
+- `WaitForLoads` 和 `Shutdown` 由控制线程调用，不能在加载回调中调用。Engine 关闭时停止接收新请求、收束任务并清理驻留；之后仍须遵循现有场景与 RHI 的释放顺序。
+
+当前异步接口仍执行具体资产的完整 `Load()`，没有实现后台 CPU 导入与渲染线程初始化的分阶段调度；本轮并发验证使用不依赖 GPU 的资产。启动场景继续使用同步加载。静态参数 true、新的材质 Shader 变体、跨线程依赖环检测、重导入及派生数据缓存尚不支持。
+
+### 7.5 验证入口
+
+`Tests.exe -test=AssetOwnershipTest` 使用独立生成的测试材质，验证材质格式、索引、路径别名、按需实例、组件间隔离、父材质更新、清理后的保活、重复请求回调和类型错误；该测试不初始化 RHI，也不依赖场景默认材质的美术数值。
+
+渲染回归使用 `Langcher.exe`。2026-10-22 修复默认材质的外观变化后，分别运行保留的重构前程序和当前程序，等待场景完成绘制后抓取窗口；本次场景区域像素差为 0，两次均通过 WM_CLOSE 退出 0。日志仍含既有 Shader 与退出销毁校验错误，不能记为 Vulkan Validation 全通过。根因、验证修正及证据见 [故障与修复记录](../dev/bugfix/故障与修复记录-2026-10-22.md)。
 
 ---
 

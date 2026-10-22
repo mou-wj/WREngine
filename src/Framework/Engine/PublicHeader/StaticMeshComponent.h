@@ -4,12 +4,14 @@
 #include "PrimitiveComponent.h"
 #include "StaticMesh.h"
 #include "EngineExport.h"
+#include "Material.h"
 #include <memory>
 #include <vector>
 
 namespace Engine
 {
-    class MaterialInterface;
+    class MaterialAsset;
+    class StaticMeshAsset;
     class StaticMesh;
     class StaticMeshProxy;
 
@@ -19,7 +21,7 @@ namespace Engine
 
     public:
         StaticMeshComponent();
-        ~StaticMeshComponent() override = default;
+        ~StaticMeshComponent() override;
 
         //----------------------------------------
         // Mesh
@@ -35,9 +37,18 @@ namespace Engine
         void SetMaterial(uint32_t SlotIndex, MaterialInterface* Material);
         MaterialInterface* GetMaterial(uint32_t SlotIndex) const;
 
-        uint32_t GetNumMaterials() const
+        uint32_t GetNumMaterials() const;
+        MaterialInstance* GetMaterialInstance(uint32_t slotIndex) const;
+        MaterialInstance* GetOrCreateMaterialInstance(uint32_t slotIndex);
+        void ResetMaterialInstance(uint32_t slotIndex);
+
+        template<EMaterialParameterSemantic Semantic, typename ParamType>
+        void SetMaterialParameterValue(uint32_t slotIndex, const std::string& name,
+                                       const typename ParamType::Type& value)
         {
-            return static_cast<uint32_t>(OverrideMaterials.size());
+            auto* instance = GetOrCreateMaterialInstance(slotIndex);
+            instance->SetParameterValue<Semantic, ParamType>(name, value);
+            MarkRenderStateDirty();
         }
 
         //----------------------------------------
@@ -67,10 +78,12 @@ namespace Engine
         Core::BoxSphereBounds CalcBounds(
             const Core::Mat4& LocalToWorld) override;
         // CPU-side mesh asset reference
-        StaticMesh* Mesh;
+        std::shared_ptr<StaticMeshAsset> MeshAsset;
+        StaticMesh* Mesh = nullptr;
 
         // Material overrides (same concept as UE OverrideMaterials)
-        std::vector<MaterialInterface*> OverrideMaterials;
+        std::vector<std::shared_ptr<MaterialAsset>> OverrideMaterials;
+        std::vector<std::unique_ptr<MaterialInstance>> MaterialInstances;
 
         // -1 = auto LOD
         int32_t ForcedLOD = -1;

@@ -1,6 +1,7 @@
 #include "EngineModule.h"
 #include "IEngine.h"
 #include "DistanceFieldMgr.h"
+#include "AssetManager.h"
 namespace Engine {
 
     std::unique_ptr<Engine> EngineObj;
@@ -22,6 +23,7 @@ namespace Engine {
 
     void EngineModule::ShutdownModule()
     {
+        AssetManager::Get().Shutdown();
         if (EngineObj)
         {
             EngineObj->Shutdown();
