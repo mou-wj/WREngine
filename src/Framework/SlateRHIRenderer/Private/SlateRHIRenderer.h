@@ -30,7 +30,7 @@ namespace SlateRHIRenderer {
 		void CreateViewport(SlateCore::SlateWidget* slateWidget) override;
 	private:
 
-		std::map<SlateCore::SlateWidget*, WindowViewportInfo> Viewports;
+		std::map<SlateCore::SlateWidget*, WindowViewportInfo> m_Viewports;
 	};
 
 

@@ -25,7 +25,7 @@ namespace SlateRHIRenderer {
         }
         
         CreateViewport(slateWidget);
-        auto slateViewport = Viewports[slateWidget];
+        auto slateViewport = m_Viewports[slateWidget];
 		auto rhiSwapchain = slateViewport.SwapchainRHI;
 		auto slot = rhiSwapchain->AcquireNextSlot();
 		auto backTexture = slot.Texture;
@@ -33,7 +33,7 @@ namespace SlateRHIRenderer {
         //LOG_INFO("render frame: %u",frameCount);
         //LOG_INFO("duration time %f s", Core::Timer::GetGlobalInstance().GetDelta());
         frameCount++;
-		//�����������ݻ��Ƶ�presentTexture��
+		// 将视口纹理复制到交换链图像后呈现。
 		auto* windowWidget = static_cast<SlateCore::Widget*>(slateWidget->GetViewportChild());
         if (!windowWidget)
         {
@@ -159,16 +159,16 @@ namespace SlateRHIRenderer {
         const int width = slateWidget->GetGeometry().Width;
         const int height = slateWidget->GetGeometry().Height;
 
-        if (Viewports.find(slateWidget) == Viewports.end()) {
+        if (m_Viewports.find(slateWidget) == m_Viewports.end()) {
             WindowViewportInfo viewportInfo;
             auto windowHandle = slateWidget->GetNativeHandle();
             viewportInfo.SwapchainRHI = GRHIApi->CreateSwapchain(windowHandle, width, height, ERHIFormat::R8G8B8A8_UNorm);
-            Viewports[slateWidget] = viewportInfo;
-            Viewports[slateWidget].Width = width;
-            Viewports[slateWidget].Height = height;
+            m_Viewports[slateWidget] = viewportInfo;
+            m_Viewports[slateWidget].Width = width;
+            m_Viewports[slateWidget].Height = height;
         }
         else {
-            auto& viewportInfo = Viewports[slateWidget];
+            auto& viewportInfo = m_Viewports[slateWidget];
             if (viewportInfo.Width != width || viewportInfo.Height != height) {
                 viewportInfo.SwapchainRHI->Resize(width, height);
                 viewportInfo.Width = width;

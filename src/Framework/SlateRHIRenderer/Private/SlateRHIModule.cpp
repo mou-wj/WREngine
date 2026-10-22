@@ -2,34 +2,34 @@
 #include "SlateRHIRenderer.h"
 namespace SlateRHIRenderer {
     SlateRHIRendererModule* GSlateRHIRendererModule = nullptr;
-    SlateRHIRendererModule::SlateRHIRendererModule():Renderer(nullptr) {
+    SlateRHIRendererModule::SlateRHIRendererModule():m_Renderer(nullptr) {
         GSlateRHIRendererModule = this;
     }
     void SlateRHIRendererModule::StartupModule()
     {
-        bLoaded = true;
+        m_bLoaded = true;
     }
 
     void SlateRHIRendererModule::ShutdownModule()
     {
-        delete Renderer;
-        bLoaded = false;
+        delete m_Renderer;
+        m_bLoaded = false;
     }
 
     bool SlateRHIRendererModule::IsLoaded() const
     {
-        return bLoaded;
+        return m_bLoaded;
     }
 
     SlateCore::SlateRenderer* SlateRHIRendererModule::CreateSlateRenderer()
     {
-        // UE ∑Á∏Ò£∫÷ª¥¥Ω®“ª¥Œ
-        if (!Renderer)
+        // UE È£éÊ†ºÔºöÂè™ÂàõÂª∫‰∏ÄÊ¨°
+        if (!m_Renderer)
         {
-            Renderer = new SlateRHIRenderer();
+            m_Renderer = new SlateRHIRenderer();
         }
 
-        return Renderer;
+        return m_Renderer;
     }
     IMPLEMENT_SIMPLE_MODULE(SlateRHIRendererModule, "SlateRHIRenderer")
 }

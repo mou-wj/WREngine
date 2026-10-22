@@ -12,10 +12,10 @@ namespace SlateRHIRenderer {
         virtual SlateCore::SlateRenderer* CreateSlateRenderer() override;
 
     private:
-        bool bLoaded = false;
+        bool m_bLoaded = false;
 
-        // Module 内部持有
-        SlateCore::SlateRenderer* Renderer;
+        // Module 鍐呴儴鎸佹湁
+        SlateCore::SlateRenderer* m_Renderer;
     };
 
     extern SLATERHIRENDERER_API SlateRHIRendererModule* GSlateRHIRendererModule;
