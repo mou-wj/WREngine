@@ -14,29 +14,29 @@ namespace Renderer
     }
 
     bool ShadowMapAllocator::Initialize(
-        const ShadowAllocatorDesc& Desc)
+        const ShadowAllocatorDesc& desc)
     {
-        Desc_ = Desc;
+        m_Desc = desc;
 
         return InitializeAtlasResources();
     }
 
     const ShadowAllocatorDesc& ShadowMapAllocator::GetDesc() const
     {
-        return Desc_;
+        return m_Desc;
     }
 
     void ShadowMapAllocator::Shutdown()
     {
-        ShadowAtlas_ = nullptr;
-        DedicatedShadowTextures_.clear();
+        m_ShadowAtlas = nullptr;
+        m_DedicatedShadowTextures.clear();
     }
 
     bool ShadowMapAllocator::InitializeAtlasResources()
     {
         RHITextureDesc desc;
-        desc.Width = Desc_.SpotShadowAtlas.Width;
-        desc.Height = Desc_.SpotShadowAtlas.Height;
+        desc.Width = m_Desc.SpotShadowAtlas.Width;
+        desc.Height = m_Desc.SpotShadowAtlas.Height;
         desc.Depth = 1;
         desc.MipLevels = 1;
         desc.ArraySize = 1;
@@ -52,33 +52,33 @@ namespace Renderer
         desc.bGenerateMips = false;
         desc.DebugName = "SpotShadowAtlas";
 
-        ShadowAtlas_ =
+        m_ShadowAtlas =
             std::make_shared<RenderCore::RenderTexture>(desc);
 
-        ShadowAtlas_->InitRHIResource();
+        m_ShadowAtlas->InitRHIResource();
 
-        return ShadowAtlas_ != nullptr;
+        return m_ShadowAtlas != nullptr;
     }
 
     ShadowAllocation ShadowMapAllocator::AllocateDirectionalCSMShadow(
-        uint32_t Resolution,
-        uint32_t CascadeCount)
+        uint32_t resolution,
+        uint32_t cascadeCount)
     {
         ShadowAllocation result;
         result.ShadowType = EShadowType::Directional;
 
-        result.Slices.resize(CascadeCount);
+        result.Slices.resize(cascadeCount);
 
         AllocateDedicatedTexture(
-            Resolution,
-            Resolution,
+            resolution,
+            resolution,
             EShadowType::Directional,
             result);
         return result;
     }
 
     ShadowAllocation ShadowMapAllocator::AllocatePointShadow(
-        uint32_t Resolution)
+        uint32_t resolution)
     {
         ShadowAllocation result;
         result.ShadowType = EShadowType::Point;
@@ -86,8 +86,8 @@ namespace Renderer
         result.Slices.resize(MaxPointLightFaces);
 
         AllocateDedicatedTexture(
-            Resolution,
-            Resolution,
+            resolution,
+            resolution,
             EShadowType::Point,
             result);
 
@@ -95,7 +95,7 @@ namespace Renderer
     }
 
     ShadowAllocation ShadowMapAllocator::AllocateSpotShadow(
-        uint32_t Resolution)
+        uint32_t resolution)
     {
         ShadowAllocation result;
         result.ShadowType = EShadowType::Spot;
@@ -103,8 +103,8 @@ namespace Renderer
         result.Slices.resize(1);
 
         AllocateFromAtlas(
-            Resolution,
-            Resolution,
+            resolution,
+            resolution,
             result);
 
         return result;
@@ -112,27 +112,27 @@ namespace Renderer
 
     RenderCore::RenderTexture* ShadowMapAllocator::GetShadowAtlas() const
     {
-        return ShadowAtlas_.get();
+        return m_ShadowAtlas.get();
     }
 
     const std::vector<RenderCore::RenderTexture*>& ShadowMapAllocator::GetDedicatedPointLightShadowTextures() const
     {
-        return PointLightShadowTextures_;
+        return m_PointLightShadowTextures;
     }
 
     const std::vector<RenderCore::RenderTexture*>& ShadowMapAllocator::GetDedicatedParallelLightShadowTextures() const
     {
-        return ParallelLightShadowTextures_;
+        return m_ParallelLightShadowTextures;
     }
 
-    void ShadowMapAllocator::ReleaseShadow(ShadowAllocation& Allocation)
+    void ShadowMapAllocator::ReleaseShadow(ShadowAllocation& allocation)
     {
-        if (!Allocation.IsValid())
+        if (!allocation.IsValid())
         {
             return;
         }
 
-        switch (Allocation.ShadowType)
+        switch (allocation.ShadowType)
         {
             //--------------------------------------------------
             // Dedicated shadow texture
@@ -140,21 +140,21 @@ namespace Renderer
         case EShadowType::Directional:
         case EShadowType::Point:
         {
-            auto* texture = Allocation.Texture;
+            auto* texture = allocation.Texture;
 
             if (texture)
             {
                 auto it = std::find_if(
-                    DedicatedShadowTextures_.begin(),
-                    DedicatedShadowTextures_.end(),
+                    m_DedicatedShadowTextures.begin(),
+                    m_DedicatedShadowTextures.end(),
                     [texture](const RenderCore::RenderTextureSP& tex)
                     {
                         return tex.get() == texture;
                     });
 
-                if (it != DedicatedShadowTextures_.end())
+                if (it != m_DedicatedShadowTextures.end())
                 {
-                    DedicatedShadowTextures_.erase(it);
+                    m_DedicatedShadowTextures.erase(it);
                 }
 
                 //--------------------------------------------------
@@ -173,8 +173,8 @@ namespace Renderer
                         }
                     };
 
-                eraseTexture(PointLightShadowTextures_);
-                eraseTexture(ParallelLightShadowTextures_);
+                eraseTexture(m_PointLightShadowTextures);
+                eraseTexture(m_ParallelLightShadowTextures);
             }
 
             break;
@@ -184,36 +184,36 @@ namespace Renderer
         // Atlas
         //--------------------------------------------------
         case EShadowType::Spot:
-            // ºóÐøÊµÏÖ Atlas FreeList
+            // åŽç»­å®žçŽ° Atlas FreeList
             break;
 
         default:
             break;
         }
 
-        Allocation.Texture = nullptr;
-        Allocation.TextureIndex = 0;
-        Allocation.Slices.clear();
-        Allocation.ShadowType = EShadowType::Unknown;
+        allocation.Texture = nullptr;
+        allocation.TextureIndex = 0;
+        allocation.Slices.clear();
+        allocation.ShadowType = EShadowType::Unknown;
     }
 
     bool ShadowMapAllocator::AllocateDedicatedTexture(
-        uint32_t Width,
-        uint32_t Height,
-        EShadowType ShadowType,
-        ShadowAllocation& OutAllocation)
+        uint32_t width,
+        uint32_t height,
+        EShadowType shadowType,
+        ShadowAllocation& outAllocation)
     {
         RHITextureDesc desc;
 
-        desc.Width = Width;
-        desc.Height = Height;
+        desc.Width = width;
+        desc.Height = height;
         desc.Depth = 1;
 
         desc.MipLevels = 1;
         desc.ArraySize = 1;
 
         desc.Type = ERHITextureType::Texture2D;
-        switch (ShadowType)
+        switch (shadowType)
         {
         case EShadowType::Directional:
             desc.Type = ERHITextureType::Texture2DArray;
@@ -245,44 +245,44 @@ namespace Renderer
 
         texture->InitRHIResource();
 
-        DedicatedShadowTextures_.push_back(texture);
+        m_DedicatedShadowTextures.push_back(texture);
 
-        OutAllocation.Texture = texture.get();
-        OutAllocation.ShadowType = ShadowType;
+        outAllocation.Texture = texture.get();
+        outAllocation.ShadowType = shadowType;
 
-        switch (ShadowType)
+        switch (shadowType)
         {
         case EShadowType::Point:
         {
-            OutAllocation.TextureIndex =
-                (uint32_t)PointLightShadowTextures_.size();
+            outAllocation.TextureIndex =
+                (uint32_t)m_PointLightShadowTextures.size();
 
-            PointLightShadowTextures_.push_back(texture.get());
+            m_PointLightShadowTextures.push_back(texture.get());
             break;
         }
 
         case EShadowType::Directional:
         {
-            OutAllocation.TextureIndex =
-                (uint32_t)ParallelLightShadowTextures_.size();
+            outAllocation.TextureIndex =
+                (uint32_t)m_ParallelLightShadowTextures.size();
 
-            ParallelLightShadowTextures_.push_back(texture.get());
+            m_ParallelLightShadowTextures.push_back(texture.get());
             break;
         }
 
         default:
-            OutAllocation.TextureIndex = 0;
+            outAllocation.TextureIndex = 0;
             break;
         }
         //-----------------------------------------
         // Fill slices
         //-----------------------------------------
 
-        OutAllocation.Slices.resize(desc.ArraySize);
+        outAllocation.Slices.resize(desc.ArraySize);
 
         for (uint32_t i = 0; i < desc.ArraySize; ++i)
         {
-            auto& slice = OutAllocation.Slices[i];
+            auto& slice = outAllocation.Slices[i];
 
             slice.Layer = i;
             slice.Mip = 0;
@@ -290,8 +290,8 @@ namespace Renderer
             slice.X = 0;
             slice.Y = 0;
 
-            slice.Width = Width;
-            slice.Height = Height;
+            slice.Width = width;
+            slice.Height = height;
 
             slice.UVScale =
             {
@@ -310,75 +310,75 @@ namespace Renderer
     }
 
     bool ShadowMapAllocator::AllocateFromAtlas(
-        uint32_t Width,
-        uint32_t Height,
-        ShadowAllocation& OutAllocation)
+        uint32_t width,
+        uint32_t height,
+        ShadowAllocation& outAllocation)
     {
-        const uint32_t AtlasWidth = Desc_.SpotShadowAtlas.Width;
-        const uint32_t AtlasHeight = Desc_.SpotShadowAtlas.Height;
+        const uint32_t atlasWidth = m_Desc.SpotShadowAtlas.Width;
+        const uint32_t atlasHeight = m_Desc.SpotShadowAtlas.Height;
 
         //--------------------------------------------------
-        // µ±Ç°ÐÐ·Å²»ÏÂ£¬»»ÐÐ
+        // å½“å‰è¡Œæ”¾ä¸ä¸‹ï¼Œæ¢è¡Œ
         //--------------------------------------------------
 
-        if (AtlasCursorX + Width > AtlasWidth)
+        if (m_AtlasCursorX + width > atlasWidth)
         {
-            AtlasCursorX = 0;
-            AtlasCursorY += AtlasCurrentRowHeight;
-            AtlasCurrentRowHeight = 0;
+            m_AtlasCursorX = 0;
+            m_AtlasCursorY += m_AtlasCurrentRowHeight;
+            m_AtlasCurrentRowHeight = 0;
         }
 
         //--------------------------------------------------
-        // Atlas ÒÑÂú
+        // Atlas å·²æ»¡
         //--------------------------------------------------
 
-        if (AtlasCursorY + Height > AtlasHeight)
+        if (m_AtlasCursorY + height > atlasHeight)
         {
             return false;
         }
 
         //--------------------------------------------------
-        // ´´½¨ Allocation
+        // åˆ›å»º Allocation
         //--------------------------------------------------
 
-        OutAllocation.ShadowType = EShadowType::Spot;
-        OutAllocation.Texture = ShadowAtlas_.get();
-        OutAllocation.TextureIndex = 0;
+        outAllocation.ShadowType = EShadowType::Spot;
+        outAllocation.Texture = m_ShadowAtlas.get();
+        outAllocation.TextureIndex = 0;
 
-        OutAllocation.Slices.clear();
-        OutAllocation.Slices.emplace_back();
+        outAllocation.Slices.clear();
+        outAllocation.Slices.emplace_back();
 
-        auto& Slice = OutAllocation.Slices.front();
+        auto& slice = outAllocation.Slices.front();
 
-        Slice.Layer = 0;
-        Slice.Mip = 0;
+        slice.Layer = 0;
+        slice.Mip = 0;
 
-        Slice.X = AtlasCursorX;
-        Slice.Y = AtlasCursorY;
+        slice.X = m_AtlasCursorX;
+        slice.Y = m_AtlasCursorY;
 
-        Slice.Width = Width;
-        Slice.Height = Height;
+        slice.Width = width;
+        slice.Height = height;
 
-        Slice.UVScale =
+        slice.UVScale =
         {
-            float(Width) / float(AtlasWidth),
-            float(Height) / float(AtlasHeight)
+            float(width) / float(atlasWidth),
+            float(height) / float(atlasHeight)
         };
 
-        Slice.UVOffset =
+        slice.UVOffset =
         {
-            float(AtlasCursorX) / float(AtlasWidth),
-            float(AtlasCursorY) / float(AtlasHeight)
+            float(m_AtlasCursorX) / float(atlasWidth),
+            float(m_AtlasCursorY) / float(atlasHeight)
         };
 
         //--------------------------------------------------
-        // ¸üÐÂÓÎ±ê
+        // æ›´æ–°æ¸¸æ ‡
         //--------------------------------------------------
 
-        AtlasCursorX += Width;
+        m_AtlasCursorX += width;
 
-        AtlasCurrentRowHeight =
-            AtlasCurrentRowHeight > Height ? AtlasCurrentRowHeight : Height;
+        m_AtlasCurrentRowHeight =
+            m_AtlasCurrentRowHeight > height ? m_AtlasCurrentRowHeight : height;
 
         return true;
     }

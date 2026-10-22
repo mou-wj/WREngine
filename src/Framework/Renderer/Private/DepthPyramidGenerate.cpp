@@ -15,9 +15,9 @@ namespace Renderer {
         RHI::ERHIShaderFrequency::Compute
     );
 
-    void AddBuildDepthPyramidPass(RenderCore::RenderGraphBuilder& GraphBuilder, const BuildDepthPyramidPassInput& Input)
+    void AddBuildDepthPyramidPass(RenderCore::RenderGraphBuilder& graphBuilder, const BuildDepthPyramidPassInput& input)
     {
-        if (!Input.SceneDepthTexture || !Input.DepthPyramidTexture)
+        if (!input.SceneDepthTexture || !input.DepthPyramidTexture)
         {
             return;
         }
@@ -34,8 +34,8 @@ namespace Renderer {
             return;
         }
 
-        const auto& sceneDepthDesc = Input.SceneDepthTexture->GetDesc();
-        const auto& pyramidDesc = Input.DepthPyramidTexture->GetDesc();
+        const auto& sceneDepthDesc = input.SceneDepthTexture->GetDesc();
+        const auto& pyramidDesc = input.DepthPyramidTexture->GetDesc();
 
         const uint32_t maxPyramidMip = pyramidDesc.MipLevels;
         const uint32_t mipCount = maxPyramidMip;
@@ -52,30 +52,30 @@ namespace Renderer {
         mipUAVDesc.ArraySize = pyramidDesc.ArraySize;
         mipUAVDesc.FirstMipSlice = 0;
         mipUAVDesc.MipCount = mipCount;
-        mipUAVDesc.Texture = Input.DepthPyramidTexture;
+        mipUAVDesc.Texture = input.DepthPyramidTexture;
         mipUAVDesc.ViewType = RHI::ERHITextureViewType::TextureView2D;
 
-        pyramidMipUAV = GraphBuilder.CreateTextureUAV("DepthPyramidGenerateUAV", mipUAVDesc);
+        pyramidMipUAV = graphBuilder.CreateTextureUAV("DepthPyramidGenerateUAV", mipUAVDesc);
 
         RHI::RHIComputePipelineStateDesc computeDesc;
         computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
 
-        auto InputCopy = Input;
-        auto* passParameter = GraphBuilder.AllocateParameter<DepthPyramidGenerateParameters>();
+        auto inputCopy = input;
+        auto* passParameter = graphBuilder.AllocateParameter<DepthPyramidGenerateParameters>();
         *passParameter = DepthPyramidGenerateParameters{};
-        passParameter->InputDepthTexture = InputCopy.SceneDepthTexture;
+        passParameter->InputDepthTexture = inputCopy.SceneDepthTexture;
         passParameter->InDepthMipTexture = pyramidMipUAV;
-        auto pyramidViewCache = GraphBuilder.GetExternalTextureViewCache(Input.DepthPyramidTexture);
-        auto pyramidTexture = Input.DepthPyramidTexture;
-        GraphBuilder.AddPass<DepthPyramidGenerateParameters>(
+        auto pyramidViewCache = graphBuilder.GetExternalTextureViewCache(input.DepthPyramidTexture);
+        auto pyramidTexture = input.DepthPyramidTexture;
+        graphBuilder.AddPass<DepthPyramidGenerateParameters>(
             "BuildDepthPyramidPass",
             DepthPyramidGenerateParameters::GetMetaData(),
             passParameter,
             RenderCore::EPassFlag::Compute,
-            [InputCopy, shader, pipelineState, mipCount, sceneDepthDesc, pyramidDesc,passParameter, pyramidViewCache, pyramidTexture](RHI::RHICommandListBase& RHICmdList)
+            [inputCopy, shader, pipelineState, mipCount, sceneDepthDesc, pyramidDesc,passParameter, pyramidViewCache, pyramidTexture](RHI::RHICommandListBase& rhiCmdList)
             {
-                auto& cmd = static_cast<RHI::RHIComputeCommandList&>(RHICmdList);
+                auto& cmd = static_cast<RHI::RHIComputeCommandList&>(rhiCmdList);
                 cmd.SetComputePipelineState(pipelineState);
 
                 for (uint32_t mip = 0; mip < mipCount; ++mip)

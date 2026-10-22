@@ -24,12 +24,12 @@ namespace Renderer {
     public:
         DECLARE_GLOBAL_SHADER_TYPE(ScreenSpaceReflectionDepthPyramidCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
         }
 
@@ -48,7 +48,7 @@ namespace Renderer {
     };
 
     // Add a graph pass that builds depth mip levels used by screen-space ray tracing.
-    RENDERER_API void AddBuildSSRDepthPyramidPass(RenderCore::RenderGraphBuilder& GraphBuilder, const BuildSSRDepthPyramidPassInput& Input);
+    RENDERER_API void AddBuildSSRDepthPyramidPass(RenderCore::RenderGraphBuilder& graphBuilder, const BuildSSRDepthPyramidPassInput& input);
 
     BEGIN_SHADER_PARAMETER_STRUCT(ScreenSpaceReflectionTextureParameters)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D, GBufferA)
@@ -77,12 +77,12 @@ namespace Renderer {
     public:
         DECLARE_GLOBAL_SHADER_TYPE(ScreenSpaceReflectionCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
         }
 
@@ -112,6 +112,6 @@ namespace Renderer {
     };
 
     // Add a graph pass that computes screen-space reflection from gbuffer.
-    RENDERER_API void AddScreenSpaceReflectionPass(RenderCore::RenderGraphBuilder& GraphBuilder, const ScreenSpaceReflectionPassInput& Input);
+    RENDERER_API void AddScreenSpaceReflectionPass(RenderCore::RenderGraphBuilder& graphBuilder, const ScreenSpaceReflectionPassInput& input);
 
 } // namespace Renderer

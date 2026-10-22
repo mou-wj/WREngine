@@ -122,7 +122,7 @@ namespace Renderer
 
     public:
         bool Initialize(
-            const ShadowAllocatorDesc& Desc);
+            const ShadowAllocatorDesc& desc);
         const ShadowAllocatorDesc& GetDesc() const;
         void Shutdown();
 
@@ -132,16 +132,16 @@ namespace Renderer
             Dedicated allocations
         ------------------------------------------------------------
         */
-        ShadowAllocation AllocateDirectionalCSMShadow(uint32_t Resolution, uint32_t CascadeCount);
+        ShadowAllocation AllocateDirectionalCSMShadow(uint32_t resolution, uint32_t cascadeCount);
 
-        ShadowAllocation AllocatePointShadow(uint32_t Resolution);
+        ShadowAllocation AllocatePointShadow(uint32_t resolution);
 
         /*
         ------------------------------------------------------------
             Atlas allocations
         ------------------------------------------------------------
         */
-        ShadowAllocation AllocateSpotShadow(uint32_t Resolution);
+        ShadowAllocation AllocateSpotShadow(uint32_t resolution);
 
         RenderCore::RenderTexture* GetShadowAtlas() const;
 
@@ -150,24 +150,24 @@ namespace Renderer
 
     public:
         void ReleaseShadow(
-            ShadowAllocation& Allocation);
+            ShadowAllocation& allocation);
 
     private:
         bool InitializeAtlasResources();
 
         bool AllocateFromAtlas(
-            uint32_t Width,
-            uint32_t Height,
-            ShadowAllocation& OutAllocation);
+            uint32_t width,
+            uint32_t height,
+            ShadowAllocation& outAllocation);
 
         bool AllocateDedicatedTexture(
-            uint32_t Width,
-            uint32_t Height,
-			EShadowType ShadowType,
-            ShadowAllocation& OutAllocation);
+            uint32_t width,
+            uint32_t height,
+			EShadowType shadowType,
+            ShadowAllocation& outAllocation);
 
     private:
-        ShadowAllocatorDesc Desc_;
+        ShadowAllocatorDesc m_Desc;
 
     private:
         /*
@@ -175,7 +175,7 @@ namespace Renderer
             Atlas resources
         ------------------------------------------------------------
         */
-        RenderCore::RenderTextureSP ShadowAtlas_;
+        RenderCore::RenderTextureSP m_ShadowAtlas;
 
     private:
         /*
@@ -183,12 +183,12 @@ namespace Renderer
             Dedicated shadow resources cache
         ------------------------------------------------------------
         */
-        std::vector<RenderCore::RenderTextureSP> DedicatedShadowTextures_;
-        std::vector<RenderCore::RenderTexture*> PointLightShadowTextures_;
-        std::vector<RenderCore::RenderTexture*> ParallelLightShadowTextures_;
-        uint32_t AtlasCursorX = 0;
-        uint32_t AtlasCursorY = 0;
-        uint32_t AtlasCurrentRowHeight = 0;
+        std::vector<RenderCore::RenderTextureSP> m_DedicatedShadowTextures;
+        std::vector<RenderCore::RenderTexture*> m_PointLightShadowTextures;
+        std::vector<RenderCore::RenderTexture*> m_ParallelLightShadowTextures;
+        uint32_t m_AtlasCursorX = 0;
+        uint32_t m_AtlasCursorY = 0;
+        uint32_t m_AtlasCurrentRowHeight = 0;
     };
 
 }

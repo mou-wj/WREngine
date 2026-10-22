@@ -38,12 +38,12 @@ namespace Renderer {
     public:
         DECLARE_GLOBAL_SHADER_TYPE(HZBOcclusionTestCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
         }
 
@@ -74,10 +74,10 @@ namespace Renderer {
         bool bIsValid = false;
     };
 
-    RENDERER_API HZBProjectedBox ProjectAABBToScreenSpace(const Core::Float4x4& ViewProjection, const Core::Float2& ScreenSize, const HZBInstanceAABB& Instance);
+    RENDERER_API HZBProjectedBox ProjectAABBToScreenSpace(const Core::Float4x4& viewProjection, const Core::Float2& screenSize, const HZBInstanceAABB& instance);
 
     RENDERER_API bool ExecuteHZBOcclusionTestPass(
-        const HZBOcclusionTestInput& Input,
-        std::vector<uint32_t>& OutVisibilityFlags);
+        const HZBOcclusionTestInput& input,
+        std::vector<uint32_t>& outVisibilityFlags);
 
 } // namespace Renderer

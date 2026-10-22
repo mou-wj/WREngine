@@ -28,11 +28,11 @@ namespace Renderer
 
 
         static bool ShouldCompilePermutation(
-            const RenderCore::ShaderPermutationParameters& Parameters);
+            const RenderCore::ShaderPermutationParameters& parameters);
 
         static void ModifyShaderCompilerEnvironment(
-            const RenderCore::ShaderPermutationParameters& Parameters,
-            RenderCore::ShaderCompilerEnvironment& OutEnvironment);
+            const RenderCore::ShaderPermutationParameters& parameters,
+            RenderCore::ShaderCompilerEnvironment& outEnvironment);
 
         static const RenderCore::ShaderParametersMetadata*
             GetShaderParameterMetadata();
@@ -56,11 +56,11 @@ namespace Renderer
 
 
         static bool ShouldCompilePermutation(
-            const RenderCore::ShaderPermutationParameters& Parameters);
+            const RenderCore::ShaderPermutationParameters& parameters);
 
         static void ModifyShaderCompilerEnvironment(
-            const RenderCore::ShaderPermutationParameters& Parameters,
-            RenderCore::ShaderCompilerEnvironment& OutEnvironment);
+            const RenderCore::ShaderPermutationParameters& parameters,
+            RenderCore::ShaderCompilerEnvironment& outEnvironment);
 
         static const RenderCore::ShaderParametersMetadata*
             GetShaderParameterMetadata();
@@ -84,11 +84,11 @@ namespace Renderer
 
 
         static bool ShouldCompilePermutation(
-            const RenderCore::ShaderPermutationParameters& Parameters);
+            const RenderCore::ShaderPermutationParameters& parameters);
 
         static void ModifyShaderCompilerEnvironment(
-            const RenderCore::ShaderPermutationParameters& Parameters,
-            RenderCore::ShaderCompilerEnvironment& OutEnvironment);
+            const RenderCore::ShaderPermutationParameters& parameters,
+            RenderCore::ShaderCompilerEnvironment& outEnvironment);
 
         static const RenderCore::ShaderParametersMetadata*
             GetShaderParameterMetadata();
@@ -115,19 +115,19 @@ namespace Renderer
     public:
         static constexpr char IS_IBL[] = "IS_IBL";
 
-        // 2. �������ά�ȣ����� 3 ����ɫת��ģʽ��
+        // Boolean IBL permutation dimension.
         using IsIBLPermutation = RenderCore::FPermutationDimensionBool<IS_IBL>;
 
-        // 3. ���������Domain�������԰������ά��
+        // Define the IBL permutation domain.
         using PermutationDomain = RenderCore::ShaderPermutationDomain<IsIBLPermutation>;
 
         DECLARE_MATERIAL_SHADER_TYPE(StaticMeshMaterialDefferedShadingCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment);
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment);
 
         static const RenderCore::ShaderParametersMetadata* GetShaderParameterMetadata()
         {
@@ -151,18 +151,18 @@ namespace Renderer
     public:
         static constexpr char USE_INSTANCE_MODEL[] = "USE_INSTANCE";
 
-        // 2. �������ά�ȣ����� 3 ����ɫת��ģʽ��
+        // Boolean instancing permutation dimension.
         using InstancePermutation = RenderCore::FPermutationDimensionBool<USE_INSTANCE_MODEL>;
 
-        // 3. ���������Domain�������԰������ά��
+        // Define the instancing permutation domain.
         using PermutationDomain = RenderCore::ShaderPermutationDomain<InstancePermutation>;
         DECLARE_GLOBAL_SHADER_TYPE(PositionOnlyVS)
         static bool ShouldCompilePermutation(
-            const RenderCore::ShaderPermutationParameters& Parameters);
+            const RenderCore::ShaderPermutationParameters& parameters);
 
         static void ModifyShaderCompilerEnvironment(
-            const RenderCore::ShaderPermutationParameters& Parameters,
-            RenderCore::ShaderCompilerEnvironment& OutEnvironment);
+            const RenderCore::ShaderPermutationParameters& parameters,
+            RenderCore::ShaderCompilerEnvironment& outEnvironment);
 
         static const RenderCore::ShaderParametersMetadata*
             GetShaderParameterMetadata();
@@ -184,18 +184,18 @@ namespace Renderer
     public:
         static constexpr char Macro_DepthStoreMode[] = "DEPTH_STORE_MODE";
 
-        // 2. �������ά�ȣ����� 3 ����ɫת��ģʽ��
+        // Depth storage mode permutation dimension.
         using DepthStoreModeDim = RenderCore::FPermutationDimensionEnum<Macro_DepthStoreMode, 2>;
 
-        // 3. ���������Domain�������԰������ά��
+        // Define the depth storage permutation domain.
         using PermutationDomain = RenderCore::ShaderPermutationDomain<DepthStoreModeDim>;
         DECLARE_GLOBAL_SHADER_TYPE(DepthShadowPassPS)
         static bool ShouldCompilePermutation(
-            const RenderCore::ShaderPermutationParameters& Parameters);
+            const RenderCore::ShaderPermutationParameters& parameters);
 
         static void ModifyShaderCompilerEnvironment(
-            const RenderCore::ShaderPermutationParameters& Parameters,
-            RenderCore::ShaderCompilerEnvironment& OutEnvironment);
+            const RenderCore::ShaderPermutationParameters& parameters,
+            RenderCore::ShaderCompilerEnvironment& outEnvironment);
 
         static const RenderCore::ShaderParametersMetadata* GetShaderParameterMetadata();
     };

@@ -24,9 +24,9 @@ namespace Renderer {
         RHI::ERHIShaderFrequency::Compute
     );
 
-    void AddBuildSSRDepthPyramidPass(RenderCore::RenderGraphBuilder& GraphBuilder, const BuildSSRDepthPyramidPassInput& Input)
+    void AddBuildSSRDepthPyramidPass(RenderCore::RenderGraphBuilder& graphBuilder, const BuildSSRDepthPyramidPassInput& input)
     {
-        if (!Input.SceneDepthTexture || !Input.DepthPyramidTexture)
+        if (!input.SceneDepthTexture || !input.DepthPyramidTexture)
         {
             return;
         }
@@ -43,13 +43,13 @@ namespace Renderer {
             return;
         }
 
-        const auto& sceneDepthDesc = Input.SceneDepthTexture->GetDesc();
-        const auto& pyramidDesc = Input.DepthPyramidTexture->GetDesc();
+        const auto& sceneDepthDesc = input.SceneDepthTexture->GetDesc();
+        const auto& pyramidDesc = input.DepthPyramidTexture->GetDesc();
 
         const uint32_t maxPyramidMip = pyramidDesc.MipLevels;
-        const uint32_t mipCount = (Input.MipCount == 0)
+        const uint32_t mipCount = (input.MipCount == 0)
             ? maxPyramidMip
-            : std::min(Input.MipCount, maxPyramidMip);
+            : std::min(input.MipCount, maxPyramidMip);
 
         if (mipCount <= 1)
         {
@@ -62,30 +62,30 @@ namespace Renderer {
         mipUAVDesc.ArraySize = pyramidDesc.ArraySize;
         mipUAVDesc.FirstMipSlice = 0;
         mipUAVDesc.MipCount = mipCount;
-        mipUAVDesc.Texture = Input.DepthPyramidTexture;
+        mipUAVDesc.Texture = input.DepthPyramidTexture;
         mipUAVDesc.ViewType = RHI::ERHITextureViewType::TextureView2D;
 
-        pyramidMipUAV =  GraphBuilder.CreateTextureUAV("SSRDepthPyramidUAV", mipUAVDesc);
+        pyramidMipUAV =  graphBuilder.CreateTextureUAV("SSRDepthPyramidUAV", mipUAVDesc);
 
 
         RHI::RHIComputePipelineStateDesc computeDesc;
         computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
 
-        auto InputCopy = Input;
-        auto* passParameter = GraphBuilder.AllocateParameter<ScreenSpaceReflectionDepthPyramidParameters>();
+        auto inputCopy = input;
+        auto* passParameter = graphBuilder.AllocateParameter<ScreenSpaceReflectionDepthPyramidParameters>();
         *passParameter = ScreenSpaceReflectionDepthPyramidParameters{};
-        passParameter->InputDepthTexture = InputCopy.SceneDepthTexture;
+        passParameter->InputDepthTexture = inputCopy.SceneDepthTexture;
         passParameter->OutputDepthMipTexture = pyramidMipUAV;
 
-        GraphBuilder.AddPass<ScreenSpaceReflectionDepthPyramidParameters>(
+        graphBuilder.AddPass<ScreenSpaceReflectionDepthPyramidParameters>(
             "BuildSSRDepthPyramidPass",
             ScreenSpaceReflectionDepthPyramidParameters::GetMetaData(),
             passParameter,
             RenderCore::EPassFlag::Compute,
-            [InputCopy, shader, pipelineState, mipCount, sceneDepthDesc, pyramidDesc](RHI::RHICommandListBase& RHICmdList)
+            [inputCopy, shader, pipelineState, mipCount, sceneDepthDesc, pyramidDesc](RHI::RHICommandListBase& rhiCmdList)
             {
-                auto& cmd = static_cast<RHI::RHIComputeCommandList&>(RHICmdList);
+                auto& cmd = static_cast<RHI::RHIComputeCommandList&>(rhiCmdList);
                 cmd.SetComputePipelineState(pipelineState);
 
                 for (uint32_t mip = 0; mip < mipCount; ++mip)
@@ -105,7 +105,7 @@ namespace Renderer {
                     params.OutputExtent = Core::Int2(static_cast<int>(dstWidth), static_cast<int>(dstHeight));
                     params.InputMipLevel = bIsFirstMip ? 0u : (mip - 1u);
                     params.IsFirstMip = bIsFirstMip ? 1u : 0u;
-                    params.InputDepthTexture = bIsFirstMip ? InputCopy.SceneDepthTexture : InputCopy.DepthPyramidTexture;
+                    params.InputDepthTexture = bIsFirstMip ? inputCopy.SceneDepthTexture : inputCopy.DepthPyramidTexture;
                     params.DepthSampler = RenderCore::GlobalSampler.get();
 
                     SetShaderParameters(cmd, shader, &params);
@@ -118,9 +118,9 @@ namespace Renderer {
         );
     }
 
-    void AddScreenSpaceReflectionPass(RenderCore::RenderGraphBuilder& GraphBuilder, const ScreenSpaceReflectionPassInput& Input)
+    void AddScreenSpaceReflectionPass(RenderCore::RenderGraphBuilder& graphBuilder, const ScreenSpaceReflectionPassInput& input)
     {
-        if (!Input.GBufferA || !Input.GBufferB || !Input.GBufferC || !Input.SceneColor || !Input.DepthPyramid || !Input.OutputReflection)
+        if (!input.GBufferA || !input.GBufferB || !input.GBufferC || !input.SceneColor || !input.DepthPyramid || !input.OutputReflection)
         {
             return;
         }
@@ -142,49 +142,49 @@ namespace Renderer {
         computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
 
-        auto InputCopy = Input;
-        const auto outputDesc = InputCopy.OutputReflection->GetDesc();
-        auto* passParameter = GraphBuilder.AllocateParameter<ScreenSpaceReflectionParameters>();
+        auto inputCopy = input;
+        const auto outputDesc = inputCopy.OutputReflection->GetDesc();
+        auto* passParameter = graphBuilder.AllocateParameter<ScreenSpaceReflectionParameters>();
         *passParameter = ScreenSpaceReflectionParameters{};
 
 		RenderCore::RenderGraphTextureUAVDesc outputUAVDesc;
         outputUAVDesc.Format = outputDesc.Format;
         outputUAVDesc.ArraySize = outputDesc.ArraySize;
-        outputUAVDesc.Texture = InputCopy.OutputReflection;
-        auto outputUAV = GraphBuilder.CreateTextureUAV("ScreenSpaceReflectionOutput", outputUAVDesc);
+        outputUAVDesc.Texture = inputCopy.OutputReflection;
+        auto outputUAV = graphBuilder.CreateTextureUAV("ScreenSpaceReflectionOutput", outputUAVDesc);
         
 
-        passParameter->Textures.GBufferA = InputCopy.GBufferA;
-        passParameter->Textures.GBufferB = InputCopy.GBufferB;
-        passParameter->Textures.GBufferC = InputCopy.GBufferC;
-        passParameter->Textures.SceneColorTexture = InputCopy.SceneColor;
-        passParameter->Textures.DepthPyramidTexture = InputCopy.DepthPyramid;
+        passParameter->Textures.GBufferA = inputCopy.GBufferA;
+        passParameter->Textures.GBufferB = inputCopy.GBufferB;
+        passParameter->Textures.GBufferC = inputCopy.GBufferC;
+        passParameter->Textures.SceneColorTexture = inputCopy.SceneColor;
+        passParameter->Textures.DepthPyramidTexture = inputCopy.DepthPyramid;
         passParameter->Textures.OutputReflectionColor = outputUAV;
         passParameter->Textures.PointSampler = RenderCore::GlobalSampler.get();
 
-        GraphBuilder.AddPass<ScreenSpaceReflectionParameters>(
+        graphBuilder.AddPass<ScreenSpaceReflectionParameters>(
             "ScreenSpaceReflectionPass",
             ScreenSpaceReflectionParameters::GetMetaData(),
             passParameter,
             RenderCore::EPassFlag::Compute,
-            [InputCopy, outputDesc, shader, pipelineState](RHI::RHICommandListBase& RHICmdList)
+            [inputCopy, outputDesc, shader, pipelineState](RHI::RHICommandListBase& rhiCmdList)
             {
                 RHI::RHITexUAVCreateInfo outputUAVDesc;
                 outputUAVDesc.Format = outputDesc.Format;
                 outputUAVDesc.ArraySize = outputDesc.ArraySize;
 
-                auto& cmd = static_cast<RHI::RHIComputeCommandList&>(RHICmdList);
+                auto& cmd = static_cast<RHI::RHIComputeCommandList&>(rhiCmdList);
                 cmd.SetComputePipelineState(pipelineState);
 
                 ScreenSpaceReflectionParameters params;
-                params.ViewProj = InputCopy.ViewProj;
-                params.InvViewProj = InputCopy.InvViewProj;
-                params.CameraPos = InputCopy.CameraPos;
+                params.ViewProj = inputCopy.ViewProj;
+                params.InvViewProj = inputCopy.InvViewProj;
+                params.CameraPos = inputCopy.CameraPos;
                 params.ScreenSize = Core::Float2(static_cast<float>(outputDesc.Width), static_cast<float>(outputDesc.Height));
-                params.MaxTraceSteps = std::max(1u, InputCopy.MaxTraceSteps);
-                params.MaxTraceDistance = std::max(0.01f, InputCopy.MaxTraceDistance);
-                params.TraceThickness = std::max(0.0001f, InputCopy.TraceThickness);
-                params.RoughnessThreshold = std::clamp(InputCopy.RoughnessThreshold, 0.0f, 1.0f);
+                params.MaxTraceSteps = std::max(1u, inputCopy.MaxTraceSteps);
+                params.MaxTraceDistance = std::max(0.01f, inputCopy.MaxTraceDistance);
+                params.TraceThickness = std::max(0.0001f, inputCopy.TraceThickness);
+                params.RoughnessThreshold = std::clamp(inputCopy.RoughnessThreshold, 0.0f, 1.0f);
 
 
                 SetShaderParameters(cmd, shader, &params);

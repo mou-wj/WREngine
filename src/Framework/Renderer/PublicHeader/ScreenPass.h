@@ -5,7 +5,7 @@
 namespace Renderer {
 	using namespace RenderCore;
 
-	RENDERER_API void addScreenPass(RenderGraphBuilder& builder, RenderGraphTexture* inTexture, RenderGraphTexture* outTexture);
+	RENDERER_API void AddScreenPass(RenderGraphBuilder& builder, RenderGraphTexture* inTexture, RenderGraphTexture* outTexture);
 
 
 }

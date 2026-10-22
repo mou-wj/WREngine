@@ -33,12 +33,12 @@ namespace Renderer {
     public:
         DECLARE_GLOBAL_SHADER_TYPE(ScreenSpaceGICS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
         }
 
@@ -67,6 +67,6 @@ namespace Renderer {
         float RoughnessThreshold = 0.85f;
     };
 
-    RENDERER_API void AddScreenSpaceGIPass(RenderCore::RenderGraphBuilder& GraphBuilder, const ScreenSpaceGIPassInput& Input);
+    RENDERER_API void AddScreenSpaceGIPass(RenderCore::RenderGraphBuilder& graphBuilder, const ScreenSpaceGIPassInput& input);
 
 } // namespace Renderer

@@ -9,16 +9,16 @@ namespace Renderer {
     struct SceneTextures
     {
        
-        // �����
+        // Primary scene render targets.
         RenderCore::RenderGraphTextureRef SceneColor;
         RenderCore::RenderGraphTextureRef SceneDepth;
         RenderCore::RenderGraphTextureRef SceneDepthPyramid;
-        // GBuffer����ѡ��������չ��
+        // GBuffer targets.
         RenderCore::RenderGraphTextureRef GBufferA;
         RenderCore::RenderGraphTextureRef GBufferB;
         RenderCore::RenderGraphTextureRef GBufferC;
 
-        // ��ѡ������ / ��չ���
+        // Optional auxiliary targets.
         RenderCore::RenderGraphTextureRef Velocity;
         RenderCore::RenderGraphTextureRef CustomDepth;
 
@@ -45,7 +45,7 @@ namespace Renderer {
         Core::Float4x4 ViewProjection;
         uint32_t TargetWidth = 0;
         uint32_t TargetHeight = 0;
-        bool wantRawDepth = false;
+        bool bWantRawDepth = false;
         Core::Float3 CameraPos;
         Core::Float4 RawDepthClearValue;
     };
@@ -59,7 +59,7 @@ namespace Renderer {
 
         virtual ~SceneRenderer() = default;
 
-        // һ֡��Ⱦ���
+        // Build the rendering passes for a frame.
         virtual void Build(RenderCore::RenderGraphBuilder& graphBuilder) = 0;
         static void AddClearRenderTargetsPass(RenderCore::RenderGraphBuilder& bulder, RenderCore::RenderTargetBindingSlots& renderTargetBindingSlots);
         static void BuildSceneLightShadowMap(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder);
@@ -70,7 +70,7 @@ namespace Renderer {
         static void BuildSceneLightCascadeShadowMap(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder, const Engine::SceneView& view);
         static void UpdateCascadeShadowInfo(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder, const Engine::SceneView& view);
         static void AddClearShadowMapPass( RenderCore::RenderGraphBuilder& graphBuilder, std::vector<ShadowRenderView>& shadowRenderViews);
-        static void BuildLightShadow(Renderer::Scene* Scene, RenderCore::RenderGraphBuilder& graphBuilder , std::vector<ShadowRenderView>& shadowRenderViews);
+        static void BuildLightShadow(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder , std::vector<ShadowRenderView>& shadowRenderViews);
     };
     using SceneRendererSP = std::shared_ptr<SceneRenderer>;
 

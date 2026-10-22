@@ -26,13 +26,13 @@ namespace Renderer
     /**
      * Global Distance Field Block
      *
-     * Ò»¸öÊÀ½ç¿Õ¼äÇøÓò¶ÔÓ¦Ò»¸öBlock
+     * ä¸€ä¸ªä¸–ç•Œç©ºé—´åŒºåŸŸå¯¹åº”ä¸€ä¸ªBlock
      *
-     * ¸ºÔğ:
+     * è´Ÿè´£:
      *
-     * 1. ÊÀ½ç·¶Î§
-     * 2. Grid×ø±ê
-     * 3. Atlas AllocationÒıÓÃ
+     * 1. ä¸–ç•ŒèŒƒå›´
+     * 2. Gridåæ ‡
+     * 3. Atlas Allocationå¼•ç”¨
      */
     struct GlobalDistanceFieldBlock
     {
@@ -45,7 +45,7 @@ namespace Renderer
         uint32_t PageIndex = GDFInvalidBlockId;
 
         //--------------------------------
-        // ÊÀ½ç¿Õ¼äBlock×ø±ê
+        // ä¸–ç•Œç©ºé—´Blockåæ ‡
         //--------------------------------
 
         int32_t GridX = 0;
@@ -55,7 +55,7 @@ namespace Renderer
 
 
         //--------------------------------
-        // ÊÀ½ç¿Õ¼ä·¶Î§
+        // ä¸–ç•Œç©ºé—´èŒƒå›´
         //--------------------------------
 
         Core::AABB Bounds;
@@ -63,7 +63,7 @@ namespace Renderer
 
 
         //--------------------------------
-        // DistanceField Atlas¿Õ¼ä
+        // DistanceField Atlasç©ºé—´
         //--------------------------------
 
         Engine::DistanceFieldAllocation Allocation;
@@ -81,15 +81,15 @@ namespace Renderer
 
 
     /**
-     * Ò»´ÎÊÀ½çÇøÓò·ÖÅä²úÉúµÄBlock¼¯ºÏ
+     * ä¸€æ¬¡ä¸–ç•ŒåŒºåŸŸåˆ†é…äº§ç”Ÿçš„Blocké›†åˆ
      *
-     * ÀıÈç:
+     * ä¾‹å¦‚:
      *
-     * Ò»¸öÇøÓò:
+     * ä¸€ä¸ªåŒºåŸŸ:
      *
      * 100m * 100m * 100m
      *
-     * »®·Ö:
+     * åˆ’åˆ†:
      *
      * 5*5*5 Block
      */
@@ -127,9 +127,9 @@ namespace Renderer
 
 
     /**
-     * Global Distance Field (ÓĞÏŞ·¶Î§µÄÈ«¾Ö¾àÀë³¡£¬ÒÔcenterÎªÖĞĞÄµÄÇ°ºó×óÓÒÉÏÏÂ100m·¶Î§)
+     * Global Distance Field (æœ‰é™èŒƒå›´çš„å…¨å±€è·ç¦»åœºï¼Œä»¥centerä¸ºä¸­å¿ƒçš„å‰åå·¦å³ä¸Šä¸‹100mèŒƒå›´)
      *
-     * ¹ÜÀí:
+     * ç®¡ç†:
      *
      * World Block
      *
@@ -142,10 +142,10 @@ namespace Renderer
      * DistanceFieldAtlas
      *
      *
-     * ²»¸ºÔğ:
+     * ä¸è´Ÿè´£:
      *
      * GPU Texture
-     * AtlasÎïÀí·ÖÅä
+     * Atlasç‰©ç†åˆ†é…
      */
     class GlobalDistanceField
     {
@@ -161,7 +161,7 @@ namespace Renderer
 
 
         bool Initialize(
-            float InVoxelSize = 5/64.0);
+            float inVoxelSize = 5/64.0);
 
 
 
@@ -173,81 +173,81 @@ namespace Renderer
 
 
         /**
-         * ¸ù¾İÊÀ½ç·¶Î§·ÖÅäBlock
+         * æ ¹æ®ä¸–ç•ŒèŒƒå›´åˆ†é…Block
          */
         bool Allocate(
-            const Core::AABB& Bounds,
-            GlobalDistanceFieldBlockClipMap& OutClipMap);
+            const Core::AABB& bounds,
+            GlobalDistanceFieldBlockClipMap& outClipMap);
 
 
 
         /**
-         * ÊÍ·ÅÇøÓò¶ÔÓ¦Block
+         * é‡Šæ”¾åŒºåŸŸå¯¹åº”Block
          */
         void Release(
-            const GlobalDistanceFieldBlockClipMap& ClipMap);
+            const GlobalDistanceFieldBlockClipMap& clipMap);
 
 
 
         /**
-         * ¸ù¾İÊÀ½çÎ»ÖÃ»ñÈ¡Block
+         * æ ¹æ®ä¸–ç•Œä½ç½®è·å–Block
          */
         bool GetBlock(
-            const Core::Float3& Position,
-            GlobalDistanceFieldBlock& OutBlock) const;
+            const Core::Float3& position,
+            GlobalDistanceFieldBlock& outBlock) const;
 
 
 
         /**
-         * »ñÈ¡·¶Î§ÄÚËùÓĞBlock
+         * è·å–èŒƒå›´å†…æ‰€æœ‰Block
          */
         void GetBlocksInsideBounds(
-            const Core::AABB& Bounds,
-            std::vector<uint32_t>& OutBlockIds) const;
+            const Core::AABB& bounds,
+            std::vector<uint32_t>& outBlockIds) const;
 
 
 
         /**
-         * »ñÈ¡Block
+         * è·å–Block
          */
         const GlobalDistanceFieldBlock* GetBlock(
-            uint32_t BlockId) const;
+            uint32_t blockId) const;
 
 
 
         /**
-         * ¸üĞÂBlockÊı¾İ
+         * æ›´æ–°Blockæ•°æ®
          *
-         * Êµ¼ÊÉÏ´«½»¸øRenderer
+         * å®é™…ä¸Šä¼ äº¤ç»™Renderer
          */
         bool GetBlockAllocation(
-            uint32_t BlockId,
-            Engine::DistanceFieldAllocation& OutAllocation) const;
+            uint32_t blockId,
+            Engine::DistanceFieldAllocation& outAllocation) const;
 
 		void UploadBlockIndexBufferToGPU();
 
 		RenderCore::RenderBuffer* GetBlockIndexBufferGPU() const
 		{
-			return BlockIndexBufferGPU.get();
+			return m_BlockIndexBufferGPU.get();
 		}
 
         RHI::RHIShaderResourceView* GetBlockIndexBufferSRV() const
         {
-            return BlockIndexBufferSRV;
+            return m_BlockIndexBufferSRV;
         }
 
         const Core::Float3& GetCenter() const {
-            return Bounds.GetCenter();
+            return m_Bounds.GetCenter();
         }
         const Core::Float3& GetOrigin() const {
-            return Bounds.Min;
+            return m_Bounds.Min;
         }
         const Core::UInt3& GetGridSize() const {
-			return Core::UInt3(GridSizeX, GridSizeY, GridSizeZ);
+			return Core::UInt3(m_GridSizeX, m_GridSizeY, m_GridSizeZ);
 		}
 
         const Engine::DistanceFieldAtlas& GetAtlas() const {
-            return *Atlas;
+            return *m_Atlas;
         }
 
     public:
@@ -255,13 +255,13 @@ namespace Renderer
 
         uint32_t GetBlockResolution() const
         {
-            return Atlas->GetBlockResolution();
+            return m_Atlas->GetBlockResolution();
         }
 
 
         float GetBlockWorldSize() const
         {
-            return BlockWorldSize;
+            return m_BlockWorldSize;
         }
 
 
@@ -270,24 +270,24 @@ namespace Renderer
 
 
         uint32_t CalculateBlockId(
-            int32_t X,
-            int32_t Y,
-            int32_t Z) const;
+            int32_t x,
+            int32_t y,
+            int32_t z) const;
 
 
 
         void CalculateBlockCoordinate(
-            const Core::Float3& Position,
-            int32_t& X,
-            int32_t& Y,
-            int32_t& Z) const;
+            const Core::Float3& position,
+            int32_t& x,
+            int32_t& y,
+            int32_t& z) const;
 
 
 
         Core::BoxSphereBounds CalculateBlockBounds(
-            int32_t X,
-            int32_t Y,
-            int32_t Z) const;
+            int32_t x,
+            int32_t y,
+            int32_t z) const;
 
 
 
@@ -298,35 +298,35 @@ namespace Renderer
         // Physical Atlas
         //--------------------------------
 
-        std::unique_ptr<Engine::DistanceFieldAtlas> Atlas = nullptr;
+        std::unique_ptr<Engine::DistanceFieldAtlas> m_Atlas = nullptr;
 
 
 
         //--------------------------------
-        // Block²ÎÊı
+        // Blockå‚æ•°
         //--------------------------------
 
-        float VoxelSize = 1.0f;
+        float m_VoxelSize = 1.0f;
 
 
-        float BlockWorldSize = 64.0f;
+        float m_BlockWorldSize = 64.0f;
 
-        uint32_t GridSizeX = 0;
-        uint32_t GridSizeY = 0;
-        uint32_t GridSizeZ = 0;
+        uint32_t m_GridSizeX = 0;
+        uint32_t m_GridSizeY = 0;
+        uint32_t m_GridSizeZ = 0;
 
-        std::vector<GlobalDistanceFieldBlockIndex> BlockIndexBufferCPU;
-        RenderCore::RenderBufferSP BlockIndexBufferGPU;
-        RHI::RHIShaderResourceView* BlockIndexBufferSRV = nullptr;
+        std::vector<GlobalDistanceFieldBlockIndex> m_BlockIndexBufferCPU;
+        RenderCore::RenderBufferSP m_BlockIndexBufferGPU;
+        RHI::RHIShaderResourceView* m_BlockIndexBufferSRV = nullptr;
 
         //--------------------------------
-        // µ±Ç°World Block
+        // å½“å‰World Block
         //--------------------------------
 
-        std::unordered_map<uint32_t, GlobalDistanceFieldBlock> Blocks;
+        std::unordered_map<uint32_t, GlobalDistanceFieldBlock> m_Blocks;
 
-        Core::AABB Bounds;
-        bool IsInitialized = false;
+        Core::AABB m_Bounds;
+        bool m_bIsInitialized = false;
 
     };
 
@@ -352,11 +352,11 @@ namespace Renderer
     END_SHADER_PARAMETER_STRUCT(DistanceFieldOutParameters)
     struct DistanceFieldMergePassInput
     {
-        std::vector<DistanceFieldSourceParameters> sourceParams;
-        std::vector<DistanceFieldOutParameters> outputParams;
+        std::vector<DistanceFieldSourceParameters> SourceParams;
+        std::vector<DistanceFieldOutParameters> OutputParams;
         RenderCore::RenderTexture* InputSDFTexture = nullptr;
         RenderCore::RenderTexture* OutputSDFTexture = nullptr;
     };
-    bool ExecuteDistanceFieldMergePass(const DistanceFieldMergePassInput& Input);
+    bool ExecuteDistanceFieldMergePass(const DistanceFieldMergePassInput& input);
 
 }

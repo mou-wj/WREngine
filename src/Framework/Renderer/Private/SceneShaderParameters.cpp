@@ -7,135 +7,135 @@ namespace Renderer {
 
     void BuildShaderParameters(
         Scene*
-        Scene,
-        RenderCore::RenderGraphBuilder& Builder,
+        scene,
+        RenderCore::RenderGraphBuilder& builder,
         SceneShaderParameters&
-        Out) {
-        const auto& SceneLightResourceInfo = Scene->GetGPUResourceInfo().LightResourceInfo;
-        Out.LightParameters.PointLightCount = SceneLightResourceInfo.PointLightCount;
-        Out.LightParameters.SpotLightCount = SceneLightResourceInfo.SpotLightCount;
-        Out.LightParameters.DirectionalLightCount = SceneLightResourceInfo.DirectionalLightCount;
-        if (SceneLightResourceInfo.PointLightBuffer) {
-            auto rdgB = Builder.RegisterExternalBuffer(
+        out) {
+        const auto& sceneLightResourceInfo = scene->GetGPUResourceInfo().LightResourceInfo;
+        out.LightParameters.PointLightCount = sceneLightResourceInfo.PointLightCount;
+        out.LightParameters.SpotLightCount = sceneLightResourceInfo.SpotLightCount;
+        out.LightParameters.DirectionalLightCount = sceneLightResourceInfo.DirectionalLightCount;
+        if (sceneLightResourceInfo.PointLightBuffer) {
+            auto rdgB = builder.RegisterExternalBuffer(
                 "PointLights",
-                SceneLightResourceInfo.PointLightBuffer.get());
-            RenderCore::RenderGraphBufferSRVDesc SRVDesc;
-            SRVDesc.NumElements = 1;
-            SRVDesc.Stride = SceneLightResourceInfo.PointLightBuffer->GetRHI()->GetDesc().Size;
-            SRVDesc.Buffer = rdgB;
-            Out.LightParameters.PointLights = Builder.CreateBufferSRV("PointLightsSRV", SRVDesc);
+                sceneLightResourceInfo.PointLightBuffer.get());
+            RenderCore::RenderGraphBufferSRVDesc srvDesc;
+            srvDesc.NumElements = 1;
+            srvDesc.Stride = sceneLightResourceInfo.PointLightBuffer->GetRHI()->GetDesc().Size;
+            srvDesc.Buffer = rdgB;
+            out.LightParameters.PointLights = builder.CreateBufferSRV("PointLightsSRV", srvDesc);
         }
-        if (SceneLightResourceInfo.SpotLightBuffer) {
-            auto rdgB = Builder.RegisterExternalBuffer(
+        if (sceneLightResourceInfo.SpotLightBuffer) {
+            auto rdgB = builder.RegisterExternalBuffer(
                 "SpotLights",
-                SceneLightResourceInfo.SpotLightBuffer.get());
-            RenderCore::RenderGraphBufferSRVDesc SRVDesc;
-            SRVDesc.NumElements = 1;
-            SRVDesc.Stride = SceneLightResourceInfo.SpotLightBuffer->GetRHI()->GetDesc().Size;
-            SRVDesc.Buffer = rdgB;
-            Out.LightParameters.SpotLights = Builder.CreateBufferSRV("SpotLightsSRV", SRVDesc);
+                sceneLightResourceInfo.SpotLightBuffer.get());
+            RenderCore::RenderGraphBufferSRVDesc srvDesc;
+            srvDesc.NumElements = 1;
+            srvDesc.Stride = sceneLightResourceInfo.SpotLightBuffer->GetRHI()->GetDesc().Size;
+            srvDesc.Buffer = rdgB;
+            out.LightParameters.SpotLights = builder.CreateBufferSRV("SpotLightsSRV", srvDesc);
         }
-        if (SceneLightResourceInfo.DirectionalLightBuffer) {
-            auto rdgB = Builder.RegisterExternalBuffer(
+        if (sceneLightResourceInfo.DirectionalLightBuffer) {
+            auto rdgB = builder.RegisterExternalBuffer(
                 "DirectionalLights",
-                SceneLightResourceInfo.DirectionalLightBuffer.get());
-            RenderCore::RenderGraphBufferSRVDesc SRVDesc;
-            SRVDesc.NumElements = 1;
-            SRVDesc.Stride = SceneLightResourceInfo.DirectionalLightBuffer->GetRHI()->GetDesc().Size;
-            SRVDesc.Buffer = rdgB;
-            Out.LightParameters.DirectionalLights = Builder.CreateBufferSRV("DirectionalLightsSRV", SRVDesc);
+                sceneLightResourceInfo.DirectionalLightBuffer.get());
+            RenderCore::RenderGraphBufferSRVDesc srvDesc;
+            srvDesc.NumElements = 1;
+            srvDesc.Stride = sceneLightResourceInfo.DirectionalLightBuffer->GetRHI()->GetDesc().Size;
+            srvDesc.Buffer = rdgB;
+            out.LightParameters.DirectionalLights = builder.CreateBufferSRV("DirectionalLightsSRV", srvDesc);
         }
-        Out.LightParameters.LinearClampSampler = RenderCore::GlobalSampler.get();
-        //Ìî³äÒõÓ°²ÎÊý
-        Out.LightShadowParameters.NearestSampler = RenderCore::GlobalNearestSampler.get();
-        auto altasTexture = Scene->GetShadowMapAllocator().GetShadowAtlas();
-        auto pointLightShadowTextures = Scene->GetShadowMapAllocator().GetDedicatedPointLightShadowTextures();
-        auto parallelLightShadowTextures = Scene->GetShadowMapAllocator().GetDedicatedParallelLightShadowTextures();
+        out.LightParameters.LinearClampSampler = RenderCore::GlobalSampler.get();
+        //å¡«å……é˜´å½±å‚æ•°
+        out.LightShadowParameters.NearestSampler = RenderCore::GlobalNearestSampler.get();
+        auto altasTexture = scene->GetShadowMapAllocator().GetShadowAtlas();
+        auto pointLightShadowTextures = scene->GetShadowMapAllocator().GetDedicatedPointLightShadowTextures();
+        auto parallelLightShadowTextures = scene->GetShadowMapAllocator().GetDedicatedParallelLightShadowTextures();
         int i = 0;
         for (auto& t : pointLightShadowTextures) {
             if (i > 7) break;
-            auto rdgT = Builder.RegisterExternalTexture("PointLightShadowTexture", t);
-            Out.LightShadowParameters.PointLightShadows[i] = rdgT;
+            auto rdgT = builder.RegisterExternalTexture("PointLightShadowTexture", t);
+            out.LightShadowParameters.PointLightShadows[i] = rdgT;
             i++;
         }
-        auto unused2D = Builder.RegisterExternalTexture("Unused2DTexture", RenderCore::GlobalTestTexture.get());
-        auto unusedCube = Builder.RegisterExternalTexture("UnusedCubeTexture", RenderCore::GlobalEmptyCubeTexture.get());
-        auto unused2DArray = Builder.RegisterExternalTexture("UnusedTexture2dArray", RenderCore::GlobalEmptyTexture2DArray.get());
+        auto unused2D = builder.RegisterExternalTexture("Unused2DTexture", RenderCore::GlobalTestTexture.get());
+        auto unusedCube = builder.RegisterExternalTexture("UnusedCubeTexture", RenderCore::GlobalEmptyCubeTexture.get());
+        auto unused2DArray = builder.RegisterExternalTexture("UnusedTexture2dArray", RenderCore::GlobalEmptyTexture2DArray.get());
         for (; i < 8; i++) {
-            Out.LightShadowParameters.PointLightShadows[i] = unusedCube;
+            out.LightShadowParameters.PointLightShadows[i] = unusedCube;
         }
         i = 0;
         for (auto& t : parallelLightShadowTextures) {
             if (i > 3) break;
-            auto rdgT = Builder.RegisterExternalTexture("ParallelLightShadowTexture", t);
-            Out.LightShadowParameters.ParrallelLightShadows[i] = rdgT;
+            auto rdgT = builder.RegisterExternalTexture("ParallelLightShadowTexture", t);
+            out.LightShadowParameters.ParrallelLightShadows[i] = rdgT;
             i++;
         }
         for (; i < 4; i++) {
-            Out.LightShadowParameters.ParrallelLightShadows[i] = unused2DArray;
+            out.LightShadowParameters.ParrallelLightShadows[i] = unused2DArray;
         }
-        auto rdgT = Builder.RegisterExternalTexture("ShadowAtlasTexture", altasTexture);
-        Out.LightShadowParameters.LightShadowAtlas = rdgT;
-        auto rdgB = Builder.RegisterExternalBuffer("AtlasAccessTextureInfos", Scene->GetGPUResourceInfo().ShadowResourceInfo.AtlasAccessInfoBuffer.get());
-        RenderCore::RenderGraphBufferSRVDesc SRVDesc;
-        SRVDesc.NumElements = 1;
-        SRVDesc.Stride = Scene->GetGPUResourceInfo().ShadowResourceInfo.AtlasAccessInfoBuffer->GetRHI()->GetDesc().Size;
-        SRVDesc.Buffer = rdgB;
-        Out.LightShadowParameters.AtlasTextureInfos = Builder.CreateBufferSRV("AtlasAccessTextureInfosSRV", SRVDesc);
-        rdgB = Builder.RegisterExternalBuffer("LightShadowAccessInfos", Scene->GetGPUResourceInfo().ShadowResourceInfo.LightShadowInfoBuffer.get());
-        SRVDesc.NumElements = 1;
-        SRVDesc.Stride = Scene->GetGPUResourceInfo().ShadowResourceInfo.LightShadowInfoBuffer->GetRHI()->GetDesc().Size;
-        SRVDesc.Buffer = rdgB;
-        Out.LightShadowParameters.LightShadowInfos = Builder.CreateBufferSRV("LightShadowAccessInfosSRV", SRVDesc);
-        rdgB = Builder.RegisterExternalBuffer("DirectionalLightShadowViewInfos", Scene->GetGPUResourceInfo().ShadowResourceInfo.DirectionalLightShadowViewInfoBuffer.get());
-        SRVDesc.NumElements = 1;
-        SRVDesc.Stride = Scene->GetGPUResourceInfo().ShadowResourceInfo.DirectionalLightShadowViewInfoBuffer->GetRHI()->GetDesc().Size;
-        SRVDesc.Buffer = rdgB;
-        Out.LightShadowParameters.DirectionalLightViewInfos = Builder.CreateBufferSRV("DirectionalLightShadowViewInfosSRV", SRVDesc);
+        auto rdgT = builder.RegisterExternalTexture("ShadowAtlasTexture", altasTexture);
+        out.LightShadowParameters.LightShadowAtlas = rdgT;
+        auto rdgB = builder.RegisterExternalBuffer("AtlasAccessTextureInfos", scene->GetGPUResourceInfo().ShadowResourceInfo.AtlasAccessInfoBuffer.get());
+        RenderCore::RenderGraphBufferSRVDesc srvDesc;
+        srvDesc.NumElements = 1;
+        srvDesc.Stride = scene->GetGPUResourceInfo().ShadowResourceInfo.AtlasAccessInfoBuffer->GetRHI()->GetDesc().Size;
+        srvDesc.Buffer = rdgB;
+        out.LightShadowParameters.AtlasTextureInfos = builder.CreateBufferSRV("AtlasAccessTextureInfosSRV", srvDesc);
+        rdgB = builder.RegisterExternalBuffer("LightShadowAccessInfos", scene->GetGPUResourceInfo().ShadowResourceInfo.LightShadowInfoBuffer.get());
+        srvDesc.NumElements = 1;
+        srvDesc.Stride = scene->GetGPUResourceInfo().ShadowResourceInfo.LightShadowInfoBuffer->GetRHI()->GetDesc().Size;
+        srvDesc.Buffer = rdgB;
+        out.LightShadowParameters.LightShadowInfos = builder.CreateBufferSRV("LightShadowAccessInfosSRV", srvDesc);
+        rdgB = builder.RegisterExternalBuffer("DirectionalLightShadowViewInfos", scene->GetGPUResourceInfo().ShadowResourceInfo.DirectionalLightShadowViewInfoBuffer.get());
+        srvDesc.NumElements = 1;
+        srvDesc.Stride = scene->GetGPUResourceInfo().ShadowResourceInfo.DirectionalLightShadowViewInfoBuffer->GetRHI()->GetDesc().Size;
+        srvDesc.Buffer = rdgB;
+        out.LightShadowParameters.DirectionalLightViewInfos = builder.CreateBufferSRV("DirectionalLightShadowViewInfosSRV", srvDesc);
         
-        auto& SplitBuffer = Scene->GetGPUResourceInfo().ShadowResourceInfo.SplitBuffer;
-        auto splitBuffer = Builder.RegisterExternalBuffer("SplitBuffer", SplitBuffer.get());
+        auto& sceneSplitBuffer = scene->GetGPUResourceInfo().ShadowResourceInfo.SplitBuffer;
+        auto splitBuffer = builder.RegisterExternalBuffer("SplitBuffer", sceneSplitBuffer.get());
         
-        RenderCore::RenderGraphBufferSRVDesc Desc;
-        Desc.Buffer = splitBuffer;
-        Desc.Format = ERHIFormat::R32_Float;
-        Desc.NumElements = splitBuffer->GetRHIBuffer()->GetDesc().Size / sizeof(float);
-        Desc.Stride = sizeof(float);
-        auto splitBufferSRV = Builder.CreateBufferSRV("SplitBufferSRV", Desc);
-		Out.LightShadowParameters.SplitBuffer = splitBufferSRV;
+        RenderCore::RenderGraphBufferSRVDesc desc;
+        desc.Buffer = splitBuffer;
+        desc.Format = ERHIFormat::R32_Float;
+        desc.NumElements = splitBuffer->GetRHIBuffer()->GetDesc().Size / sizeof(float);
+        desc.Stride = sizeof(float);
+        auto splitBufferSRV = builder.CreateBufferSRV("SplitBufferSRV", desc);
+		out.LightShadowParameters.SplitBuffer = splitBufferSRV;
 
-        //Ìî³ä¾àÀë³¡²ÎÊý
+        //å¡«å……è·ç¦»åœºå‚æ•°
 		
 
     }
 
-    void BuildGlobalDistanceFieldParameters(Scene* Scene, RenderCore::RenderGraphBuilder& Builder, SceneGlobalDistanceFieldParameters& Out)
+    void BuildGlobalDistanceFieldParameters(Scene* scene, RenderCore::RenderGraphBuilder& builder, SceneGlobalDistanceFieldParameters& out)
     {
-        auto& DistanceFieldResourceInfo = Scene->GetGPUResourceInfo().DistanceFieldResourceInfo;
-        Out.BlockSize = Core::Float3(5, 5, 5);
-        Out.DistanceFieldVoxelSize = 5 / 64.0;
-        Out.DistanceSampler = RenderCore::GlobalSampler.get();
-        Out.GlobalDistanceFieldAtlasResolution = Core::UInt3(256, 256, 256);
-        Out.GlobalDistanceFieldGridSize = DistanceFieldResourceInfo.StaticDistanceField.GetGridSize();
-        Out.GlobalDistanceFieldOrigin = DistanceFieldResourceInfo.StaticDistanceField.GetOrigin();
-        auto rdgGlobalDistenctAtlas = Builder.RegisterExternalTexture("GlobalDistanceFieldAtlas", DistanceFieldResourceInfo.StaticDistanceField.GetAtlas().GetAtlasTexture());
-        Out.GlobalDistanceFieldAtlas = rdgGlobalDistenctAtlas;
-        Out.AllocateBlockIndexInfos = DistanceFieldResourceInfo.StaticDistanceField.GetBlockIndexBufferSRV();
+        auto& distanceFieldResourceInfo = scene->GetGPUResourceInfo().DistanceFieldResourceInfo;
+        out.BlockSize = Core::Float3(5, 5, 5);
+        out.DistanceFieldVoxelSize = 5 / 64.0;
+        out.DistanceSampler = RenderCore::GlobalSampler.get();
+        out.GlobalDistanceFieldAtlasResolution = Core::UInt3(256, 256, 256);
+        out.GlobalDistanceFieldGridSize = distanceFieldResourceInfo.StaticDistanceField.GetGridSize();
+        out.GlobalDistanceFieldOrigin = distanceFieldResourceInfo.StaticDistanceField.GetOrigin();
+        auto rdgGlobalDistenctAtlas = builder.RegisterExternalTexture("GlobalDistanceFieldAtlas", distanceFieldResourceInfo.StaticDistanceField.GetAtlas().GetAtlasTexture());
+        out.GlobalDistanceFieldAtlas = rdgGlobalDistenctAtlas;
+        out.AllocateBlockIndexInfos = distanceFieldResourceInfo.StaticDistanceField.GetBlockIndexBufferSRV();
     }
 
-    void BuildEvnIBLLightParameters(Scene* Scene, RenderCore::RenderGraphBuilder& Builder, SceneEvnIBLLightParameters& Out)
+    void BuildEvnIBLLightParameters(Scene* scene, RenderCore::RenderGraphBuilder& builder, SceneEvnIBLLightParameters& out)
     {
-        const auto& SceneLightResourceInfo = Scene->GetGPUResourceInfo().LightResourceInfo;
-        if (SceneLightResourceInfo.IBLDiffuseTexture != nullptr && SceneLightResourceInfo.IBLSpecularTexture != nullptr) {
+        const auto& sceneLightResourceInfo = scene->GetGPUResourceInfo().LightResourceInfo;
+        if (sceneLightResourceInfo.IBLDiffuseTexture != nullptr && sceneLightResourceInfo.IBLSpecularTexture != nullptr) {
 
 
-            auto rdgT = Builder.RegisterExternalTexture("IBLDiffuseTexture", SceneLightResourceInfo.IBLDiffuseTexture);
-            Out.IBLDiffuseMap = rdgT;
-            rdgT = Builder.RegisterExternalTexture("IBLSpecularTexture", SceneLightResourceInfo.IBLSpecularTexture);
-            Out.IBLSpecularMap = rdgT;
-            rdgT = Builder.RegisterExternalTexture("IBLLutTexture", GlobalIBLLutTexture.get());
-            Out.LinearClampIBLSampler = RenderCore::GlobalSampler.get();
-            Out.IBLLut = rdgT;
+            auto rdgT = builder.RegisterExternalTexture("IBLDiffuseTexture", sceneLightResourceInfo.IBLDiffuseTexture);
+            out.IBLDiffuseMap = rdgT;
+            rdgT = builder.RegisterExternalTexture("IBLSpecularTexture", sceneLightResourceInfo.IBLSpecularTexture);
+            out.IBLSpecularMap = rdgT;
+            rdgT = builder.RegisterExternalTexture("IBLLutTexture", GlobalIBLLutTexture.get());
+            out.LinearClampIBLSampler = RenderCore::GlobalSampler.get();
+            out.IBLLut = rdgT;
         }
         else {
             RenderCore::RenderGraphTextureDesc emptyCubeMapDesc;
@@ -146,12 +146,12 @@ namespace Renderer {
             emptyCubeMapDesc.MipLevels = 1;
             emptyCubeMapDesc.Usage = RHI::ERHITextureCreateFlag::ShaderResource;
             emptyCubeMapDesc.Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
-            Out.LinearClampIBLSampler = RenderCore::GlobalSampler.get();
-            auto rdgT = Builder.CreateTexture("EmptyCubeMap", emptyCubeMapDesc);
-            Out.IBLDiffuseMap = rdgT;
-            Out.IBLSpecularMap = rdgT;
-            rdgT = Builder.RegisterExternalTexture("IBLLutTexture", GlobalIBLLutTexture.get());
-            Out.IBLLut = rdgT;
+            out.LinearClampIBLSampler = RenderCore::GlobalSampler.get();
+            auto rdgT = builder.CreateTexture("EmptyCubeMap", emptyCubeMapDesc);
+            out.IBLDiffuseMap = rdgT;
+            out.IBLSpecularMap = rdgT;
+            rdgT = builder.RegisterExternalTexture("IBLLutTexture", GlobalIBLLutTexture.get());
+            out.IBLLut = rdgT;
 
         }
     }

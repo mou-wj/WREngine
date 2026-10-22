@@ -3,7 +3,7 @@
 namespace Renderer {
 	class DefferedSceneRenderer : public SceneRenderer {
 	public:
-		// Ò»Ö¡äÖÈ¾Èë¿Ú
+		// ä¸€å¸§æ¸²æŸ“å…¥å£
 		void Build(RenderCore::RenderGraphBuilder& graphBuilder) override;
 	};
 }

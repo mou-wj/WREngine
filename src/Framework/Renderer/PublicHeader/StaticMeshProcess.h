@@ -13,12 +13,12 @@ namespace Renderer {
 
     /*
 ===============================================================================
-    MeshBatchElement (ÍêÈ«»ùÓÚÖ¸ÕëµÄÔ­×Ó»æÖÆµ¥Ôª)
+    MeshBatchElement (å®Œå…¨åŸºäºæŒ‡é’ˆçš„åŸå­ç»˜åˆ¶å•å…ƒ)
 ===============================================================================
 */
     struct MeshBatchElement {
 
-        // ¼¸ºÎ»æÖÆÇø¼ä¿ØÖÆ
+        // å‡ ä½•ç»˜åˆ¶åŒºé—´æ§åˆ¶
         uint32_t FirstIndex = 0;
         uint32_t NumIndices = 0;
         int32_t BaseVertexIndex = 0;
@@ -30,21 +30,21 @@ namespace Renderer {
 
     /*
     ===============================================================================
-        MeshBatch (×´Ì¬Ò»ÖÂµÄÅú´Î¼¯ºÏ)
+        MeshBatch (çŠ¶æ€ä¸€è‡´çš„æ‰¹æ¬¡é›†åˆ)
     ===============================================================================
     */
     struct MeshBatch {
-        // ÄÚÇ¶µÄÔªËØÊı×é
+        // å†…åµŒçš„å…ƒç´ æ•°ç»„
         std::vector<MeshBatchElement> Elements;
 
-        // ºËĞÄäÖÈ¾×´Ì¬£¨Ò»¸öÅú´ÎÄÚ±ØĞëÑÏ¸ñÒ»ÖÂ£¬´¥·¢Í¬Ò»¸ö PSO£©
+        // æ ¸å¿ƒæ¸²æŸ“çŠ¶æ€ï¼ˆä¸€ä¸ªæ‰¹æ¬¡å†…å¿…é¡»ä¸¥æ ¼ä¸€è‡´ï¼Œè§¦å‘åŒä¸€ä¸ª PSOï¼‰
         RenderCore::VertexFactory* VertexFactory = nullptr;
         Engine::MaterialRenderProxy * MaterialProxy = nullptr;
 
-        // ¼¸ºÎÊı¾İÔ´Ö¸ÕëÅ²µ½ÁË Batch ×´Ì¬²ã£¬ÍêÃÀÊÊÅäÄãµÄ RenderCore ×ÊÔ´
+        // å‡ ä½•æ•°æ®æºæŒ‡é’ˆæŒªåˆ°äº† Batch çŠ¶æ€å±‚ï¼Œå®Œç¾é€‚é…ä½ çš„ RenderCore èµ„æº
         RenderCore::RenderBuffer* IndexBuffer = nullptr;
 
-        // ¹ÜÏß×´Ì¬±êÖ¾Î»
+        // ç®¡çº¿çŠ¶æ€æ ‡å¿—ä½
         RHI::ERHIFrontFace FrontFace = RHI::ERHIFrontFace::CounterClockwise;
         uint32_t StartInstance = 0;
         std::vector<uint32_t> InstanceDataIds;

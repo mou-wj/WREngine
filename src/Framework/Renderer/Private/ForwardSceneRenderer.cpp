@@ -14,7 +14,7 @@ namespace Renderer {
 
     void ForwardSceneRenderer::Build(RenderCore::RenderGraphBuilder& builder)
     {
-        auto SceneColorTargetTexture = SceneTextures.SceneColor;
+        auto sceneColorTargetTexture = SceneTextures.SceneColor;
         //ClearRenderTarget
 		RenderTargetBindingSlots renderTargetBindingSlots;
         renderTargetBindingSlots.NumColorRenderTargets = 1;
@@ -23,26 +23,26 @@ namespace Renderer {
         AddClearRenderTargetsPass(builder, renderTargetBindingSlots);
 
         auto sceneEnvMap = Scene->GetGPUResourceInfo().LightResourceInfo.IBLSpecularTexture;
-        //��renderer���Ƶ�DefferedOutputColor
-        //��ȡ����static mesh primitive
+        // Build forward rendering passes for each view.
+        // Collect the views and static mesh batches.
 		const auto& views = Views->GetViews();
         for (auto view : views) {
             UpdateCascadeShadowInfo(Scene,builder, view);
-            MeshBatchList DrawMeshBatches;
-            StaticMeshDrawBuild(Scene,view, DrawMeshBatches);
-            for (auto MeshBatch : DrawMeshBatches) {
+            MeshBatchList drawMeshBatches;
+            StaticMeshDrawBuild(Scene,view, drawMeshBatches);
+            for (auto meshBatch : drawMeshBatches) {
                 auto vsfShaderType = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::MeshMaterial]["StaticMeshMaterialShaderVS"];
                 auto psfShaderType = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::MeshMaterial]["StaticMeshMaterialShaderPS"];
                 auto vfType = VertexFactoryType::GetRegisterMap()["LocalVertexFactory"];
-                auto vfFlags = MeshBatch.VertexFactory->GetVertexFactoryFlags();
-                bool supportInstance = MeshBatch.InstanceDataIds.size() > 1;
+                auto vfFlags = meshBatch.VertexFactory->GetVertexFactoryFlags();
+                bool supportInstance = meshBatch.InstanceDataIds.size() > 1;
                 if (supportInstance) {
                     LocalVertexFactoryFeatureFlags flags;
                     flags.PackedFlags= vfFlags;
 					flags.SupportsInstanceData = true;
                     vfFlags = flags.PackedFlags;
                 }
-                auto shdingMode = MeshBatch.MaterialProxy->GetParent()->GetShadingModel();
+                auto shdingMode = meshBatch.MaterialProxy->GetParent()->GetShadingModel();
                 shdingMode = EShadingModel::Lit;
             
                 MeshMaterialShaderKey vsKey;
@@ -54,7 +54,7 @@ namespace Renderer {
             
                 auto vertexShader = GMeshMaterialShaderMap.GetShader(vsKey);
             
-                //����pixel����
+                // Select the pixel shader permutation.
                 MeshMaterialShaderKey psKey;
                 psKey.ShaderType = static_cast<MeshMaterialShaderType*>(psfShaderType);
                 psKey.VF = vfType;
@@ -64,11 +64,11 @@ namespace Renderer {
                 auto pixelShader = GMeshMaterialShaderMap.GetShader(psKey);
             
             
-                // ������դ��״̬
+                // Create the rasterizer state.
                 RHI::RHIRasterizerStateDesc rasterizerDesc;
                 rasterizerDesc.PolygonMode = RHI::ERHIPolygonMode::Fill;
                 rasterizerDesc.CullMode = RHI::ERHICullMode::Back;
-                rasterizerDesc.FrontFace = MeshBatch.FrontFace;
+                rasterizerDesc.FrontFace = meshBatch.FrontFace;
                 rasterizerDesc.LineWidth = 1.0f;
                 rasterizerDesc.bDepthBiasEnable = false;
             
@@ -78,7 +78,7 @@ namespace Renderer {
             
             
             
-                // �������ģ��״̬
+                // Create the depth and stencil state.
                 RHI::RHIDepthStencilStateDesc depthStencilDesc;
                 depthStencilDesc.bDepthTestEnable = true;
                 depthStencilDesc.bDepthWriteEnable = true;
@@ -86,16 +86,16 @@ namespace Renderer {
             
                 auto depthStencilState = RHIPipelineStateCache::GetOrCreateDepthStencilState(depthStencilDesc);
                 RHI::RHIGraphicsPipelineStateDesc pipelineDesc;
-                // ����ͼ�ι���״̬
+                // Set graphics shader stages.
                 pipelineDesc.ShaderStages.VertexShader = dynamic_cast<RHI::RHIVertexShader*>(vertexShader->GetRHIShader());
                 pipelineDesc.ShaderStages.FragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(pixelShader->GetRHIShader());
-                // ����������ø����������...
+                // Attach the graphics state objects.
                 pipelineDesc.RasterizerState = rasterizerState;
             
                 pipelineDesc.DepthStencilState = depthStencilState;
-                pipelineDesc.VertexDescState = MeshBatch.VertexFactory->GetRHIVertexDescState();
+                pipelineDesc.VertexDescState = meshBatch.VertexFactory->GetRHIVertexDescState();
                 if (supportInstance) {
-                    LocalVertexFactory* vf = dynamic_cast<LocalVertexFactory*>(MeshBatch.VertexFactory);
+                    LocalVertexFactory* vf = dynamic_cast<LocalVertexFactory*>(meshBatch.VertexFactory);
                     pipelineDesc.VertexDescState = vf->GetRHIInstancedVertexDescState();
                 }
 
@@ -113,19 +113,19 @@ namespace Renderer {
                 END_SHADER_PARAMETER_STRUCT(PassParameters)
                 auto* params = builder.AllocateParameter<PassParameters>();
                 if (shdingMode == EShadingModel::Lit) {
-                    //�������Լ�������Ϣ
+                    // Build scene and material shader parameters.
                     BuildShaderParameters(Scene, builder, params->pixelParameters.Scene);
-                    BuildShaderParameters(MeshBatch.MaterialProxy, builder, params->pixelParameters.Material);
+                    BuildShaderParameters(meshBatch.MaterialProxy, builder, params->pixelParameters.Material);
                 }
             
-				auto& batch = MeshBatch;
+				auto& batch = meshBatch;
                 auto materialOwner = batch.MaterialProxy->GetParent();
             
-                //��ɫ���
+                // Configure color blending.
                 if (materialOwner->GetBlendMode() == EBlendMode::Opaque)
                 {
                     RHI::RHIColorBlendStateDesc blendDesc;
-                    // ������ɫ���״̬
+                    // Configure opaque color blending.
                     RHI::RHIColorBlendAttachmentDesc blendAttachDesc;
                     blendAttachDesc.bBlendEnable = false;
                     std::vector<RHI::RHIColorBlendAttachmentDesc> attachments = { blendAttachDesc };
@@ -135,7 +135,7 @@ namespace Renderer {
                 }
                 else {
                     RHI::RHIColorBlendStateDesc blendDesc;
-                    // ������ɫ���״̬
+                    // Configure translucent color blending.
                     RHI::RHIColorBlendAttachmentDesc blendAttachDesc;
                     blendAttachDesc.bBlendEnable = true;
                     std::vector<RHI::RHIColorBlendAttachmentDesc> attachments = { blendAttachDesc };
@@ -145,7 +145,7 @@ namespace Renderer {
                 }
                 auto pipeline = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(pipelineDesc);
                 
-                // ����
+                // Color blend attachments.
             
             
                 params->vertexParameters.vertexFactoryParameters.CameraWorldPosition = view.CameraWorldPos;
@@ -165,31 +165,31 @@ namespace Renderer {
                 params->pixelParameters.renderTargetSlots.DepthStencil.DepthAction = ERenderTargetActions::Load_Store;
             
                 // -------------------------------------
-                // ���� pass
+                // Add the draw pass.
                 // -------------------------------------
                 builder.AddPass<PassParameters>(
                     "StaticMeshDrawPass",
                     PassParameters::GetMetaData(),
                     params,
                     EPassFlag::Graphic,
-                    [=](RHI::RHICommandListBase& RHICmdList)
+                    [=](RHI::RHICommandListBase& rhiCmdList)
                     {
-                        auto& cmd = static_cast<RHI::RHIGraphicCommandList&>(RHICmdList);
+                        auto& cmd = static_cast<RHI::RHIGraphicCommandList&>(rhiCmdList);
                         PassParameters* materialParams = params;
             
                         cmd.SetGraphicPipelineState(pipeline);
-                        //��vertexfactory
+                        // Bind the vertex factory.
                         batch.VertexFactory->Bind(cmd);
                         if (supportInstance) {
-                            LocalVertexFactory* vf = dynamic_cast<LocalVertexFactory*>(MeshBatch.VertexFactory);
-                            vf->BindInstanceBuffer(cmd,MeshBatch.InstanceDataBufferAccessor->GetInstanceIdBuffer()->GetRHI(), 0);
+                            LocalVertexFactory* vf = dynamic_cast<LocalVertexFactory*>(meshBatch.VertexFactory);
+                            vf->BindInstanceBuffer(cmd,meshBatch.InstanceDataBufferAccessor->GetInstanceIdBuffer()->GetRHI(), 0);
                         }
                         cmd.SetViewport(view.Viewport.X, view.Viewport.Y, view.Viewport.Width, view.Viewport.Height, 0.0f, 1.0f);
                         cmd.SetScissor(view.Viewport.X, view.Viewport.Y, view.Viewport.Width, view.Viewport.Height);
-                        //����vertex����
+                        // Bind vertex shader parameters.
                         SetShaderParameters(cmd, vertexShader, &params->vertexParameters);
             
-                        //����pixel����
+                        // Bind pixel shader parameters.
                         SetShaderParameters(cmd, pixelShader, &params->pixelParameters);
                         auto boundRenderTarget = params->pixelParameters.renderTargetSlots.GetBoundRenderTarget();
                         RHIRenderPassInfo passInfo;
@@ -200,7 +200,7 @@ namespace Renderer {
                         passInfo.RenderArea.Width = view.Viewport.Width;
                         passInfo.RenderArea.Height = view.Viewport.Height;
                         cmd.BeginRenderPass(passInfo);
-                        //����
+                        // Draw the mesh batch elements.
                         for (auto element : batch.Elements) {
                             cmd.DrawIndexed(batch.IndexBuffer->GetRHI(), element.NumIndices, batch.InstanceDataIds.size(), element.FirstIndex, element.BaseVertexIndex, batch.StartInstance);
                         }

@@ -15,13 +15,13 @@ namespace Renderer
     */
 
     bool StaticMeshMaterialShaderVS::ShouldCompilePermutation(
-        const RenderCore::ShaderPermutationParameters& Parameters)
+        const RenderCore::ShaderPermutationParameters& parameters)
     {
-        const MeshMaterialShaderPermutationParameters& MeshParams =
-            static_cast<const MeshMaterialShaderPermutationParameters&>(Parameters);
+        const MeshMaterialShaderPermutationParameters& meshParams =
+            static_cast<const MeshMaterialShaderPermutationParameters&>(parameters);
 
-        // ’‚¿Ô÷ª◊ˆ◊Óª˘¥°µƒπ˝¬À
-        if (MeshParams.VFType == nullptr)
+        // ËøôÈáåÂè™ÂÅöÊúÄÂü∫Á°ÄÁöÑËøáÊª§
+        if (meshParams.VFType == nullptr)
         {
             return false;
         }
@@ -29,14 +29,14 @@ namespace Renderer
     }
 
     void StaticMeshMaterialShaderVS::ModifyShaderCompilerEnvironment(
-        const RenderCore::ShaderPermutationParameters& Parameters,
-        RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        const RenderCore::ShaderPermutationParameters& parameters,
+        RenderCore::ShaderCompilerEnvironment& outEnvironment)
     {
-        const MeshMaterialShaderPermutationParameters& MeshParams =
-            static_cast<const MeshMaterialShaderPermutationParameters&>(Parameters);
+        const MeshMaterialShaderPermutationParameters& meshParams =
+            static_cast<const MeshMaterialShaderPermutationParameters&>(parameters);
 
         // VS define
-        OutEnvironment.SetDefine("VERTEX_SHADER", 1);
+        outEnvironment.SetDefine("VERTEX_SHADER", 1);
 
 
 
@@ -66,12 +66,12 @@ namespace Renderer
         */
 
         bool StaticMeshMaterialShaderPS::ShouldCompilePermutation(
-            const RenderCore::ShaderPermutationParameters& Parameters)
+            const RenderCore::ShaderPermutationParameters& parameters)
     {
-        const MeshMaterialShaderPermutationParameters& MeshParams =
-            static_cast<const MeshMaterialShaderPermutationParameters&>(Parameters);
+        const MeshMaterialShaderPermutationParameters& meshParams =
+            static_cast<const MeshMaterialShaderPermutationParameters&>(parameters);
 
-        if (MeshParams.VFType == nullptr)
+        if (meshParams.VFType == nullptr)
         {
             return false;
         }
@@ -80,14 +80,14 @@ namespace Renderer
     }
 
     void StaticMeshMaterialShaderPS::ModifyShaderCompilerEnvironment(
-        const RenderCore::ShaderPermutationParameters& Parameters,
-        RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        const RenderCore::ShaderPermutationParameters& parameters,
+        RenderCore::ShaderCompilerEnvironment& outEnvironment)
     {
-        const MeshMaterialShaderPermutationParameters& MeshParams =
-            static_cast<const MeshMaterialShaderPermutationParameters&>(Parameters);
+        const MeshMaterialShaderPermutationParameters& meshParams =
+            static_cast<const MeshMaterialShaderPermutationParameters&>(parameters);
 
-        OutEnvironment.SetDefine("PIXEL_SHADER", 1);
-        Engine::ModifyShaderCompilerEnvironment(MeshParams.MaterialParams, OutEnvironment);
+        outEnvironment.SetDefine("PIXEL_SHADER", 1);
+        Engine::ModifyShaderCompilerEnvironment(meshParams.MaterialParams, outEnvironment);
     }
 
 
@@ -113,12 +113,12 @@ namespace Renderer
            */
 
         bool StaticMeshMaterialGBufferShaderPS::ShouldCompilePermutation(
-            const RenderCore::ShaderPermutationParameters& Parameters)
+            const RenderCore::ShaderPermutationParameters& parameters)
     {
-        const MeshMaterialShaderPermutationParameters& MeshParams =
-            static_cast<const MeshMaterialShaderPermutationParameters&>(Parameters);
+        const MeshMaterialShaderPermutationParameters& meshParams =
+            static_cast<const MeshMaterialShaderPermutationParameters&>(parameters);
 
-        if (MeshParams.VFType == nullptr)
+        if (meshParams.VFType == nullptr)
         {
             return false;
         }
@@ -127,14 +127,14 @@ namespace Renderer
     }
 
     void StaticMeshMaterialGBufferShaderPS::ModifyShaderCompilerEnvironment(
-        const RenderCore::ShaderPermutationParameters& Parameters,
-        RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        const RenderCore::ShaderPermutationParameters& parameters,
+        RenderCore::ShaderCompilerEnvironment& outEnvironment)
     {
-        const MeshMaterialShaderPermutationParameters& MeshParams =
-            static_cast<const MeshMaterialShaderPermutationParameters&>(Parameters);
+        const MeshMaterialShaderPermutationParameters& meshParams =
+            static_cast<const MeshMaterialShaderPermutationParameters&>(parameters);
 
-        OutEnvironment.SetDefine("PIXEL_SHADER", 1);
-        Engine::ModifyShaderCompilerEnvironment(MeshParams.MaterialParams, OutEnvironment);
+        outEnvironment.SetDefine("PIXEL_SHADER", 1);
+        Engine::ModifyShaderCompilerEnvironment(meshParams.MaterialParams, outEnvironment);
 
     }
 
@@ -153,14 +153,14 @@ namespace Renderer
         "MainPS",
         ERHIShaderFrequency::Fragment
     )
-    void StaticMeshMaterialDefferedShadingCS::ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+    void StaticMeshMaterialDefferedShadingCS::ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
     {
-        const MaterialShaderPermutationParameters& MeshParams =
-            static_cast<const MaterialShaderPermutationParameters&>(Parameters);
-        Engine::ModifyShaderCompilerEnvironment(MeshParams.MaterialParams, OutEnvironment);
+        const MaterialShaderPermutationParameters& meshParams =
+            static_cast<const MaterialShaderPermutationParameters&>(parameters);
+        Engine::ModifyShaderCompilerEnvironment(meshParams.MaterialParams, outEnvironment);
         PermutationDomain domain;
-        domain.SetFromId(Parameters.PermutationId);
-        domain.ModifyCompilationEnvironment(OutEnvironment);
+        domain.SetFromId(parameters.PermutationId);
+        domain.ModifyCompilationEnvironment(outEnvironment);
     }
 
     IMPLEMENT_MATERIAL_SHADER_TYPE(
@@ -179,18 +179,18 @@ namespace Renderer
      */
 
     bool PositionOnlyVS::ShouldCompilePermutation(
-        const RenderCore::ShaderPermutationParameters& Parameters)
+        const RenderCore::ShaderPermutationParameters& parameters)
     {
         return true;
     }
 
     void PositionOnlyVS::ModifyShaderCompilerEnvironment(
-        const RenderCore::ShaderPermutationParameters& Parameters,
-        RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        const RenderCore::ShaderPermutationParameters& parameters,
+        RenderCore::ShaderCompilerEnvironment& outEnvironment)
     {
         PermutationDomain domain;
-        domain.SetFromId(Parameters.PermutationId);
-        domain.ModifyCompilationEnvironment(OutEnvironment);
+        domain.SetFromId(parameters.PermutationId);
+        domain.ModifyCompilationEnvironment(outEnvironment);
     }
 
 
@@ -217,12 +217,12 @@ namespace Renderer
      */
     
     bool DepthShadowPassPS::ShouldCompilePermutation(
-        const RenderCore::ShaderPermutationParameters& Parameters)
+        const RenderCore::ShaderPermutationParameters& parameters)
     {
-        const MeshMaterialShaderPermutationParameters& MeshParams =
-            static_cast<const MeshMaterialShaderPermutationParameters&>(Parameters);
+        const MeshMaterialShaderPermutationParameters& meshParams =
+            static_cast<const MeshMaterialShaderPermutationParameters&>(parameters);
     
-        if (MeshParams.VFType == nullptr)
+        if (meshParams.VFType == nullptr)
         {
             return false;
         }
@@ -231,12 +231,12 @@ namespace Renderer
     }
     
     void DepthShadowPassPS::ModifyShaderCompilerEnvironment(
-        const RenderCore::ShaderPermutationParameters& Parameters,
-        RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        const RenderCore::ShaderPermutationParameters& parameters,
+        RenderCore::ShaderCompilerEnvironment& outEnvironment)
     {
-        PermutationDomain Domain;
-        Domain.SetFromId(Parameters.PermutationId);
-        Domain.ModifyCompilationEnvironment(OutEnvironment);
+        PermutationDomain domain;
+        domain.SetFromId(parameters.PermutationId);
+        domain.ModifyCompilationEnvironment(outEnvironment);
     }
     
     
@@ -257,32 +257,32 @@ namespace Renderer
 
 
     RHI::RHIVertexDescState* GetVertexOnlyState(bool useIntance) {
-        RHI::RHIVertexDescStateDesc Desc;
+        RHI::RHIVertexDescStateDesc desc;
 
-        // “ª∏ˆ Vertex Buffer
-        Desc.Bindings.push_back({
+        // ‰∏Ä‰∏™ Vertex Buffer
+        desc.Bindings.push_back({
             .Binding = 0,
             .Stride = sizeof(float) * 3,
             .InputRate = ERHIInputRate::PerVertex
             });
 
         // Position
-        Desc.Attributes.push_back({
+        desc.Attributes.push_back({
             .Location = 0,
             .Binding = 0,
             .Offset = 0,
             .Format = ERHIFormat::R32G32B32_Float
             });
         if (useIntance) {
-            // “ª∏ˆ Vertex Buffer
-            Desc.Bindings.push_back({
+            // ‰∏Ä‰∏™ Vertex Buffer
+            desc.Bindings.push_back({
                 .Binding = 1,
                 .Stride = sizeof(uint32_t),
                 .InputRate = ERHIInputRate::PerInstance
                 });
 
             // Position
-            Desc.Attributes.push_back({
+            desc.Attributes.push_back({
                 .Location = 1,
                 .Binding = 1,
                 .Offset = 0,
@@ -291,6 +291,6 @@ namespace Renderer
 
 
         }
-        return RHI::RHIPipelineStateCache::GetOrCreateVertexDescState(Desc);
+        return RHI::RHIPipelineStateCache::GetOrCreateVertexDescState(desc);
     }
 }

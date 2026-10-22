@@ -26,7 +26,7 @@ namespace Renderer {
     {
         auto vs = RenderCore::GShaderMap.GetShader<Renderer::DrawSkyVS>(0);
         auto ps = RenderCore::GShaderMap.GetShader<Renderer::DrawSkyPS>(0);
-        // ´´½¨¹âÕ¤»¯×´Ì¬
+        // åˆ›å»ºå…‰æ …åŒ–çŠ¶æ€
         RHI::RHIRasterizerStateDesc rasterizerDesc;
         rasterizerDesc.PolygonMode = RHI::ERHIPolygonMode::Fill;
         rasterizerDesc.CullMode = RHI::ERHICullMode::None;
@@ -40,7 +40,7 @@ namespace Renderer {
 
 
 
-        // ´´½¨Éî¶ÈÄ£°å×´Ì¬
+        // åˆ›å»ºæ·±åº¦æ¨¡æ¿çŠ¶æ€
         RHI::RHIDepthStencilStateDesc depthStencilDesc;
         depthStencilDesc.bDepthTestEnable = true;
         depthStencilDesc.bDepthWriteEnable = true;
@@ -48,43 +48,43 @@ namespace Renderer {
 
         auto depthStencilState = RHIPipelineStateCache::GetOrCreateDepthStencilState(depthStencilDesc);
         RHI::RHIGraphicsPipelineStateDesc pipelineDesc;
-        // ´´½¨Í¼ĞÎ¹ÜÏß×´Ì¬
+        // åˆ›å»ºå›¾å½¢ç®¡çº¿çŠ¶æ€
         pipelineDesc.ShaderStages.VertexShader = dynamic_cast<RHI::RHIVertexShader*>(vs->GetRHIShader());
         pipelineDesc.ShaderStages.FragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(ps->GetRHIShader());
-        // ÕâÀï¿ÉÒÔÉèÖÃ¸ü¶à¹ÜÏßÅäÖÃ...
+        // è¿™é‡Œå¯ä»¥è®¾ç½®æ›´å¤šç®¡çº¿é…ç½®...
         pipelineDesc.RasterizerState = rasterizerState;
 
         pipelineDesc.DepthStencilState = depthStencilState;
-        RHI::RHIVertexDescStateDesc Desc;
+        RHI::RHIVertexDescStateDesc desc;
 
         //
-        // ´´½¨ Binding Descriptions
+        // åˆ›å»º Binding Descriptions
         //
 
-        RHI::RHIVertexBindingDesc BindingDesc;
-        BindingDesc.Binding = 0;
-        BindingDesc.Stride = sizeof(float) * 3;
-        BindingDesc.InputRate = ERHIInputRate::PerVertex;
+        RHI::RHIVertexBindingDesc bindingDesc;
+        bindingDesc.Binding = 0;
+        bindingDesc.Stride = sizeof(float) * 3;
+        bindingDesc.InputRate = ERHIInputRate::PerVertex;
 
-        Desc.Bindings.push_back(BindingDesc);
+        desc.Bindings.push_back(bindingDesc);
 
 
         //
-        // ´´½¨ Attribute Descriptions
+        // åˆ›å»º Attribute Descriptions
         //
-        RHI::RHIVertexAttributeDesc AttrDesc;
+        RHI::RHIVertexAttributeDesc attrDesc;
 
-        AttrDesc.Location = 0;
-        AttrDesc.Binding = 0;
-        AttrDesc.Offset = 0;
-        AttrDesc.Format = ERHIFormat::R32G32B32_Float;
+        attrDesc.Location = 0;
+        attrDesc.Binding = 0;
+        attrDesc.Offset = 0;
+        attrDesc.Format = ERHIFormat::R32G32B32_Float;
 
-        Desc.Attributes.push_back(AttrDesc);
-        auto vertexDescState = RHIPipelineStateCache::GetOrCreateVertexDescState(Desc);
+        desc.Attributes.push_back(attrDesc);
+        auto vertexDescState = RHIPipelineStateCache::GetOrCreateVertexDescState(desc);
         pipelineDesc.VertexDescState = vertexDescState;
 
         RHI::RHIColorBlendStateDesc blendDesc;
-        // ´´½¨ÑÕÉ«»ìºÏ×´Ì¬
+        // åˆ›å»ºé¢œè‰²æ··åˆçŠ¶æ€
         RHI::RHIColorBlendAttachmentDesc blendAttachDesc;
         blendAttachDesc.bBlendEnable = false;
         std::vector<RHI::RHIColorBlendAttachmentDesc> attachments = { blendAttachDesc };
@@ -126,29 +126,29 @@ namespace Renderer {
         params->psParam.renderTargetSlots.DepthStencil.DepthAction = ERenderTargetActions::Load_DontCare;
 
         // -------------------------------------
-        // Ìí¼Ó pass
+        // æ·»åŠ  pass
         // -------------------------------------
         builder.AddPass<DrawSkyPassParameters>(
             "StaticMeshDrawPass",
             DrawSkyPassParameters::GetMetaData(),
             params,
             RenderCore::EPassFlag::Graphic,
-            [=](RHI::RHICommandListBase& RHICmdList)
+            [=](RHI::RHICommandListBase& rhiCmdList)
             {
-                auto& cmd = static_cast<RHI::RHIGraphicCommandList&>(RHICmdList);
-                DrawSkyPassParameters* Params = params;
+                auto& cmd = static_cast<RHI::RHIGraphicCommandList&>(rhiCmdList);
+                DrawSkyPassParameters* passParams = params;
 
                 cmd.SetGraphicPipelineState(pipeline);
-                //°ó¶¨vertexfactory
+                //ç»‘å®švertexfactory
                 auto vertexbuffer = Engine::GStaticMesh_Cube->GetLODResource(0).VertexBuffers.PositionBuffer.Buffer.get();
                 auto indexbuffer = Engine::GStaticMesh_Cube->GetLODResource(0).IndexBuffer.Buffer.get();
                 cmd.SetStreamSource(0, vertexbuffer->GetRHI(), 0);
                 cmd.SetViewport(view.Viewport.X, view.Viewport.Y, view.Viewport.Width, view.Viewport.Height, 0.0f, 1.0f);
                 cmd.SetScissor(view.Viewport.X, view.Viewport.Y, view.Viewport.Width, view.Viewport.Height);
-                //ÉèÖÃvertex²ÎÊı
+                //è®¾ç½®vertexå‚æ•°
                 SetShaderParameters(cmd, vs, &params->vsParam);
 
-                //ÉèÖÃpixel²ÎÊı
+                //è®¾ç½®pixelå‚æ•°
                 SetShaderParameters(cmd, ps, &params->psParam);
                 auto boundRenderTarget = params->psParam.renderTargetSlots.GetBoundRenderTarget();
                 RHIRenderPassInfo passInfo;
@@ -159,7 +159,7 @@ namespace Renderer {
                 passInfo.RenderArea.Width = view.Viewport.Width;
                 passInfo.RenderArea.Height = view.Viewport.Height;
                 cmd.BeginRenderPass(passInfo);
-                //»æÖÆ
+                //ç»˜åˆ¶
                 cmd.DrawIndexed(indexbuffer->GetRHI(), 36);
                 cmd.EndRenderPass();
             }

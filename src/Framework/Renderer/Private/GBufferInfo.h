@@ -62,16 +62,16 @@ namespace Renderer
         }
 
         FGBufferItem(
-            EGBufferSlot InSlot,
-            int InTargetIndex,
-            uint8_t InChannelStart,
-            uint8_t InChannelCount)
+            EGBufferSlot inSlot,
+            int inTargetIndex,
+            uint8_t inChannelStart,
+            uint8_t inChannelCount)
         {
             bIsValid = true;
-            BufferSlot = InSlot;
-            TargetIndex = InTargetIndex;
-            ChannelStart = InChannelStart;
-            ChannelCount = InChannelCount;
+            BufferSlot = inSlot;
+            TargetIndex = inTargetIndex;
+            ChannelStart = inChannelStart;
+            ChannelCount = inChannelCount;
         }
 
         bool bIsValid;
@@ -103,12 +103,12 @@ namespace Renderer
         }
 
         FGBufferTarget(
-            RHI::ERHIFormat InType,
-            const std::string& InName,
+            RHI::ERHIFormat inType,
+            const std::string& inName,
             bool bInIsSrgb = false)
         {
-            TargetFormat = InType;
-            TargetName = InName;
+            TargetFormat = inType;
+            TargetName = inName;
             bIsSrgb = bInIsSrgb;
             bIsRenderTargetable = true;
             bIsShaderResource = true;
@@ -172,17 +172,17 @@ namespace Renderer
         bool bHasAO = true;
         bool bHasSpecular = true;
 
-        bool operator==(const FGBufferParams& RHS) const
+        bool operator==(const FGBufferParams& rhs) const
         {
             return
-                bHasVelocity == RHS.bHasVelocity &&
-                bHasAO == RHS.bHasAO &&
-                bHasSpecular == RHS.bHasSpecular;
+                bHasVelocity == rhs.bHasVelocity &&
+                bHasAO == rhs.bHasAO &&
+                bHasSpecular == rhs.bHasSpecular;
         }
 
-        bool operator!=(const FGBufferParams& RHS) const
+        bool operator!=(const FGBufferParams& rhs) const
         {
-            return !(*this == RHS);
+            return !(*this == rhs);
         }
     };
 
@@ -190,15 +190,15 @@ namespace Renderer
     // Utility Functions
     //=============================================================================
 
-    FGBufferInfo CreateGBufferInfo(const FGBufferParams& Params);
+    FGBufferInfo CreateGBufferInfo(const FGBufferParams& params);
 
     const FGBufferItem* FindGBufferSlot(
-        const FGBufferInfo& GBufferInfo,
-        EGBufferSlot Slot);
+        const FGBufferInfo& gBufferInfo,
+        EGBufferSlot slot);
 
     const FGBufferTarget* FindGBufferTargetByName(
-        const FGBufferInfo& GBufferInfo,
-        const std::string& Name);
+        const FGBufferInfo& gBufferInfo,
+        const std::string& name);
 
     BEGIN_SHADER_PARAMETER_STRUCT(GBufferInputParameters)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D, GBufferA)

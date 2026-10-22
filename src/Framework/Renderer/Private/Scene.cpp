@@ -37,9 +37,9 @@ namespace Renderer {
         PrimitiveSceneInfo(
             std::unique_ptr<
             Engine::PrimitiveSceneProxy>
-            InProxy)
+            inProxy)
         :
-        Proxy(std::move(InProxy))
+        m_Proxy(std::move(inProxy))
     {
     }
 
@@ -51,9 +51,9 @@ namespace Renderer {
         LightSceneInfo(
             std::unique_ptr<
             Engine::LightSceneProxy>
-            InProxy)
+            inProxy)
         :
-        Proxy(std::move(InProxy))
+        m_Proxy(std::move(inProxy))
     {
     }
 
@@ -62,125 +62,125 @@ namespace Renderer {
 
     void SceneAccelerationStructure::Clear()
     {
-        Nodes.clear();
-        Primitives.clear();
+        m_Nodes.clear();
+        m_Primitives.clear();
     }
 
-    void SceneAccelerationStructure::Build(const std::unordered_map<Engine::PrimitiveComponent*, std::unique_ptr<PrimitiveSceneInfo>>& PrimitiveInfos)
+    void SceneAccelerationStructure::Build(const std::unordered_map<Engine::PrimitiveComponent*, std::unique_ptr<PrimitiveSceneInfo>>& primitiveInfos)
     {
-        Primitives.clear();
-        Nodes.clear();
+        m_Primitives.clear();
+        m_Nodes.clear();
 
-        Primitives.reserve(PrimitiveInfos.size());
-        for (auto& Pair : PrimitiveInfos)
+        m_Primitives.reserve(primitiveInfos.size());
+        for (auto& pair : primitiveInfos)
         {
-            if (!Pair.second) continue;
-            if (!Pair.second->bVisible) continue;
-            auto* Proxy = Pair.second->GetProxy();
-            if (Proxy)
+            if (!pair.second) continue;
+            if (!pair.second->bVisible) continue;
+            auto* proxy = pair.second->GetProxy();
+            if (proxy)
             {
-                Primitives.push_back(Proxy);
+                m_Primitives.push_back(proxy);
             }
         }
 
-        if (Primitives.empty())
+        if (m_Primitives.empty())
         {
             return;
         }
 
-        Nodes.reserve(Primitives.size() * 2);
-        BuildNode(0, static_cast<int>(Primitives.size()));
+        m_Nodes.reserve(m_Primitives.size() * 2);
+        BuildNode(0, static_cast<int>(m_Primitives.size()));
     }
 
-    int SceneAccelerationStructure::Partition(int Start, int Count, int Axis)
+    int SceneAccelerationStructure::Partition(int start, int count, int axis)
     {
-        auto Compare = [Axis](Engine::PrimitiveSceneProxy* A, Engine::PrimitiveSceneProxy* B) {
-            const Core::AABB& ABox = A->GetBounds().Box;
-            const Core::AABB& BBox = B->GetBounds().Box;
-            float ACenter = (Axis == 0 ? (ABox.Min.X + ABox.Max.X) : (Axis == 1 ? (ABox.Min.Y + ABox.Max.Y) : (ABox.Min.Z + ABox.Max.Z)));
-            float BCenter = (Axis == 0 ? (BBox.Min.X + BBox.Max.X) : (Axis == 1 ? (BBox.Min.Y + BBox.Max.Y) : (BBox.Min.Z + BBox.Max.Z)));
-            return ACenter < BCenter;
+        auto compare = [axis](Engine::PrimitiveSceneProxy* a, Engine::PrimitiveSceneProxy* b) {
+            const Core::AABB& aBox = a->GetBounds().Box;
+            const Core::AABB& bBox = b->GetBounds().Box;
+            float aCenter = (axis == 0 ? (aBox.Min.X + aBox.Max.X) : (axis == 1 ? (aBox.Min.Y + aBox.Max.Y) : (aBox.Min.Z + aBox.Max.Z)));
+            float bCenter = (axis == 0 ? (bBox.Min.X + bBox.Max.X) : (axis == 1 ? (bBox.Min.Y + bBox.Max.Y) : (bBox.Min.Z + bBox.Max.Z)));
+            return aCenter < bCenter;
         };
 
-        int Mid = Start + Count / 2;
-        std::nth_element(Primitives.begin() + Start, Primitives.begin() + Mid, Primitives.begin() + Start + Count, Compare);
-        return Mid;
+        int mid = start + count / 2;
+        std::nth_element(m_Primitives.begin() + start, m_Primitives.begin() + mid, m_Primitives.begin() + start + count, compare);
+        return mid;
     }
 
-    int SceneAccelerationStructure::BuildNode(int Start, int Count)
+    int SceneAccelerationStructure::BuildNode(int start, int count)
     {
-        int NodeIndex = static_cast<int>(Nodes.size());
-        Nodes.emplace_back();
-        Node& Current = Nodes.back();
-        Current.Start = Start;
-        Current.Count = Count;
-        Current.LeftChild = -1;
-        Current.RightChild = -1;
-        Current.bLeaf = false;
-        Current.Bounds.SetEmpty();
+        int nodeIndex = static_cast<int>(m_Nodes.size());
+        m_Nodes.emplace_back();
+        Node& current = m_Nodes.back();
+        current.Start = start;
+        current.Count = count;
+        current.LeftChild = -1;
+        current.RightChild = -1;
+        current.bLeaf = false;
+        current.Bounds.SetEmpty();
 
-        for (int Index = Start; Index < Start + Count; ++Index)
+        for (int index = start; index < start + count; ++index)
         {
-            Current.Bounds.Merge(Primitives[Index]->GetBounds());
+            current.Bounds.Merge(m_Primitives[index]->GetBounds());
         }
 
-        if (Count <= 1)
+        if (count <= 1)
         {
-            Current.bLeaf = true;
-            return NodeIndex;
+            current.bLeaf = true;
+            return nodeIndex;
         }
 
-        Core::Float3 Extent = Current.Bounds.Box.GetExtent();
-        int Axis = 0;
-        if (Extent.Y > Extent.X) Axis = 1;
-        if (Extent.Z > ((Axis == 0) ? Extent.X : Extent.Y)) Axis = 2;
+        Core::Float3 extent = current.Bounds.Box.GetExtent();
+        int axis = 0;
+        if (extent.Y > extent.X) axis = 1;
+        if (extent.Z > ((axis == 0) ? extent.X : extent.Y)) axis = 2;
 
-        int Mid = Partition(Start, Count, Axis);
-        if (Mid <= Start || Mid >= Start + Count)
+        int mid = Partition(start, count, axis);
+        if (mid <= start || mid >= start + count)
         {
-            Current.bLeaf = true;
-            return NodeIndex;
+            current.bLeaf = true;
+            return nodeIndex;
         }
 
-        Current.LeftChild = BuildNode(Start, Mid - Start);
-        Current.RightChild = BuildNode(Mid, Start + Count - Mid);
-        return NodeIndex;
+        current.LeftChild = BuildNode(start, mid - start);
+        current.RightChild = BuildNode(mid, start + count - mid);
+        return nodeIndex;
     }
 
-    void SceneAccelerationStructure::Query(const Engine::SceneView& View, std::vector<Engine::PrimitiveSceneProxy*>& OutPrimitives) const
+    void SceneAccelerationStructure::Query(const Engine::SceneView& view, std::vector<Engine::PrimitiveSceneProxy*>& outPrimitives) const
     {
-        if (Nodes.empty())
+        if (m_Nodes.empty())
         {
             return;
         }
 
-        auto QueryNode = [&](auto&& self, int NodeIndex) -> void {
-            const Node& Current = Nodes[NodeIndex];
-            if (!View.IsBoxVisible(Current.Bounds.Box))
+        auto queryNode = [&](auto&& self, int nodeIndex) -> void {
+            const Node& current = m_Nodes[nodeIndex];
+            if (!view.IsBoxVisible(current.Bounds.Box))
             {
                 return;
             }
 
-            if (Current.bLeaf)
+            if (current.bLeaf)
             {
-                for (int Index = Current.Start; Index < Current.Start + Current.Count; ++Index)
+                for (int index = current.Start; index < current.Start + current.Count; ++index)
                 {
-                    OutPrimitives.push_back(Primitives[Index]);
+                    outPrimitives.push_back(m_Primitives[index]);
                 }
                 return;
             }
 
-            if (Current.LeftChild != -1)
+            if (current.LeftChild != -1)
             {
-                self(self, Current.LeftChild);
+                self(self, current.LeftChild);
             }
-            if (Current.RightChild != -1)
+            if (current.RightChild != -1)
             {
-                self(self, Current.RightChild);
+                self(self, current.RightChild);
             }
         };
 
-        QueryNode(QueryNode, 0);
+        queryNode(queryNode, 0);
     }
 
 
@@ -190,7 +190,7 @@ namespace Renderer {
 
     Scene::Scene()
     {
-		ShadowMapAllocator.Initialize(
+		m_ShadowMapAllocator.Initialize(
 			ShadowAllocatorDesc{
 				{ 4096, 4096 } // SpotShadowAtlas
 			});
@@ -205,161 +205,161 @@ namespace Renderer {
 
     void Scene::AddPrimitive(
         Engine::PrimitiveComponent*
-        Component)
+        component)
     {
-        if (!Component)
+        if (!component)
         {
             return;
         }
-        if (PrimitiveInfos.find(Component) != PrimitiveInfos.end()) {
+        if (m_PrimitiveInfos.find(component) != m_PrimitiveInfos.end()) {
             return;
         }
-        Component->SetSceneOwner(this);
-        auto Proxy =
-            std::unique_ptr<Engine::PrimitiveSceneProxy>(Component
+        component->SetSceneOwner(this);
+        auto proxy =
+            std::unique_ptr<Engine::PrimitiveSceneProxy>(component
             ->CreateSceneProxy());
 
-        if (!Proxy)
+        if (!proxy)
         {
             return;
         }
 
-        SceneCommand Command;
+        SceneCommand command;
 
-        Command.Type =
+        command.Type =
             ESceneCommandType
             ::AddPrimitive;
 
-        Command.PrimitiveComponent =
-            Component;
+        command.PrimitiveComponent =
+            component;
 
-        Command.PrimitiveProxy =
-            std::move(Proxy);
+        command.PrimitiveProxy =
+            std::move(proxy);
 
-        std::scoped_lock Lock(
-            PendingCommandMutex);
+        std::scoped_lock lock(
+            m_PendingCommandMutex);
 
-        PendingCommands.push_back(
-            std::move(Command));
+        m_PendingCommands.push_back(
+            std::move(command));
     }
 
     void Scene::RemovePrimitive(
         Engine::PrimitiveComponent*
-        Component)
+        component)
     {
-        if (PrimitiveInfos.find(Component) == PrimitiveInfos.end()) {
+        if (m_PrimitiveInfos.find(component) == m_PrimitiveInfos.end()) {
             return;
         }
-        Component->SetSceneOwner(nullptr);
-        SceneCommand Command;
+        component->SetSceneOwner(nullptr);
+        SceneCommand command;
 
-        Command.Type =
+        command.Type =
             ESceneCommandType
             ::RemovePrimitive;
 
-        Command.PrimitiveComponent =
-            Component;
+        command.PrimitiveComponent =
+            component;
 
-        std::scoped_lock Lock(
-            PendingCommandMutex);
+        std::scoped_lock lock(
+            m_PendingCommandMutex);
 
-        PendingCommands.push_back(
-            std::move(Command));
+        m_PendingCommands.push_back(
+            std::move(command));
     }
 
     void Scene::AddLight(
         Engine::LightComponent*
-        Component)
+        component)
     {
-        if (!Component)
+        if (!component)
         {
             return;
         }
-        if (LightInfos.find(Component) != LightInfos.end()) {
+        if (m_LightInfos.find(component) != m_LightInfos.end()) {
             return;
         }
-        Component->SetSceneOwner(this);
-        auto Proxy =
-            std::unique_ptr<Engine::LightSceneProxy>(Component
+        component->SetSceneOwner(this);
+        auto proxy =
+            std::unique_ptr<Engine::LightSceneProxy>(component
             ->CreateSceneProxy());
 
-        if (!Proxy)
+        if (!proxy)
         {
             return;
         }
 
-        SceneCommand Command;
+        SceneCommand command;
 
-        Command.Type =
+        command.Type =
             ESceneCommandType
             ::AddLight;
 
-        Command.LightComponent =
-            Component;
+        command.LightComponent =
+            component;
 
-        Command.LightProxy =
-            std::move(Proxy);
+        command.LightProxy =
+            std::move(proxy);
 
-        std::scoped_lock Lock(
-            PendingCommandMutex);
+        std::scoped_lock lock(
+            m_PendingCommandMutex);
 
-        PendingCommands.push_back(
-            std::move(Command));
+        m_PendingCommands.push_back(
+            std::move(command));
     }
 
     void Scene::RemoveLight(
         Engine::LightComponent*
-        Component)
+        component)
     {
-        if (LightInfos.find(Component) == LightInfos.end()) {
+        if (m_LightInfos.find(component) == m_LightInfos.end()) {
             return;
         }
-        Component->SetSceneOwner(nullptr);
-        SceneCommand Command;
+        component->SetSceneOwner(nullptr);
+        SceneCommand command;
 
-        Command.Type =
+        command.Type =
             ESceneCommandType
             ::RemoveLight;
 
-        Command.LightComponent =
-            Component;
+        command.LightComponent =
+            component;
 
-        std::scoped_lock Lock(
-            PendingCommandMutex);
+        std::scoped_lock lock(
+            m_PendingCommandMutex);
 
-        PendingCommands.push_back(
-            std::move(Command));
+        m_PendingCommands.push_back(
+            std::move(command));
     }
 
     void Scene::FlushPendingUpdates()
     {
         std::vector<
             SceneCommand>
-            Commands;
+            commands;
 
         {
-            std::scoped_lock Lock(
-                PendingCommandMutex);
+            std::scoped_lock lock(
+                m_PendingCommandMutex);
 
-            Commands.swap(
-                PendingCommands);
+            commands.swap(
+                m_PendingCommands);
         }
-        Engine::LightSceneProxy* LightProxy = nullptr;
-        auto markLightDiry = [this](Engine::LightSceneProxy* LightProxy) {
-            if (!LightProxy) return;
-            auto lightType = LightProxy->GetLightType();
+        Engine::LightSceneProxy* lightProxy = nullptr;
+        auto markLightDiry = [this](Engine::LightSceneProxy* lightProxy) {
+            if (!lightProxy) return;
+            auto lightType = lightProxy->GetLightType();
             switch (lightType)
             {
                 case Engine::ELightType::Directional:
-                    GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::DirectionalLight;
+                    m_GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::DirectionalLight;
                     break;
                 case Engine::ELightType::Point:
-                    GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::PointLight;
+                    m_GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::PointLight;
                     break;
                 case Engine::ELightType::Spot:
-                    GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::SpotLight;
+                    m_GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::SpotLight;
                 case Engine::ELightType::Sky:
-                    GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::SkyLight;
+                    m_GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::SkyLight;
                     break;
                 default:
                     break;
@@ -367,26 +367,26 @@ namespace Renderer {
 
 
          };
-        for (auto& Command
-            : Commands)
+        for (auto& command
+            : commands)
         {
-            switch (Command.Type)
+            switch (command.Type)
             {
                 case ESceneCommandType::
                 AddPrimitive:
                 {
-                    PrimitiveInfos[
-                        Command
+                    m_PrimitiveInfos[
+                        command
                             .PrimitiveComponent]
                         =
                         std::make_unique<
                         PrimitiveSceneInfo>(
                             std::move(
-                                Command
+                                command
                                 .PrimitiveProxy));
 
-                    PrimitiveSceneInfo* addedInfo = PrimitiveInfos[Command.PrimitiveComponent].get();
-                    GPUResourceInfo.DirtyFlags |=
+                    PrimitiveSceneInfo* addedInfo = m_PrimitiveInfos[command.PrimitiveComponent].get();
+                    m_GPUResourceInfo.DirtyFlags |=
                         ESceneGPUResourceDirty
                         ::Primitive;
                     break;
@@ -395,13 +395,13 @@ namespace Renderer {
                 case ESceneCommandType::
                 RemovePrimitive:
                 {
-                    auto existingIt = PrimitiveInfos.find(Command.PrimitiveComponent);
+                    auto existingIt = m_PrimitiveInfos.find(command.PrimitiveComponent);
 
-                    PrimitiveInfos.erase(
-                        Command
+                    m_PrimitiveInfos.erase(
+                        command
                         .PrimitiveComponent);
 
-                    GPUResourceInfo.DirtyFlags |=
+                    m_GPUResourceInfo.DirtyFlags |=
                         ESceneGPUResourceDirty
                         ::Primitive;
 
@@ -411,15 +411,15 @@ namespace Renderer {
                 case ESceneCommandType::
                 AddLight:
                 {
-                    markLightDiry(Command.LightProxy.get());
-                    LightInfos[
-                        Command
+                    markLightDiry(command.LightProxy.get());
+                    m_LightInfos[
+                        command
                             .LightComponent]
                         =
                         std::make_unique<
                         LightSceneInfo>(
                             std::move(
-                                Command
+                                command
                                 .LightProxy));
                     
                     break;
@@ -428,9 +428,9 @@ namespace Renderer {
                 case ESceneCommandType::
                 RemoveLight:
                 {
-                    markLightDiry(Command.LightProxy.get());
-                    LightInfos.erase(
-                        Command
+                    markLightDiry(command.LightProxy.get());
+                    m_LightInfos.erase(
+                        command
                         .LightComponent);
                     
                     break;
@@ -441,52 +441,52 @@ namespace Renderer {
             }
         }
         //update scene bounds
-        SceneBounds.SetEmpty();
-        for (auto& primitive : PrimitiveInfos) {
-            SceneBounds.Merge(primitive.second->GetProxy()->GetBounds());
+        m_SceneBounds.SetEmpty();
+        for (auto& primitive : m_PrimitiveInfos) {
+            m_SceneBounds.Merge(primitive.second->GetProxy()->GetBounds());
         }
-        AccelerationStructure.Build(PrimitiveInfos);
+        m_AccelerationStructure.Build(m_PrimitiveInfos);
 		//build GPU resource info
         UpdateGPUResourceIfNeeded();
 
 
     }
 
-    void Scene::NotifyComponentChanged(SceneComponent* Component)
+    void Scene::NotifyComponentChanged(SceneComponent* component)
     {
-        if (Component->IsA<Engine::LightComponent>())
+        if (component->IsA<Engine::LightComponent>())
         {
-            auto* Light = static_cast<Engine::LightComponent*>(Component);
-            switch (Light->GetLightType())
+            auto* light = static_cast<Engine::LightComponent*>(component);
+            switch (light->GetLightType())
             {
             case ELightType::Directional:
-                GPUResourceInfo.DirtyFlags |=
+                m_GPUResourceInfo.DirtyFlags |=
                     ESceneGPUResourceDirty
                     ::DirectionalLight;
                 break;
 
             case ELightType::Point:
-                GPUResourceInfo.DirtyFlags |=
+                m_GPUResourceInfo.DirtyFlags |=
                     ESceneGPUResourceDirty
                     ::PointLight;
                 break;
 
             case ELightType::Spot:
-                GPUResourceInfo.DirtyFlags |=
+                m_GPUResourceInfo.DirtyFlags |=
                     ESceneGPUResourceDirty
                     ::SpotLight;
                 break;
             case ELightType::Sky:
-                GPUResourceInfo.DirtyFlags |=
+                m_GPUResourceInfo.DirtyFlags |=
                     ESceneGPUResourceDirty
                     ::SkyLight;
                 break;
             }
         }
 
-        if (Component->IsA<Engine::PrimitiveComponent>())
+        if (component->IsA<Engine::PrimitiveComponent>())
         {
-            GPUResourceInfo.DirtyFlags |=
+            m_GPUResourceInfo.DirtyFlags |=
                 ESceneGPUResourceDirty
                 ::Primitive;
         }
@@ -494,62 +494,62 @@ namespace Renderer {
 
     bool Scene::UpdateGlobalDistanceFieldIfNeeded()
     {
-        static bool FirstInit = false;
-        if ( EnumHasAnyFlags(GPUResourceInfo.DirtyFlags, ESceneGPUResourceDirty::GlobalDistanceField) || FirstInit == false) {
-            FirstInit = true;
-            // ’ºØæ≤Ã¨Õ¯∏Ò–≈œ¢£¨∏¸–¬æ‡¿Î≥°
-            DistanceFieldMergePassInput Input;
-            Core::AABB AffectBox;
+        static bool firstInit = false;
+        if ( EnumHasAnyFlags(m_GPUResourceInfo.DirtyFlags, ESceneGPUResourceDirty::GlobalDistanceField) || firstInit == false) {
+            firstInit = true;
+            //Êî∂ÈõÜÈùôÊÄÅÁΩëÊ†º‰ø°ÊÅØÔºåÊõ¥Êñ∞Ë∑ùÁ¶ªÂú∫
+            DistanceFieldMergePassInput input;
+            Core::AABB affectBox;
 
-            for (auto& primitive : PrimitiveInfos) {
+            for (auto& primitive : m_PrimitiveInfos) {
 				if(primitive.second->GetProxy()->IsA<StaticMeshProxy>()){
                     
-                    StaticMeshProxy* StaticMeshProxyIns = primitive.second->GetProxy()->Cast<StaticMeshProxy>();
-                    auto renderData = StaticMeshProxyIns->GetStaticMeshComponent()->GetStaticMesh()->GetRenderData();
+                    StaticMeshProxy* staticMeshProxyIns = primitive.second->GetProxy()->Cast<StaticMeshProxy>();
+                    auto renderData = staticMeshProxyIns->GetStaticMeshComponent()->GetStaticMesh()->GetRenderData();
                     auto allocation = renderData->LODResources[0].DistanceFieldData.Allocation;
-                    DistanceFieldSourceParameters Source;
-                    Source.LocalToWorld = StaticMeshProxyIns->GetLocalToWorld();
-                    Source.WorldToLocal = StaticMeshProxyIns->GetWorldToLocal();
-                    Core::UInt3 Offset(allocation.X, allocation.Y, allocation.Z);
-                    Core::UInt3 Size(allocation.SizeX, allocation.SizeY, allocation.SizeZ);
-                    Source.Offset = Offset;
-                    Source.InputResolution = Size;
+                    DistanceFieldSourceParameters source;
+                    source.LocalToWorld = staticMeshProxyIns->GetLocalToWorld();
+                    source.WorldToLocal = staticMeshProxyIns->GetWorldToLocal();
+                    Core::UInt3 offset(allocation.X, allocation.Y, allocation.Z);
+                    Core::UInt3 size(allocation.SizeX, allocation.SizeY, allocation.SizeZ);
+                    source.Offset = offset;
+                    source.InputResolution = size;
                     auto localBound = renderData->Bounds;
-                    auto bound = StaticMeshProxyIns->GetBounds();
+                    auto bound = staticMeshProxyIns->GetBounds();
                     Core::Float3 boundMin,boundMax;
                     boundMin = localBound.Box.Min;
                     boundMax = localBound.Box.Max;
-                    Source.BoundsMax = boundMax;
-                    Source.BoundsMin = boundMin;
-                    AffectBox.Merge(bound.Box);
-                    Input.sourceParams.emplace_back(Source);
+                    source.BoundsMax = boundMax;
+                    source.BoundsMin = boundMin;
+                    affectBox.Merge(bound.Box);
+                    input.SourceParams.emplace_back(source);
                 }
             }
-            if (Input.sourceParams.empty()) {
+            if (input.SourceParams.empty()) {
                 return false;
             }
             GlobalDistanceFieldBlockClipMap clipMap;
-            auto suc = GPUResourceInfo.DistanceFieldResourceInfo.StaticDistanceField.Allocate(AffectBox, clipMap);
-            // ’ºØ–Ë“™∏¸–¬µƒglobaldistancefield «¯”Úid
+            auto suc = m_GPUResourceInfo.DistanceFieldResourceInfo.StaticDistanceField.Allocate(affectBox, clipMap);
+            //Êî∂ÈõÜÈúÄË¶ÅÊõ¥Êñ∞ÁöÑglobaldistancefield Âå∫Âüüid
             std::vector<uint32_t> affectBlockIDs;
-            GPUResourceInfo.DistanceFieldResourceInfo.StaticDistanceField.GetBlocksInsideBounds(AffectBox, affectBlockIDs);
+            m_GPUResourceInfo.DistanceFieldResourceInfo.StaticDistanceField.GetBlocksInsideBounds(affectBox, affectBlockIDs);
             for (auto& id : affectBlockIDs) {
-                const auto block = GPUResourceInfo.DistanceFieldResourceInfo.StaticDistanceField.GetBlock(id);
+                const auto block = m_GPUResourceInfo.DistanceFieldResourceInfo.StaticDistanceField.GetBlock(id);
 				if (block) {
-					DistanceFieldOutParameters Out;
-					Out.Offset = Core::Int3(block->Allocation.X, block->Allocation.Y, block->Allocation.Z);
-					Out.BoundsMin = block->Bounds.Min;
-					Out.BoundsMax = block->Bounds.Max;
-					Input.outputParams.emplace_back(Out);
+					DistanceFieldOutParameters out;
+					out.Offset = Core::Int3(block->Allocation.X, block->Allocation.Y, block->Allocation.Z);
+					out.BoundsMin = block->Bounds.Min;
+					out.BoundsMax = block->Bounds.Max;
+					input.OutputParams.emplace_back(out);
 				}
             }
-            if (Input.outputParams.empty()) {
+            if (input.OutputParams.empty()) {
                 return false;
             }
 
-            Input.InputSDFTexture = Engine::GDistanceFieldMgr.GetAtlas().GetAtlasTexture();
-            Input.OutputSDFTexture = GPUResourceInfo.DistanceFieldResourceInfo.StaticDistanceField.GetAtlas().GetAtlasTexture();
-            ExecuteDistanceFieldMergePass(Input);
+            input.InputSDFTexture = Engine::GDistanceFieldMgr.GetAtlas().GetAtlasTexture();
+            input.OutputSDFTexture = m_GPUResourceInfo.DistanceFieldResourceInfo.StaticDistanceField.GetAtlas().GetAtlasTexture();
+            ExecuteDistanceFieldMergePass(input);
 
         }
         return false;
@@ -558,288 +558,288 @@ namespace Renderer {
     void Scene::ForEachPrimitive(
         std::function<void(
             Engine::PrimitiveSceneProxy*)>
-        Visitor)
+        visitor)
     {
-        for (auto& Pair
-            : PrimitiveInfos)
+        for (auto& pair
+            : m_PrimitiveInfos)
         {
-            auto* Info =
-                Pair.second.get();
+            auto* info =
+                pair.second.get();
 
-            if (!Info->bVisible)
+            if (!info->bVisible)
             {
                 continue;
             }
 
-            Visitor(
-                Info->GetProxy());
+            visitor(
+                info->GetProxy());
         }
     }
 
     void Scene::ForEachLight(
         std::function<void(
             Engine::LightSceneProxy*)>
-        Visitor)
+        visitor)
     {
-        for (auto& Pair
-            : LightInfos)
+        for (auto& pair
+            : m_LightInfos)
         {
-            auto* Info =
-                Pair.second.get();
+            auto* info =
+                pair.second.get();
 
-            if (!Info->bVisible)
+            if (!info->bVisible)
             {
                 continue;
             }
 
-            Visitor(
-                Info->GetProxy());
+            visitor(
+                info->GetProxy());
         }
     }
 
     const SceneGPUResourceInfo& Scene::GetGPUResourceInfo() const
     {
-        return GPUResourceInfo;
+        return m_GPUResourceInfo;
     }
 
     ShadowMapAllocator& Scene::GetShadowMapAllocator()
     {
-        return ShadowMapAllocator;
+        return m_ShadowMapAllocator;
     }
 
     const Core::BoxSphereBounds& Scene::GetSceneBounds() const
     {
-        return SceneBounds;
+        return m_SceneBounds;
     }
 
-    LightShadowInfo& Scene::GetLightShadowInfo(Engine::LightSceneProxy* Light)
+    LightShadowInfo& Scene::GetLightShadowInfo(Engine::LightSceneProxy* light)
     {
-        return GPUResourceInfo.ShadowResourceInfo.LightShadowInfos[Light];
+        return m_GPUResourceInfo.ShadowResourceInfo.LightShadowInfos[light];
     }
 
-    std::vector<Engine::PrimitiveSceneProxy*> Scene::GatherVisiblePrimitivesCPU(const Engine::SceneView& View) const
+    std::vector<Engine::PrimitiveSceneProxy*> Scene::GatherVisiblePrimitivesCPU(const Engine::SceneView& view) const
     {
-        std::vector<Engine::PrimitiveSceneProxy*> Result;
-        Result.reserve(PrimitiveInfos.size());
+        std::vector<Engine::PrimitiveSceneProxy*> result;
+        result.reserve(m_PrimitiveInfos.size());
 
-        if (AccelerationStructure.IsValid())
+        if (m_AccelerationStructure.IsValid())
         {
-            AccelerationStructure.Query(View, Result);
-            return Result;
+            m_AccelerationStructure.Query(view, result);
+            return result;
         }
 
-        for (const auto& Pair : PrimitiveInfos)
+        for (const auto& pair : m_PrimitiveInfos)
         {
-            const PrimitiveSceneInfo* Info = Pair.second.get();
-            if (!Info || !Info->bVisible)
+            const PrimitiveSceneInfo* info = pair.second.get();
+            if (!info || !info->bVisible)
             {
                 continue;
             }
-            Engine::PrimitiveSceneProxy* Proxy = Info->GetProxy();
-            if (!Proxy)
+            Engine::PrimitiveSceneProxy* proxy = info->GetProxy();
+            if (!proxy)
             {
                 continue;
             }
-            if (View.IsBoxVisible(Proxy->GetBounds().Box))
+            if (view.IsBoxVisible(proxy->GetBounds().Box))
             {
-                Result.push_back(Proxy);
+                result.push_back(proxy);
             }
         }
-        return Result;
+        return result;
     }
 
-    std::vector<Engine::PrimitiveSceneProxy*> Scene::GatherVisiblePrimitivesGPU(const Engine::SceneView& View) const
+    std::vector<Engine::PrimitiveSceneProxy*> Scene::GatherVisiblePrimitivesGPU(const Engine::SceneView& view) const
     {
-        std::vector<Engine::PrimitiveSceneProxy*> Result;
-        const auto& PrimitiveRes = GPUResourceInfo.PrimitiveResourceInfo;
-        Result.reserve(PrimitiveRes.PrimitiveCount);
+        std::vector<Engine::PrimitiveSceneProxy*> result;
+        const auto& primitiveRes = m_GPUResourceInfo.PrimitiveResourceInfo;
+        result.reserve(primitiveRes.PrimitiveCount);
 
-        if (PrimitiveRes.PrimitiveCount == 0)
+        if (primitiveRes.PrimitiveCount == 0)
         {
-            return Result;
+            return result;
         }
 
-        if (!PrimitiveRes.PrimitiveBoundsBuffer ||
-            !PrimitiveRes.VisibilityFlagsBuffer ||
-            PrimitiveGPUProxyOrder.size() < PrimitiveRes.PrimitiveCount)
+        if (!primitiveRes.PrimitiveBoundsBuffer ||
+            !primitiveRes.VisibilityFlagsBuffer ||
+            m_PrimitiveGPUProxyOrder.size() < primitiveRes.PrimitiveCount)
         {
-            return GatherVisiblePrimitivesCPU(View);
+            return GatherVisiblePrimitivesCPU(view);
         }
 
-        FrustumCullPassInput PassInput;
-        PassInput.ViewProjection = View.ViewProjectionMatrix;
-        PassInput.PrimitiveCount = PrimitiveRes.PrimitiveCount;
-        PassInput.PrimitiveBoundsBuffer = PrimitiveRes.PrimitiveBoundsBuffer.get();
-        PassInput.VisibilityFlagsBuffer = PrimitiveRes.VisibilityFlagsBuffer.get();
+        FrustumCullPassInput passInput;
+        passInput.ViewProjection = view.ViewProjectionMatrix;
+        passInput.PrimitiveCount = primitiveRes.PrimitiveCount;
+        passInput.PrimitiveBoundsBuffer = primitiveRes.PrimitiveBoundsBuffer.get();
+        passInput.VisibilityFlagsBuffer = primitiveRes.VisibilityFlagsBuffer.get();
 
         std::vector<uint32_t> visibilityFlags;
-        if (!ExecuteFrustumCullPass(PassInput, visibilityFlags) ||
-            visibilityFlags.size() < PrimitiveRes.PrimitiveCount)
+        if (!ExecuteFrustumCullPass(passInput, visibilityFlags) ||
+            visibilityFlags.size() < primitiveRes.PrimitiveCount)
         {
-            return GatherVisiblePrimitivesCPU(View);
+            return GatherVisiblePrimitivesCPU(view);
         }
 
-        for (uint32_t index = 0; index < PrimitiveRes.PrimitiveCount; ++index)
+        for (uint32_t index = 0; index < primitiveRes.PrimitiveCount; ++index)
         {
             if (visibilityFlags[index] == 0)
             {
                 continue;
             }
 
-            auto* proxy = PrimitiveGPUProxyOrder[index];
+            auto* proxy = m_PrimitiveGPUProxyOrder[index];
             if (proxy)
             {
-                Result.push_back(proxy);
+                result.push_back(proxy);
             }
         }
 
-        return Result;
+        return result;
     }
 
-    std::vector<Engine::PrimitiveSceneProxy*> Scene::GatherVisiblePrimitives(const Engine::SceneView& View) const
+    std::vector<Engine::PrimitiveSceneProxy*> Scene::GatherVisiblePrimitives(const Engine::SceneView& view) const
     {
-        return GatherVisiblePrimitivesCPU(View);
+        return GatherVisiblePrimitivesCPU(view);
     }
 
     void Scene::UpdatePrimitiveGPUResource()
     {
-        auto& PrimitiveRes = GPUResourceInfo.PrimitiveResourceInfo;
-        auto& LocalVFInfo = PrimitiveRes.localvertexfactoryinstanceInfo;
+        auto& primitiveRes = m_GPUResourceInfo.PrimitiveResourceInfo;
+        auto& localVfInfo = primitiveRes.LocalVertexFactoryInstanceInfo;
 
-        PrimitiveGPUProxyOrder.clear();
-        PrimitiveGPUProxyOrder.reserve(PrimitiveInfos.size());
+        m_PrimitiveGPUProxyOrder.clear();
+        m_PrimitiveGPUProxyOrder.reserve(m_PrimitiveInfos.size());
 
-        std::vector<AABBParameters> BoundsData;
-        BoundsData.reserve(PrimitiveInfos.size());
+        std::vector<AABBParameters> boundsData;
+        boundsData.reserve(m_PrimitiveInfos.size());
 
-        for (const auto& Pair : PrimitiveInfos)
+        for (const auto& pair : m_PrimitiveInfos)
         {
-            const PrimitiveSceneInfo* Info = Pair.second.get();
-            if (!Info || !Info->bVisible)
+            const PrimitiveSceneInfo* info = pair.second.get();
+            if (!info || !info->bVisible)
             {
                 continue;
             }
 
-            Engine::PrimitiveSceneProxy* Proxy = Info->GetProxy();
-            if (!Proxy)
+            Engine::PrimitiveSceneProxy* proxy = info->GetProxy();
+            if (!proxy)
             {
                 continue;
             }
 
-            const Core::AABB& Bounds = Proxy->GetBounds().Box;
-            AABBParameters Data;
-            Data.Min = Bounds.Min;
-            Data.Max = Bounds.Max;
+            const Core::AABB& bounds = proxy->GetBounds().Box;
+            AABBParameters data;
+            data.Min = bounds.Min;
+            data.Max = bounds.Max;
 
-            PrimitiveGPUProxyOrder.push_back(Proxy);
-            BoundsData.emplace_back(Data);
+            m_PrimitiveGPUProxyOrder.push_back(proxy);
+            boundsData.emplace_back(data);
         }
 
-        PrimitiveRes.PrimitiveCount = static_cast<uint32_t>(BoundsData.size());
+        primitiveRes.PrimitiveCount = static_cast<uint32_t>(boundsData.size());
 
 
 
-        RHI::RHIBufferDesc BoundsDesc;
-        BoundsDesc.Size = std::max<uint64_t>(1ull, static_cast<uint64_t>(BoundsData.size() * sizeof(AABBParameters)));
-        BoundsDesc.Stride = sizeof(AABBParameters);
-        BoundsDesc.Usage =
+        RHI::RHIBufferDesc boundsDesc;
+        boundsDesc.Size = std::max<uint64_t>(1ull, static_cast<uint64_t>(boundsData.size() * sizeof(AABBParameters)));
+        boundsDesc.Stride = sizeof(AABBParameters);
+        boundsDesc.Usage =
             RHI::ERHIBufferUsageFlag::Structured |
             RHI::ERHIBufferUsageFlag::ShaderResource |
             RHI::ERHIBufferUsageFlag::TransferDst;
-        BoundsDesc.InitialQueueType = RHI::EQueueType::Compute;
-        PrimitiveRes.PrimitiveBoundsBuffer = std::make_shared<RenderCore::RenderBuffer>(BoundsDesc);
-        PrimitiveRes.PrimitiveBoundsBuffer->InitRHIResource();
-        if (!BoundsData.empty())
+        boundsDesc.InitialQueueType = RHI::EQueueType::Compute;
+        primitiveRes.PrimitiveBoundsBuffer = std::make_shared<RenderCore::RenderBuffer>(boundsDesc);
+        primitiveRes.PrimitiveBoundsBuffer->InitRHIResource();
+        if (!boundsData.empty())
         {
-            PrimitiveRes.PrimitiveBoundsBuffer->UploadData(
-                BoundsData.data(),
-                static_cast<uint32_t>(BoundsData.size() * sizeof(AABBParameters)));
+            primitiveRes.PrimitiveBoundsBuffer->UploadData(
+                boundsData.data(),
+                static_cast<uint32_t>(boundsData.size() * sizeof(AABBParameters)));
         }
 
-        RHI::RHIBufferDesc VisibilityDesc;
-        VisibilityDesc.Size = std::max<uint64_t>(1ull, static_cast<uint64_t>(PrimitiveRes.PrimitiveCount * sizeof(uint32_t)));
-        VisibilityDesc.Stride = sizeof(uint32_t);
-        VisibilityDesc.Usage =
+        RHI::RHIBufferDesc visibilityDesc;
+        visibilityDesc.Size = std::max<uint64_t>(1ull, static_cast<uint64_t>(primitiveRes.PrimitiveCount * sizeof(uint32_t)));
+        visibilityDesc.Stride = sizeof(uint32_t);
+        visibilityDesc.Usage =
             RHI::ERHIBufferUsageFlag::Structured |
             RHI::ERHIBufferUsageFlag::UnorderedAccess |
             RHI::ERHIBufferUsageFlag::TransferSrc |
             RHI::ERHIBufferUsageFlag::TransferDst;
-        VisibilityDesc.InitialQueueType = RHI::EQueueType::Compute;
-        PrimitiveRes.VisibilityFlagsBuffer = std::make_shared<RenderCore::RenderBuffer>(VisibilityDesc);
-        PrimitiveRes.VisibilityFlagsBuffer->InitRHIResource();
+        visibilityDesc.InitialQueueType = RHI::EQueueType::Compute;
+        primitiveRes.VisibilityFlagsBuffer = std::make_shared<RenderCore::RenderBuffer>(visibilityDesc);
+        primitiveRes.VisibilityFlagsBuffer->InitRHIResource();
 
-        std::vector<uint32_t> ZeroVisibility(PrimitiveRes.PrimitiveCount, 0u);
-        const uint32_t UploadSize = PrimitiveRes.PrimitiveCount > 0 ?
-            PrimitiveRes.PrimitiveCount * sizeof(uint32_t) :
+        std::vector<uint32_t> zeroVisibility(primitiveRes.PrimitiveCount, 0u);
+        const uint32_t uploadSize = primitiveRes.PrimitiveCount > 0 ?
+            primitiveRes.PrimitiveCount * sizeof(uint32_t) :
             sizeof(uint32_t);
-        if (!ZeroVisibility.empty()) {
-            PrimitiveRes.VisibilityFlagsBuffer->UploadData(static_cast<const void*>(ZeroVisibility.data()),
-                UploadSize);
+        if (!zeroVisibility.empty()) {
+            primitiveRes.VisibilityFlagsBuffer->UploadData(static_cast<const void*>(zeroVisibility.data()),
+                uploadSize);
         }
 
 
-        std::vector<Engine::LocalVertexFactoryInstanceSubParameters> SubParameters;
-        SubParameters.reserve(PrimitiveGPUProxyOrder.size());
-        LocalVFInfo.StaticMeshProxyToInstanceId.clear();
+        std::vector<Engine::LocalVertexFactoryInstanceSubParameters> subParameters;
+        subParameters.reserve(m_PrimitiveGPUProxyOrder.size());
+        localVfInfo.StaticMeshProxyToInstanceId.clear();
 
-        for (Engine::PrimitiveSceneProxy* Proxy : PrimitiveGPUProxyOrder)
+        for (Engine::PrimitiveSceneProxy* proxy : m_PrimitiveGPUProxyOrder)
         {
-            if (!Proxy)
+            if (!proxy)
             {
                 continue;
             }
 
-            Engine::StaticMeshProxy* StaticMeshProxy = Proxy->Cast<Engine::StaticMeshProxy>();
-            if (!StaticMeshProxy)
+            Engine::StaticMeshProxy* staticMeshProxy = proxy->Cast<Engine::StaticMeshProxy>();
+            if (!staticMeshProxy)
             {
                 continue;
             }
 
-            Engine::LocalVertexFactoryInstanceSubParameters Param;
-            Param.LocalToWorld = StaticMeshProxy->GetLocalToWorld();
+            Engine::LocalVertexFactoryInstanceSubParameters param;
+            param.LocalToWorld = staticMeshProxy->GetLocalToWorld();
 
-            const uint32_t InstanceId = static_cast<uint32_t>(SubParameters.size());
-            SubParameters.push_back(Param);
-            LocalVFInfo.StaticMeshProxyToInstanceId.emplace(StaticMeshProxy, InstanceId);
+            const uint32_t instanceId = static_cast<uint32_t>(subParameters.size());
+            subParameters.push_back(param);
+            localVfInfo.StaticMeshProxyToInstanceId.emplace(staticMeshProxy, instanceId);
         }
 
-        auto& InstanceManager = Engine::LocalVertexFactoryInstanceManager::Get();
-        if (LocalVFInfo.InstanceBlock)
+        auto& instanceManager = Engine::LocalVertexFactoryInstanceManager::Get();
+        if (localVfInfo.InstanceBlock)
         {
-            InstanceManager.RemoveInstanceBlock(LocalVFInfo.InstanceBlock);
-            LocalVFInfo.InstanceBlock.reset();
+            instanceManager.RemoveInstanceBlock(localVfInfo.InstanceBlock);
+            localVfInfo.InstanceBlock.reset();
         }
 
-        if (!SubParameters.empty())
+        if (!subParameters.empty())
         {
-            LocalVFInfo.InstanceBlock = InstanceManager.CreateInstanceBlock("ScenePrimitiveLocalVFInstances");
-            LocalVFInfo.InstanceBlock->AddSubParameters(SubParameters);
+            localVfInfo.InstanceBlock = instanceManager.CreateInstanceBlock("ScenePrimitiveLocalVFInstances");
+            localVfInfo.InstanceBlock->AddSubParameters(subParameters);
         }
 
-        InstanceManager.UpdateGPUResources();
+        instanceManager.UpdateGPUResources();
     }
 
     void Scene::EnsureDistanceFieldResources()
     {
-        auto& DFRes = GPUResourceInfo.DistanceFieldResourceInfo;
-        DFRes.StaticDistanceField.Initialize();
+        auto& dfRes = m_GPUResourceInfo.DistanceFieldResourceInfo;
+        dfRes.StaticDistanceField.Initialize();
     }
 
     
 
     void Scene::UpdateGPUResourceIfNeeded()
     {
-        auto Dirty = GPUResourceInfo.DirtyFlags;
+        auto dirty = m_GPUResourceInfo.DirtyFlags;
         uint32_t lightIndex = 0;
-        if (Dirty ==
+        if (dirty ==
             ESceneGPUResourceDirty
             ::None)
         {
             return;
         }
 
-        auto& LightRes =
-            GPUResourceInfo
+        auto& lightRes =
+            m_GPUResourceInfo
             .LightResourceInfo;
 
         //------------------------------------------------
@@ -847,25 +847,25 @@ namespace Renderer {
         //------------------------------------------------
 
         if (EnumHasAnyFlags(
-            Dirty,
+            dirty,
             ESceneGPUResourceDirty
             ::DirectionalLight))
         {
             std::vector<
                 DirectionalLightData>
-                GPUData;
+                gpuData;
 
-            for (auto& Pair :
-                LightInfos)
+            for (auto& pair :
+                m_LightInfos)
             {
-                auto* Proxy =
-                    Pair.second
+                auto* proxy =
+                    pair.second
                     ->GetProxy();
 
-                if (!Proxy)
+                if (!proxy)
                     continue;
 
-                if (Proxy
+                if (proxy
                     ->GetLightType()
                     != ELightType
                     ::Directional)
@@ -874,29 +874,29 @@ namespace Renderer {
                 }
 
                 DirectionalLightData
-                    Data;
-                Data.Common.Color = Proxy->GetColor();
-                Data.Common.Intensity = Proxy->GetIntensity();
-                Data.Common.LightId = lightIndex;
-                LightIndexs[Proxy] = lightIndex;
+                    data;
+                data.Common.Color = proxy->GetColor();
+                data.Common.Intensity = proxy->GetIntensity();
+                data.Common.LightId = lightIndex;
+                m_LightIndexs[proxy] = lightIndex;
                 lightIndex++;
-                auto DirProxy = dynamic_cast<DirectionalLightSceneProxy*>(Proxy);
-                Data.Direction = DirProxy ? DirProxy->GetDirection() : Core::Float3(0.0f, -1.0f, 0.0f);
-                GPUData.emplace_back(
-                    Data);
+                auto dirProxy = dynamic_cast<DirectionalLightSceneProxy*>(proxy);
+                data.Direction = dirProxy ? dirProxy->GetDirection() : Core::Float3(0.0f, -1.0f, 0.0f);
+                gpuData.emplace_back(
+                    data);
                 
             }
 
-            LightRes.DirectionalLightCount = static_cast<uint32_t>(GPUData.size());
-            RHI::RHIBufferDesc Desc;
-            Desc.Size = GPUData.size() * sizeof(DirectionalLightData);
-            if (Desc.Size == 0) {
-                Desc.Size = 1;
+            lightRes.DirectionalLightCount = static_cast<uint32_t>(gpuData.size());
+            RHI::RHIBufferDesc desc;
+            desc.Size = gpuData.size() * sizeof(DirectionalLightData);
+            if (desc.Size == 0) {
+                desc.Size = 1;
             }
-            Desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
-            LightRes.DirectionalLightBuffer = std::make_shared<RenderCore::RenderBuffer>(Desc);
-            LightRes.DirectionalLightBuffer->InitRHIResource();
-            LightRes.DirectionalLightBuffer->UploadData(GPUData.data(), Desc.Size);
+            desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
+            lightRes.DirectionalLightBuffer = std::make_shared<RenderCore::RenderBuffer>(desc);
+            lightRes.DirectionalLightBuffer->InitRHIResource();
+            lightRes.DirectionalLightBuffer->UploadData(gpuData.data(), desc.Size);
         }
 
         //------------------------------------------------
@@ -904,25 +904,25 @@ namespace Renderer {
         //------------------------------------------------
 
         if (EnumHasAnyFlags(
-            Dirty,
+            dirty,
             ESceneGPUResourceDirty
             ::PointLight))
         {
             std::vector<
                 PointLightData>
-                GPUData;
+                gpuData;
 
-            for (auto& Pair :
-                LightInfos)
+            for (auto& pair :
+                m_LightInfos)
             {
-                auto* Proxy =
-                    Pair.second
+                auto* proxy =
+                    pair.second
                     ->GetProxy();
 
-                if (!Proxy)
+                if (!proxy)
                     continue;
 
-                if (Proxy
+                if (proxy
                     ->GetLightType()
                     != ELightType
                     ::Point)
@@ -931,32 +931,32 @@ namespace Renderer {
                 }
 
                 PointLightData
-                    Data;
-                Data.Common.Color = Proxy->GetColor();
-                Data.Common.Intensity = Proxy->GetIntensity();
-                Data.Position = Proxy->GetPosition();
-                Data.Common.LightId = lightIndex;
-                LightIndexs[Proxy] = lightIndex;
+                    data;
+                data.Common.Color = proxy->GetColor();
+                data.Common.Intensity = proxy->GetIntensity();
+                data.Position = proxy->GetPosition();
+                data.Common.LightId = lightIndex;
+                m_LightIndexs[proxy] = lightIndex;
                 lightIndex++;
-                auto PointLightProxy = dynamic_cast<PointLightSceneProxy*>(Proxy);
-                Data.Radius = PointLightProxy->GetAttenuationRadius();
+                auto pointLightProxy = dynamic_cast<PointLightSceneProxy*>(proxy);
+                data.Radius = pointLightProxy->GetAttenuationRadius();
 
-                GPUData.emplace_back(
-                    Data);
+                gpuData.emplace_back(
+                    data);
             }
 
-            LightRes.PointLightCount =
+            lightRes.PointLightCount =
                 static_cast<uint32_t>(
-                    GPUData.size());
-            RHI::RHIBufferDesc Desc;
-            Desc.Size = GPUData.size() * sizeof(PointLightData);
-            if (Desc.Size == 0) {
-                Desc.Size = 1;
+                    gpuData.size());
+            RHI::RHIBufferDesc desc;
+            desc.Size = gpuData.size() * sizeof(PointLightData);
+            if (desc.Size == 0) {
+                desc.Size = 1;
             }
-            Desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
-            LightRes.PointLightBuffer = std::make_shared<RenderCore::RenderBuffer>(Desc);
-            LightRes.PointLightBuffer->InitRHIResource();
-            LightRes.PointLightBuffer->UploadData(GPUData.data(), Desc.Size);
+            desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
+            lightRes.PointLightBuffer = std::make_shared<RenderCore::RenderBuffer>(desc);
+            lightRes.PointLightBuffer->InitRHIResource();
+            lightRes.PointLightBuffer->UploadData(gpuData.data(), desc.Size);
         }
 
         //------------------------------------------------
@@ -964,25 +964,25 @@ namespace Renderer {
         //------------------------------------------------
 
         if (EnumHasAnyFlags(
-            Dirty,
+            dirty,
             ESceneGPUResourceDirty
             ::SpotLight))
         {
             std::vector<
                 SpotLightData>
-                GPUData;
+                gpuData;
 
-            for (auto& Pair :
-                LightInfos)
+            for (auto& pair :
+                m_LightInfos)
             {
-                auto* Proxy =
-                    Pair.second
+                auto* proxy =
+                    pair.second
                     ->GetProxy();
 
-                if (!Proxy)
+                if (!proxy)
                     continue;
 
-                if (Proxy
+                if (proxy
                     ->GetLightType()
                     != ELightType
                     ::Spot)
@@ -991,70 +991,70 @@ namespace Renderer {
                 }
 
                 SpotLightData
-                    Data;
-                Data.Common.Color = Proxy->GetColor();
-                Data.Common.Intensity = Proxy->GetIntensity();
-                Data.Common.LightId = lightIndex;
-                LightIndexs[Proxy] = lightIndex;
+                    data;
+                data.Common.Color = proxy->GetColor();
+                data.Common.Intensity = proxy->GetIntensity();
+                data.Common.LightId = lightIndex;
+                m_LightIndexs[proxy] = lightIndex;
                 lightIndex++;
-                Data.Position = Proxy->GetPosition();
-                auto SpotLightProxy = dynamic_cast<SpotLightSceneProxy*>(Proxy);
-                Data.Radius = SpotLightProxy->GetAttenuationRadius();
-                Data.Direction = SpotLightProxy->GetDirection();
-                Data.InnerConeCos = SpotLightProxy->GetInnerConeAngle();
-                Data.OuterConeCos = SpotLightProxy->GetOuterConeAngle();
+                data.Position = proxy->GetPosition();
+                auto spotLightProxy = dynamic_cast<SpotLightSceneProxy*>(proxy);
+                data.Radius = spotLightProxy->GetAttenuationRadius();
+                data.Direction = spotLightProxy->GetDirection();
+                data.InnerConeCos = spotLightProxy->GetInnerConeAngle();
+                data.OuterConeCos = spotLightProxy->GetOuterConeAngle();
 
-                GPUData.emplace_back(
-                    Data);
+                gpuData.emplace_back(
+                    data);
             }
 
-            LightRes.SpotLightCount =
+            lightRes.SpotLightCount =
                 static_cast<uint32_t>(
-                    GPUData.size());
-            RHI::RHIBufferDesc Desc;
-            Desc.Size = GPUData.size() * sizeof(SpotLightData);
-            if (Desc.Size == 0) {
-                Desc.Size = 1;
+                    gpuData.size());
+            RHI::RHIBufferDesc desc;
+            desc.Size = gpuData.size() * sizeof(SpotLightData);
+            if (desc.Size == 0) {
+                desc.Size = 1;
             }
-            Desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
-            LightRes.SpotLightBuffer = std::make_shared<RenderCore::RenderBuffer>(Desc);
-            LightRes.SpotLightBuffer->InitRHIResource();
-            LightRes.SpotLightBuffer->UploadData(GPUData.data(), Desc.Size);
+            desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
+            lightRes.SpotLightBuffer = std::make_shared<RenderCore::RenderBuffer>(desc);
+            lightRes.SpotLightBuffer->InitRHIResource();
+            lightRes.SpotLightBuffer->UploadData(gpuData.data(), desc.Size);
         }
 
         if (EnumHasAnyFlags(
-            Dirty,
+            dirty,
             ESceneGPUResourceDirty
             ::Primitive))
         {
             UpdatePrimitiveGPUResource();
         }
-        LightRes.IBLSpecularTexture = nullptr;
-        LightRes.IBLSpecularTexture = nullptr;
+        lightRes.IBLSpecularTexture = nullptr;
+        lightRes.IBLSpecularTexture = nullptr;
         if (EnumHasAnyFlags(
-            Dirty,
+            dirty,
             ESceneGPUResourceDirty
             ::SkyLight)) {
-            for (auto& Pair :
-                LightInfos)
+            for (auto& pair :
+                m_LightInfos)
             {
-                auto* Proxy =
-                    Pair.second
+                auto* proxy =
+                    pair.second
                     ->GetProxy();
 
-                if (!Proxy)
+                if (!proxy)
                     continue;
 
-                if (Proxy
+                if (proxy
                     ->GetLightType()
                     != ELightType
                     ::Sky)
                 {
                     continue;
                 }
-                auto SkyLightProxy = dynamic_cast<SkyLightSceneProxy*>(Proxy);
-                LightRes.IBLSpecularTexture = SkyLightProxy->GetSpecularPrefilter();
-                LightRes.IBLDiffuseTexture = SkyLightProxy->GetDiffuseIrradiance();
+                auto skyLightProxy = dynamic_cast<SkyLightSceneProxy*>(proxy);
+                lightRes.IBLSpecularTexture = skyLightProxy->GetSpecularPrefilter();
+                lightRes.IBLDiffuseTexture = skyLightProxy->GetDiffuseIrradiance();
             }
 
         }

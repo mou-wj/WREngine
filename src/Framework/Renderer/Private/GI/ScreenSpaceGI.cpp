@@ -16,9 +16,9 @@ namespace Renderer {
         RHI::ERHIShaderFrequency::Compute
     );
 
-    void AddScreenSpaceGIPass(RenderCore::RenderGraphBuilder& GraphBuilder, const ScreenSpaceGIPassInput& Input)
+    void AddScreenSpaceGIPass(RenderCore::RenderGraphBuilder& graphBuilder, const ScreenSpaceGIPassInput& input)
     {
-        if (!Input.GBufferA || !Input.GBufferB || !Input.GBufferC || !Input.SceneColor || !Input.DepthPyramid || !Input.OutputGI)
+        if (!input.GBufferA || !input.GBufferB || !input.GBufferC || !input.SceneColor || !input.DepthPyramid || !input.OutputGI)
         {
             return;
         }
@@ -39,47 +39,47 @@ namespace Renderer {
         computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
 
-        auto InputCopy = Input;
-        const auto outputDesc = InputCopy.OutputGI->GetDesc();
-        auto* passParameter = GraphBuilder.AllocateParameter<ScreenSpaceGIParameters>();
+        auto inputCopy = input;
+        const auto outputDesc = inputCopy.OutputGI->GetDesc();
+        auto* passParameter = graphBuilder.AllocateParameter<ScreenSpaceGIParameters>();
         *passParameter = ScreenSpaceGIParameters{};
 
         RenderCore::RenderGraphTextureUAVDesc outputUAVDesc;
         outputUAVDesc.Format = outputDesc.Format;
         outputUAVDesc.ArraySize = outputDesc.ArraySize;
-        outputUAVDesc.Texture = InputCopy.OutputGI;
-        auto outputUAV = GraphBuilder.CreateTextureUAV("ScreenSpaceGIOuput", outputUAVDesc);
+        outputUAVDesc.Texture = inputCopy.OutputGI;
+        auto outputUAV = graphBuilder.CreateTextureUAV("ScreenSpaceGIOuput", outputUAVDesc);
 
-        passParameter->Textures.GBufferInput.GBufferA = InputCopy.GBufferA;
-        passParameter->Textures.GBufferInput.GBufferB = InputCopy.GBufferB;
-        passParameter->Textures.GBufferInput.GBufferC = InputCopy.GBufferC;
-        passParameter->Textures.SceneColorTexture = InputCopy.SceneColor;
-        passParameter->Textures.GBufferInput.Depth = InputCopy.DepthPyramid;
+        passParameter->Textures.GBufferInput.GBufferA = inputCopy.GBufferA;
+        passParameter->Textures.GBufferInput.GBufferB = inputCopy.GBufferB;
+        passParameter->Textures.GBufferInput.GBufferC = inputCopy.GBufferC;
+        passParameter->Textures.SceneColorTexture = inputCopy.SceneColor;
+        passParameter->Textures.GBufferInput.Depth = inputCopy.DepthPyramid;
         passParameter->Textures.OutputGIColor = outputUAV;
         passParameter->Textures.GBufferInput.PointSampler = RenderCore::GlobalNearestSampler.get();
 
-        GraphBuilder.AddPass<ScreenSpaceGIParameters>(
+        graphBuilder.AddPass<ScreenSpaceGIParameters>(
             "ScreenSpaceGIPass",
             ScreenSpaceGIParameters::GetMetaData(),
             passParameter,
             RenderCore::EPassFlag::Compute,
-            [InputCopy, outputDesc, shader, pipelineState, passParameter](RHI::RHICommandListBase& RHICmdList)
+            [inputCopy, outputDesc, shader, pipelineState, passParameter](RHI::RHICommandListBase& rhiCmdList)
             {
                 RHI::RHITexUAVCreateInfo outputUAVDesc;
                 outputUAVDesc.Format = outputDesc.Format;
                 outputUAVDesc.ArraySize = outputDesc.ArraySize;
 
-                auto& cmd = static_cast<RHI::RHIComputeCommandList&>(RHICmdList);
+                auto& cmd = static_cast<RHI::RHIComputeCommandList&>(rhiCmdList);
                 cmd.SetComputePipelineState(pipelineState);
 
                 ScreenSpaceGIParameters& params = *passParameter;
-                params.ViewProj = InputCopy.ViewProj;
-                params.InvViewProj = InputCopy.InvViewProj;
-                params.CameraPos = InputCopy.CameraPos;
+                params.ViewProj = inputCopy.ViewProj;
+                params.InvViewProj = inputCopy.InvViewProj;
+                params.CameraPos = inputCopy.CameraPos;
                 params.ScreenSize = Core::Float2(static_cast<float>(outputDesc.Width), static_cast<float>(outputDesc.Height));
-                params.MaxTraceSteps = std::max(1u, InputCopy.MaxTraceSteps);
-                params.MaxTraceDistance = std::max(0.01f, InputCopy.MaxTraceDistance);
-                params.TraceThickness = std::max(0.0001f, InputCopy.TraceThickness);
+                params.MaxTraceSteps = std::max(1u, inputCopy.MaxTraceSteps);
+                params.MaxTraceDistance = std::max(0.01f, inputCopy.MaxTraceDistance);
+                params.TraceThickness = std::max(0.0001f, inputCopy.TraceThickness);
                 
 
                 SetShaderParameters(cmd, shader, &params);

@@ -19,14 +19,14 @@ namespace Renderer {
     public:
         DECLARE_GLOBAL_SHADER_TYPE(DrawSkyVS)
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
-            OutEnvironment.SetDefine("VERTEX_SHADER", 1);
+            outEnvironment.SetDefine("VERTEX_SHADER", 1);
         }
 
 
@@ -47,14 +47,14 @@ namespace Renderer {
     public:
         DECLARE_GLOBAL_SHADER_TYPE(DrawSkyPS)
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
-            OutEnvironment.SetDefine("PIXEL_SHADER", 1);
+            outEnvironment.SetDefine("PIXEL_SHADER", 1);
         }
 
         static const RenderCore::ShaderParametersMetadata* GetShaderParameterMetadata()

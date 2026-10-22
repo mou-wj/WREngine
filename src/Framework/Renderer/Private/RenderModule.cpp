@@ -39,7 +39,7 @@ namespace Renderer {
 
     void RenderModule::StartupModule()
     {
-        //������Ⱦ�߳�
+        // Start the render thread.
         RenderCore::StartRenderThread();
 		InitGlobalRenderResource();
         GTransientResourceAllocator.InitRHI();
@@ -49,12 +49,12 @@ namespace Renderer {
         //初始化ibl lut
         InitIBLLut();
         Engine::InitializeShapeStaticMeshes();
-        bLoaded = true;
+        m_bLoaded = true;
     }
 
     void RenderModule::ShutdownModule()
     {
-        bLoaded = false;
+        m_bLoaded = false;
         GRenderTargetPool.Clear();
         GTransientResourceAllocator.ReleaseRHI();
 		GMeshMaterialShaderMap.Clear();
@@ -63,58 +63,58 @@ namespace Renderer {
         ReleaseGlobalRenderResource();
         GlobalIBLLutTexture.reset();
         Engine::ReleaseShapeStaticMeshes();
-        // �ر���Ⱦ�߳�
+        // Stop the render thread.
         RenderCore::StopRenderThread();
 		
     }
 
     bool RenderModule::IsLoaded() const
     {
-        return bLoaded;
+        return m_bLoaded;
     }
 
 
     void RenderModule::BeginRender(
-        Engine::SceneViewFamily* Views)
+        Engine::SceneViewFamily* views)
     {
 
         RenderCore::RenderGraphBuilder builder;
-        auto ColorTex = Views->RenderTarget->GetRenderTarget();
-        auto sceneColorTexture = builder.RegisterExternalTexture("RenderTarget", ColorTex);
+        auto colorTex = views->RenderTarget->GetRenderTarget();
+        auto sceneColorTexture = builder.RegisterExternalTexture("RenderTarget", colorTex);
         PoolRenderTargetDesc depthDesc;
         depthDesc.Format = RHI::ERHIFormat::D32_Float;
-        depthDesc.Width = ColorTex->GetRHI()->GetDesc().Width;
-		depthDesc.Height = ColorTex->GetRHI()->GetDesc().Height;
+        depthDesc.Width = colorTex->GetRHI()->GetDesc().Width;
+		depthDesc.Height = colorTex->GetRHI()->GetDesc().Height;
         depthDesc.Usage = RHI::ERHITextureCreateFlag::DepthStencil | RHI::ERHITextureCreateFlag::ShaderResource;
-        auto PoolDepthTarget = GRenderTargetPool.GetFreeRenderTarget(depthDesc);
-		PoolDepthTarget->MarkUsed(true);
-		auto depthText = builder.RegisterExternalTexture("DepthTarget", PoolDepthTarget.get());
+        auto poolDepthTarget = GRenderTargetPool.GetFreeRenderTarget(depthDesc);
+		poolDepthTarget->MarkUsed(true);
+		auto depthText = builder.RegisterExternalTexture("DepthTarget", poolDepthTarget.get());
         uint32_t maxMipLevel = std::max<uint32_t>(1, (uint32_t)std::log2(std::max<uint32_t>(1, depthDesc.Width)));
         depthDesc.MipLevels = maxMipLevel;
         depthDesc.Usage |= RHI::ERHITextureCreateFlag::UAV;
-        auto PoolDepthPyramidTarget = GRenderTargetPool.GetFreeRenderTarget(depthDesc);
-        PoolDepthPyramidTarget->MarkUsed(true);
-        auto preDepthText = builder.RegisterExternalTexture("DepthTargetPyramid", PoolDepthPyramidTarget.get());
+        auto poolDepthPyramidTarget = GRenderTargetPool.GetFreeRenderTarget(depthDesc);
+        poolDepthPyramidTarget->MarkUsed(true);
+        auto preDepthText = builder.RegisterExternalTexture("DepthTargetPyramid", poolDepthPyramidTarget.get());
         //构建Gbuffer
         auto gbufferInfo = CreateGBufferInfo({});
         std::vector<RenderCore::RenderGraphTextureRef> gbuffers;
-        std::vector<PooledRenderTarget*> GbufferTargets;
+        std::vector<PooledRenderTarget*> gbufferTargets;
         for (int i = 0; i < gbufferInfo.NumTargets; i++) {
             PoolRenderTargetDesc gbufferDesc;
             gbufferDesc.Format = gbufferInfo.Targets[i].TargetFormat;
-            gbufferDesc.Width = ColorTex->GetRHI()->GetDesc().Width;
-            gbufferDesc.Height = ColorTex->GetRHI()->GetDesc().Height;
+            gbufferDesc.Width = colorTex->GetRHI()->GetDesc().Width;
+            gbufferDesc.Height = colorTex->GetRHI()->GetDesc().Height;
             gbufferDesc.Usage = RHI::ERHITextureCreateFlag::RenderTarget | RHI::ERHITextureCreateFlag::ShaderResource;
-            auto PoolGbufferTarget = GRenderTargetPool.GetFreeRenderTarget(gbufferDesc);
-            PoolGbufferTarget->MarkUsed(true);
-            GbufferTargets.push_back(PoolGbufferTarget.get());
-            auto gbufferText = builder.RegisterExternalTexture(std::string("GBufferTarget") + std::to_string(i), PoolGbufferTarget.get());
+            auto poolGbufferTarget = GRenderTargetPool.GetFreeRenderTarget(gbufferDesc);
+            poolGbufferTarget->MarkUsed(true);
+            gbufferTargets.push_back(poolGbufferTarget.get());
+            auto gbufferText = builder.RegisterExternalTexture(std::string("GBufferTarget") + std::to_string(i), poolGbufferTarget.get());
             gbuffers.push_back(gbufferText);
         }
 		LocalVertexFactoryInstanceManager::Get().BeginUpdateGPUResources();
         auto sceneRenderer = CreateSceneRenderer();
-        sceneRenderer->Scene =  dynamic_cast<Scene*>(Views->Scene);
-        sceneRenderer->Views = Views;
+        sceneRenderer->Scene =  dynamic_cast<Scene*>(views->Scene);
+        sceneRenderer->Views = views;
         sceneRenderer->SceneTextures.SceneColor = sceneColorTexture;
         sceneRenderer->SceneTextures.SceneDepth = depthText;
         sceneRenderer->SceneTextures.SceneDepthPyramid = preDepthText;
@@ -127,35 +127,35 @@ namespace Renderer {
         LocalVertexFactoryInstanceManager::Get().UpdateGPUResources();
         sceneRenderer->Scene->UpdateGlobalDistanceFieldIfNeeded();
         builder.Execute();
-        PoolDepthTarget->MarkUsed(false);
-        PoolDepthPyramidTarget->MarkUsed(false);
-        for (auto gTarget : GbufferTargets) {
+        poolDepthTarget->MarkUsed(false);
+        poolDepthPyramidTarget->MarkUsed(false);
+        for (auto gTarget : gbufferTargets) {
             gTarget->MarkUsed(false);
         }
     }
     Engine::SceneInterface* RenderModule::AllocateScene() {
         return new Scene();
     }
-    void RenderModule::PreComputeIBL(RenderCore::RenderTexture* InHDRTexture, RenderCore::RenderTexture* OutDiffuseIBL, RenderCore::RenderTexture* OutSpecularIBL) {
-        if (!InHDRTexture || !OutDiffuseIBL || !OutSpecularIBL) return;
+    void RenderModule::PreComputeIBL(RenderCore::RenderTexture* inHdrTexture, RenderCore::RenderTexture* outDiffuseIbl, RenderCore::RenderTexture* outSpecularIbl) {
+        if (!inHdrTexture || !outDiffuseIbl || !outSpecularIbl) return;
         IBLPrecomputeParameters params;
-        uint32_t roughnessCount = OutDiffuseIBL->GetRHI()->GetDesc().MipLevels;
+        uint32_t roughnessCount = outDiffuseIbl->GetRHI()->GetDesc().MipLevels;
         Core::Int2 outsize;
-        outsize.X = OutDiffuseIBL->GetRHI()->GetDesc().Width;
-        outsize.Y = OutDiffuseIBL->GetRHI()->GetDesc().Height;
+        outsize.X = outDiffuseIbl->GetRHI()->GetDesc().Width;
+        outsize.Y = outDiffuseIbl->GetRHI()->GetDesc().Height;
         
         params.EnvironmentMapParameter.SampleCount = 4;
 
 
-        TransitionTextureImmediate(RHI::GRHIApi, InHDRTexture,  RHI::ERHIResourceAccess::SRV, RHI::EQueueType::Compute);
-        TransitionTextureImmediate(RHI::GRHIApi, OutDiffuseIBL, RHI::ERHIResourceAccess::UAV, RHI::EQueueType::Compute);
-        TransitionTextureImmediate(RHI::GRHIApi, OutSpecularIBL, RHI::ERHIResourceAccess::UAV, RHI::EQueueType::Compute);
+        TransitionTextureImmediate(RHI::GRHIApi, inHdrTexture,  RHI::ERHIResourceAccess::SRV, RHI::EQueueType::Compute);
+        TransitionTextureImmediate(RHI::GRHIApi, outDiffuseIbl, RHI::ERHIResourceAccess::UAV, RHI::EQueueType::Compute);
+        TransitionTextureImmediate(RHI::GRHIApi, outSpecularIbl, RHI::ERHIResourceAccess::UAV, RHI::EQueueType::Compute);
         params.EnvironmentMapParameter.EnvSampler = RenderCore::GlobalSampler.get();
-        params.EnvironmentMapParameter.EnvironmentMap = InHDRTexture->GetRHI();
+        params.EnvironmentMapParameter.EnvironmentMap = inHdrTexture->GetRHI();
 
 
         // 获取 shader 实例（按变体 id）
-        auto& GShaderMap = RenderCore::GShaderMap;
+        auto& gShaderMap = RenderCore::GShaderMap;
         auto shaderType = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::Global]["IBLPrecomputeCS"];
         
         
@@ -172,18 +172,18 @@ namespace Renderer {
 		for (uint32_t mip = 0; mip < 6; mip++) {
 
             params.EnvironmentMapParameter.Roughness = mip * roughnessStep;
-            RenderCore::Shader* shader = GShaderMap.GetShader(shaderType, 0);
+            RenderCore::Shader* shader = gShaderMap.GetShader(shaderType, 0);
             if (!shader) return;
             RHI::RHIComputePipelineStateDesc computeDesc;
             computeDesc.ComputeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
             auto pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
             cmdlist.SetComputePipelineState(pipelineState);
-            RHI::RHITexUAVCreateInfo SpecEnvUAVDesc;
-            SpecEnvUAVDesc.Format = OutSpecularIBL->GetRHI()->GetDesc().Format;
-            SpecEnvUAVDesc.ArraySize = OutSpecularIBL->GetRHI()->GetDesc().ArraySize;
-			SpecEnvUAVDesc.FirstMipSlice = mip;
-            SpecEnvUAVDesc.ViewType = RHI::ERHITextureViewType::TextureView2DArray;
-            auto specuav = OutSpecularIBL->GetViewCache().GetOrCreateUAV(OutSpecularIBL->GetRHI(), SpecEnvUAVDesc);
+            RHI::RHITexUAVCreateInfo specEnvUavDesc;
+            specEnvUavDesc.Format = outSpecularIbl->GetRHI()->GetDesc().Format;
+            specEnvUavDesc.ArraySize = outSpecularIbl->GetRHI()->GetDesc().ArraySize;
+			specEnvUavDesc.FirstMipSlice = mip;
+            specEnvUavDesc.ViewType = RHI::ERHITextureViewType::TextureView2DArray;
+            auto specuav = outSpecularIbl->GetViewCache().GetOrCreateUAV(outSpecularIbl->GetRHI(), specEnvUavDesc);
             
             params.EnvironmentMapParameter.OutputSpecularParam.OutputSpecularTexture = specuav;
 
@@ -201,13 +201,13 @@ namespace Renderer {
             
         }
 		//计算漫反射预计算贴图
-        RHI::RHITexUAVCreateInfo DifEnvUAVDesc;
-        DifEnvUAVDesc.Format = OutDiffuseIBL->GetRHI()->GetDesc().Format;
-        DifEnvUAVDesc.ArraySize = OutDiffuseIBL->GetRHI()->GetDesc().ArraySize;
-        DifEnvUAVDesc.ViewType = RHI::ERHITextureViewType::TextureView2DArray;
-        auto difuav = OutDiffuseIBL->GetViewCache().GetOrCreateUAV(OutDiffuseIBL->GetRHI(), DifEnvUAVDesc);
+        RHI::RHITexUAVCreateInfo difEnvUavDesc;
+        difEnvUavDesc.Format = outDiffuseIbl->GetRHI()->GetDesc().Format;
+        difEnvUavDesc.ArraySize = outDiffuseIbl->GetRHI()->GetDesc().ArraySize;
+        difEnvUavDesc.ViewType = RHI::ERHITextureViewType::TextureView2DArray;
+        auto difuav = outDiffuseIbl->GetViewCache().GetOrCreateUAV(outDiffuseIbl->GetRHI(), difEnvUavDesc);
         params.EnvironmentMapParameter.OutputDiffuseParam.OutputDiffuseTexture = difuav;
-        RenderCore::Shader* shader = GShaderMap.GetShader(shaderType, 1);
+        RenderCore::Shader* shader = gShaderMap.GetShader(shaderType, 1);
         if (!shader) return;
         RHI::RHIComputePipelineStateDesc computeDesc;
         computeDesc.ComputeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
@@ -227,9 +227,9 @@ namespace Renderer {
         RHI::RHIFence fence;
 		fence.QueueType = RHI::EQueueType::Compute;
         fence.Value = GRHIApi->GetQueue(RHI::EQueueType::Compute)->ExecuteContext(computeContex);
-        InHDRTexture->GetTracker().UpdateLastAccessFence(fence);
-        OutDiffuseIBL->GetTracker().UpdateLastAccessFence(fence);
-        OutSpecularIBL->GetTracker().UpdateLastAccessFence(fence);
+        inHdrTexture->GetTracker().UpdateLastAccessFence(fence);
+        outDiffuseIbl->GetTracker().UpdateLastAccessFence(fence);
+        outSpecularIbl->GetTracker().UpdateLastAccessFence(fence);
     }
 
     void RenderModule::InitIBLLut() {
@@ -256,7 +256,7 @@ namespace Renderer {
         auto uav = GlobalIBLLutTexture->GetViewCache().GetOrCreateUAV(GlobalIBLLutTexture->GetRHI(), lutUAVDesc);
         params.BRDFParameter.OutputBRDFLUT = uav;
         // 获取 shader 实例（按变体 id）
-        auto& GShaderMap = RenderCore::GShaderMap;
+        auto& gShaderMap = RenderCore::GShaderMap;
         auto shaderType = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::Global]["IBLPrecomputeCS"];
 
         // 创建或获取 compute pipeline state
@@ -265,7 +265,7 @@ namespace Renderer {
         cmdlist.SetImmediate(true);
 
         //计算lut预计算贴图
-        RenderCore::Shader* shader = GShaderMap.GetShader(shaderType, 2);
+        RenderCore::Shader* shader = gShaderMap.GetShader(shaderType, 2);
         if (!shader) return;
         RHI::RHIComputePipelineStateDesc computeDesc;
         computeDesc.ComputeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());

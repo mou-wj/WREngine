@@ -1,119 +1,119 @@
 #include "GBufferInfo.h"
 namespace Renderer {
 
-    FGBufferInfo CreateGBufferInfo(const FGBufferParams& Params)
+    FGBufferInfo CreateGBufferInfo(const FGBufferParams& params)
     {
-        FGBufferInfo Info;
+        FGBufferInfo info;
 
-        Info.Layout =
-            Params.bHasVelocity
+        info.Layout =
+            params.bHasVelocity
             ? GBL_ForceVelocity
             : GBL_Default;
 
-        Info.NumTargets = 0;
+        info.NumTargets = 0;
 
         //=========================================================================
         // Targets
         //=========================================================================
 
-        Info.Targets[0] =
+        info.Targets[0] =
             FGBufferTarget(
                 RHI::ERHIFormat::R8G8B8A8_UNorm,
                 "GBufferA");
 
-        Info.Targets[1] =
+        info.Targets[1] =
             FGBufferTarget(
                 RHI::ERHIFormat::R16G16B16A16_Float,
                 "GBufferB");
 
-        Info.Targets[2] =
+        info.Targets[2] =
             FGBufferTarget(
                 RHI::ERHIFormat::R8G8B8A8_UNorm,
                 "GBufferC");
 
-        Info.NumTargets = 3;
+        info.NumTargets = 3;
 
-        if (Params.bHasVelocity)
+        if (params.bHasVelocity)
         {
-            Info.Targets[3] =
+            info.Targets[3] =
                 FGBufferTarget(
                     RHI::ERHIFormat::R16G16_Float,
                     "Velocity");
 
-            Info.NumTargets++;
+            info.NumTargets++;
         }
 
         //=========================================================================
         // Slot Mapping
         //=========================================================================
 
-        Info.Slots[GBS_BaseColor] =
+        info.Slots[GBS_BaseColor] =
             FGBufferItem(GBS_BaseColor, 0, 0, 3);
 
-        Info.Slots[GBS_Metallic] =
+        info.Slots[GBS_Metallic] =
             FGBufferItem(GBS_Metallic, 0, 3, 1);
 
-        Info.Slots[GBS_WorldNormal] =
+        info.Slots[GBS_WorldNormal] =
             FGBufferItem(GBS_WorldNormal, 1, 0, 3);
 
-        Info.Slots[GBS_Roughness] =
+        info.Slots[GBS_Roughness] =
             FGBufferItem(GBS_Roughness, 1, 3, 1);
-        Info.Slots[GBS_ShadingModelId] =
+        info.Slots[GBS_ShadingModelId] =
             FGBufferItem(GBS_ShadingModelId, 2, 2, 1);
 
-        if (Params.bHasSpecular)
+        if (params.bHasSpecular)
         {
-            Info.Slots[GBS_Specular] =
+            info.Slots[GBS_Specular] =
                 FGBufferItem(GBS_Specular, 2, 0, 1);
         }
 
-        if (Params.bHasAO)
+        if (params.bHasAO)
         {
-            Info.Slots[GBS_AO] =
+            info.Slots[GBS_AO] =
                 FGBufferItem(GBS_AO, 2, 1, 1);
         }
 
-        if (Params.bHasVelocity)
+        if (params.bHasVelocity)
         {
-            Info.Slots[GBS_Velocity] =
+            info.Slots[GBS_Velocity] =
                 FGBufferItem(GBS_Velocity, 3, 0, 2);
         }
 
-        return Info;
+        return info;
     }
 
     const FGBufferItem* FindGBufferSlot(
-        const FGBufferInfo& GBufferInfo,
-        EGBufferSlot Slot)
+        const FGBufferInfo& gBufferInfo,
+        EGBufferSlot slot)
     {
-        if (Slot <= GBS_Invalid || Slot >= GBS_Num)
+        if (slot <= GBS_Invalid || slot >= GBS_Num)
         {
             return nullptr;
         }
 
-        const FGBufferItem& Item =
-            GBufferInfo.Slots[Slot];
+        const FGBufferItem& item =
+            gBufferInfo.Slots[slot];
 
-        if (!Item.bIsValid)
+        if (!item.bIsValid)
         {
             return nullptr;
         }
 
-        return &Item;
+        return &item;
     }
 
     const FGBufferTarget* FindGBufferTargetByName(
-        const FGBufferInfo& GBufferInfo,
-        const std::string& Name)
+        const FGBufferInfo& gBufferInfo,
+        const std::string& name)
     {
-        for (int i = 0; i < GBufferInfo.NumTargets; i++)
+        for (int i = 0; i < gBufferInfo.NumTargets; i++)
         {
-            const FGBufferTarget& Target =
-                GBufferInfo.Targets[i];
+            const FGBufferTarget& target =
+                gBufferInfo.Targets[i];
 
-            if (Target.TargetName == Name)
+            if (target.TargetName == name)
             {
-                return &Target;
+                return &target;
             }
         }
 

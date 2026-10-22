@@ -56,7 +56,7 @@ namespace Renderer {
     END_SHADER_PARAMETER_STRUCT(SceneEvnIBLLightParameters)
 
 
-    //spot light������Ϣ
+    // Spot light shadow atlas access parameters.
     BEGIN_SHADER_PARAMETER_STRUCT(AtlasShadowTextureAccessInfo)
         SHADER_PARAMETER(uint32_t, Layer)
         SHADER_PARAMETER(uint32_t, mip)
@@ -84,8 +84,8 @@ namespace Renderer {
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(LightShadowAccessInfo, LightShadowInfos)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(DirectionalLightCascadeShadowViewInfo, DirectionalLightViewInfos)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D, LightShadowAtlas)
-		SHADER_PARAMETER_RDG_TEXTURE_ARRAY(TextureCube, PointLightShadows, 8)//�ȹ̶����8�����ԴͶ����Ӱ
-        SHADER_PARAMETER_RDG_TEXTURE_ARRAY(Texture2DArray, ParrallelLightShadows, 4)//�ȹ̶����4�����ԴͶ����Ӱ
+		SHADER_PARAMETER_RDG_TEXTURE_ARRAY(TextureCube, PointLightShadows, 8)// Fixed capacity for point-light shadow maps.
+        SHADER_PARAMETER_RDG_TEXTURE_ARRAY(Texture2DArray, ParrallelLightShadows, 4)// Fixed capacity for directional-light shadow maps.
     END_SHADER_PARAMETER_STRUCT(SceneLightShadowParameters)
 
     //距离场参数
@@ -109,19 +109,19 @@ namespace Renderer {
 
     class Scene;
     ENGINE_API void BuildShaderParameters(
-        Scene*  Scene,
-        RenderCore::RenderGraphBuilder& Builder,
+        Scene*  scene,
+        RenderCore::RenderGraphBuilder& builder,
         SceneShaderParameters&
-        Out);
+        out);
 
     ENGINE_API void BuildGlobalDistanceFieldParameters(
-        Scene* Scene,
-        RenderCore::RenderGraphBuilder& Builder,
-        SceneGlobalDistanceFieldParameters& Out);
+        Scene* scene,
+        RenderCore::RenderGraphBuilder& builder,
+        SceneGlobalDistanceFieldParameters& out);
 
     ENGINE_API void BuildEvnIBLLightParameters(
-		Scene* Scene,
-		RenderCore::RenderGraphBuilder& Builder,
-		SceneEvnIBLLightParameters& Out);
+		Scene* scene,
+		RenderCore::RenderGraphBuilder& builder,
+		SceneEvnIBLLightParameters& out);
 
 }

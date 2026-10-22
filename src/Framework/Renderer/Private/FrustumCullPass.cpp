@@ -17,17 +17,17 @@ namespace Renderer {
     );
 
     bool ExecuteFrustumCullPass(
-        const FrustumCullPassInput& Input,
-        std::vector<uint32_t>& OutVisibilityFlags)
+        const FrustumCullPassInput& input,
+        std::vector<uint32_t>& outVisibilityFlags)
     {
-        OutVisibilityFlags.clear();
+        outVisibilityFlags.clear();
 
-        if (Input.PrimitiveCount == 0)
+        if (input.PrimitiveCount == 0)
         {
             return true;
         }
 
-        if (!Input.PrimitiveBoundsBuffer || !Input.VisibilityFlagsBuffer)
+        if (!input.PrimitiveBoundsBuffer || !input.VisibilityFlagsBuffer)
         {
             return false;
         }
@@ -58,21 +58,21 @@ namespace Renderer {
 
         RHI::RHIBufferSRVCreateInfo aabbSRVDesc;
         aabbSRVDesc.Offset = 0;
-        aabbSRVDesc.NumElements = Input.PrimitiveCount;
+        aabbSRVDesc.NumElements = input.PrimitiveCount;
         aabbSRVDesc.Stride = sizeof(AABBParameters);
         aabbSRVDesc.Format = RHI::ERHIFormat::Unknown;
 
         RHI::RHIBufferUAVCreateInfo visibilityUAVDesc;
         visibilityUAVDesc.Offset = 0;
-        visibilityUAVDesc.NumElements = Input.PrimitiveCount;
+        visibilityUAVDesc.NumElements = input.PrimitiveCount;
         visibilityUAVDesc.Stride = sizeof(uint32_t);
         visibilityUAVDesc.Format = RHI::ERHIFormat::Unknown;
 
-        auto* aabbSRV = Input.PrimitiveBoundsBuffer->GetViewCache().GetOrCreateSRV(
-            Input.PrimitiveBoundsBuffer->GetRHI(),
+        auto* aabbSRV = input.PrimitiveBoundsBuffer->GetViewCache().GetOrCreateSRV(
+            input.PrimitiveBoundsBuffer->GetRHI(),
             aabbSRVDesc);
-        auto* visibilityUAV = Input.VisibilityFlagsBuffer->GetViewCache().GetOrCreateUAV(
-            Input.VisibilityFlagsBuffer->GetRHI(),
+        auto* visibilityUAV = input.VisibilityFlagsBuffer->GetViewCache().GetOrCreateUAV(
+            input.VisibilityFlagsBuffer->GetRHI(),
             visibilityUAVDesc);
 
         if (!aabbSRV || !visibilityUAV)
@@ -82,13 +82,13 @@ namespace Renderer {
 
         RenderCore::TransitionBufferImmediate(
             RHI::GRHIApi,
-            Input.PrimitiveBoundsBuffer,
+            input.PrimitiveBoundsBuffer,
             RHI::ERHIResourceAccess::SRV,
             RHI::EQueueType::Compute);
 
         RenderCore::TransitionBufferImmediate(
             RHI::GRHIApi,
-            Input.VisibilityFlagsBuffer,
+            input.VisibilityFlagsBuffer,
             RHI::ERHIResourceAccess::UAV,
             RHI::EQueueType::Compute);
 
@@ -110,14 +110,14 @@ namespace Renderer {
         cmd.SetComputePipelineState(pipelineState);
 
         FrustumCullParameters params;
-        params.ViewProjection = Input.ViewProjection;
-        params.PrimitiveCount = Input.PrimitiveCount;
+        params.ViewProjection = input.ViewProjection;
+        params.PrimitiveCount = input.PrimitiveCount;
         params.AABBs = aabbSRV;
         params.VisibilityFlags = visibilityUAV;
 
         SetShaderParameters(cmd, cullingShader, &params);
 
-        const uint32_t groupX = (Input.PrimitiveCount + 63u) / 64u;
+        const uint32_t groupX = (input.PrimitiveCount + 63u) / 64u;
         cmd.Dispatch(groupX, 1, 1);
         cmd.End();
 
@@ -126,14 +126,14 @@ namespace Renderer {
         computeFence.Value = computeQueue->ExecuteContext({ computeContext }, {});
         computeQueue->WaitValue(computeFence.Value);
 
-        Input.PrimitiveBoundsBuffer->GetTracker().UpdateAccess(RHI::ERHIResourceAccess::SRV);
-        Input.PrimitiveBoundsBuffer->GetTracker().UpdateLastAccessFence(computeFence);
-        Input.VisibilityFlagsBuffer->GetTracker().UpdateAccess(RHI::ERHIResourceAccess::UAV);
-        Input.VisibilityFlagsBuffer->GetTracker().UpdateLastAccessFence(computeFence);
+        input.PrimitiveBoundsBuffer->GetTracker().UpdateAccess(RHI::ERHIResourceAccess::SRV);
+        input.PrimitiveBoundsBuffer->GetTracker().UpdateLastAccessFence(computeFence);
+        input.VisibilityFlagsBuffer->GetTracker().UpdateAccess(RHI::ERHIResourceAccess::UAV);
+        input.VisibilityFlagsBuffer->GetTracker().UpdateLastAccessFence(computeFence);
 
         RenderCore::TransitionBufferImmediate(
             RHI::GRHIApi,
-            Input.VisibilityFlagsBuffer,
+            input.VisibilityFlagsBuffer,
             RHI::ERHIResourceAccess::TransferSrc,
             RHI::EQueueType::Compute);
 
@@ -150,10 +150,10 @@ namespace Renderer {
 
         RHI::RHIReadBufferInfo readInfo;
         readInfo.Offset = 0;
-        readInfo.Size = Input.PrimitiveCount * sizeof(uint32_t);
+        readInfo.Size = input.PrimitiveCount * sizeof(uint32_t);
         void* mapped = RHI::GRHIApi->MapReadBuffer(
             readbackCmd,
-            Input.VisibilityFlagsBuffer->GetRHI(),
+            input.VisibilityFlagsBuffer->GetRHI(),
             readInfo);
 
         if (!mapped)
@@ -165,19 +165,19 @@ namespace Renderer {
         auto readbackFenceValue = computeQueue->ExecuteContext({ readbackContext }, {});
         computeQueue->WaitValue(readbackFenceValue);
 
-        OutVisibilityFlags.resize(Input.PrimitiveCount);
+        outVisibilityFlags.resize(input.PrimitiveCount);
         std::memcpy(
-            OutVisibilityFlags.data(),
+            outVisibilityFlags.data(),
             mapped,
-            Input.PrimitiveCount * sizeof(uint32_t));
+            input.PrimitiveCount * sizeof(uint32_t));
 
         RHI::GRHIApi->Unmap(mapped);
 
-        Input.VisibilityFlagsBuffer->GetTracker().UpdateAccess(RHI::ERHIResourceAccess::TransferSrc);
+        input.VisibilityFlagsBuffer->GetTracker().UpdateAccess(RHI::ERHIResourceAccess::TransferSrc);
 		RHI::RHIFence readbackFence;
 		readbackFence.QueueType = RHI::EQueueType::Compute;
 		readbackFence.Value = readbackFenceValue;
-        Input.VisibilityFlagsBuffer->GetTracker().UpdateLastAccessFence(readbackFence);
+        input.VisibilityFlagsBuffer->GetTracker().UpdateLastAccessFence(readbackFence);
 
         return true;
     }

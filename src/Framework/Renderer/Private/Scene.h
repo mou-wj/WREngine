@@ -44,12 +44,12 @@ namespace Renderer {
         explicit PrimitiveSceneInfo(
             std::unique_ptr<
             Engine::PrimitiveSceneProxy>
-            InProxy);
+            inProxy);
 
         Engine::PrimitiveSceneProxy*
             GetProxy() const
         {
-            return Proxy.get();
+            return m_Proxy.get();
         }
 
     public:
@@ -64,7 +64,7 @@ namespace Renderer {
 
         std::unique_ptr<
             Engine::PrimitiveSceneProxy>
-            Proxy;
+            m_Proxy;
     };
 
     //====================================================
@@ -78,12 +78,12 @@ namespace Renderer {
         explicit LightSceneInfo(
             std::unique_ptr<
             Engine::LightSceneProxy>
-            InProxy);
+            inProxy);
 
         Engine::LightSceneProxy*
             GetProxy() const
         {
-            return Proxy.get();
+            return m_Proxy.get();
         }
 
     public:
@@ -94,7 +94,7 @@ namespace Renderer {
 
         std::unique_ptr<
             Engine::LightSceneProxy>
-            Proxy;
+            m_Proxy;
     };
 
     struct LightShadowInfo
@@ -196,7 +196,7 @@ namespace Renderer {
         uint32_t PrimitiveCount = 0;
         RenderCore::RenderBufferSP PrimitiveBoundsBuffer = nullptr;
         RenderCore::RenderBufferSP VisibilityFlagsBuffer = nullptr;
-        LocalVertexFactoryInstanceInfo localvertexfactoryinstanceInfo;
+        LocalVertexFactoryInstanceInfo LocalVertexFactoryInstanceInfo;
     };
 
 
@@ -216,10 +216,10 @@ namespace Renderer {
     class SceneAccelerationStructure
     {
     public:
-        void Build(const std::unordered_map<Engine::PrimitiveComponent*, std::unique_ptr<PrimitiveSceneInfo>>& PrimitiveInfos);
-        void Query(const Engine::SceneView& View, std::vector<Engine::PrimitiveSceneProxy*>& OutPrimitives) const;
+        void Build(const std::unordered_map<Engine::PrimitiveComponent*, std::unique_ptr<PrimitiveSceneInfo>>& primitiveInfos);
+        void Query(const Engine::SceneView& view, std::vector<Engine::PrimitiveSceneProxy*>& outPrimitives) const;
         void Clear();
-        bool IsValid() const { return !Nodes.empty(); }
+        bool IsValid() const { return !m_Nodes.empty(); }
 
     private:
         struct Node
@@ -232,16 +232,16 @@ namespace Renderer {
             bool bLeaf = false;
         };
 
-        std::vector<Node> Nodes;
-        std::vector<Engine::PrimitiveSceneProxy*> Primitives;
+        std::vector<Node> m_Nodes;
+        std::vector<Engine::PrimitiveSceneProxy*> m_Primitives;
 
-        int BuildNode(int Start, int Count);
-        int Partition(int Start, int Count, int Axis);
+        int BuildNode(int start, int count);
+        int Partition(int start, int count, int axis);
     };
 
     /*
     ===============================================================================
-        Scene (SceneInterface ����ȫ�幤ҵ��ʵ��)
+        Scene implementation of the Engine scene interface.
     ===============================================================================
     */
     class RENDERER_API Scene : public Engine::SceneInterface {
@@ -250,34 +250,34 @@ namespace Renderer {
         ~Scene() override;
 
         // -------------------------------------------------------------------------
-        // ��Ϸ�߳����ע��ӿ� (GameThread Only)
+        // Game-thread scene registration interface.
         // -------------------------------------------------------------------------
-        void AddPrimitive(Engine::PrimitiveComponent* Component) override;
-        void RemovePrimitive(Engine::PrimitiveComponent* Component) override;
-        void AddLight(Engine::LightComponent* Component) override;
-        void RemoveLight(Engine::LightComponent* Component) override;
+        void AddPrimitive(Engine::PrimitiveComponent* component) override;
+        void RemovePrimitive(Engine::PrimitiveComponent* component) override;
+        void AddLight(Engine::LightComponent* component) override;
+        void RemoveLight(Engine::LightComponent* component) override;
         // -------------------------------------------------------------------------
-        // ��Ⱦ�߳�ר����ѯ�ӿ� (RenderThread Only)
+        // Render-thread scene update and query interface.
         // -------------------------------------------------------------------------
         void FlushPendingUpdates() override;
-        void NotifyComponentChanged(Engine::SceneComponent* Component) override;
+        void NotifyComponentChanged(Engine::SceneComponent* component) override;
         bool UpdateGlobalDistanceFieldIfNeeded() override;
 
 
-        std::vector<Engine::PrimitiveSceneProxy*> GatherVisiblePrimitives(const Engine::SceneView& View) const ;
+        std::vector<Engine::PrimitiveSceneProxy*> GatherVisiblePrimitives(const Engine::SceneView& view) const ;
 
-        void ForEachPrimitive(std::function<void(Engine::PrimitiveSceneProxy*)> Visitor);
+        void ForEachPrimitive(std::function<void(Engine::PrimitiveSceneProxy*)> visitor);
 
-        void ForEachLight(std::function<void(Engine::LightSceneProxy*)> Visitor);
+        void ForEachLight(std::function<void(Engine::LightSceneProxy*)> visitor);
 
         const SceneGPUResourceInfo& GetGPUResourceInfo() const;
         ShadowMapAllocator& GetShadowMapAllocator();
         const Core::BoxSphereBounds& GetSceneBounds() const;
-        LightShadowInfo& GetLightShadowInfo(Engine::LightSceneProxy* Light);
+        LightShadowInfo& GetLightShadowInfo(Engine::LightSceneProxy* light);
 
     private:
-        std::vector<Engine::PrimitiveSceneProxy*> GatherVisiblePrimitivesCPU(const Engine::SceneView& View) const;
-        std::vector<Engine::PrimitiveSceneProxy*> GatherVisiblePrimitivesGPU(const Engine::SceneView& View) const;
+        std::vector<Engine::PrimitiveSceneProxy*> GatherVisiblePrimitivesCPU(const Engine::SceneView& view) const;
+        std::vector<Engine::PrimitiveSceneProxy*> GatherVisiblePrimitivesGPU(const Engine::SceneView& view) const;
         friend class SceneRenderer;
         void UpdateGPUResourceIfNeeded();
         void UpdatePrimitiveGPUResource();
@@ -291,24 +291,24 @@ namespace Renderer {
             Engine::PrimitiveComponent*,
             std::unique_ptr<
             PrimitiveSceneInfo>>
-            PrimitiveInfos;
+            m_PrimitiveInfos;
 
         std::vector<
             Engine::PrimitiveSceneProxy*>
-            PrimitiveGPUProxyOrder;
+            m_PrimitiveGPUProxyOrder;
 
-        SceneAccelerationStructure AccelerationStructure;
+        SceneAccelerationStructure m_AccelerationStructure;
 
         std::unordered_map<
             Engine::LightComponent*,
             std::unique_ptr<
             LightSceneInfo>>
-            LightInfos;
+            m_LightInfos;
 
         std::unordered_map<
             Engine::LightSceneProxy*,
             uint32_t>
-            LightIndexs;
+            m_LightIndexs;
 
         //=========================================
         // GT -> RT command queue
@@ -316,13 +316,13 @@ namespace Renderer {
 
         std::vector<
             SceneCommand>
-            PendingCommands;
+            m_PendingCommands;
 
         std::mutex
-            PendingCommandMutex;
-        SceneGPUResourceInfo GPUResourceInfo;
-        ShadowMapAllocator ShadowMapAllocator;
-        Core::BoxSphereBounds SceneBounds;
+            m_PendingCommandMutex;
+        SceneGPUResourceInfo m_GPUResourceInfo;
+        ShadowMapAllocator m_ShadowMapAllocator;
+        Core::BoxSphereBounds m_SceneBounds;
 
 
     };

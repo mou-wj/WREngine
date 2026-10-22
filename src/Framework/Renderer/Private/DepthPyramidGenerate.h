@@ -25,12 +25,12 @@ namespace Renderer {
     public:
         DECLARE_GLOBAL_SHADER_TYPE(DepthPyramidGenerateCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
         }
 
@@ -46,6 +46,6 @@ namespace Renderer {
         RenderCore::RenderGraphTextureRef DepthPyramidTexture = nullptr;
     };
 
-    RENDERER_API void AddBuildDepthPyramidPass(RenderCore::RenderGraphBuilder& GraphBuilder, const BuildDepthPyramidPassInput& Input);
+    RENDERER_API void AddBuildDepthPyramidPass(RenderCore::RenderGraphBuilder& graphBuilder, const BuildDepthPyramidPassInput& input);
 
 } // namespace Renderer

@@ -50,7 +50,7 @@ class RENDERER_API MeshMaterialShader : public RenderCore::Shader
 
 ```cpp
 static bool ShouldCompilePermutation(
-    const RenderCore::ShaderPermutationParameters& Parameters)
+    const RenderCore::ShaderPermutationParameters& parameters)
 {
     return true;
 }

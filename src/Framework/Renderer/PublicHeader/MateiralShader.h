@@ -25,8 +25,8 @@ namespace Renderer
     {
     public:
         using ShaderMetaType = Engine::MaterialShaderType;
-        MaterialShader(const ShaderMetaType::ShaderCompiledInitializer& Initializer)
-            : Shader(Initializer)
+        MaterialShader(const ShaderMetaType::ShaderCompiledInitializer& initializer)
+            : Shader(initializer)
         {
         }
 
@@ -44,7 +44,7 @@ namespace Renderer
             Whether this shader should compile for the given material.
         */
         static bool ShouldCompilePermutation(
-            const RenderCore::ShaderPermutationParameters& Parameters)
+            const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
@@ -53,8 +53,8 @@ namespace Renderer
             Hook for material-specific compiler defines.
         */
         static void ModifyShaderCompilerEnvironment(
-            const RenderCore::ShaderPermutationParameters& Parameters,
-            RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+            const RenderCore::ShaderPermutationParameters& parameters,
+            RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
         }
 

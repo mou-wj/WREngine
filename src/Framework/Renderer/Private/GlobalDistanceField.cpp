@@ -27,12 +27,12 @@ namespace Renderer
     public:
         DECLARE_GLOBAL_SHADER_TYPE(DistanceFieldMergeCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
         }
 
@@ -50,10 +50,10 @@ namespace Renderer
     );
 
 
-    bool ExecuteDistanceFieldMergePass(const DistanceFieldMergePassInput& Input)
+    bool ExecuteDistanceFieldMergePass(const DistanceFieldMergePassInput& input)
     {
         
-        if (!Input.InputSDFTexture || !Input.OutputSDFTexture)
+        if (!input.InputSDFTexture || !input.OutputSDFTexture)
         {
             return false;
         }
@@ -71,8 +71,8 @@ namespace Renderer
             return false;
         }
 
-        const auto& inputDesc = Input.InputSDFTexture->GetRHI()->GetDesc();
-        const auto& outputDesc = Input.OutputSDFTexture->GetRHI()->GetDesc();
+        const auto& inputDesc = input.InputSDFTexture->GetRHI()->GetDesc();
+        const auto& outputDesc = input.OutputSDFTexture->GetRHI()->GetDesc();
 
         RHI::RHITexSRVCreateInfo inputSRVDesc;
         inputSRVDesc.Format = inputDesc.Format;
@@ -82,8 +82,8 @@ namespace Renderer
         outputUAVDesc.Format = outputDesc.Format;
         outputUAVDesc.ArraySize = outputDesc.ArraySize;
 
-        auto* inputSRV = Input.InputSDFTexture->GetViewCache().GetOrCreateSRV(Input.InputSDFTexture->GetRHI(), inputSRVDesc);
-        auto* outputUAV = Input.OutputSDFTexture->GetViewCache().GetOrCreateUAV(Input.OutputSDFTexture->GetRHI(), outputUAVDesc);
+        auto* inputSRV = input.InputSDFTexture->GetViewCache().GetOrCreateSRV(input.InputSDFTexture->GetRHI(), inputSRVDesc);
+        auto* outputUAV = input.OutputSDFTexture->GetViewCache().GetOrCreateUAV(input.OutputSDFTexture->GetRHI(), outputUAVDesc);
 
         if (!inputSRV || !outputUAV)
         {
@@ -92,13 +92,13 @@ namespace Renderer
 
         RenderCore::TransitionTextureImmediate(
             RHI::GRHIApi,
-            Input.InputSDFTexture,
+            input.InputSDFTexture,
             RHI::ERHIResourceAccess::SRV,
             RHI::EQueueType::Compute);
 
         RenderCore::TransitionTextureImmediate(
             RHI::GRHIApi,
-            Input.OutputSDFTexture,
+            input.OutputSDFTexture,
             RHI::ERHIResourceAccess::UAV,
             RHI::EQueueType::Compute);
         
@@ -129,66 +129,66 @@ namespace Renderer
         DistanceFieldMergeParameters params;
         RenderCore::TransientBufferDesc bufferDesc;
         bufferDesc.Stride = sizeof(DistanceFieldSourceParameters);
-        bufferDesc.Size = Input.sourceParams.size() * bufferDesc.Stride;
+        bufferDesc.Size = input.SourceParams.size() * bufferDesc.Stride;
         bufferDesc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
         auto buffer = RenderCore::GTransientResourceAllocator.AllocateBuffer(bufferDesc, 0, 1);
 
 		RenderCore::TransitionResource(GRHIApi, cmd, buffer->GetRHI(), RHI::ERHIResourceAccess::Unknown, RHI::ERHIResourceAccess::TransferDest, RHI::EQueueType::Graphics, RHI::EQueueType::Compute);
 		RHIUpdateBufferRegion updateRegion;
         updateRegion.Size = bufferDesc.Size;
-        GRHIApi->UpdateBuffer(cmd, buffer->GetRHI(), Input.sourceParams.data(), updateRegion);
+        GRHIApi->UpdateBuffer(cmd, buffer->GetRHI(), input.SourceParams.data(), updateRegion);
         RenderCore::TransitionResource(GRHIApi, cmd, buffer->GetRHI(), RHI::ERHIResourceAccess::TransferDest, RHI::ERHIResourceAccess::SRV, RHI::EQueueType::Compute, RHI::EQueueType::Compute);
         
         RHI::RHIBufferSRVCreateInfo srvDesc;
         srvDesc.Stride = sizeof(DistanceFieldSourceParameters);
-        srvDesc.NumElements = Input.sourceParams.size();
+        srvDesc.NumElements = input.SourceParams.size();
         auto srcsrv = buffer->GetViewCache().GetOrCreateSRV(buffer->GetRHI(), srvDesc);
 
         bufferDesc.Stride = sizeof(DistanceFieldOutParameters);
-        bufferDesc.Size = Input.outputParams.size() * bufferDesc.Stride;
+        bufferDesc.Size = input.OutputParams.size() * bufferDesc.Stride;
         auto outbuffer = RenderCore::GTransientResourceAllocator.AllocateBuffer(bufferDesc, 0, 1);
 
         RenderCore::TransitionResource(GRHIApi, cmd, outbuffer->GetRHI(), RHI::ERHIResourceAccess::Unknown, RHI::ERHIResourceAccess::TransferDest, RHI::EQueueType::Graphics, RHI::EQueueType::Compute);
         updateRegion.Size = bufferDesc.Size;
-        GRHIApi->UpdateBuffer(cmd, outbuffer->GetRHI(), Input.outputParams.data(), updateRegion);
+        GRHIApi->UpdateBuffer(cmd, outbuffer->GetRHI(), input.OutputParams.data(), updateRegion);
         RenderCore::TransitionResource(GRHIApi, cmd, outbuffer->GetRHI(), RHI::ERHIResourceAccess::TransferDest, RHI::ERHIResourceAccess::SRV, RHI::EQueueType::Compute, RHI::EQueueType::Compute);
 
 
         srvDesc.Stride = sizeof(DistanceFieldOutParameters);
-        srvDesc.NumElements = Input.outputParams.size();
+        srvDesc.NumElements = input.OutputParams.size();
 
         auto outsrv = outbuffer->GetViewCache().GetOrCreateSRV(outbuffer->GetRHI(), srvDesc);
         params.Source = srcsrv;
         params.Output = outsrv;
-        params.SourceCount = Input.sourceParams.size();
-        params.OutputCount = Input.outputParams.size();
-        Core::UInt3 OutputResolution = Core::UInt3(64, 64, 64);
-        params.OutputResolution = OutputResolution;
-        auto inputSrcDesc = Input.InputSDFTexture->GetRHI()->GetDesc();
-        Core::UInt3 InputAtlasResolution = Core::UInt3(inputSrcDesc.Width, inputSrcDesc.Height, inputSrcDesc.Depth);
-        params.InputAtlasResolution = InputAtlasResolution;
-        params.InputSDFTexture = Input.InputSDFTexture->GetRHI();
-        auto outputTexUAV = Input.OutputSDFTexture->GetViewCache().GetOrCreateUAV(Input.OutputSDFTexture->GetRHI(), outputUAVDesc);
+        params.SourceCount = input.SourceParams.size();
+        params.OutputCount = input.OutputParams.size();
+        Core::UInt3 outputResolution = Core::UInt3(64, 64, 64);
+        params.OutputResolution = outputResolution;
+        auto inputSrcDesc = input.InputSDFTexture->GetRHI()->GetDesc();
+        Core::UInt3 inputAtlasResolution = Core::UInt3(inputSrcDesc.Width, inputSrcDesc.Height, inputSrcDesc.Depth);
+        params.InputAtlasResolution = inputAtlasResolution;
+        params.InputSDFTexture = input.InputSDFTexture->GetRHI();
+        auto outputTexUAV = input.OutputSDFTexture->GetViewCache().GetOrCreateUAV(input.OutputSDFTexture->GetRHI(), outputUAVDesc);
         params.OutputSDFTexture = outputTexUAV;
         params.InputSDFSampler = RenderCore::GlobalSampler.get();
 
         SetShaderParameters(cmd, shader, &params);
 
-        const uint32_t groupX = (static_cast<uint32_t>(OutputResolution.X)) / 8u;
-        const uint32_t groupY = (static_cast<uint32_t>(OutputResolution.Y)) / 8u;
-        const uint32_t groupZ = (static_cast<uint32_t>(OutputResolution.Z)) / 8u;
+        const uint32_t groupX = (static_cast<uint32_t>(outputResolution.X)) / 8u;
+        const uint32_t groupY = (static_cast<uint32_t>(outputResolution.Y)) / 8u;
+        const uint32_t groupZ = (static_cast<uint32_t>(outputResolution.Z)) / 8u;
         cmd.Dispatch(groupX, groupY, groupZ);
 
         cmd.End();
         RHI::RHIFence fence;
 		fence.QueueType = RHI::EQueueType::Compute;
         fence.Value = computeQueue->ExecuteContext(computeContext);
-        Input.InputSDFTexture->GetTracker().UpdateLastAccessFence(fence);
-        Input.OutputSDFTexture->GetTracker().UpdateLastAccessFence(fence);
+        input.InputSDFTexture->GetTracker().UpdateLastAccessFence(fence);
+        input.OutputSDFTexture->GetTracker().UpdateLastAccessFence(fence);
         
         RenderCore::TransitionTextureImmediate(
             RHI::GRHIApi,
-            Input.OutputSDFTexture,
+            input.OutputSDFTexture,
             RHI::ERHIResourceAccess::SRV,
             RHI::EQueueType::Compute);
         return true;
@@ -203,35 +203,35 @@ namespace Renderer
 
 
     bool GlobalDistanceField::Initialize(
-        float InVoxelSize)
+        float inVoxelSize)
     {
-        if (IsInitialized) { return true; }
-        IsInitialized = true;
-        Bounds.Min = Core::Float3(-100, -100, -100);
-        Bounds.Max = Core::Float3(100, 100, 100);
-        Atlas = std::make_unique<Engine::DistanceFieldAtlas>();
+        if (m_bIsInitialized) { return true; }
+        m_bIsInitialized = true;
+        m_Bounds.Min = Core::Float3(-100, -100, -100);
+        m_Bounds.Max = Core::Float3(100, 100, 100);
+        m_Atlas = std::make_unique<Engine::DistanceFieldAtlas>();
         RHI::ERHITextureCreateFlags usage = RHI::ERHITextureCreateFlag::ShaderResource | RHI::ERHITextureCreateFlag::TransferDest | RHI::ERHITextureCreateFlag::UAV;
-        Atlas->Initialize(256, 256, 256, 64, usage);
-        GridSizeX = GridSizeY = GridSizeZ = 40;
-        BlockIndexBufferCPU.resize(GridSizeX * GridSizeY * GridSizeZ);
+        m_Atlas->Initialize(256, 256, 256, 64, usage);
+        m_GridSizeX = m_GridSizeY = m_GridSizeZ = 40;
+        m_BlockIndexBufferCPU.resize(m_GridSizeX * m_GridSizeY * m_GridSizeZ);
         RHI::RHIBufferDesc bufferDesc;
-        bufferDesc.Size = GridSizeX * GridSizeY * GridSizeZ * sizeof(GlobalDistanceFieldBlockIndex);
+        bufferDesc.Size = m_GridSizeX * m_GridSizeY * m_GridSizeZ * sizeof(GlobalDistanceFieldBlockIndex);
         bufferDesc.Stride = sizeof(GlobalDistanceFieldBlockIndex);
         bufferDesc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
-        BlockIndexBufferGPU = std::make_unique<RenderCore::RenderBuffer>(bufferDesc);
-		BlockIndexBufferGPU->InitRHIResource();
+        m_BlockIndexBufferGPU = std::make_unique<RenderCore::RenderBuffer>(bufferDesc);
+		m_BlockIndexBufferGPU->InitRHIResource();
         RHI::RHIBufferSRVCreateInfo srvInfo;
         srvInfo.Stride = sizeof(GlobalDistanceFieldBlockIndex);
-        srvInfo.NumElements = GridSizeX * GridSizeY * GridSizeZ;
+        srvInfo.NumElements = m_GridSizeX * m_GridSizeY * m_GridSizeZ;
 
-        BlockIndexBufferSRV = BlockIndexBufferGPU->GetViewCache().GetOrCreateSRV(BlockIndexBufferGPU->GetRHI(), srvInfo);
+        m_BlockIndexBufferSRV = m_BlockIndexBufferGPU->GetViewCache().GetOrCreateSRV(m_BlockIndexBufferGPU->GetRHI(), srvInfo);
 
-        VoxelSize = InVoxelSize;
+        m_VoxelSize = inVoxelSize;
 
 
-        BlockWorldSize =
-            Atlas->GetBlockResolution() *
-            VoxelSize;
+        m_BlockWorldSize =
+            m_Atlas->GetBlockResolution() *
+            m_VoxelSize;
 
 
         return true;
@@ -241,321 +241,321 @@ namespace Renderer
 
     void GlobalDistanceField::Release()
     {
-        if (Atlas)
+        if (m_Atlas)
         {
-            for (auto& Pair : Blocks)
+            for (auto& pair : m_Blocks)
             {
-                Atlas->Free(
-                    Pair.second.Allocation);
+                m_Atlas->Free(
+                    pair.second.Allocation);
             }
         }
 
 
-        Blocks.clear();
+        m_Blocks.clear();
 
 
-        Atlas = nullptr;
+        m_Atlas = nullptr;
     }
 
 
 
     uint32_t GlobalDistanceField::CalculateBlockId(
-        int32_t X,
-        int32_t Y,
-        int32_t Z) const
+        int32_t x,
+        int32_t y,
+        int32_t z) const
     {
         return
-            X +
-            Y * GridSizeX +
-            Z * GridSizeX * GridSizeY;
+            x +
+            y * m_GridSizeX +
+            z * m_GridSizeX * m_GridSizeY;
     }
 
 
 
     void GlobalDistanceField::CalculateBlockCoordinate(
-        const Core::Float3& Position,
-        int32_t& X,
-        int32_t& Y,
-        int32_t& Z) const
+        const Core::Float3& position,
+        int32_t& x,
+        int32_t& y,
+        int32_t& z) const
     {
-        Core::Float3 delta = Position - Bounds.Min;
+        Core::Float3 delta = position - m_Bounds.Min;
 
-        X =
+        x =
             static_cast<int32_t>(
-                std::floor(delta.X / BlockWorldSize));
+                std::floor(delta.X / m_BlockWorldSize));
 
 
-        Y =
+        y =
             static_cast<int32_t>(
-                std::floor(delta.Y / BlockWorldSize));
+                std::floor(delta.Y / m_BlockWorldSize));
 
 
-        Z =
+        z =
             static_cast<int32_t>(
-                std::floor(delta.Z / BlockWorldSize));
+                std::floor(delta.Z / m_BlockWorldSize));
     }
 
 
 
     Core::BoxSphereBounds GlobalDistanceField::CalculateBlockBounds(
-        int32_t X,
-        int32_t Y,
-        int32_t Z) const
+        int32_t x,
+        int32_t y,
+        int32_t z) const
     {
-        Core::Float3 Min(
-            X * BlockWorldSize,
-            Y * BlockWorldSize,
-            Z * BlockWorldSize);
+        Core::Float3 min(
+            x * m_BlockWorldSize,
+            y * m_BlockWorldSize,
+            z * m_BlockWorldSize);
 
-        Min += Bounds.Min;
+        min += m_Bounds.Min;
 
-        Core::Float3 Max =
-            Min +
+        Core::Float3 max =
+            min +
             Core::Float3(
-                BlockWorldSize,
-                BlockWorldSize,
-                BlockWorldSize);
+                m_BlockWorldSize,
+                m_BlockWorldSize,
+                m_BlockWorldSize);
 
 
 
         return Core::BoxSphereBounds(
             Core::AABB(
-                Min,
-                Max));
+                min,
+                max));
     }
 
 
     bool GlobalDistanceField::Allocate(
-        const Core::AABB& Bounds,
-        GlobalDistanceFieldBlockClipMap& OutClipMap)
+        const Core::AABB& bounds,
+        GlobalDistanceFieldBlockClipMap& outClipMap)
     {
-        if (!Atlas || Bounds.IsEmpty())
+        if (!m_Atlas || bounds.IsEmpty())
         {
             return false;
         }
 
 
 
-        int32_t MinX;
-        int32_t MinY;
-        int32_t MinZ;
+        int32_t minX;
+        int32_t minY;
+        int32_t minZ;
 
 
-        int32_t MaxX;
-        int32_t MaxY;
-        int32_t MaxZ;
-
-
-
-        CalculateBlockCoordinate(
-            Bounds.Min,
-            MinX,
-            MinY,
-            MinZ);
+        int32_t maxX;
+        int32_t maxY;
+        int32_t maxZ;
 
 
 
         CalculateBlockCoordinate(
-            Bounds.Max,
-            MaxX,
-            MaxY,
-            MaxZ);
+            bounds.Min,
+            minX,
+            minY,
+            minZ);
 
 
 
-        OutClipMap.Bounds =
-            Core::BoxSphereBounds(Bounds);
+        CalculateBlockCoordinate(
+            bounds.Max,
+            maxX,
+            maxY,
+            maxZ);
 
 
 
-        OutClipMap.MinBlockX = MinX;
-        OutClipMap.MinBlockY = MinY;
-        OutClipMap.MinBlockZ = MinZ;
+        outClipMap.Bounds =
+            Core::BoxSphereBounds(bounds);
 
 
 
-        OutClipMap.SizeX =
-            MaxX - MinX + 1;
-
-
-        OutClipMap.SizeY =
-            MaxY - MinY + 1;
-
-
-        OutClipMap.SizeZ =
-            MaxZ - MinZ + 1;
+        outClipMap.MinBlockX = minX;
+        outClipMap.MinBlockY = minY;
+        outClipMap.MinBlockZ = minZ;
 
 
 
-        for (int32_t Z = MinZ; Z <= MaxZ; Z++)
+        outClipMap.SizeX =
+            maxX - minX + 1;
+
+
+        outClipMap.SizeY =
+            maxY - minY + 1;
+
+
+        outClipMap.SizeZ =
+            maxZ - minZ + 1;
+
+
+
+        for (int32_t z = minZ; z <= maxZ; z++)
         {
-            for (int32_t Y = MinY; Y <= MaxY; Y++)
+            for (int32_t y = minY; y <= maxY; y++)
             {
-                for (int32_t X = MinX; X <= MaxX; X++)
+                for (int32_t x = minX; x <= maxX; x++)
                 {
-                    uint32_t BlockId =
+                    uint32_t blockId =
                         CalculateBlockId(
-                            X,
-                            Y,
-                            Z);
+                            x,
+                            y,
+                            z);
 
 
 
-                    auto It =
-                        Blocks.find(BlockId);
+                    auto it =
+                        m_Blocks.find(blockId);
 
 
 
-                    if (It != Blocks.end())
+                    if (it != m_Blocks.end())
                     {
-                        OutClipMap.BlockIds.push_back(
-                            BlockId);
+                        outClipMap.BlockIds.push_back(
+                            blockId);
 
                         continue;
                     }
 
 
 
-                    GlobalDistanceFieldBlock Block;
+                    GlobalDistanceFieldBlock block;
 
 
-                    Block.BlockId = BlockId;
-                    Block.PageIndex = BlockId;
+                    block.BlockId = blockId;
+                    block.PageIndex = blockId;
 
-                    Block.GridX = X;
-
-
-                    Block.GridY =
-                        Y;
+                    block.GridX = x;
 
 
-                    Block.GridZ =
-                        Z;
+                    block.GridY =
+                        y;
+
+
+                    block.GridZ =
+                        z;
 
 
 
-                    Block.Bounds =
+                    block.Bounds =
                         CalculateBlockBounds(
-                            X,
-                            Y,
-                            Z).Box;
+                            x,
+                            y,
+                            z).Box;
 
 
 
-                    if (!Atlas->Allocate(
-                        Block.Allocation))
+                    if (!m_Atlas->Allocate(
+                        block.Allocation))
                     {
                         return false;
                     }
 
-                    auto& page = BlockIndexBufferCPU[BlockId];
+                    auto& page = m_BlockIndexBufferCPU[blockId];
 
 
                     page.Valid = 1;
 
                     page.AllocationX =
-                        Block.Allocation.X;
+                        block.Allocation.X;
 
                     page.AllocationY =
-                        Block.Allocation.Y;
+                        block.Allocation.Y;
 
                     page.AllocationZ =
-                        Block.Allocation.Z;
+                        block.Allocation.Z;
 
-                    Blocks.emplace(
-                        BlockId,
-                        Block);
+                    m_Blocks.emplace(
+                        blockId,
+                        block);
 
 
 
-                    OutClipMap.BlockIds.push_back(
-                        BlockId);
+                    outClipMap.BlockIds.push_back(
+                        blockId);
                 }
             }
         }
 
         UploadBlockIndexBufferToGPU();
 
-        return !OutClipMap.BlockIds.empty();
+        return !outClipMap.BlockIds.empty();
     }
 
 
 
     void GlobalDistanceField::Release(
-        const GlobalDistanceFieldBlockClipMap& ClipMap)
+        const GlobalDistanceFieldBlockClipMap& clipMap)
     {
-        if (!Atlas)
+        if (!m_Atlas)
         {
             return;
         }
 
 
 
-        for (uint32_t BlockId : ClipMap.BlockIds)
+        for (uint32_t blockId : clipMap.BlockIds)
         {
-            auto It =
-                Blocks.find(BlockId);
+            auto it =
+                m_Blocks.find(blockId);
 
 
 
-            if (It == Blocks.end())
+            if (it == m_Blocks.end())
             {
                 continue;
             }
 
 
 
-            Atlas->Free(
-                It->second.Allocation);
+            m_Atlas->Free(
+                it->second.Allocation);
 
 
 
-            Blocks.erase(It);
+            m_Blocks.erase(it);
         }
     }
 
 
 
     bool GlobalDistanceField::GetBlock(
-        const Core::Float3& Position,
-        GlobalDistanceFieldBlock& OutBlock) const
+        const Core::Float3& position,
+        GlobalDistanceFieldBlock& outBlock) const
     {
-        int32_t X;
-        int32_t Y;
-        int32_t Z;
+        int32_t x;
+        int32_t y;
+        int32_t z;
 
 
 
         CalculateBlockCoordinate(
-            Position,
-            X,
-            Y,
-            Z);
+            position,
+            x,
+            y,
+            z);
 
 
 
-        uint32_t BlockId =
+        uint32_t blockId =
             CalculateBlockId(
-                X,
-                Y,
-                Z);
+                x,
+                y,
+                z);
 
 
 
-        auto It =
-            Blocks.find(BlockId);
+        auto it =
+            m_Blocks.find(blockId);
 
 
 
-        if (It == Blocks.end())
+        if (it == m_Blocks.end())
         {
             return false;
         }
 
 
 
-        OutBlock =
-            It->second;
+        outBlock =
+            it->second;
 
 
         return true;
@@ -564,59 +564,59 @@ namespace Renderer
 
 
     void GlobalDistanceField::GetBlocksInsideBounds(
-        const Core::AABB& Bounds,
-        std::vector<uint32_t>& OutBlockIds) const
+        const Core::AABB& bounds,
+        std::vector<uint32_t>& outBlockIds) const
     {
-        OutBlockIds.clear();
+        outBlockIds.clear();
 
 
 
-        int32_t MinX;
-        int32_t MinY;
-        int32_t MinZ;
+        int32_t minX;
+        int32_t minY;
+        int32_t minZ;
 
 
-        int32_t MaxX;
-        int32_t MaxY;
-        int32_t MaxZ;
-
-
-
-        CalculateBlockCoordinate(
-            Bounds.Min,
-            MinX,
-            MinY,
-            MinZ);
+        int32_t maxX;
+        int32_t maxY;
+        int32_t maxZ;
 
 
 
         CalculateBlockCoordinate(
-            Bounds.Max,
-            MaxX,
-            MaxY,
-            MaxZ);
+            bounds.Min,
+            minX,
+            minY,
+            minZ);
 
 
 
-        for (int32_t Z = MinZ; Z <= MaxZ; Z++)
+        CalculateBlockCoordinate(
+            bounds.Max,
+            maxX,
+            maxY,
+            maxZ);
+
+
+
+        for (int32_t z = minZ; z <= maxZ; z++)
         {
-            for (int32_t Y = MinY; Y <= MaxY; Y++)
+            for (int32_t y = minY; y <= maxY; y++)
             {
-                for (int32_t X = MinX; X <= MaxX; X++)
+                for (int32_t x = minX; x <= maxX; x++)
                 {
-                    uint32_t BlockId =
+                    uint32_t blockId =
                         CalculateBlockId(
-                            X,
-                            Y,
-                            Z);
+                            x,
+                            y,
+                            z);
 
 
 
-                    if (Blocks.find(BlockId)
-                        != Blocks.end())
+                    if (m_Blocks.find(blockId)
+                        != m_Blocks.end())
                     {
-                        OutBlockIds.push_back(
-                            BlockId);
+                        outBlockIds.push_back(
+                            blockId);
                     }
                 }
             }
@@ -626,39 +626,39 @@ namespace Renderer
 
 
     const GlobalDistanceFieldBlock* GlobalDistanceField::GetBlock(
-        uint32_t BlockId) const
+        uint32_t blockId) const
     {
-        auto It =
-            Blocks.find(BlockId);
+        auto it =
+            m_Blocks.find(blockId);
 
 
-        if (It == Blocks.end())
+        if (it == m_Blocks.end())
         {
             return nullptr;
         }
 
 
-        return &It->second;
+        return &it->second;
     }
 
 
 
     bool GlobalDistanceField::GetBlockAllocation(
-        uint32_t BlockId,
-        Engine::DistanceFieldAllocation& OutAllocation) const
+        uint32_t blockId,
+        Engine::DistanceFieldAllocation& outAllocation) const
     {
-        auto Block =
-            GetBlock(BlockId);
+        auto block =
+            GetBlock(blockId);
 
 
-        if (!Block)
+        if (!block)
         {
             return false;
         }
 
 
-        OutAllocation =
-            Block->Allocation;
+        outAllocation =
+            block->Allocation;
 
 
         return true;
@@ -666,17 +666,17 @@ namespace Renderer
 
     void Renderer::GlobalDistanceField::UploadBlockIndexBufferToGPU()
     {
-        if (!BlockIndexBufferGPU)
+        if (!m_BlockIndexBufferGPU)
         {
             return;
         }
 
 
-        auto size = GridSizeX * GridSizeY * GridSizeZ * sizeof(GlobalDistanceFieldBlockIndex);
+        auto size = m_GridSizeX * m_GridSizeY * m_GridSizeZ * sizeof(GlobalDistanceFieldBlockIndex);
         char zero = 0;
-        memset(BlockIndexBufferCPU.data(), 0, size);
-        for (const auto& [BlockId, Block] : Blocks) {
-            auto& page = BlockIndexBufferCPU[BlockId];
+        memset(m_BlockIndexBufferCPU.data(), 0, size);
+        for (const auto& [BlockId, Block] : m_Blocks) {
+            auto& page = m_BlockIndexBufferCPU[BlockId];
             page.Valid = 1;
             page.AllocationX = Block.Allocation.X;
             page.AllocationY = Block.Allocation.Y;
@@ -684,7 +684,7 @@ namespace Renderer
         }
 
 
-        BlockIndexBufferGPU->UploadData(BlockIndexBufferCPU.data(), size, 0);
+        m_BlockIndexBufferGPU->UploadData(m_BlockIndexBufferCPU.data(), size, 0);
     }
 
 

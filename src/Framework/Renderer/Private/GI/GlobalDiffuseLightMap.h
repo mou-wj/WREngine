@@ -23,7 +23,7 @@ namespace Renderer
         uint32_t MaxVoxelsPerLeaf = 8;
         uint32_t TargetResolution = 64;
         float VoxelSize = 0.25f;
-        bool AutoExpandBounds = true;
+        bool bAutoExpandBounds = true;
     };
 
     struct SceneVoxelCell
@@ -41,39 +41,39 @@ namespace Renderer
 
     struct SceneVoxelCellTraits
     {
-        static Core::BoxSphereBounds GetBounds(const SceneVoxelCell& Primitive)
+        static Core::BoxSphereBounds GetBounds(const SceneVoxelCell& primitive)
         {
-            return Core::BoxSphereBounds(Primitive.Bounds);
+            return Core::BoxSphereBounds(primitive.Bounds);
         }
 
-        static Core::Float3 GetCentroid(const SceneVoxelCell& Primitive)
+        static Core::Float3 GetCentroid(const SceneVoxelCell& primitive)
         {
-            return Primitive.Bounds.GetCenter();
+            return primitive.Bounds.GetCenter();
         }
 
-        static bool RayIntersect(const SceneVoxelCell& Primitive, const Core::Ray& Ray, float& OutDistance)
+        static bool RayIntersect(const SceneVoxelCell& primitive, const Core::Ray& ray, float& outDistance)
         {
-            const bool Hit = Ray.RayIntersectAABB(Primitive.Bounds);
-            if (!Hit)
+            const bool hit = ray.RayIntersectAABB(primitive.Bounds);
+            if (!hit)
             {
-                OutDistance = 0.0f;
+                outDistance = 0.0f;
                 return false;
             }
 
-            const float Distance = Primitive.Bounds.Distance(Ray.Origin);
-            OutDistance = Distance;
+            const float distance = primitive.Bounds.Distance(ray.Origin);
+            outDistance = distance;
             return true;
         }
 
-        static Core::Float3 ClosestPoint(const SceneVoxelCell& Primitive, const Core::Float3& Position)
+        static Core::Float3 ClosestPoint(const SceneVoxelCell& primitive, const Core::Float3& position)
         {
             return Core::Float3();
             //return Primitive.Bounds.GetClosestPoint(Position);
         }
 
-        static float ClosestDistance(const SceneVoxelCell& Primitive, const Core::Float3& Position)
+        static float ClosestDistance(const SceneVoxelCell& primitive, const Core::Float3& position)
         {
-            return Primitive.Bounds.Distance(Position);
+            return primitive.Bounds.Distance(position);
         }
     };
 
@@ -87,7 +87,7 @@ namespace Renderer
         uint32_t VoxelCount = 0;
         uint32_t Parent = Core::OctreeInvalidNode;
         uint32_t Level = 0;
-        bool IsLeaf = true;
+        bool bIsLeaf = true;
 
         SceneVoxelOctreeNode()
         {
@@ -176,8 +176,8 @@ namespace Renderer
         void Clear();
 
         void BuildFromStaticMeshes(
-            const std::vector<const Engine::StaticMesh*>& Meshes,
-            const SceneVoxelOctreeSettings& Settings = SceneVoxelOctreeSettings());
+            const std::vector<const Engine::StaticMesh*>& meshes,
+            const SceneVoxelOctreeSettings& settings = SceneVoxelOctreeSettings());
 
         const std::vector<SceneVoxelOctreeNode>& GetNodes() const;
         const std::vector<SceneVoxelCell>& GetVoxels() const;
@@ -185,42 +185,42 @@ namespace Renderer
         std::vector<SceneVoxelOctreeShaderNode> FlattenForShader() const;
 
     protected:
-        static Core::AABB ComputeSceneBounds(const std::vector<SceneVoxelCell>& VoxelPrimitives);
+        static Core::AABB ComputeSceneBounds(const std::vector<SceneVoxelCell>& voxelPrimitives);
         void RebuildNodesAndVoxels();
 
-        SceneVoxelOctreeSettings Settings_;
-        SceneVoxelOctreeTemplate Tree;
-        std::vector<SceneVoxelOctreeNode> Nodes;
-        std::vector<SceneVoxelCell> Voxels;
-        Core::AABB Bounds;
+        SceneVoxelOctreeSettings _settings;
+        SceneVoxelOctreeTemplate _tree;
+        std::vector<SceneVoxelOctreeNode> _nodes;
+        std::vector<SceneVoxelCell> _voxels;
+        Core::AABB _bounds;
     };
 
     class GlobalDiffuseLightMapVoxelizer
     {
     public:
-        void SetSettings(const SceneVoxelOctreeSettings& InSettings);
-        void VoxelizeStaticMeshes(const std::vector<const Engine::StaticMesh*>& Meshes);
+        void SetSettings(const SceneVoxelOctreeSettings& inSettings);
+        void VoxelizeStaticMeshes(const std::vector<const Engine::StaticMesh*>& meshes);
         const SceneVoxelOctree& GetSceneVoxelOctree() const;
-        void BuildShaderParameters(SceneVoxelOctreeShaderParameters& OutParameters) const;
+        void BuildShaderParameters(SceneVoxelOctreeShaderParameters& outParameters) const;
 
     private:
-        SceneVoxelOctreeSettings Settings;
-        SceneVoxelOctree SceneOctree;
+        SceneVoxelOctreeSettings m_Settings;
+        SceneVoxelOctree m_SceneOctree;
     };
 
     class GlobalDiffuseLightMap
     {
     public:
-        explicit GlobalDiffuseLightMap(SceneVoxelOctreeSettings InSettings = SceneVoxelOctreeSettings());
+        explicit GlobalDiffuseLightMap(SceneVoxelOctreeSettings inSettings = SceneVoxelOctreeSettings());
 
-        void SetSettings(const SceneVoxelOctreeSettings& InSettings);
-        void VoxelizeStaticMeshes(const std::vector<const Engine::StaticMesh*>& Meshes);
+        void SetSettings(const SceneVoxelOctreeSettings& inSettings);
+        void VoxelizeStaticMeshes(const std::vector<const Engine::StaticMesh*>& meshes);
         const SceneVoxelOctree& GetSceneVoxelOctree() const;
-        void BuildShaderParameters(SceneVoxelOctreeShaderParameters& OutParameters) const;
+        void BuildShaderParameters(SceneVoxelOctreeShaderParameters& outParameters) const;
 
     private:
-        SceneVoxelOctreeSettings Settings;
-        SceneVoxelOctree SceneOctree;
+        SceneVoxelOctreeSettings m_Settings;
+        SceneVoxelOctree m_SceneOctree;
     };
 
     class GlobalDiffuseLightMapInitCS : public RenderCore::GlobalShader
@@ -228,12 +228,12 @@ namespace Renderer
     public:
         DECLARE_GLOBAL_SHADER_TYPE(GlobalDiffuseLightMapInitCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
         }
 
@@ -248,12 +248,12 @@ namespace Renderer
     public:
         DECLARE_GLOBAL_SHADER_TYPE(GlobalDiffuseLightMapDiffuseCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
         }
 
@@ -288,7 +288,7 @@ namespace Renderer
         SceneVoxelOctreeSettings Settings = SceneVoxelOctreeSettings();
     };
 
-    RENDERER_API void ExecuteGlobalDiffuseLightMapInit(RenderCore::RenderGraphBuilder& GraphBuilder, const GlobalDiffuseLightMapInitExecuteInput& Input);
-    RENDERER_API void ExecuteGlobalDiffuseLightMapDiffuse(RenderCore::RenderGraphBuilder& GraphBuilder, const GlobalDiffuseLightMapDiffuseExecuteInput& Input);
+    RENDERER_API void ExecuteGlobalDiffuseLightMapInit(RenderCore::RenderGraphBuilder& graphBuilder, const GlobalDiffuseLightMapInitExecuteInput& input);
+    RENDERER_API void ExecuteGlobalDiffuseLightMapDiffuse(RenderCore::RenderGraphBuilder& graphBuilder, const GlobalDiffuseLightMapDiffuseExecuteInput& input);
 }
 

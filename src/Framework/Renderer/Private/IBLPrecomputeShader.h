@@ -45,16 +45,16 @@ namespace Renderer {
         using PermutationDomain = RenderCore::ShaderPermutationDomain<IBLModeDim>;
         DECLARE_GLOBAL_SHADER_TYPE(IBLPrecomputeCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& Parameters)
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
         {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& Parameters, RenderCore::ShaderCompilerEnvironment& OutEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
         {
-            PermutationDomain Domain;
-            Domain.SetFromId(Parameters.PermutationId);
-            Domain.ModifyCompilationEnvironment(OutEnvironment);
+            PermutationDomain domain;
+            domain.SetFromId(parameters.PermutationId);
+            domain.ModifyCompilationEnvironment(outEnvironment);
         }
 
         static const RenderCore::ShaderParametersMetadata* GetShaderParameterMetadata()

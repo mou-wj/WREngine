@@ -16,15 +16,15 @@ namespace Renderer {
         bool IsLoaded() const override;
 
         // RenderInterface
-        void BeginRender(Engine::SceneViewFamily* Views) override;
+        void BeginRender(Engine::SceneViewFamily* views) override;
         Engine::SceneInterface* AllocateScene() override;
-        void PreComputeIBL(RenderCore::RenderTexture* InHDRTexture, RenderCore::RenderTexture* OutDiffuseIBL, RenderCore::RenderTexture* OutSpecularIBL) override;
+        void PreComputeIBL(RenderCore::RenderTexture* inHdrTexture, RenderCore::RenderTexture* outDiffuseIbl, RenderCore::RenderTexture* outSpecularIbl) override;
 
     private:
         void InitIBLLut();
     private:
-        bool bLoaded = false;
-        std::string ModuleName = "RenderModule";
+        bool m_bLoaded = false;
+        std::string m_ModuleName = "RenderModule";
     };
 
 

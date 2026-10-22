@@ -7,14 +7,14 @@ namespace Renderer {
 	//	SHADER_PARAMETER_RENDER_TARGETS()
 	//END_SHADER_PARAMETER_STRUCT(ScenePassShaderParameter);
 
-	void addScreenPass(RenderGraphBuilder& builder, RenderGraphTexture* inTexture, RenderGraphTexture* outTexture) {
-		auto& GShaderMap = RenderCore::GShaderMap;
+	void AddScreenPass(RenderGraphBuilder& builder, RenderGraphTexture* inTexture, RenderGraphTexture* outTexture) {
+		auto& gShaderMap = RenderCore::GShaderMap;
 		auto drawTextureShaderType = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::Global]["DrawTexturePS"];
         auto fullScreenQuadShaderType = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::Global]["FullScreenVS"];
 		
-		auto drawTexture = GShaderMap.GetShader(drawTextureShaderType,0);
-		auto fullScreenQuad = GShaderMap.GetShader(fullScreenQuadShaderType, 0);
-		//��ȡĬ�Ϲ���״̬
+		auto drawTexture = gShaderMap.GetShader(drawTextureShaderType,0);
+		auto fullScreenQuad = gShaderMap.GetShader(fullScreenQuadShaderType, 0);
+		// Build the default screen-pass pipeline state.
 		RHIGraphicsPipelineStateDesc pipelineStateDesc;
 		pipelineStateDesc.ShaderStages.VertexShader = dynamic_cast<RHI::RHIVertexShader*>(drawTexture->GetRHIShader());
         pipelineStateDesc.ShaderStages.FragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(fullScreenQuad->GetRHIShader());
