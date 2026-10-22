@@ -115,7 +115,7 @@ public:
     void Run() override
     {
         auto* api = RHI::GRHIApi;
-        if (!api || !TriangleGraphicsPipelineState)
+        if (!api || !m_TriangleGraphicsPipelineState)
         {
             return;
         }
@@ -145,10 +145,10 @@ public:
             cmdList.SetImmediate(true);
             cmdList.Begin();
             // 设置图形管线状态
-            cmdList.SetGraphicPipelineState(TriangleGraphicsPipelineState);
+            cmdList.SetGraphicPipelineState(m_TriangleGraphicsPipelineState);
 
             // 设置顶点缓冲区流
-            cmdList.SetStreamSource(0, VertexBuffer.get(), 0);
+            cmdList.SetStreamSource(0, m_VertexBuffer.get(), 0);
 
             // 设置视口
             RHI::RHIRect viewport;
@@ -159,7 +159,7 @@ public:
             cmdList.SetViewport(0,0,512,512,0,1);
             cmdList.SetScissor(0, 0, 512, 512);
 
-            auto swapchainSlot = Swapchain->AcquireNextSlot();
+            auto swapchainSlot = m_Swapchain->AcquireNextSlot();
             auto* backTexture = swapchainSlot.Texture;
             if (!backTexture)
             {
@@ -167,16 +167,16 @@ public:
             }
 
             RHIRenderPassInfo passInfo;
-            passInfo.RenderTargets.Bound(backTexture,ERenderTargetActions::Clear_Store, depthStencilTexture.get(), ERenderTargetActions::Clear_Store, FrameWidth, FrameHeight);
+            passInfo.RenderTargets.Bound(backTexture,ERenderTargetActions::Clear_Store, m_DepthStencilTexture.get(), ERenderTargetActions::Clear_Store, m_FrameWidth, m_FrameHeight);
             passInfo.RenderTargets.ColorAttachments[0].ClearBinding.Color[0] = 1;
             passInfo.RenderTargets.ColorAttachments[0].ClearBinding.Color[3] = 1;
 			passInfo.RenderTargets.DepthStencil.ClearBinding.Depth = 1.0f;
-            passInfo.RenderArea.Width = FrameWidth;
-            passInfo.RenderArea.Height = FrameHeight;
+            passInfo.RenderArea.Width = m_FrameWidth;
+            passInfo.RenderArea.Height = m_FrameHeight;
             
 
             TransitionResource(api, cmdList, backTexture, RHI::ERHIResourceAccess::RenderTargetView);
-            TransitionResource(api, cmdList, depthStencilTexture.get(), RHI::ERHIResourceAccess::DSVWrite);
+            TransitionResource(api, cmdList, m_DepthStencilTexture.get(), RHI::ERHIResourceAccess::DSVWrite);
 
             cmdList.BeginRenderPass(passInfo);
             // 绘制三角形 (3个顶点, 1个实例)
@@ -200,7 +200,7 @@ public:
             presentWait.SyncPoint = queue->GetSyncPoint();
 			presentWait.Value = submitResultValue;
             presentWait.WaitStage = RHI::ERHIPipelineStage::ColorAttachmentOutput;
-            GRHIApi->GetPresentExecutor()->Present(Swapchain.get(), presentWait);
+            GRHIApi->GetPresentExecutor()->Present(m_Swapchain.get(), presentWait);
             cmdList.Clear();
         }
 
@@ -213,12 +213,12 @@ public:
     void Teardown() override
     {
         // 释放所有创建的资源
-        VertexBuffer.reset();
-        VertexShader.reset();
-        FragmentShader.reset();
-        depthStencilTexture.reset();
-        Swapchain.reset();
-		Window.reset();
+        m_VertexBuffer.reset();
+        m_VertexShader.reset();
+        m_FragmentShader.reset();
+        m_DepthStencilTexture.reset();
+        m_Swapchain.reset();
+		m_Window.reset();
         auto* api = RHI::GRHIApi;
         if (!api)
         {
@@ -232,18 +232,18 @@ private:
     // ==========================================
     // 私有资源成员
     // ==========================================
-    RHI::RHIBufferSP VertexBuffer;
-    RHI::RHIVertexShaderSP VertexShader;
-    RHI::RHIFragmentShaderSP FragmentShader;
-    RHI::RHIGraphicsPipelineState* TriangleGraphicsPipelineState;
-    RHI::RHIVertexDescState* VertexDescState;
-    RHI::RHISwapchainSP Swapchain;
-    SlateCore::WindowSP Window;
-    int WindiwWidth = 512;
-    int WindowHeight = 512;
-    int FrameWidth = 0;
-    int FrameHeight = 0;
-    RHI::RHITextureSP depthStencilTexture;
+    RHI::RHIBufferSP m_VertexBuffer;
+    RHI::RHIVertexShaderSP m_VertexShader;
+    RHI::RHIFragmentShaderSP m_FragmentShader;
+    RHI::RHIGraphicsPipelineState* m_TriangleGraphicsPipelineState;
+    RHI::RHIVertexDescState* m_VertexDescState;
+    RHI::RHISwapchainSP m_Swapchain;
+    SlateCore::WindowSP m_Window;
+    int m_WindiwWidth = 512;
+    int m_WindowHeight = 512;
+    int m_FrameWidth = 0;
+    int m_FrameHeight = 0;
+    RHI::RHITextureSP m_DepthStencilTexture;
 
     // ==========================================
     // 辅助函数：创建顶点缓冲区
@@ -264,7 +264,7 @@ private:
         bufferDesc.Usage = RHI::ERHIBufferUsageFlag::Vertex | RHI::ERHIBufferUsageFlag::TransferDst;
 
         // 创建缓冲区
-        VertexBuffer = api->CreateBuffer(bufferDesc);
+        m_VertexBuffer = api->CreateBuffer(bufferDesc);
 
         // 将顶点数据拷贝到缓冲区
 		auto* queue = api->GetQueue(RHI::EQueueType::Graphics);
@@ -285,9 +285,9 @@ private:
         RHI::RHIGraphicCommandList commandList(graphicContext);
         commandList.SetImmediate(true);
         commandContext->Begin();
-        TransitionResource(api, commandList, VertexBuffer.get(), RHI::ERHIResourceAccess::TransferDest);
-        api->UpdateBuffer(commandList, VertexBuffer.get(), vertices, { 0, sizeof(vertices) });
-        TransitionResource(api, commandList, VertexBuffer.get(), RHI::ERHIResourceAccess::VertexOrIndexBuffer);
+        TransitionResource(api, commandList, m_VertexBuffer.get(), RHI::ERHIResourceAccess::TransferDest);
+        api->UpdateBuffer(commandList, m_VertexBuffer.get(), vertices, { 0, sizeof(vertices) });
+        TransitionResource(api, commandList, m_VertexBuffer.get(), RHI::ERHIResourceAccess::VertexOrIndexBuffer);
         commandList.ExecuteAll();
         commandList.End();
         queue->ExecuteContext(graphicContext);
@@ -340,7 +340,7 @@ private:
             return;
         }
 
-        VertexShader = api->CreateVertexShader(vsOutput.PackedBinaryData);
+        m_VertexShader = api->CreateVertexShader(vsOutput.PackedBinaryData);
 
 
         // =============================
@@ -368,7 +368,7 @@ private:
             return;
         }
 
-        FragmentShader = api->CreateFragmentShader(psOutput.PackedBinaryData);
+        m_FragmentShader = api->CreateFragmentShader(psOutput.PackedBinaryData);
     }
 
     // ==========================================
@@ -404,7 +404,7 @@ private:
         descDesc.Bindings = {bindingDesc};
         descDesc.Attributes = attributes;
 
-        VertexDescState = RHIPipelineStateCache::GetOrCreateVertexDescState(descDesc);
+        m_VertexDescState = RHIPipelineStateCache::GetOrCreateVertexDescState(descDesc);
     }
 
     // ==========================================
@@ -443,13 +443,13 @@ private:
 
         // 创建图形管线状态
         RHI::RHIGraphicsPipelineStateDesc pipelineDesc;
-        pipelineDesc.ShaderStages.VertexShader = VertexShader.get();
-        pipelineDesc.ShaderStages.FragmentShader = FragmentShader.get();
+        pipelineDesc.ShaderStages.VertexShader = m_VertexShader.get();
+        pipelineDesc.ShaderStages.FragmentShader = m_FragmentShader.get();
         // 这里可以设置更多管线配置...
         pipelineDesc.RasterizerState = rasterizerState;
         pipelineDesc.ColorBlendState = colorBlendState;
         pipelineDesc.DepthStencilState = depthStencilState;
-        pipelineDesc.VertexDescState = VertexDescState;
+        pipelineDesc.VertexDescState = m_VertexDescState;
 
         //rendertarget info
 		pipelineDesc.AttachmentDesc.ColorAttachmentCount = 1;
@@ -459,34 +459,34 @@ private:
         pipelineDesc.AttachmentDesc.bEnableDepth = true;
         pipelineDesc.AttachmentDesc.DepthStencilFormat = RHI::ERHIFormat::D32_Float;
         
-        TriangleGraphicsPipelineState = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(pipelineDesc);
+        m_TriangleGraphicsPipelineState = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(pipelineDesc);
     }
 
     void CreateSwapchain(RHI::RHIApi* api)
 	{
         // 
-        Window = SlateCore::WindowFactory::CreateWindowSP(WindiwWidth, WindowHeight, "RHIRenderTriangleTest");
-        Window->Show();
+        m_Window = SlateCore::WindowFactory::CreateWindowSP(m_WindiwWidth, m_WindowHeight, "RHIRenderTriangleTest");
+        m_Window->Show();
         // 创建交换链
-		void* windowHandle = Window->GetNativeHandle(); // 获取窗口句柄的函数
-		uint32_t width = WindiwWidth;
-		uint32_t height = WindowHeight;
+		void* windowHandle = m_Window->GetNativeHandle(); // 获取窗口句柄的函数
+		uint32_t width = m_WindiwWidth;
+		uint32_t height = m_WindowHeight;
 		ERHIFormat format = ERHIFormat::B8G8R8A8_UNorm;
-        Swapchain = api->CreateSwapchain(windowHandle, width, height, format);
-        auto frameSize = Window->GetFramebufferSize();
-        FrameWidth = frameSize.X;
-        FrameHeight = frameSize.Y;
+        m_Swapchain = api->CreateSwapchain(windowHandle, width, height, format);
+        auto frameSize = m_Window->GetFramebufferSize();
+        m_FrameWidth = frameSize.X;
+        m_FrameHeight = frameSize.Y;
 
 	}
 
     void CreateRenderTarget(RHI::RHIApi* api) {
         // 创建渲染目标
         RHI::RHITextureDesc depthTargetDesc;
-        depthTargetDesc.Width = FrameWidth;
-        depthTargetDesc.Height = FrameHeight;
+        depthTargetDesc.Width = m_FrameWidth;
+        depthTargetDesc.Height = m_FrameHeight;
         depthTargetDesc.Format = RHI::ERHIFormat::D32_Float;
         depthTargetDesc.Usage = RHI::ERHITextureCreateFlag::DepthStencil;
-        depthStencilTexture = api->CreateTexture(depthTargetDesc);
+        m_DepthStencilTexture = api->CreateTexture(depthTargetDesc);
 
     }
 

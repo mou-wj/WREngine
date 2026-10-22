@@ -95,8 +95,8 @@ struct ComputeShaderConstants
 {
     uint32_t bFlipTextureVertical;   // 是否纹理上下颠倒
     uint32_t bFlipBufferHorizontal;  // 是否缓冲左右颠倒
-    uint32_t padding0;
-    uint32_t padding1;
+    uint32_t Padding0;
+    uint32_t Padding1;
 };
 
 class RHIShaderParameterTest : public TestBase
@@ -122,7 +122,7 @@ public:
     void Run() override
     {
         auto* api = RHI::GRHIApi;
-        if (!api || !ComputePipelineState)
+        if (!api || !m_ComputePipelineState)
             return;
 
         auto* queue = api->GetQueue(RHI::EQueueType::Compute);
@@ -151,7 +151,7 @@ public:
             cmdList.Begin();
 
             // 设置计算管线状态
-            cmdList.SetComputePipelineState(ComputePipelineState.get());
+            cmdList.SetComputePipelineState(m_ComputePipelineState.get());
 
             // 准备计算着色器参数
             RHI::RHIBatchedShaderParameters computeParams;
@@ -168,23 +168,23 @@ public:
                 cbData.bFlipBufferHorizontal = 1;
             }
 
-            TransitionResource(api, cmdList, ConstantBuffer.get(), RHI::ERHIResourceAccess::TransferDest,EQueueType::Compute);
-            api->UpdateBuffer(cmdList, ConstantBuffer.get(), &cbData, { 0, sizeof(cbData) });
-            TransitionResource(api, cmdList, ConstantBuffer.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
+            TransitionResource(api, cmdList, m_ConstantBuffer.get(), RHI::ERHIResourceAccess::TransferDest,EQueueType::Compute);
+            api->UpdateBuffer(cmdList, m_ConstantBuffer.get(), &cbData, { 0, sizeof(cbData) });
+            TransitionResource(api, cmdList, m_ConstantBuffer.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
 
-            TransitionResource(api, cmdList, TestBuffer.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
-            TransitionResource(api, cmdList, TestTexture.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
-            TransitionResource(api, cmdList, OutputTexture.get(), RHI::ERHIResourceAccess::UAV, EQueueType::Compute);
-            TransitionResource(api, cmdList, OutputBuffer.get(), RHI::ERHIResourceAccess::UAV, EQueueType::Compute);
+            TransitionResource(api, cmdList, m_TestBuffer.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
+            TransitionResource(api, cmdList, m_TestTexture.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
+            TransitionResource(api, cmdList, m_OutputTexture.get(), RHI::ERHIResourceAccess::UAV, EQueueType::Compute);
+            TransitionResource(api, cmdList, m_OutputBuffer.get(), RHI::ERHIResourceAccess::UAV, EQueueType::Compute);
 
 
             std::optional<ShaderParameterAllocation> alloc;
             // 设置 ComputeConstants 作为 UniformBuffer
-            if (alloc = ParameterMap.FindParameterAllocation("ComputeConstants"))
+            if (alloc = m_ParameterMap.FindParameterAllocation("ComputeConstants"))
             {
                 RHI::RHIShaderResourceParameter ubParam;
                 ubParam.Type = RHI::RHIShaderResourceParameter::EType::UniformBuffer;
-                ubParam.Resource = ConstantBuffer.get();
+                ubParam.Resource = m_ConstantBuffer.get();
                 ubParam.Index = alloc->BaseIndex;
                 computeParams.ResourceParameters.push_back(ubParam);
             }
@@ -196,7 +196,7 @@ public:
             size_t dataOffset = 0;
             std::optional<size_t> extraParamOffset;
             std::optional<size_t> extraParam1Offset;
-            if (alloc = ParameterMap.FindParameterAllocation("bExtraParam"))
+            if (alloc = m_ParameterMap.FindParameterAllocation("bExtraParam"))
             {
                 RHI::RHIShaderUniformParameter param;
                 param.BufferIndex = alloc->BufferIndex;
@@ -208,7 +208,7 @@ public:
                 dataOffset += alloc->Size;
             }
 
-            if (alloc = ParameterMap.FindParameterAllocation("bExtraParam1"))
+            if (alloc = m_ParameterMap.FindParameterAllocation("bExtraParam1"))
             {
                 RHI::RHIShaderUniformParameter param;
                 param.BufferIndex = alloc->BufferIndex;
@@ -232,62 +232,62 @@ public:
             }
 
             // 设置资源参数：纹理 SRV
-            if (TestTextureSRV && (alloc = ParameterMap.FindParameterAllocation("InputTexture")))
+            if (m_TestTextureSRV && (alloc = m_ParameterMap.FindParameterAllocation("InputTexture")))
             {
                 RHI::RHIShaderResourceParameter texParam;
                 texParam.Type = RHI::RHIShaderResourceParameter::EType::Texture;
-                texParam.Resource = TestTexture.get();
+                texParam.Resource = m_TestTexture.get();
                 texParam.Index = alloc->BaseIndex;
                 computeParams.ResourceParameters.push_back(texParam);
             }
 
             // 纹理 UAV
-            if (OutputTextureUAV && (alloc = ParameterMap.FindParameterAllocation("OutputTexture")))
+            if (m_OutputTextureUAV && (alloc = m_ParameterMap.FindParameterAllocation("OutputTexture")))
             {
                 RHI::RHIShaderResourceParameter texUavParam;
                 texUavParam.Type = RHI::RHIShaderResourceParameter::EType::UAV;
-                texUavParam.Resource = OutputTextureUAV.get();
+                texUavParam.Resource = m_OutputTextureUAV.get();
                 texUavParam.Index = alloc->BaseIndex;
                 computeParams.ResourceParameters.push_back(texUavParam);
             }
 
             // 缓冲区 SRV
-            if (TestBufferSRV && (alloc = ParameterMap.FindParameterAllocation("InputBuffer")))
+            if (m_TestBufferSRV && (alloc = m_ParameterMap.FindParameterAllocation("InputBuffer")))
             {
                 RHI::RHIShaderResourceParameter bufSrvParam;
                 bufSrvParam.Type = RHI::RHIShaderResourceParameter::EType::SRV;
-                bufSrvParam.Resource = TestBufferSRV.get();
+                bufSrvParam.Resource = m_TestBufferSRV.get();
                 bufSrvParam.Index = alloc->BaseIndex;
                 computeParams.ResourceParameters.push_back(bufSrvParam);
             }
 
             // 缓冲区 UAV
-            if (OutputBufferUAV && (alloc = ParameterMap.FindParameterAllocation("OutputBuffer")))
+            if (m_OutputBufferUAV && (alloc = m_ParameterMap.FindParameterAllocation("OutputBuffer")))
             {
                 RHI::RHIShaderResourceParameter bufUavParam;
                 bufUavParam.Type = RHI::RHIShaderResourceParameter::EType::UAV;
-                bufUavParam.Resource = OutputBufferUAV.get();
+                bufUavParam.Resource = m_OutputBufferUAV.get();
                 bufUavParam.Index = alloc->BaseIndex;
                 computeParams.ResourceParameters.push_back(bufUavParam);
             }
 
             // 设置批量参数
-            cmdList.SetBatchedShaderParameters(ComputeShader.get(), computeParams);
+            cmdList.SetBatchedShaderParameters(m_ComputeShader.get(), computeParams);
 
             // 分发计算任务 (2x2 纹理，每个线程组 8x8，分发 1 个线程组)
             cmdList.Dispatch(1, 1, 1);
-            auto swapchainSlot = Swapchain->AcquireNextSlot();
+            auto swapchainSlot = m_Swapchain->AcquireNextSlot();
             auto* backTexture = swapchainSlot.Texture;
             if (backTexture)
             {
-                TransitionResource(api, cmdList, OutputTexture.get(), RHI::ERHIResourceAccess::TransferSrc, EQueueType::Compute);
+                TransitionResource(api, cmdList, m_OutputTexture.get(), RHI::ERHIResourceAccess::TransferSrc, EQueueType::Compute);
                 TransitionResource(api, cmdList, backTexture, RHI::ERHIResourceAccess::TransferDest, EQueueType::Compute);
                 RHI::RHIBlitTextureDesc blit{};
                 blit.SrcRegion.Width = 2;
                 blit.SrcRegion.Height = 2;
-                blit.DstRegion.Width = FrameWidth;
-                blit.DstRegion.Height = FrameHeight;
-                cmdList.BlitTexture(OutputTexture.get(), backTexture, blit);
+                blit.DstRegion.Width = m_FrameWidth;
+                blit.DstRegion.Height = m_FrameHeight;
+                cmdList.BlitTexture(m_OutputTexture.get(), backTexture, blit);
                 TransitionResource(api, cmdList, backTexture, RHI::ERHIResourceAccess::Present, EQueueType::Graphics);
             }
 
@@ -301,13 +301,13 @@ public:
             {
                 waitInfos.push_back({ swapchainSlot.ReadySync, EQueueType::Graphics, 0,RHI::ERHIPipelineStage::ColorAttachmentOutput });
             }
-            auto FenceValue = queue->ExecuteContext({ computeContext }, waitInfos);
-            queue->WaitValue(FenceValue);
+            auto fenceValue = queue->ExecuteContext({ computeContext }, waitInfos);
+            queue->WaitValue(fenceValue);
             RHI::RHIWaitInfo presentWait;
             presentWait.SyncPoint = queue->GetSyncPoint();
-            presentWait.Value = FenceValue;
+            presentWait.Value = fenceValue;
             presentWait.WaitStage = RHI::ERHIPipelineStage::ComputeShader;
-            GRHIApi->GetPresentExecutor()->Present(Swapchain.get(), presentWait);
+            GRHIApi->GetPresentExecutor()->Present(m_Swapchain.get(), presentWait);
             cmdList.Clear();
         }
 
@@ -317,22 +317,22 @@ public:
 
     void Teardown() override
     {
-        ComputeShader.reset();
-        ComputePipelineState.reset();
-        TestTexture.reset();
-        TestTextureSRV.reset();
-        TestSampler.reset();
-        TestBuffer.reset();
-        TestBufferSRV.reset();
-        TestBufferUAV.reset();
-        OutputTexture.reset();
-        OutputTextureUAV.reset();
-        OutputBuffer.reset();
-        OutputBufferUAV.reset();
-        ConstantBuffer.reset();
+        m_ComputeShader.reset();
+        m_ComputePipelineState.reset();
+        m_TestTexture.reset();
+        m_TestTextureSRV.reset();
+        m_TestSampler.reset();
+        m_TestBuffer.reset();
+        m_TestBufferSRV.reset();
+        m_TestBufferUAV.reset();
+        m_OutputTexture.reset();
+        m_OutputTextureUAV.reset();
+        m_OutputBuffer.reset();
+        m_OutputBufferUAV.reset();
+        m_ConstantBuffer.reset();
         GTrackedResourceAccess.clear();
-        Swapchain.reset();
-        Window.reset();
+        m_Swapchain.reset();
+        m_Window.reset();
         auto* api = RHI::GRHIApi;
         if (!api)
             return;
@@ -345,29 +345,29 @@ public:
 
 private:
     // 用于测试 SetBatchedShaderParameters 的各种资源类型
-    RHI::RHITextureSP TestTexture;
-    RHI::RHIShaderResourceViewSP TestTextureSRV;
-    RHI::RHISamplerSP TestSampler;
-    RHI::RHIBufferSP TestBuffer;
-    RHI::RHIShaderResourceViewSP TestBufferSRV;
-    RHI::RHIUnorderedAccessViewSP TestBufferUAV;
+    RHI::RHITextureSP m_TestTexture;
+    RHI::RHIShaderResourceViewSP m_TestTextureSRV;
+    RHI::RHISamplerSP m_TestSampler;
+    RHI::RHIBufferSP m_TestBuffer;
+    RHI::RHIShaderResourceViewSP m_TestBufferSRV;
+    RHI::RHIUnorderedAccessViewSP m_TestBufferUAV;
 
     // 计算着色器相关资源
-    RHI::RHIComputeShaderSP ComputeShader;
-    RHI::RHIComputePipelineStateSP ComputePipelineState;
-    RHI::RHITextureSP OutputTexture;
-    RHI::RHIUnorderedAccessViewSP OutputTextureUAV;
-    RHI::RHIBufferSP OutputBuffer;
-    RHI::RHIUnorderedAccessViewSP OutputBufferUAV;
-    RHI::RHIBufferSP ConstantBuffer;
-    RHI::RHISwapchainSP Swapchain;
-    SlateCore::WindowSP Window;
-    int WindiwWidth = 512;
-    int WindowHeight = 512;
-    int FrameWidth = 0;
-    int FrameHeight = 0;
+    RHI::RHIComputeShaderSP m_ComputeShader;
+    RHI::RHIComputePipelineStateSP m_ComputePipelineState;
+    RHI::RHITextureSP m_OutputTexture;
+    RHI::RHIUnorderedAccessViewSP m_OutputTextureUAV;
+    RHI::RHIBufferSP m_OutputBuffer;
+    RHI::RHIUnorderedAccessViewSP m_OutputBufferUAV;
+    RHI::RHIBufferSP m_ConstantBuffer;
+    RHI::RHISwapchainSP m_Swapchain;
+    SlateCore::WindowSP m_Window;
+    int m_WindiwWidth = 512;
+    int m_WindowHeight = 512;
+    int m_FrameWidth = 0;
+    int m_FrameHeight = 0;
     // Shader 参数映射
-    RenderCore::ShaderParameterAllocationMap ParameterMap;
+    RenderCore::ShaderParameterAllocationMap m_ParameterMap;
 
     void CreateShaders(RHI::RHIApi* api)
     {
@@ -440,8 +440,8 @@ private:
         if (!csOutput.bSuccess)
             return;
 
-        ParameterMap = csOutput.ParameterMap;
-        ComputeShader = api->CreateComputeShader(csOutput.PackedBinaryData);
+        m_ParameterMap = csOutput.ParameterMap;
+        m_ComputeShader = api->CreateComputeShader(csOutput.PackedBinaryData);
     }
 
     void CreateTestResources(RHI::RHIApi* api)
@@ -452,7 +452,7 @@ private:
         texDesc.Height = 2;
         texDesc.Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
         texDesc.Usage = RHI::ERHITextureCreateFlag::ShaderResource | RHI::ERHITextureCreateFlag::TransferDest;
-        TestTexture = api->CreateTexture(texDesc);
+        m_TestTexture = api->CreateTexture(texDesc);
 
         uint8_t texData[16] = {
             0xFF, 0x00, 0x00, 0xFF,
@@ -476,35 +476,35 @@ private:
         RHI::RHIComputeCommandList cmdList(computeContext);
         cmdList.SetImmediate(true);
         cmdList.Begin();
-        TransitionResource(api, cmdList, TestTexture.get(), RHI::ERHIResourceAccess::TransferDest, EQueueType::Compute);
-        api->UpdateTexture(cmdList, TestTexture.get(), texData, RHI::RHIUpdateTextureRegion::Create2DRegion(2, 2));
-        TransitionResource(api, cmdList, TestTexture.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
+        TransitionResource(api, cmdList, m_TestTexture.get(), RHI::ERHIResourceAccess::TransferDest, EQueueType::Compute);
+        api->UpdateTexture(cmdList, m_TestTexture.get(), texData, RHI::RHIUpdateTextureRegion::Create2DRegion(2, 2));
+        TransitionResource(api, cmdList, m_TestTexture.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
         cmdList.End();
         cmdList.ExecuteAll();
         queue->ExecuteContext(computeContext);
         queue->WaitIdle();
         // 采样器
         RHI::RHISamplerDesc samplerDesc;
-        TestSampler = api->CreateSampler(samplerDesc);
+        m_TestSampler = api->CreateSampler(samplerDesc);
 
         // 创建 SRV
         RHI::RHITexSRVCreateInfo srvDesc;
         srvDesc.FirstMipSlice = 0;
         srvDesc.Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
-        TestTextureSRV = api->CreateTextureShaderResourceView(TestTexture.get(), srvDesc);
+        m_TestTextureSRV = api->CreateTextureShaderResourceView(m_TestTexture.get(), srvDesc);
 
         // 创建一个简单的 Buffer，用于测试 SRV/UAV 绑定
         RHI::RHIBufferDesc bufDesc;
         bufDesc.Size = sizeof(glm::vec4);
         bufDesc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::UnorderedAccess | RHI::ERHIBufferUsageFlag::TransferDst;
-        TestBuffer = api->CreateBuffer(bufDesc);
+        m_TestBuffer = api->CreateBuffer(bufDesc);
 
         glm::vec4 bufferData = glm::vec4(0.25f, 0.5f, 0.75f, 1.0f);
         cmdList.SetImmediate(true);
         cmdList.Begin();
-        TransitionResource(api, cmdList, TestBuffer.get(), RHI::ERHIResourceAccess::TransferDest, EQueueType::Compute);
-        api->UpdateBuffer(cmdList, TestBuffer.get(), &bufferData, { 0, sizeof(bufferData) });
-        TransitionResource(api, cmdList, TestBuffer.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
+        TransitionResource(api, cmdList, m_TestBuffer.get(), RHI::ERHIResourceAccess::TransferDest, EQueueType::Compute);
+        api->UpdateBuffer(cmdList, m_TestBuffer.get(), &bufferData, { 0, sizeof(bufferData) });
+        TransitionResource(api, cmdList, m_TestBuffer.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
         cmdList.End();
         cmdList.ExecuteAll();
         queue->ExecuteContext(computeContext);
@@ -516,14 +516,14 @@ private:
         bufSrvDesc.NumElements = 1;
         bufSrvDesc.Stride = sizeof(glm::vec4);
         bufSrvDesc.Format = RHI::ERHIFormat::R32G32B32A32_Float;
-        TestBufferSRV = api->CreateBufferShaderResourceView(TestBuffer.get(), bufSrvDesc);
+        m_TestBufferSRV = api->CreateBufferShaderResourceView(m_TestBuffer.get(), bufSrvDesc);
 
         RHI::RHIBufferUAVCreateInfo bufUavDesc;
         bufUavDesc.Offset = 0;
         bufUavDesc.NumElements = 1;
         bufUavDesc.Stride = sizeof(glm::vec4);
         bufUavDesc.Format = RHI::ERHIFormat::R32G32B32A32_Float;
-        TestBufferUAV = api->CreateBufferUnorderedAccessView(TestBuffer.get(), bufUavDesc);
+        m_TestBufferUAV = api->CreateBufferUnorderedAccessView(m_TestBuffer.get(), bufUavDesc);
     }
 
     void CreateComputeResources(RHI::RHIApi* api)
@@ -534,18 +534,18 @@ private:
         outputTexDesc.Height = 2;
         outputTexDesc.Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
         outputTexDesc.Usage = RHI::ERHITextureCreateFlag::UAV | RHI::ERHITextureCreateFlag::TransferSrc;
-        OutputTexture = api->CreateTexture(outputTexDesc);
+        m_OutputTexture = api->CreateTexture(outputTexDesc);
 
         // 创建输出纹理的 UAV
         RHI::RHITexUAVCreateInfo texUavDesc;
         texUavDesc.Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
-        OutputTextureUAV = api->CreateTextureUnorderedAccessView(OutputTexture.get(), texUavDesc);
+        m_OutputTextureUAV = api->CreateTextureUnorderedAccessView(m_OutputTexture.get(), texUavDesc);
 
         // 创建输出缓冲区（UAV）
         RHI::RHIBufferDesc outputBufDesc;
         outputBufDesc.Size = sizeof(glm::vec4);
         outputBufDesc.Usage = RHI::ERHIBufferUsageFlag::UnorderedAccess;
-        OutputBuffer = api->CreateBuffer(outputBufDesc);    
+        m_OutputBuffer = api->CreateBuffer(outputBufDesc);
 
         // 创建输出缓冲区的 UAV
         RHI::RHIBufferUAVCreateInfo bufUavDesc;
@@ -553,13 +553,13 @@ private:
         bufUavDesc.NumElements = 1;
         bufUavDesc.Stride = sizeof(glm::vec4);
         bufUavDesc.Format = RHI::ERHIFormat::R32G32B32A32_Float;
-        OutputBufferUAV = api->CreateBufferUnorderedAccessView(OutputBuffer.get(), bufUavDesc);
+        m_OutputBufferUAV = api->CreateBufferUnorderedAccessView(m_OutputBuffer.get(), bufUavDesc);
 
         // 创建常量缓冲
         RHI::RHIBufferDesc cbDesc;
         cbDesc.Size = sizeof(ComputeShaderConstants);
         cbDesc.Usage = RHI::ERHIBufferUsageFlag::Constant | RHI::ERHIBufferUsageFlag::TransferDst;
-        ConstantBuffer = api->CreateBuffer(cbDesc);
+        m_ConstantBuffer = api->CreateBuffer(cbDesc);
 
         // 初始化常量缓冲数据（第一次运行：不翻转）
         ComputeShaderConstants cbData = { 0, 0, 0, 0 };
@@ -578,9 +578,9 @@ private:
         RHI::RHIComputeCommandList cmdList(computeContext);
         cmdList.SetImmediate(true);
         cmdList.Begin();
-        TransitionResource(api, cmdList, ConstantBuffer.get(), RHI::ERHIResourceAccess::TransferDest, EQueueType::Compute);
-        api->UpdateBuffer(cmdList, ConstantBuffer.get(), &cbData, { 0, sizeof(cbData) });
-        TransitionResource(api, cmdList, ConstantBuffer.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
+        TransitionResource(api, cmdList, m_ConstantBuffer.get(), RHI::ERHIResourceAccess::TransferDest, EQueueType::Compute);
+        api->UpdateBuffer(cmdList, m_ConstantBuffer.get(), &cbData, { 0, sizeof(cbData) });
+        TransitionResource(api, cmdList, m_ConstantBuffer.get(), RHI::ERHIResourceAccess::SRV, EQueueType::Compute);
         cmdList.End();
         cmdList.ExecuteAll();
         queue->ExecuteContext(computeContext);
@@ -589,23 +589,23 @@ private:
 
         // 创建计算管线状态
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.ComputeShader = ComputeShader.get();
-        ComputePipelineState = api->CreateComputePipelineState(computeDesc);
+        computeDesc.ComputeShader = m_ComputeShader.get();
+        m_ComputePipelineState = api->CreateComputePipelineState(computeDesc);
     }
     void CreateSwapchain(RHI::RHIApi* api)
     {
         // 
-        Window = SlateCore::WindowFactory::CreateWindowSP(WindiwWidth, WindowHeight, "RHIShaderParameterTest");
-        Window->Show();
+        m_Window = SlateCore::WindowFactory::CreateWindowSP(m_WindiwWidth, m_WindowHeight, "RHIShaderParameterTest");
+        m_Window->Show();
         // 创建交换链
-        void* windowHandle = Window->GetNativeHandle(); // 获取窗口句柄的函数
-        uint32_t width = WindiwWidth;
-        uint32_t height = WindowHeight;
+        void* windowHandle = m_Window->GetNativeHandle(); // 获取窗口句柄的函数
+        uint32_t width = m_WindiwWidth;
+        uint32_t height = m_WindowHeight;
         ERHIFormat format = ERHIFormat::B8G8R8A8_UNorm;
-        Swapchain = api->CreateSwapchain(windowHandle, width, height, format);
-        auto frameSize = Window->GetFramebufferSize();
-        FrameWidth = frameSize.X;
-        FrameHeight = frameSize.Y;
+        m_Swapchain = api->CreateSwapchain(windowHandle, width, height, format);
+        auto frameSize = m_Window->GetFramebufferSize();
+        m_FrameWidth = frameSize.X;
+        m_FrameHeight = frameSize.Y;
 
     }
 };

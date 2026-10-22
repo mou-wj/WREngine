@@ -1,5 +1,5 @@
 // MathTest.cpp
-// ²âÊÔÊıÑ§½Ó¿Ú¹¦ÄÜ
+// æµ‹è¯•æ•°å­¦æ¥å£åŠŸèƒ½
 #include <unordered_map>
 #include "TestBase.h"
 #include "Math.hpp"
@@ -106,7 +106,7 @@ namespace Test {
                 "Origin In View");
 
             std::cout
-                << "Expected: z ¡Ö -5\n";
+                << "Expected: z â‰ˆ -5\n";
         }
 
         // --------------------------------------------
@@ -145,7 +145,7 @@ namespace Test {
             std::cout
                 << "Expected:\n";
             std::cout
-                << "x¡Ö0 y¡Ö0\n";
+                << "xâ‰ˆ0 yâ‰ˆ0\n";
             std::cout
                 << "w>0\n";
         }
@@ -198,7 +198,7 @@ namespace Test {
                 view;
             vp.Print(std::cout);
 
-            // Ô­µã
+            // åŸç‚¹
             auto worldOrigin =
                 MakeVec4(
                     0,
@@ -236,7 +236,7 @@ namespace Test {
                 std::cout
                     << "Expected:\n";
                 std::cout
-                    << "center => x¡Ö0 y¡Ö0\n";
+                    << "center => xâ‰ˆ0 yâ‰ˆ0\n";
             }
             else
             {
@@ -244,7 +244,7 @@ namespace Test {
                     << "ERROR: w == 0\n";
             }
 
-            // Ç°·½Ò»µã
+            // å‰æ–¹ä¸€ç‚¹
             auto frontPoint =
                 MakeVec4(
                     0,

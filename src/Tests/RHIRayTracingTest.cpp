@@ -131,14 +131,14 @@ public:
         CreateGeometryBuffers(api);
         CreateAccelerationStructures(api);
         CreateRayTracingPipeline(api);
-        std::cout << "RHIRayTracingTest setup: BLAS=" << bool(BottomLevelAS) << " TLAS=" << bool(TopLevelAS)
-            << " pipeline=" << bool(RayTracingPipelineState) << std::endl;
+        std::cout << "RHIRayTracingTest setup: BLAS=" << bool(m_BottomLevelAS) << " TLAS=" << bool(m_TopLevelAS)
+            << " pipeline=" << bool(m_RayTracingPipelineState) << std::endl;
     }
 
     void Run() override
     {
         auto* api = RHI::GRHIApi;
-        if (!api || !TopLevelAS)
+        if (!api || !m_TopLevelAS)
         {
             return;
         }
@@ -168,22 +168,22 @@ public:
             cmdList.SetImmediate(true);
             cmdList.Begin();
 
-            if (!bAccelerationBuilt)
+            if (!m_bAccelerationBuilt)
             {
-                if (BottomLevelAS)
+                if (m_BottomLevelAS)
                 {
-                    TransitionAccelerationStructure(api, cmdList, BottomLevelAS.get(), RHI::ERHIResourceAccess::BVHWrite);
-                    cmdList.BuildAccelerationStructure(BottomLevelAS.get());
-                    TransitionAccelerationStructure(api, cmdList, BottomLevelAS.get(), RHI::ERHIResourceAccess::BVHRead);
+                    TransitionAccelerationStructure(api, cmdList, m_BottomLevelAS.get(), RHI::ERHIResourceAccess::BVHWrite);
+                    cmdList.BuildAccelerationStructure(m_BottomLevelAS.get());
+                    TransitionAccelerationStructure(api, cmdList, m_BottomLevelAS.get(), RHI::ERHIResourceAccess::BVHRead);
                 }
 
-                TransitionAccelerationStructure(api, cmdList, TopLevelAS.get(), RHI::ERHIResourceAccess::BVHWrite);
-                cmdList.BuildAccelerationStructure(TopLevelAS.get());
-                TransitionAccelerationStructure(api, cmdList, TopLevelAS.get(), RHI::ERHIResourceAccess::BVHRead);
-                bAccelerationBuilt = true;
+                TransitionAccelerationStructure(api, cmdList, m_TopLevelAS.get(), RHI::ERHIResourceAccess::BVHWrite);
+                cmdList.BuildAccelerationStructure(m_TopLevelAS.get());
+                TransitionAccelerationStructure(api, cmdList, m_TopLevelAS.get(), RHI::ERHIResourceAccess::BVHRead);
+                m_bAccelerationBuilt = true;
             }
 
-            auto swapchainSlot = Swapchain->AcquireNextSlot();
+            auto swapchainSlot = m_Swapchain->AcquireNextSlot();
             auto* backTexture = swapchainSlot.Texture;
             if (backTexture)
             {
@@ -194,11 +194,11 @@ public:
                         << backTexture->GetDesc().Height << std::endl;
             }
 
-            if (RayTracingPipelineState)
+            if (m_RayTracingPipelineState)
             {
-                cmdList.SetRayTracingPipelineState(RayTracingPipelineState.get());
+                cmdList.SetRayTracingPipelineState(m_RayTracingPipelineState.get());
                 BindRayGenShaderParameters(cmdList);
-                cmdList.TraceRays(static_cast<uint32_t>(FrameWidth), static_cast<uint32_t>(FrameHeight), 1);
+                cmdList.TraceRays(static_cast<uint32_t>(m_FrameWidth), static_cast<uint32_t>(m_FrameHeight), 1);
             }
 
             if (backTexture)
@@ -218,13 +218,13 @@ public:
             auto submitResultValue = queue->ExecuteContext({ graphicContext }, waitInfos);
             queue->WaitValue(submitResultValue);
 
-            if (Swapchain)
+            if (m_Swapchain)
             {
                 RHI::RHIWaitInfo presentWait;
                 presentWait.SyncPoint = queue->GetSyncPoint();
                 presentWait.Value = submitResultValue;
                 presentWait.WaitStage = RHI::ERHIPipelineStage::ColorAttachmentOutput;
-                RHI::GRHIApi->GetPresentExecutor()->Present(Swapchain.get(), presentWait);
+                RHI::GRHIApi->GetPresentExecutor()->Present(m_Swapchain.get(), presentWait);
             }
 
             cmdList.Clear();
@@ -237,16 +237,16 @@ public:
 
     void Teardown() override
     {
-        RayTracingPipelineState.reset();
-        RayGenShader.reset();
-        MissShader.reset();
-        ClosestHitShader.reset();
-        TopLevelAS.reset();
-        BottomLevelAS.reset();
-        IndexBuffer.reset();
-        VertexBuffer.reset();
-        Swapchain.reset();
-        Window.reset();
+        m_RayTracingPipelineState.reset();
+        m_RayGenShader.reset();
+        m_MissShader.reset();
+        m_ClosestHitShader.reset();
+        m_TopLevelAS.reset();
+        m_BottomLevelAS.reset();
+        m_IndexBuffer.reset();
+        m_VertexBuffer.reset();
+        m_Swapchain.reset();
+        m_Window.reset();
 
         auto* api = RHI::GRHIApi;
         if (!api)
@@ -267,12 +267,12 @@ private:
 
         RHI::RHITexUAVCreateInfo texUavDesc{};
         texUavDesc.Format = backTexture->GetDesc().Format;
-        CurrentBackTextureUAV = RHI::GRHIApi->CreateTextureUnorderedAccessView(backTexture, texUavDesc);
+        m_CurrentBackTextureUAV = RHI::GRHIApi->CreateTextureUnorderedAccessView(backTexture, texUavDesc);
     }
 
     void BindRayGenShaderParameters(RHI::RHIGraphicCommandList& cmdList)
     {
-        if (!RayGenShader || !CurrentBackTextureUAV || !TopLevelAS)
+        if (!m_RayGenShader || !m_CurrentBackTextureUAV || !m_TopLevelAS)
         {
             return;
         }
@@ -286,7 +286,7 @@ private:
                 return;
             }
 
-            auto allocation = RayGenParameterMap.FindParameterAllocation(name);
+            auto allocation = m_RayGenParameterMap.FindParameterAllocation(name);
             if (!allocation.has_value())
             {
                 return;
@@ -300,12 +300,12 @@ private:
             params.ResourceParameters.push_back(resourceParam);
         };
 
-        addResource("gScene", RHI::RHIShaderResourceParameter::EType::AccelerationStructure, TopLevelAS.get());
-        addResource("gOutput", RHI::RHIShaderResourceParameter::EType::UAV, CurrentBackTextureUAV.get());
+        addResource("gScene", RHI::RHIShaderResourceParameter::EType::AccelerationStructure, m_TopLevelAS.get());
+        addResource("gOutput", RHI::RHIShaderResourceParameter::EType::UAV, m_CurrentBackTextureUAV.get());
 
         if (!params.ResourceParameters.empty())
         {
-            cmdList.SetBatchedShaderParameters(RayGenShader.get(), params);
+            cmdList.SetBatchedShaderParameters(m_RayGenShader.get(), params);
         }
     }
 
@@ -316,16 +316,16 @@ private:
             return;
         }
 
-        Window = SlateCore::WindowFactory::CreateWindowSP(WindowWidth, WindowHeight, "RHIRayTracingTest");
-        Window->Show();
+        m_Window = SlateCore::WindowFactory::CreateWindowSP(m_WindowWidth, m_WindowHeight, "RHIRayTracingTest");
+        m_Window->Show();
 
-        void* windowHandle = Window->GetNativeHandle();
-        Swapchain = api->CreateSwapchain(windowHandle, static_cast<uint32_t>(WindowWidth), static_cast<uint32_t>(WindowHeight), RHI::ERHIFormat::B8G8R8A8_UNorm);
+        void* windowHandle = m_Window->GetNativeHandle();
+        m_Swapchain = api->CreateSwapchain(windowHandle, static_cast<uint32_t>(m_WindowWidth), static_cast<uint32_t>(m_WindowHeight), RHI::ERHIFormat::B8G8R8A8_UNorm);
 
-        auto frameSize = Window->GetFramebufferSize();
-        FrameWidth = frameSize.X;
-        FrameHeight = frameSize.Y;
-        std::cout << "RHIRayTracingTest dispatch extent: " << FrameWidth << "x" << FrameHeight << std::endl;
+        auto frameSize = m_Window->GetFramebufferSize();
+        m_FrameWidth = frameSize.X;
+        m_FrameHeight = frameSize.Y;
+        std::cout << "RHIRayTracingTest dispatch extent: " << m_FrameWidth << "x" << m_FrameHeight << std::endl;
     }
 
     void CreateGeometryBuffers(RHI::RHIApi* api)
@@ -358,7 +358,7 @@ private:
             RHI::ERHIBufferUsageFlag::TransferDst | 
             RHI::ERHIBufferUsageFlag::AccelerationStructureBuildInput;
         vertexDesc.InitialQueueType = RHI::EQueueType::Graphics;
-        VertexBuffer = api->CreateBuffer(vertexDesc);
+        m_VertexBuffer = api->CreateBuffer(vertexDesc);
 
         RHI::RHIBufferDesc indexDesc{};
         indexDesc.Size = sizeof(indices);
@@ -368,10 +368,10 @@ private:
             RHI::ERHIBufferUsageFlag::TransferDst |
             RHI::ERHIBufferUsageFlag::AccelerationStructureBuildInput;
         indexDesc.InitialQueueType = RHI::EQueueType::Graphics;
-        IndexBuffer = api->CreateBuffer(indexDesc);
+        m_IndexBuffer = api->CreateBuffer(indexDesc);
 
         auto* queue = api->GetQueue(RHI::EQueueType::Graphics);
-        if (!queue || !VertexBuffer || !IndexBuffer)
+        if (!queue || !m_VertexBuffer || !m_IndexBuffer)
         {
             return;
         }
@@ -387,13 +387,13 @@ private:
         cmdList.SetImmediate(true);
         cmdList.Begin();
 
-        TransitionViewableResource(api, cmdList, VertexBuffer.get(), RHI::ERHIResourceAccess::TransferDest);
-        api->UpdateBuffer(cmdList, VertexBuffer.get(), vertices, { 0, sizeof(vertices) });
-        TransitionViewableResource(api, cmdList, VertexBuffer.get(), RHI::ERHIResourceAccess::SRV);
+        TransitionViewableResource(api, cmdList, m_VertexBuffer.get(), RHI::ERHIResourceAccess::TransferDest);
+        api->UpdateBuffer(cmdList, m_VertexBuffer.get(), vertices, { 0, sizeof(vertices) });
+        TransitionViewableResource(api, cmdList, m_VertexBuffer.get(), RHI::ERHIResourceAccess::SRV);
 
-        TransitionViewableResource(api, cmdList, IndexBuffer.get(), RHI::ERHIResourceAccess::TransferDest);
-        api->UpdateBuffer(cmdList, IndexBuffer.get(), indices, { 0, sizeof(indices) });
-        TransitionViewableResource(api, cmdList, IndexBuffer.get(), RHI::ERHIResourceAccess::SRV);
+        TransitionViewableResource(api, cmdList, m_IndexBuffer.get(), RHI::ERHIResourceAccess::TransferDest);
+        api->UpdateBuffer(cmdList, m_IndexBuffer.get(), indices, { 0, sizeof(indices) });
+        TransitionViewableResource(api, cmdList, m_IndexBuffer.get(), RHI::ERHIResourceAccess::SRV);
 
         cmdList.End();
         cmdList.ExecuteAll();
@@ -402,32 +402,32 @@ private:
 
     void CreateAccelerationStructures(RHI::RHIApi* api)
     {
-        if (!api || !VertexBuffer || !IndexBuffer)
+        if (!api || !m_VertexBuffer || !m_IndexBuffer)
         {
             return;
         }
 
         RHI::RHIRayTracingGeometryDesc geometryDesc{};
-        geometryDesc.VertexBuffer = VertexBuffer.get();
-        geometryDesc.IndexBuffer = IndexBuffer.get();
+        geometryDesc.VertexBuffer = m_VertexBuffer.get();
+        geometryDesc.IndexBuffer = m_IndexBuffer.get();
         geometryDesc.VertexStride = sizeof(float) * 3;
         geometryDesc.VertexCount = 3;
         geometryDesc.IndexCount = 3;
         geometryDesc.bAllowUpdate = true;
-        BottomLevelAS = api->CreateRayTracingGeometry(geometryDesc);
+        m_BottomLevelAS = api->CreateRayTracingGeometry(geometryDesc);
 
         RHI::RHIRayTracingInstancesDesc instancesDesc{};
-        if (BottomLevelAS)
+        if (m_BottomLevelAS)
         {
             RHI::RHIRayTracingInstanceDesc instanceDesc{};
-            instanceDesc.Geometry = BottomLevelAS.get();
+            instanceDesc.Geometry = m_BottomLevelAS.get();
             instanceDesc.Transform = Core::Float4x4::Identity();
             instanceDesc.InstanceID = 0;
             instanceDesc.Mask = 0xFF;
             instancesDesc.Instances.push_back(instanceDesc);
         }
 
-        TopLevelAS = api->CreateRayTracingInstance(instancesDesc);
+        m_TopLevelAS = api->CreateRayTracingInstance(instancesDesc);
     }
 
     void CreateRayTracingPipeline(RHI::RHIApi* api)
@@ -536,53 +536,53 @@ private:
             return;
         }
 
-        RayGenParameterMap = rayGenOutput.ParameterMap;
+        m_RayGenParameterMap = rayGenOutput.ParameterMap;
 
-        RayGenShader = api->CreateRayGenShader(rayGenOutput.PackedBinaryData);
-        MissShader = api->CreateMissShader(missOutput.PackedBinaryData);
-        ClosestHitShader = api->CreateCloseHitShader(closestHitOutput.PackedBinaryData);
+        m_RayGenShader = api->CreateRayGenShader(rayGenOutput.PackedBinaryData);
+        m_MissShader = api->CreateMissShader(missOutput.PackedBinaryData);
+        m_ClosestHitShader = api->CreateCloseHitShader(closestHitOutput.PackedBinaryData);
 
-        if (!RayGenShader || !MissShader || !ClosestHitShader)
+        if (!m_RayGenShader || !m_MissShader || !m_ClosestHitShader)
         {
             std::cout << "RHIRayTracingTest: ray tracing shader creation failed.\n";
             return;
         }
 
         RHI::RHIRayTracingPipelineStateDesc pipelineDesc{};
-        pipelineDesc.RayGenTable.push_back(RayGenShader.get());
-        pipelineDesc.MissTable.push_back(MissShader.get());
-        pipelineDesc.HitGroupTable.push_back(ClosestHitShader.get());
+        pipelineDesc.RayGenTable.push_back(m_RayGenShader.get());
+        pipelineDesc.MissTable.push_back(m_MissShader.get());
+        pipelineDesc.HitGroupTable.push_back(m_ClosestHitShader.get());
 
-        RayTracingPipelineState = api->CreateRayTracingsPipelineState(pipelineDesc);
-        if (!RayTracingPipelineState)
+        m_RayTracingPipelineState = api->CreateRayTracingsPipelineState(pipelineDesc);
+        if (!m_RayTracingPipelineState)
         {
             std::cout << "RHIRayTracingTest: CreateRayTracingsPipelineState returned null (backend may be unfinished).\n";
         }
     }
 
 private:
-    int WindowWidth = 512;
-    int WindowHeight = 512;
-    int FrameWidth = 512;
-    int FrameHeight = 512;
+    int m_WindowWidth = 512;
+    int m_WindowHeight = 512;
+    int m_FrameWidth = 512;
+    int m_FrameHeight = 512;
 
-    bool bAccelerationBuilt = false;
+    bool m_bAccelerationBuilt = false;
 
-    SlateCore::WindowSP Window;
-    RHI::RHISwapchainSP Swapchain;
+    SlateCore::WindowSP m_Window;
+    RHI::RHISwapchainSP m_Swapchain;
 
-    RHI::RHIBufferSP VertexBuffer;
-    RHI::RHIBufferSP IndexBuffer;
+    RHI::RHIBufferSP m_VertexBuffer;
+    RHI::RHIBufferSP m_IndexBuffer;
 
-    RHI::RHIRayTracingGeometrySP BottomLevelAS;
-    RHI::RHIRayTracingInstanceSP TopLevelAS;
+    RHI::RHIRayTracingGeometrySP m_BottomLevelAS;
+    RHI::RHIRayTracingInstanceSP m_TopLevelAS;
 
-    RHI::RHIRayGenShaderSP RayGenShader;
-    RHI::RHIMissShaderSP MissShader;
-    RHI::RHICloseHitShaderSP ClosestHitShader;
-    RHI::RHIRayTracingPipelineStateSP RayTracingPipelineState;
-    RHI::RHIUnorderedAccessViewSP CurrentBackTextureUAV;
-    RenderCore::ShaderParameterAllocationMap RayGenParameterMap;
+    RHI::RHIRayGenShaderSP m_RayGenShader;
+    RHI::RHIMissShaderSP m_MissShader;
+    RHI::RHICloseHitShaderSP m_ClosestHitShader;
+    RHI::RHIRayTracingPipelineStateSP m_RayTracingPipelineState;
+    RHI::RHIUnorderedAccessViewSP m_CurrentBackTextureUAV;
+    RenderCore::ShaderParameterAllocationMap m_RayGenParameterMap;
 };
 
 REGISTER_RENDER_TEST("RHIRayTracingTest", RHIRayTracingTest);

@@ -37,9 +37,9 @@ LoadGate Gate;
 class CountingAsset : public Engine::IAsset
 {
 public:
-    explicit CountingAsset(const std::string& path) : Path(path) {}
-    const std::string& GetPath() const override { return Path; }
-    const std::string& GetName() const override { return Name; }
+    explicit CountingAsset(const std::string& path) : m_Path(path) {}
+    const std::string& GetPath() const override { return m_Path; }
+    const std::string& GetName() const override { return m_Name; }
     bool Load() override
     {
         if (++Gate.Loads == 1) Gate.Started.set_value();
@@ -47,8 +47,8 @@ public:
         return true;
     }
 private:
-    std::string Path;
-    std::string Name = "CountingAsset";
+    std::string m_Path;
+    std::string m_Name = "CountingAsset";
 };
 
 class WrongTypeAsset : public CountingAsset

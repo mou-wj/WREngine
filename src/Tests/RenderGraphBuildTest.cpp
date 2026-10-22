@@ -102,7 +102,7 @@ public:
     int FrameHeight = 0;
     int WindiwWidth = 512;
     int WindowHeight = 512;
-    RHI::RHISamplerSP samplerSP;
+    RHI::RHISamplerSP SamplerSP;
     void Setup() override {
         RHI::GRHIApi = CreateTestRHIApi();
         RHI::GRHIApi->Init();
@@ -118,10 +118,10 @@ public:
         InitGlobalResources();
 
         // 只保存静态描述
-        texDesc.Width = FrameWidth;
-        texDesc.Height = FrameHeight;
-        texDesc.Format = ERHIFormat::R8G8B8A8_UNorm;
-        texDesc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferSrc | ERHITextureCreateFlag::TransferDest;
+        m_TexDesc.Width = FrameWidth;
+        m_TexDesc.Height = FrameHeight;
+        m_TexDesc.Format = ERHIFormat::R8G8B8A8_UNorm;
+        m_TexDesc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferSrc | ERHITextureCreateFlag::TransferDest;
     }
 
     
@@ -136,29 +136,29 @@ public:
 	{
 		//获取第0好blittextureshader变体
         auto blitShaderType = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::Global]["BlitTextureCS"];
-        blitTextureShader0 = GShaderMap.GetShader(blitShaderType,0);
-        if (!blitTextureShader0) {
+        m_BlitTextureShader0 = GShaderMap.GetShader(blitShaderType,0);
+        if (!m_BlitTextureShader0) {
             assert(0);
         }
        
         // 创建计算管线状态
         RHI::RHIComputePipelineStateDesc computeDesc;
-        computeDesc.ComputeShader = dynamic_cast<RHIComputeShader*>(blitTextureShader0->GetRHIShader());
-        ComputePipelineState = RHI::GRHIApi->CreateComputePipelineState(computeDesc);
+        computeDesc.ComputeShader = dynamic_cast<RHIComputeShader*>(m_BlitTextureShader0->GetRHIShader());
+        m_ComputePipelineState = RHI::GRHIApi->CreateComputePipelineState(computeDesc);
 	}
 
     void InitSwapchain()
     {
         // 
-        Window = SlateCore::WindowFactory::CreateWindowSP(WindiwWidth, WindowHeight, "RenderGraphBuildTest");
-        Window->Show();
+        m_Window = SlateCore::WindowFactory::CreateWindowSP(WindiwWidth, WindowHeight, "RenderGraphBuildTest");
+        m_Window->Show();
         // 创建交换链
-        void* windowHandle = Window->GetNativeHandle(); // 获取窗口句柄的函数
+        void* windowHandle = m_Window->GetNativeHandle(); // 获取窗口句柄的函数
         uint32_t width = WindiwWidth;
         uint32_t height = WindowHeight;
         ERHIFormat format = ERHIFormat::B8G8R8A8_UNorm;
-        Swapchain = RHI::GRHIApi->CreateSwapchain(windowHandle, width, height, format);
-        auto frameSize = Window->GetFramebufferSize();
+        m_Swapchain = RHI::GRHIApi->CreateSwapchain(windowHandle, width, height, format);
+        auto frameSize = m_Window->GetFramebufferSize();
         FrameWidth = frameSize.X;
         FrameHeight = frameSize.Y;
     }
@@ -175,16 +175,16 @@ public:
         constexpr int kFrameCount = 1000;
 
         RHI::RHISamplerDesc samplerDesc{};
-        samplerSP = api->CreateSampler(samplerDesc);
+        SamplerSP = api->CreateSampler(samplerDesc);
 
         // =========================================
         // 1️⃣ 创建随机源纹理（只做一次）
         // =========================================
-        RHITextureDesc randomTexDesc = texDesc;
-        texDesc.InitialQueueType = EQueueType::Compute;
+        RHITextureDesc randomTexDesc = m_TexDesc;
+        m_TexDesc.InitialQueueType = EQueueType::Compute;
         randomTexDesc.Usage |= ERHITextureCreateFlag::TransferDest | ERHITextureCreateFlag::ShaderResource;
-        randomTex = std::make_shared<RenderTexture>(randomTexDesc);
-        randomTex->InitRHIResource();
+        m_RandomTex = std::make_shared<RenderTexture>(randomTexDesc);
+        m_RandomTex->InitRHIResource();
         std::vector<uint32_t> randomData(randomTexDesc.Width * randomTexDesc.Height);
         for (int i = 0; i < randomData.size(); i++) {
             randomData[i] = rand();
@@ -197,17 +197,17 @@ public:
             cmd.SetImmediate(true);
             cmd.Begin();
 
-            TransitionResource(api, cmd, randomTex.get()->GetRHI(), ERHIResourceAccess::TransferDest,EQueueType::Compute);
+            TransitionResource(api, cmd, m_RandomTex.get()->GetRHI(), ERHIResourceAccess::TransferDest,EQueueType::Compute);
 
-            api->UpdateTexture(cmd, randomTex.get()->GetRHI(), randomData.data(),
+            api->UpdateTexture(cmd, m_RandomTex.get()->GetRHI(), randomData.data(),
                 RHIUpdateTextureRegion::Create2DRegion(randomTexDesc.Width, randomTexDesc.Height));
 
-            TransitionResource(api, cmd, randomTex.get()->GetRHI(), ERHIResourceAccess::SRV,EQueueType::Compute);
+            TransitionResource(api, cmd, m_RandomTex.get()->GetRHI(), ERHIResourceAccess::SRV,EQueueType::Compute);
 
             cmd.End();
 
             queue->ExecuteContext({ ctx }, {});
-            randomTex->GetTracker().UpdateSubresourceAccess(RHI::RHISubresourceRange{}, ERHIResourceAccess::SRV);
+            m_RandomTex->GetTracker().UpdateSubresourceAccess(RHI::RHISubresourceRange{}, ERHIResourceAccess::SRV);
         }
 
         // =========================================
@@ -219,9 +219,9 @@ public:
             // 从 pool 取 RT
             // -------------------------------------
             PoolRenderTargetDesc rtDesc{};
-            rtDesc.Width = texDesc.Width;
-            rtDesc.Height = texDesc.Height;
-            rtDesc.Format = texDesc.Format;
+            rtDesc.Width = m_TexDesc.Width;
+            rtDesc.Height = m_TexDesc.Height;
+            rtDesc.Format = m_TexDesc.Format;
             rtDesc.Usage = ERHITextureCreateFlag::UAV |
                 ERHITextureCreateFlag::TransferSrc |
                 ERHITextureCreateFlag::TransferDest;
@@ -234,7 +234,7 @@ public:
             RenderGraphBuilder builder;
 
             // 👉 注册 external
-            auto rdgSrc = builder.RegisterExternalTexture("SrcTex", randomTex.get());
+            auto rdgSrc = builder.RegisterExternalTexture("SrcTex", m_RandomTex.get());
             auto rdgDst = builder.RegisterExternalTexture("DstTex", renderTarget.get());
 
             // 👉 创建 SRV / UAV
@@ -249,9 +249,9 @@ public:
 
             params->SrcTexture = rdgSrc;
             params->DstTexture = dstUAV;
-            params->SrcSampler = samplerSP.get();
-            params->SrcSize = { (float)texDesc.Width, (float)texDesc.Height };
-            params->SrcInvSize = { 1.0f / texDesc.Width, 1.0f / texDesc.Height };
+            params->SrcSampler = SamplerSP.get();
+            params->SrcSize = { (float)m_TexDesc.Width, (float)m_TexDesc.Height };
+            params->SrcInvSize = { 1.0f / m_TexDesc.Width, 1.0f / m_TexDesc.Height };
             params->DstSize = params->SrcSize;
             params->DstInvSize = params->SrcInvSize;
             params->SrcMipLevel = 0;
@@ -264,15 +264,15 @@ public:
                 BlitTextureParameters::GetMetaData(),
                 params,
                 EPassFlag::Compute,
-                [=](RHI::RHICommandListBase& RHICmdList)
+                [=](RHI::RHICommandListBase& rhiCmdList)
                 {
-                    auto& cmd = static_cast<RHI::RHIComputeCommandList&>(RHICmdList);
+                    auto& cmd = static_cast<RHI::RHIComputeCommandList&>(rhiCmdList);
 
-                    cmd.SetComputePipelineState(ComputePipelineState.get());
-                    SetShaderParameters(cmd, blitTextureShader0, params);
+                    cmd.SetComputePipelineState(m_ComputePipelineState.get());
+                    SetShaderParameters(cmd, m_BlitTextureShader0, params);
                     cmd.Dispatch(
-                        texDesc.Width / 8,
-                        texDesc.Height / 8,
+                        m_TexDesc.Width / 8,
+                        m_TexDesc.Height / 8,
                         1);
                 }
             );
@@ -285,7 +285,7 @@ public:
             // =========================================
             // 3️⃣ Blit 到 swapchain
             // =========================================
-            auto slot = Swapchain->AcquireNextSlot();
+            auto slot = m_Swapchain->AcquireNextSlot();
             auto* backTexture = slot.Texture;
 
             auto* computeQueue = api->GetQueue(EQueueType::Compute);
@@ -299,8 +299,8 @@ public:
 
             TransitionResource(api, cmd, backTexture, ERHIResourceAccess::TransferDest, EQueueType::Compute);
             RHI::RHIBlitTextureDesc blit{};
-            blit.SrcRegion.Width = texDesc.Width;
-            blit.SrcRegion.Height = texDesc.Height;
+            blit.SrcRegion.Width = m_TexDesc.Width;
+            blit.SrcRegion.Height = m_TexDesc.Height;
             blit.DstRegion.Width = FrameWidth;
             blit.DstRegion.Height = FrameHeight;
             cmd.BlitTexture(renderTarget->GetRHI(), backTexture, blit);
@@ -328,7 +328,7 @@ public:
             RHI::RHIWaitInfo presentWait;
             presentWait.QueueType = fence.QueueType;
             presentWait.Value = fence.Value;
-            api->GetPresentExecutor()->Present(Swapchain.get(), { presentWait });
+            api->GetPresentExecutor()->Present(m_Swapchain.get(), { presentWait });
             renderTarget->MarkUsed(false);
         }
 
@@ -339,22 +339,22 @@ public:
         // 资源清理如有需要可补充
         GRenderTargetPool.Clear();
         GShaderMap.Clear();
-		ComputePipelineState.reset();
-        Swapchain.reset();
-        Window.reset();
-		samplerSP.reset();
-        randomTex.reset();
+		m_ComputePipelineState.reset();
+        m_Swapchain.reset();
+        m_Window.reset();
+		SamplerSP.reset();
+        m_RandomTex.reset();
         
         delete RHI::GRHIApi;
     }
 
 private:
-    RenderGraphTextureDesc texDesc;
-    RHI::RHIComputePipelineStateSP ComputePipelineState;
-    RHI::RHISwapchainSP Swapchain;
-    SlateCore::WindowSP Window;
-    RenderCore::Shader* blitTextureShader0;
-    RenderTextureSP randomTex;
+    RenderGraphTextureDesc m_TexDesc;
+    RHI::RHIComputePipelineStateSP m_ComputePipelineState;
+    RHI::RHISwapchainSP m_Swapchain;
+    SlateCore::WindowSP m_Window;
+    RenderCore::Shader* m_BlitTextureShader0;
+    RenderTextureSP m_RandomTex;
 };
 
 REGISTER_RENDER_TEST("RenderGraphBuildTest", RenderGraphBuildTest);

@@ -111,7 +111,7 @@ namespace Test {
         int FrameHeight = 0;
         int WindiwWidth = 512;
         int WindowHeight = 512;
-        RHI::RHISamplerSP samplerSP;
+        RHI::RHISamplerSP SamplerSP;
         void Setup() override {
             RHI::GRHIApi = CreateTestRHIApi();
             RHI::GRHIApi->Init();
@@ -128,24 +128,24 @@ namespace Test {
 
 
             // 只保存静态描述
-            texDesc.Width = FrameWidth;
-            texDesc.Height = FrameHeight;
-            texDesc.Format = ERHIFormat::R8G8B8A8_UNorm;
-            texDesc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferSrc | ERHITextureCreateFlag::TransferDest;
+            m_TexDesc.Width = FrameWidth;
+            m_TexDesc.Height = FrameHeight;
+            m_TexDesc.Format = ERHIFormat::R8G8B8A8_UNorm;
+            m_TexDesc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferSrc | ERHITextureCreateFlag::TransferDest;
         }
 
         void InitSwapchain()
         {
             // 
-            Window = SlateCore::WindowFactory::CreateWindowSP(WindiwWidth, WindowHeight, "RHIRenderTriangleTest");
-            Window->Show();
+            m_Window = SlateCore::WindowFactory::CreateWindowSP(WindiwWidth, WindowHeight, "RHIRenderTriangleTest");
+            m_Window->Show();
             // 创建交换链
-            void* windowHandle = Window->GetNativeHandle(); // 获取窗口句柄的函数
+            void* windowHandle = m_Window->GetNativeHandle(); // 获取窗口句柄的函数
             uint32_t width = WindiwWidth;
             uint32_t height = WindowHeight;
             ERHIFormat format = ERHIFormat::B8G8R8A8_UNorm;
-            Swapchain = RHI::GRHIApi->CreateSwapchain(windowHandle, width, height, format);
-            auto frameSize = Window->GetFramebufferSize();
+            m_Swapchain = RHI::GRHIApi->CreateSwapchain(windowHandle, width, height, format);
+            auto frameSize = m_Window->GetFramebufferSize();
             FrameWidth = frameSize.X;
             FrameHeight = frameSize.Y;
         }
@@ -158,18 +158,18 @@ namespace Test {
         void InitStaticMesh() {
 			AssetManager::Get().LoadSync<MaterialAsset>(Core::GetProjectDir() + "/resources/material/DefaultWhite/material.json");
 
-            staticMeshAsset = AssetManager::Get().LoadSync<StaticMeshAsset>(Core::GetProjectDir() + "/resources/glb/sphere.glb");
-            staticMeshComponent = new StaticMeshComponent();
-            staticMeshComponent->SetStaticMesh(staticMeshAsset->GetMesh());
-            scene = GetRenderModuleInstance()->AllocateScene();
-            scene->AddPrimitive(staticMeshComponent);
+            m_StaticMeshAsset = AssetManager::Get().LoadSync<StaticMeshAsset>(Core::GetProjectDir() + "/resources/glb/sphere.glb");
+            m_StaticMeshComponent = new StaticMeshComponent();
+            m_StaticMeshComponent->SetStaticMesh(m_StaticMeshAsset->GetMesh());
+            m_Scene = GetRenderModuleInstance()->AllocateScene();
+            m_Scene->AddPrimitive(m_StaticMeshComponent);
         }
 
         void InitPipelineState() {
             auto vsfShaderType = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::MeshMaterial]["StaticMeshMaterialShaderVS"];
             auto psfShaderType = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::MeshMaterial]["StaticMeshMaterialShaderPS"];
             auto vfType = VertexFactoryType::GetRegisterMap()["LocalVertexFactory"];
-            auto vfFlags = staticMeshComponent->GetStaticMesh()->GetRenderData()->GetLODResource(0).VertexFactory->GetVertexFactoryFlags();
+            auto vfFlags = m_StaticMeshComponent->GetStaticMesh()->GetRenderData()->GetLODResource(0).VertexFactory->GetVertexFactoryFlags();
             MeshMaterialShaderKey vsKey;
             vsKey.ShaderType = static_cast<MeshMaterialShaderType*>(vsfShaderType);
             vsKey.VF = vfType;
@@ -177,7 +177,7 @@ namespace Test {
             vsKey.VertexFactoryFlags = vfFlags;
             vsKey.MaterialParameter.ShadingModel = EShadingModel::Unlit;
 
-            vertexShader = GMeshMaterialShaderMap.GetShader(vsKey);
+            m_VertexShader = GMeshMaterialShaderMap.GetShader(vsKey);
 
             //设置pixel参数
             MeshMaterialShaderKey psKey;
@@ -186,7 +186,7 @@ namespace Test {
             psKey.PermutationId = 0;
             psKey.VertexFactoryFlags = vfFlags;
             psKey.MaterialParameter.ShadingModel = EShadingModel::Unlit;
-            pixelShader = GMeshMaterialShaderMap.GetShader(psKey);
+            m_PixelShader = GMeshMaterialShaderMap.GetShader(psKey);
 
 
             // 创建光栅化状态
@@ -212,21 +212,21 @@ namespace Test {
             auto depthStencilState = RHIPipelineStateCache::GetOrCreateDepthStencilState(depthStencilDesc);
 
             // 创建图形管线状态
-            pipelineDesc.ShaderStages.VertexShader = dynamic_cast<RHI::RHIVertexShader*>(vertexShader->GetRHIShader());
-            pipelineDesc.ShaderStages.FragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(pixelShader->GetRHIShader());
+            m_PipelineDesc.ShaderStages.VertexShader = dynamic_cast<RHI::RHIVertexShader*>(m_VertexShader->GetRHIShader());
+            m_PipelineDesc.ShaderStages.FragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(m_PixelShader->GetRHIShader());
             // 这里可以设置更多管线配置...
-            pipelineDesc.RasterizerState = rasterizerState;
+            m_PipelineDesc.RasterizerState = rasterizerState;
 
-            pipelineDesc.DepthStencilState = depthStencilState;
-            pipelineDesc.VertexDescState = staticMeshAsset->GetMesh()->GetRenderData()->LODResources[0].VertexFactory->GetRHIVertexDescState();
+            m_PipelineDesc.DepthStencilState = depthStencilState;
+            m_PipelineDesc.VertexDescState = m_StaticMeshAsset->GetMesh()->GetRenderData()->LODResources[0].VertexFactory->GetRHIVertexDescState();
 
             //rendertarget info
-            pipelineDesc.AttachmentDesc.ColorAttachmentCount = 1;
-            pipelineDesc.AttachmentDesc.ColorAttachments[0].Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
-            pipelineDesc.AttachmentDesc.ColorAttachments[0].Actions = ERenderTargetActions::Clear_Store;
-            pipelineDesc.AttachmentDesc.DepthActions = ERenderTargetActions::Clear_Store;
-            pipelineDesc.AttachmentDesc.bEnableDepth = true;
-            pipelineDesc.AttachmentDesc.DepthStencilFormat = RHI::ERHIFormat::D32_Float;
+            m_PipelineDesc.AttachmentDesc.ColorAttachmentCount = 1;
+            m_PipelineDesc.AttachmentDesc.ColorAttachments[0].Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
+            m_PipelineDesc.AttachmentDesc.ColorAttachments[0].Actions = ERenderTargetActions::Clear_Store;
+            m_PipelineDesc.AttachmentDesc.DepthActions = ERenderTargetActions::Clear_Store;
+            m_PipelineDesc.AttachmentDesc.bEnableDepth = true;
+            m_PipelineDesc.AttachmentDesc.DepthStencilFormat = RHI::ERHIFormat::D32_Float;
 
 
 
@@ -240,7 +240,7 @@ namespace Test {
             constexpr int kFrameCount = 1000;
 
             RHI::RHISamplerDesc samplerDesc{};
-            samplerSP = api->CreateSampler(samplerDesc);
+            SamplerSP = api->CreateSampler(samplerDesc);
 
 
             // =========================================
@@ -253,9 +253,9 @@ namespace Test {
                 // 从 pool 取 RT
                 // -------------------------------------
                 PoolRenderTargetDesc rtDesc{};
-                rtDesc.Width = texDesc.Width;
-                rtDesc.Height = texDesc.Height;
-                rtDesc.Format = texDesc.Format;
+                rtDesc.Width = m_TexDesc.Width;
+                rtDesc.Height = m_TexDesc.Height;
+                rtDesc.Format = m_TexDesc.Format;
                 rtDesc.Usage = ERHITextureCreateFlag::RenderTarget |
                     ERHITextureCreateFlag::TransferSrc |
                     ERHITextureCreateFlag::TransferDest;
@@ -264,8 +264,8 @@ namespace Test {
                 auto renderTarget = GRenderTargetPool.GetFreeRenderTarget(rtDesc);
                 renderTarget->MarkUsed();
                 PoolRenderTargetDesc depthTargetDesc{};
-                depthTargetDesc.Width = texDesc.Width;
-                depthTargetDesc.Height = texDesc.Height;
+                depthTargetDesc.Width = m_TexDesc.Width;
+                depthTargetDesc.Height = m_TexDesc.Height;
                 depthTargetDesc.Format = RHI::ERHIFormat::D32_Float;
                 depthTargetDesc.Usage = ERHITextureCreateFlag::DepthStencil;
                 depthTargetDesc.DebugName = "DepthTarget";
@@ -277,7 +277,7 @@ namespace Test {
                 camera.SetPosition({ 0.0f, 0.0f, -5.0f });
                 camera.SetTarget({ 0.0f, 0.0f, 0.0f });
                 camera.SetUp({ 0.0f, 1.0f, 0.0f });
-                camera.SetPerspective(Core::DegToRad(45.0f), texDesc.Width / (float)texDesc.Height, 0.1f, 100.0f);
+                camera.SetPerspective(Core::DegToRad(45.0f), m_TexDesc.Width / (float)m_TexDesc.Height, 0.1f, 100.0f);
                 auto view = camera.GetViewMatrix();
                 auto proj = camera.GetProjectionMatrix();
                 //绘制场景
@@ -287,13 +287,13 @@ namespace Test {
                 sceneView.ProjectionMatrix = proj;
                 sceneView.ViewProjectionMatrix = view * proj;
                 SceneViewFamily sceneViewFamily;
-                sceneViewFamily.Scene = scene;
+                sceneViewFamily.Scene = m_Scene;
                 sceneViewFamily.AddView(sceneView);
-                auto meshSceneProxy = staticMeshComponent->CreateSceneProxy();
+                auto meshSceneProxy = m_StaticMeshComponent->CreateSceneProxy();
                 MeshBatchList list;
                 std::vector<Engine::StaticMeshProxy*> meshs;
                 meshs.push_back(dynamic_cast<Engine::StaticMeshProxy*>(meshSceneProxy));
-                Scene* s = dynamic_cast<Scene*>(scene);
+                Scene* s = dynamic_cast<Scene*>(m_Scene);
                 Renderer::StaticMeshDrawBuild(s, sceneView, list);
                 // -------------------------------------
                 // RDG 构建
@@ -313,7 +313,7 @@ namespace Test {
                         std::vector<RHI::RHIColorBlendAttachmentDesc> attachments = { blendAttachDesc };
                         blendDesc.Attachments = attachments;
                         auto colorBlendState = RHIPipelineStateCache::GetOrCreateColorBlendState(blendDesc);
-                        pipelineDesc.ColorBlendState = colorBlendState;
+                        m_PipelineDesc.ColorBlendState = colorBlendState;
                     }
                     else {
                         RHI::RHIColorBlendStateDesc blendDesc;
@@ -323,9 +323,9 @@ namespace Test {
                         std::vector<RHI::RHIColorBlendAttachmentDesc> attachments = { blendAttachDesc };
                         blendDesc.Attachments = attachments;
                         auto colorBlendState = RHIPipelineStateCache::GetOrCreateColorBlendState(blendDesc);
-                        pipelineDesc.ColorBlendState = colorBlendState;
+                        m_PipelineDesc.ColorBlendState = colorBlendState;
                     }
-                    auto pipeline = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(pipelineDesc);
+                    auto pipeline = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(m_PipelineDesc);
                     auto state = pipeline;
                     // 参数
                     
@@ -361,9 +361,9 @@ namespace Test {
                         PassParameters::GetMetaData(),
                         params,
                         EPassFlag::Graphic,
-                        [=](RHI::RHICommandListBase& RHICmdList)
+                        [=](RHI::RHICommandListBase& rhiCmdList)
                         {
-                            auto& cmd = static_cast<RHI::RHIGraphicCommandList&>(RHICmdList);
+                            auto& cmd = static_cast<RHI::RHIGraphicCommandList&>(rhiCmdList);
                             PassParameters* passParams = params;
 
 
@@ -374,10 +374,10 @@ namespace Test {
                             cmd.SetViewport(0, 0, FrameWidth, FrameHeight, 0.0f, 1.0f);
                             cmd.SetScissor(0, 0, FrameWidth, FrameHeight);
                             //设置vertex参数
-                            SetShaderParameters(cmd, vertexShader, &passParams->vertexParameters);
+                            SetShaderParameters(cmd, m_VertexShader, &passParams->vertexParameters);
 
                             //设置pixel参数
-                            SetShaderParameters(cmd, pixelShader, &passParams->pixelParameters);
+                            SetShaderParameters(cmd, m_PixelShader, &passParams->pixelParameters);
                             auto boundRenderTarget = params->pixelParameters.renderTargetSlots.GetBoundRenderTarget();
                             RHIRenderPassInfo passInfo;
                             passInfo.RenderTargets = boundRenderTarget;
@@ -401,7 +401,7 @@ namespace Test {
                 // =========================================
                 // 3️⃣ Blit 到 swapchain
                 // =========================================
-                auto slot = Swapchain->AcquireNextSlot();
+                auto slot = m_Swapchain->AcquireNextSlot();
                 auto* backTexture = slot.Texture;
 
                 auto* computeQueue = api->GetQueue(EQueueType::Compute);
@@ -415,8 +415,8 @@ namespace Test {
 
                 TransitionResource(api, cmd, backTexture, ERHIResourceAccess::TransferDest);
                 RHI::RHIBlitTextureDesc blit{};
-                blit.SrcRegion.Width = texDesc.Width;
-                blit.SrcRegion.Height = texDesc.Height;
+                blit.SrcRegion.Width = m_TexDesc.Width;
+                blit.SrcRegion.Height = m_TexDesc.Height;
                 blit.DstRegion.Width = FrameWidth;
                 blit.DstRegion.Height = FrameHeight;
                 cmd.BlitTexture(renderTarget->GetRHI(), backTexture, blit);
@@ -444,7 +444,7 @@ namespace Test {
                 RHI::RHIWaitInfo presentWait;
                 presentWait.QueueType = fence.QueueType;
                 presentWait.Value = fence.Value;
-                api->GetPresentExecutor()->Present(Swapchain.get(), { presentWait });
+                api->GetPresentExecutor()->Present(m_Swapchain.get(), { presentWait });
                 renderTarget->MarkUsed(false);
                 depthRenderTarget->MarkUsed(false);
             }
@@ -466,24 +466,24 @@ namespace Test {
             GMeshMaterialShaderMap.Clear();
             RHIPipelineStateCache::ClearAll();
             GRenderTargetPool.Clear();
-            Swapchain.reset();
-            Window.reset();
-            samplerSP.reset();
+            m_Swapchain.reset();
+            m_Window.reset();
+            SamplerSP.reset();
             RHI::GRHIApi->Shutdown();
             delete RHI::GRHIApi;
         }
 
     private:
-        RenderGraphTextureDesc texDesc;
-        RHI::RHISwapchainSP Swapchain;
-        SlateCore::WindowSP Window;
-        RenderCore::Shader* blitTextureShader0;
-        std::shared_ptr<StaticMeshAsset> staticMeshAsset;
-        StaticMeshComponent* staticMeshComponent;
-        Engine::SceneInterface* scene;
-        RHI::RHIGraphicsPipelineStateDesc pipelineDesc;
-        Shader* vertexShader;
-        Shader* pixelShader;
+        RenderGraphTextureDesc m_TexDesc;
+        RHI::RHISwapchainSP m_Swapchain;
+        SlateCore::WindowSP m_Window;
+        RenderCore::Shader* m_BlitTextureShader0;
+        std::shared_ptr<StaticMeshAsset> m_StaticMeshAsset;
+        StaticMeshComponent* m_StaticMeshComponent;
+        Engine::SceneInterface* m_Scene;
+        RHI::RHIGraphicsPipelineStateDesc m_PipelineDesc;
+        Shader* m_VertexShader;
+        Shader* m_PixelShader;
 
     };
 
