@@ -1,6 +1,7 @@
 #pragma once
 #include "LayoutMgr.h"
 #include <Window.h>
+#include "SlateRenderer.h"
 
 namespace ImGUISlate
 {
@@ -12,7 +13,7 @@ namespace ImGUISlate
         ImMainWindow(
             int width,
             int height,
-            const std::string& title);
+            const std::string& title, SlateCore::SlateRenderer* renderer);
 
         ~ImMainWindow() override;
         void Draw();
@@ -20,7 +21,8 @@ namespace ImGUISlate
     public:
         ImSlateRenderer* GetRenderer() const;
         void AddWidget(SlateCore::Widget* widget, const LayoutParams& params);
-        //派生类不在只有一个rootwidget，所以删除
+        void RemoveWidget(SlateCore::Widget* widget) override;
+        // Window registrations must stay synchronized with the layout.
         void SetRootWidget(SlateCore::Widget* widget) = delete;
         SlateCore::Widget* GetRootWidgets() const = delete;
     public:
@@ -45,6 +47,7 @@ namespace ImGUISlate
             const SlateCore::KeyEvent& event) override;
 
     private:
+        SlateCore::SlateRenderer* m_WindowRenderer = nullptr;
         std::unique_ptr<LayoutManager> m_Layout;
         std::unique_ptr<ImSlateRenderer> m_Renderer;
     };

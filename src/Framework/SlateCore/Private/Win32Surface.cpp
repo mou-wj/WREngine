@@ -245,9 +245,19 @@ namespace SlateCore
             return 0;
 
         case WM_KILLFOCUS:
+            m_PressedButtons = 0;
+            if (::GetCapture() == hwnd) ::ReleaseCapture();
             if (_owner)
             {
                 _owner->OnFocusLost();
+            }
+            return 0;
+
+        case WM_CAPTURECHANGED:
+            if (m_PressedButtons)
+            {
+                m_PressedButtons = 0;
+                if (_owner) _owner->OnFocusLost();
             }
             return 0;
         }
@@ -366,6 +376,18 @@ namespace SlateCore
                 break;
             }
 
+            const uint32_t mask = 1u << static_cast<uint32_t>(event.Button);
+            if (event.Event == EInputEvent::Pressed)
+            {
+                ::SetFocus(m_HWnd);
+                ::SetCapture(m_HWnd);
+                m_PressedButtons |= mask;
+            }
+            else
+            {
+                m_PressedButtons &= ~mask;
+                if (!m_PressedButtons && ::GetCapture() == m_HWnd) ::ReleaseCapture();
+            }
             return _owner->OnMouseButton(event);
         }
 

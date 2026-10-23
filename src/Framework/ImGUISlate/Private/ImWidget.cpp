@@ -170,25 +170,4 @@ namespace ImGUISlate {
         Resize(static_cast<float>(width), static_cast<float>(height));
         return true;
     }
-    PopupImWidget::PopupImWidget(SlateCore::PlatformSurfaceOwner * parentOwner)
-		: SlateCore::NativeWidget(parentOwner)
-	{
-	}
-    void PopupImWidget::Draw()
-    {
-        if (_visibility != SlateCore::EVisibility::Visible)
-        {
-            return;
-        }
-
-        if (_drawHandler)
-        {
-            _drawHandler(_geometry.X, _geometry.Y, _geometry.Width, _geometry.Height);
-        }
-    }
-    bool PopupImWidget::OnResize(uint32_t width, uint32_t height)
-    {
-        Resize(static_cast<float>(width), static_cast<float>(height));
-        return true;
-    }
 }

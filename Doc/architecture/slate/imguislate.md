@@ -1,208 +1,84 @@
-# ImGuiSlate 模块架构说明
+# ImGUISlate 模块架构说明
 
 ## 1. 模块定位
 
-`ImGUISlate` 模块位于 `SlateCore` 之上，是“基于 Dear ImGui 的 Slate 实现层”。它并不是替代 `SlateCore`，而是在其抽象接口基础上提供一套更具体的窗口、布局与 UI 渲染实现。
+`ImGUISlate` 在 SlateCore 上提供 ImGui 界面、布局、输入适配和一套项目自有的 RHI 渲染后端。业务层继续通过 ImWidget 绘制回调组织面板，不需要调用 OpenGL/Vulkan/D3D12。
 
-从源码结构看，`src/Framework/ImGUISlate` 主要包含：
+关键实现：
 
-- `ImMainWindow.h`：ImGui 版主窗口，继承自 `SlateCore::Window`
-- `ImSlateRenderer.h`：把 `SlateCore` 事件和 `ImGui` 输入输出桥接起来的 renderer
-- `ImWidget.h`：ImGui widget 抽象，继承自 `SlateCore::Widget`
-- `LayoutMgr.h`：布局系统，支持垂直/水平/网格布局
-- `ImFileDialogWidget.h`：更具体的 ImGui 对话框控件
+| 文件 | 职责 |
+| --- | --- |
+| `ImMainWindow.h/.cpp` | Window、水平布局与窗口输入转发 |
+| `ImSlateRenderer.h/.cpp` | 每窗口 ImGuiContext、帧生成、场景纹理合成 |
+| `ImWidget.h/.cpp` | 逻辑区域与通用 DrawCallback |
+| `LayoutMgr.h/.cpp` | 水平、垂直、网格布局工具 |
+| `Private/imgui_impl_rhi.h/.cpp` | ImDrawData → RHI 命令、纹理、Shader、上传资源 |
 
-从架构上看，`ImGUISlate` 是当前项目中“可视化 UI 具体实现”的一层：它使用 ImGui 作为实际渲染和交互机制，但仍遵循 `SlateCore` 的窗口、控件、事件体系。
+CMake 链接 SlateCore、RenderCore，编译 ImGui 核心源文件，过滤官方 `imgui_impl_*` 图形后端；ImGUISlate 不再建立 WGL 环境或链接 OpenGL 绘制路径。新增的后端放在 Private，避免把 ImGui 细节扩散到 RHI 公共接口。
 
----
+## 2. 窗口和控件
 
-## 2. 设计目标
+`ImMainWindow(width, height, title, renderer)` 接受由 SlateRHIRenderer 模块提供的非拥有渲染器指针。Window 负责唯一的原生表面，ImSlateRenderer 为该 Window 创建一个 ImGuiContext。
 
-`ImGUISlate` 的目标是：
+`ImWidget` 继承 Widget 和 ImWidgetBase，保存 `(x, y, width, height)` 绘制回调。`PopupImWidget` 继承 ImWidget，只表达弹层用途，不再拥有原生句柄。真正弹层的打开/关闭、模态和层级由回调中的 ImGui API 组织。
 
-- 在 `SlateCore` 的抽象系统之上完成具体 UI 组织
-- 利用 ImGui 做真正的绘制和交互
-- 通过 layout manager 管理多 widget 的堆叠与排列
-- 把 UI 事件转换成 `ImGui` 的输入事件（鼠标、键盘、滚轮）
-- 让应用层能通过 Slate 风格的 widget API 快速构建编辑器式界面
+Window 与 LayoutManager 保存非拥有 Widget 指针；ImMainWindow::RemoveWidget 同步移除两处登记，并等待之前提交完成后允许调用方销毁资源。布局按客户区尺寸更新，不根据外框大小分配区域。
 
-因此，`ImGUISlate` 就是“Slate 框架 + ImGui 具体实现”的桥接层。
-
----
-
-## 3. 主窗口：`ImMainWindow`
-
-`ImMainWindow` 是 `ImGUISlate` 的核心入口，它继承自 `SlateCore::Window`：
-
-```cpp
-class IMGUISLATE_API ImMainWindow final : public SlateCore::Window
-{
-public:
-    ImMainWindow(int width, int height, const std::string& title);
-    void Draw();
-    bool Initialize() override;
-    void AddWidget(SlateCore::Widget* widget, const LayoutParams& params);
-};
-```
-
-它的职责包括：
-
-- 创建窗口本体
-- 维护 `LayoutManager`
-- 维护一个 `ImSlateRenderer`
-- 将多个 widget 组合进根窗口
-- 转发窗口事件到各个 widget / ImGui
-
-这里有一个关键点：`ImMainWindow` 明确禁用了 `SetRootWidget` 和 `GetRootWidgets`，因为它使用的是 `LayoutManager` 分层布局，而不是简单的单根 widget 方案。这说明它更偏“编辑器型界面容器”，而不是一个普通窗口。
-
----
-
-## 4. 布局系统：`LayoutManager`
-
-`ImGUISlate` 中的布局系统使用 `LayoutManager` 作为抽象父类：
-
-```cpp
-class IMGUISLATE_API LayoutManager
-{
-public:
-    void AddWidget(SlateCore::Widget* widget, const LayoutParams& params = {});
-    void RemoveWidget(SlateCore::Widget* widget);
-    virtual void Layout(float width, float height) = 0;
-};
-```
-
-布局参数 `LayoutParams` 包含：
-
-- `Width`, `Height`
-- `Weight`
-- `Margin`
-- `Row`, `Column`
-- `RowSpan`, `ColumnSpan`
-
-具体布局实现：
-
-- `VerticalLayout`
-- `HorizontalLayout`
-- `GridLayout`
-
-这说明 `ImGUISlate` 不是单纯的 ImGui 直接调用，而是额外在 `SlateCore` 的控件树基础上新增了布局管理器。这样 UI 可以按编辑器常见方式安排：垂直堆放、横向堆放、网格布局。
-
----
-
-## 5. 控件抽象：`ImWidget` 与 `PopupImWidget`
-
-`ImWidget.h` 中定义了两个重要类型：
-
-```cpp
-class IMGUISLATE_API ImWidget : public SlateCore::Widget, public ImWidgetBase
-class IMGUISLATE_API PopupImWidget : public SlateCore::NativeWidget, public ImWidgetBase
-```
-
-### 5.1 `ImWidgetBase`
-
-`ImWidgetBase` 继承自 `SlateCore::EventHandler`，负责把事件转成 ImGui 输入：
-
-```cpp
-virtual bool OnMouseMove(const SlateCore::MouseMoveEvent& event) override;
-virtual bool OnMouseButton(const SlateCore::MouseButtonEvent& event) override;
-virtual bool OnMouseWheel(const SlateCore::MouseWheelEvent& event) override;
-virtual bool OnKeyDown(const SlateCore::KeyEvent& event) override;
-virtual bool OnKeyUp(const SlateCore::KeyEvent& event) override;
-```
-
-它同时持有：
-
-```cpp
-using DrawCallback = std::function<void(int x, int y, int w, int h)>;
-DrawCallback _drawHandler;
-```
-
-这说明每个 ImGui widget 都可以绑定一个自定义绘制回调，用于绘制真正的界面内容。
-
-### 5.2 `ImWidget`
-
-`ImWidget` 是最基本的可绘制控件，用于完成常规区域绘制逻辑：
-
-- `Draw()`
-- `OnResize()`
-
-### 5.3 `PopupImWidget`
-
-`PopupImWidget` 继承自 `SlateCore::NativeWidget`，更接近“原生窗口/弹出层”的语义，适合弹出对话框、悬浮面板等场景。
-
----
-
-## 6. 事件桥接：`ImSlateRenderer`
-
-`ImSlateRenderer` 是 `ImGUISlate` 中的关键桥接对象，它继承自 `SlateCore::EventHandler`：
-
-```cpp
-class ImSlateRenderer : public SlateCore::EventHandler
-{
-public:
-    explicit ImSlateRenderer(SlateCore::Window* window);
-    void Render();
-
-    bool OnMouseMove(const SlateCore::MouseMoveEvent& Event) override;
-    bool OnMouseButton(const SlateCore::MouseButtonEvent& Event) override;
-    bool OnMouseWheel(const SlateCore::MouseWheelEvent& Event) override;
-    bool OnKeyDown(const SlateCore::KeyEvent& Event) override;
-    bool OnKeyUp(const SlateCore::KeyEvent& Event) override;
-};
-```
-
-它完成的核心工作是：
-
-- 将 `SlateCore` 的事件类型转换成 ImGui 的键值和鼠标值
-- 调整 `ImGuiIO` 的状态
-- 让 ImGui 接收窗口输入
-- 在 render pass 中绘制整个 widget 树
-
-例如在 `ImSlateRenderer.cpp` 中，代码对 `SlateCore::EKey` 和 `SlateCore::EMouseButton` 进行了转换：
-
-```cpp
-ImGuiKey ConvertKey(SlateCore::EKey key)
-int ConvertMouseButton(SlateCore::EMouseButton button)
-```
-
-这说明 `ImGUISlate` 用“桥接函数”的方式把 Slate 的输入模型转换成 ImGui 的输入模型，是典型的适配层设计。
-
----
-
-## 7. 具体绘制流转
-
-在 `ImMainWindow` 中，窗口本身并不直接负责所有渲染，而是通过 `LayoutManager` + `ImSlateRenderer` 的组合来完成：
+## 3. 单帧绘制
 
 ```text
-ImMainWindow
-    -> LayoutManager
-        -> Widget tree
-    -> ImSlateRenderer
-        -> ImGuiIO / ImGui::Render()
+Application.TickFrame
+  → ImMainWindow.PollEvents
+  → ImMainWindow.Draw
+    → 切换该 Window 的 ImGuiContext、更新尺寸和 DeltaTime、NewFrame
+    → 遍历可见 Widget，执行 Draw
+        → SlateWidget 转发 SceneViewport.Draw，产生 RenderTexture
+        → ImWidget 回调生成 GUI
+    → 视口纹理加入 ImGui 背景 DrawList，GUI 窗口/弹层在其上方
+    → ImGui.Render
+    → SlateRenderer.Render(Window, callback)
+        → ImGuiRHIBackend.RenderDrawData
+        → 登记本批命令使用的纹理和缓冲
+        → SlateRHIRenderer 提交后立即更新资源 Access 和 Fence
+        → 一次窗口 Present，随后提交窗口完成标记
+        → 返回窗口完成 Fence，ImGuiRHIBackend.EndFrame 仅记录帧存储的复用时机
 ```
 
-整体流程大致为：
+场景保持离屏输出，避免改动 Renderer/Engine 的主渲染流程。GUI 可以覆盖场景区域；既不存在场景子 HWND，也不需要处理原生子窗口遮住 GUI 的问题。
 
-1. 用户输入进入 `ImMainWindow` 的事件回调
-2. 事件沿着 `SlateCore` 的 event handler 传递
-3. `ImWidgetBase` 将事件转换为 ImGui 输入
-4. `Draw()` 回调或 `ImGui::Begin/End` 逻辑执行 UI 绘制
-5. `ImSlateRenderer` 负责最终把 UI 输出到窗口表面
+## 4. 自有 ImGui RHI 后端
 
-这是一种标准的“框架事件 + ImGui 渲染”的组合结构。
+后端解析 ImDrawData，复用 RenderCore 的 ShaderCompiler、RenderBuffer、RenderTexture 和 RHI 状态缓存：
 
----
+- 编译简单的 HLSL 顶点/片元 Shader，按当前 GShaderPlatform 输出对应后端数据。
+- 顶点含二维坐标、UV、归一化 RGBA 颜色；顶点常量负责正交投影。
+- 合并各 DrawList 的顶点，将索引转成 uint32 并折叠 VtxOffset，支持大网格和后端间的索引差异。三组帧资源按提交 Fence 轮转，顶点/索引上传和访问转换直接录入本帧命令列表。
+- 按目标格式缓存图形管线，开启透明混合，关闭剔除和深度测试。RenderPass 使用实际后备缓冲尺寸，避免窗口调整期间客户区尺寸与交换链 extent 暂时不一致导致越界。
+- 把 DisplayPos、FramebufferScale 和 ClipRect 换算为裁剪矩形；OpenGL 的 Scissor 使用底部原点。
+- 为每条绘制命令绑定纹理 SRV、Sampler 并 DrawIndexed。
+- 处理 `ImTextureData` 的 WantCreate/WantUpdates/WantDestroy，支持当前 ImGui 版本的动态字体图集。
 
-## 8. 架构总结
+VulkanRHI 已用负高度 Viewport 统一 Y 轴，所以 GUI 正交投影不再对 Vulkan 额外翻转。Vulkan 的 Shader 阶段使用独立 descriptor set；D3D12 当前资源参数使用 space0，编译定义分别匹配现有后端绑定约定。
 
-`ImGUISlate` 模块可以概括为：
+## 5. 纹理与外部内容
 
-1. 依赖 `SlateCore` 的窗口抽象、控件体系和事件架构
-2. 通过 `ImMainWindow` 建立实际窗口实例
-3. 利用 `LayoutManager` 管理窗口中的 widget 布局
-4. 通过 `ImWidgetBase` 和 `ImSlateRenderer` 把 Slate 事件桥接到 ImGui
-5. 使用 `DrawCallback` 把实际 UI 逻辑插入到 widget 中
+本后端的 ImTextureID 表示 `RenderCore::RenderTexture*` 的整数编码，不是 GLuint、VkImage 或 D3D12 descriptor。视口纹理和字体图集均通过该约定进入普通 ImGui Image 绘制。
 
-因此，`ImGUISlate` 不是独立的 UI 系统，而是 `SlateCore` 的一套具体实现方案：它保持了 Slate 风格的架构，最终落地为基于 ImGui 的编辑器界面和工具面板系统。
+调用方使用外部 RenderTexture 时，必须保证对象及 RHI 资源在相关提交完成前有效，资源创建时应支持 ShaderResource。不能临时取裸句柄交给 ImGui 后立刻销毁其所有者。当前转换工具属于后端 Private 实现，尚未增加公共纹理注册/注销 API。
 
-从工程结构上看，它处于“Slate 框架层”与“应用业务层”之间，是当前项目中最贴近编辑器 UI 实现的一层。
+接入其他界面库时，可以复用 Window 和 SlateRenderer 的绘制回调，把其绘制列表翻译为 RHI 命令，或把受控的 RHI 离屏输出作为纹理合成。需要原生图形上下文的第三方 renderer 仍需专门互操作设计。
+
+## 6. 输入与线程
+
+平台事件先进入 ImMainWindow，由 ImSlateRenderer 在窗口坐标中向 ImGuiIO 投递一次。ImGui 未捕获的事件转给 SlateCore 的逻辑区域；场景已捕获拖动时仍接收后续移动/释放。
+
+主线程负责 ImGui NewFrame、Widget 回调、Render，以及把 ImDrawData 同步翻译成 RHI 录制。异步后端执行的是已经录制好的命令和有效期受控的 RHI 资源，不跨线程持有下一帧会被改写的 ImDrawData。OpenGL 原生调用继续由 OpenGLRHI 的 worker 与 current context 执行，ImGUISlate 不迁移或借用它的上下文。
+
+## 7. 首版限制
+
+- 正常绘制不使用 WaitIdle，也不在每帧末尾等待完成。三组上传资源仅在复用未完成的那一组时等待对应 Fence；窗口释放/缩放等待该窗口最后的完成值。字体图集更新/销毁时单独等待其最后访问 Fence，字体上传继续沿用现有同步上传接口。
+- 每窗口帧多提交一个空命令上下文，产生覆盖已排队 Present 的完成值；后续可用 RHI 的呈现完成接口替代该提交，但不能只等待 Draw Fence 就释放仍在 worker 使用的窗口。
+- 字体图集更新当前上传整张图，不是只更新脏矩形。
+- 支持 ResetRenderState 回调；其他 ImDrawCallback 在录制线程执行，不能假设存在 current GL context，不能直接调用官方原生后端函数。
+- 未启用 ImGui 平台多视口。独立窗口由显式创建 Window 管理。
+- 平台输入沿用现有 SlateCore 的有限 EKey 集合；完整文本/IME、全部快捷键和多 DPI 窗口仍需单独完善。

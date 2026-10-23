@@ -18,7 +18,7 @@ void LayoutManager::AddWidget(
 }
 
 
-inline void LayoutManager::RemoveWidget(SlateCore::Widget* widget)
+void LayoutManager::RemoveWidget(SlateCore::Widget* widget)
 {
     _elements.erase(
         std::remove_if(

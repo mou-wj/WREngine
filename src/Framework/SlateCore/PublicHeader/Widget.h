@@ -2,7 +2,6 @@
 
 #include "TypeIDCast.h"
 #include "EventHandler.h"
-#include "PlatformSurfaceOwner.h"
 #include <memory>
 
 namespace SlateCore
@@ -134,26 +133,5 @@ namespace SlateCore
         virtual void OnSetPosition(float x, float y)
         {
         }
-    };
-    class PlatformSurface;
-    class SLATECORE_API NativeWidget : public Widget, public PlatformSurfaceOwner
-    {
-    public:
-        explicit NativeWidget(PlatformSurfaceOwner* parentOwner = nullptr);
-        virtual ~NativeWidget() override;
-
-        void SetParentOwnerSource(PlatformSurfaceOwner* parentOwner);
-        PlatformSurfaceOwner* GetParentOwnerSource() const;
-
-        void SetNativeHandle(void* nativeHandle);
-
-        bool HasParentNativeRelationship() const;
-        void* GetParentNativeHandle() const;
-        void* GetNativeHandle() const override;
-    protected:
-        bool InitializeOwnedSurface();
-        PlatformSurface* GetOwnedSurface() const override;
-        void* _nativeHandle = nullptr;
-        std::unique_ptr<PlatformSurface> _ownedSurface;
     };
 }

@@ -1,25 +1,27 @@
 #pragma once
 
 #include "Window.h"
+#include "SlateRenderer.h"
 #include "EventHandler.h"
 #include <memory>
 #include <unordered_map>
 #include <list>
+#include <chrono>
 
 struct ImGuiContext;
 
 namespace ImGUISlate {
 
-    class ImWidget;
+    class ImGuiRHIBackend;
 
     class ImSlateRenderer : public SlateCore::EventHandler
     {
     public:
-        ImSlateRenderer(SlateCore::Window* window);
+        ImSlateRenderer(SlateCore::Window* window, SlateCore::SlateRenderer* renderer);
         ~ImSlateRenderer();
 
         void Render();
-        void RegisterWidget(ImWidget* widget);
+
 
         virtual bool OnMouseMove(
             const SlateCore::MouseMoveEvent& event)override;
@@ -45,17 +47,11 @@ namespace ImGUISlate {
             uint32_t height) override;
     private:
 
-        bool EnsureOpenGLContext();
-        void DestroyOpenGLContexts();
         void UpdateDisplaySize();
-
         ImGuiContext* m_Context = nullptr;
-        bool m_bOpenGLBackendInitialized = false;
         SlateCore::Window* m_Window = nullptr;
-        void* m_DeviceContext = nullptr;
-        void* m_GLContext = nullptr;
-        std::vector<ImWidget*> m_Widgets;
+        SlateCore::SlateRenderer* m_WindowRenderer = nullptr;
+        std::unique_ptr<ImGuiRHIBackend> m_Backend;
+        std::chrono::steady_clock::time_point m_LastFrame = std::chrono::steady_clock::now();
     };
-
-    IMGUISLATE_API ImSlateRenderer* CreateSlateRenderer(SlateCore::Window* window);
 }

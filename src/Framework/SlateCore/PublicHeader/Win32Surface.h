@@ -57,6 +57,7 @@ namespace SlateCore
 
     private:
         HWND m_HWnd = nullptr;
+        uint32_t m_PressedButtons = 0;
     };
 }
 

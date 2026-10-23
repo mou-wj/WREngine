@@ -2,6 +2,7 @@
 
 #include "ImSlateRenderer.h"
 #include "ImWidget.h"
+#include <algorithm>
 
 namespace ImGUISlate
 {
@@ -9,8 +10,8 @@ namespace ImGUISlate
     ImMainWindow::ImMainWindow(
         int width,
         int height,
-        const std::string& title)
-        : Window(width, height, title)
+        const std::string& title, SlateCore::SlateRenderer* renderer)
+        : Window(width, height, title), m_WindowRenderer(renderer)
     {
 
     }
@@ -24,10 +25,10 @@ namespace ImGUISlate
 
     bool ImMainWindow::Initialize()
     {
-        bool res = Window::Initialize();
-        m_Renderer = std::make_unique<ImSlateRenderer>(this);
+        if (!m_WindowRenderer || !Window::Initialize()) return false;
+        m_Renderer = std::make_unique<ImSlateRenderer>(this, m_WindowRenderer);
         m_Layout = std::make_unique<HorizontalLayout>();
-        return res;
+        return true;
     }
 
     ImSlateRenderer* ImMainWindow::GetRenderer() const
@@ -37,12 +38,24 @@ namespace ImGUISlate
 
     void ImMainWindow::AddWidget(SlateCore::Widget* widget,const LayoutParams& params)
     {
+        if (!widget || std::find(_widgets.begin(), _widgets.end(), widget) != _widgets.end()) return;
+        Window::AddWidget(widget);
         m_Layout->AddWidget(widget, params);
-        m_Layout->Layout(_width,_height);
-        if (widget->IsA<ImWidget>()) {
-            ImWidget* imWidget = widget->Cast<ImWidget>();
-            m_Renderer->RegisterWidget(imWidget);
-        }
+        const auto size = GetFramebufferSize();
+        m_Layout->Layout(static_cast<float>(size.X), static_cast<float>(size.Y));
+
+    }
+
+    void ImMainWindow::RemoveWidget(SlateCore::Widget* widget)
+    {
+        if (!widget) return;
+        // The caller may destroy the widget and its textures after removal.
+        m_WindowRenderer->ReleaseWindow(this);
+        Window::RemoveWidget(widget);
+        m_Layout->RemoveWidget(widget);
+        const auto size = GetFramebufferSize();
+        if (size.X > 0 && size.Y > 0)
+            m_Layout->Layout(static_cast<float>(size.X), static_cast<float>(size.Y));
     }
 
     bool ImMainWindow::OnFocusReceived()
@@ -76,9 +89,12 @@ namespace ImGUISlate
         uint32_t width,
         uint32_t height)
     {
-        _width = static_cast<int>(width);
-        _height = static_cast<int>(height);
-        m_Layout->Layout(_width, _height);
+        // Layout can recreate viewport textures; finish previous users before resizing them.
+        if (m_Renderer) m_WindowRenderer->ReleaseWindow(this);
+        Window::OnResize(width, height);
+        const auto size = GetFramebufferSize();
+        if (m_Layout && size.X > 0 && size.Y > 0)
+            m_Layout->Layout(static_cast<float>(size.X), static_cast<float>(size.Y));
 
         return true;
     }
@@ -92,7 +108,7 @@ namespace ImGUISlate
             handled |= m_Renderer->OnMouseMove(event);
         }
 
-        if (!handled)
+        if (!handled || HasMouseCapture())
         {
             handled |= Window::OnMouseMove(event);
         }
@@ -110,7 +126,7 @@ namespace ImGUISlate
             handled |= m_Renderer->OnMouseButton(event);
         }
 
-        if (!handled)
+        if (!handled || HasMouseCapture())
         {
             handled |= Window::OnMouseButton(event);
         }
@@ -128,7 +144,7 @@ namespace ImGUISlate
             handled |= m_Renderer->OnMouseWheel(event);
         }
 
-        if (!handled)
+        if (!handled || HasMouseCapture())
         {
             handled |= Window::OnMouseWheel(event);
         }

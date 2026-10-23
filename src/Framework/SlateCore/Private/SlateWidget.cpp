@@ -1,43 +1,12 @@
 #include "SlateWidget.h"
-
-#include "PlatformSurface.h"
-
-#ifdef _WIN32
-#include "Win32Surface.h"
-#endif
-
 namespace SlateCore
 {
-    SlateWidget::SlateWidget(PlatformSurfaceOwner* parentOwner) : NativeWidget(parentOwner)
+    SlateWidget::~SlateWidget() = default;
+    void SlateWidget::OnSetSize(float width, float height)
     {
-        OnVisibilityChanged();
+        if (m_ViewportChild && width > 0 && height > 0)
+            m_ViewportChild->Resize(static_cast<int>(width), static_cast<int>(height));
     }
-
-    SlateWidget::~SlateWidget()
-    {
-
-    }
-
-    void SlateWidget::OnVisibilityChanged()
-    {
-        if (!_ownedSurface)
-        {
-            return;
-        }
-        if (_visibility == EVisibility::Visible) {
-            _ownedSurface->Show();
-        }
-        else if (_visibility == EVisibility::Hidden) {
-            _ownedSurface->Hide();
-        }
-    }
-    void SlateWidget::OnSetSize(float width, float height) {
-        SetSize(static_cast<int>(width), static_cast<int>(height));
-    }
-    void SlateWidget::OnSetPosition(float x, float y) {
-        OnSetPosition(static_cast<int>(x), static_cast<int>(y));
-    }
-
     bool SlateWidget::AddChildWidget(SlateViewport* child)
     {
         if (!child)
@@ -53,6 +22,7 @@ namespace SlateCore
     void SlateWidget::SetViewportChild(SlateViewport* viewport)
     {
         m_ViewportChild = viewport;
+        OnSetSize(_geometry.Width, _geometry.Height);
     }
 
     SlateViewport* SlateWidget::GetViewportChild() const

@@ -28,6 +28,8 @@ if(NOT MODULE_SOURCES)
     message(WARNING "No source files found for ${TARGET_NAME} in ${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
 
+list(FILTER IMGUI_SOURCE_FILES EXCLUDE REGEX "[/\\]backends[/\\]imgui_impl_.*\\.cpp$")
+
 # Create shared library target
 add_library(${TARGET_NAME} SHARED
     ${MODULE_SOURCES}
@@ -43,8 +45,7 @@ target_include_directories(${TARGET_NAME}
         "${IMGUI_INCLUDE_DIR}"
         "${IMGUI_INCLUDE_DIR}/backends"
 )
-find_package(OpenGL REQUIRED)
-target_link_libraries(${TARGET_NAME} PUBLIC SlateCore OpenGL::GL)
+target_link_libraries(${TARGET_NAME} PUBLIC SlateCore RenderCore)
 
 # Position independent code for shared libs
 set_target_properties(${TARGET_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)

@@ -54,10 +54,10 @@ ImGUI 构建的 widget 一般分为两类：
 
 设计要求：
 
-- 继承自 SlateCore::NativeWidget
+- 继承自 ImWidget，仍然是没有原生句柄的逻辑区域
 - 共享 ImWidgetBase 中的事件、callback 和输入逻辑
 - 通过 Draw() 实现弹出层绘制
-- 适合作为独立的临时窗口或悬浮层
+- 在所属 Window 的 ImGuiContext 内组织临时弹层；真正独立的 OS 窗口创建新的 Window
 
 典型用法：
 
@@ -147,19 +147,17 @@ public:
 ### 4.2 弹出 widget
 
 ```cpp
-class PopupImWidget : public SlateCore::NativeWidget, public ImWidgetBase
+class PopupImWidget : public ImWidget
 {
 public:
-    explicit PopupImWidget(SlateCore::PlatformSurfaceOwner* parentOwner = nullptr);
-
-    virtual void Draw() override;
-    virtual bool OnResize(uint32_t width, uint32_t height) override;
+    PopupImWidget() = default;
+    using ImWidget::ImWidget;
 };
 ```
 
 这里的含义：
 
-- `SlateCore::NativeWidget` 负责原生窗口/平台层挂载能力
+- Window 独占平台表面；PopupImWidget 不创建 HWND、交换链或图形上下文
 - `ImWidgetBase` 提供相同的通用事件抽象
 - `PopupImWidget` 负责弹出层的绘制与生命周期
 
@@ -264,7 +262,7 @@ ImGUISlate 模块中常见的通用控件包括：
 - 保持 ImGUISlate 是一个“通用 UI 组件库”
 - 保持上层 widget 是“业务驱动的具体 UI”
 - 让 `ImWidgetBase` 统一做通用事件与绘制接口
-- 让 `ImWidget` 与 `PopupImWidget` 分别适配两种不同的容器机制
+- 让 `ImWidget` 与 `PopupImWidget` 共用逻辑区域机制，仅区分界面用途
 
 这样最容易扩展到：
 
@@ -294,3 +292,12 @@ ImGUISlate 最合理的职责是：
 - 组合 ImGUISlate 的基础组件
 
 这是一种清晰、可扩展、低耦合的 UI 分层方式。
+## 10. RHI 渲染接入约定（2026-10-23）
+
+- ImGui 核心负责交互和生成 DrawData，项目自有 `Private/imgui_impl_rhi` 负责录制 RHI 绘制命令，不再使用官方 OpenGL 图形后端。
+- 一个 Window 内的场景纹理和所有 GUI 共享最终交换链；控件不自行 Present。
+- 输入由 ImSlateRenderer 在窗口级集中投递，不在业务 Widget 回调中重复向同一 ImGuiIO 投递。
+- 原生 GL 调用仍由 OpenGLRHI worker 执行，禁止为接入 GUI 在主线程额外建立或抢占上下文。
+- 场景保持离屏 RenderTexture 输出，使用 GUI 图像合成；业务不依赖原生纹理句柄。
+- 资源释放、尺寸变化须等待相关窗口提交完成，不能把临时 CPU DrawData 交给异步线程延后解析。
+- 当前实现和限制见 `Doc/architecture/slate/imguislate.md`。

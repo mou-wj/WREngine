@@ -1,249 +1,80 @@
 # SlateCore 模块架构说明
 
-## 1. 模块定位
+## 1. 模块定位与边界
 
-`SlateCore` 是整个 UI / 窗口系统的基础层，它负责把“窗口、事件、控件、视口”这些概念抽象成统一接口，供上层的 `Application` 和 `ImGUISlate` 使用。
+`SlateCore` 定义平台窗口、逻辑控件、输入、离屏视口和窗口绘制入口。它不依赖 ImGui，也不直接调用原生图形 API。
 
-从源码结构看，`src/Framework/SlateCore/PublicHeader` 中的关键内容包括：
+- `Window / PlatformSurface / PlatformSurfaceOwner`：实际 OS 窗口及生命周期。
+- `Widget`：位置、大小、可见性、命中测试和输入处理。
+- `SlateWidget`：承载一个 `SlateViewport` 的逻辑容器。
+- `SlateViewport`：渲染到纹理的区域，Engine 的 `SceneViewport` 是其实现。
+- `SlateRenderer`：按 Window 组织最终目标的绘制与提交。
+- `ApplicationBase`：应用生命周期接口。
 
-- `Window.h`：窗口抽象与创建工厂
-- `Widget.h`：控件基类、几何体、可见性与 native widget
-- `EventHandler.h`：输入事件与 resize/focus 处理接口
-- `SlateWidget.h`：可含子控件的窗口部件
-- `SlateViewport.h`：视口抽象，负责渲染目标纹理
-- `SlateRenderer.h`：渲染器接口和 renderer module
-- `ApplicationBase.h`：应用层基类，负责全局应用实例
+## 2. Window 与 Widget
 
-从架构上看，`SlateCore` 并不直接做具体 UI 绘制，它更像是一个“平台窗口开发框架”和“事件分发框架”。
+只有 Window 持有平台 Surface 和原生句柄。Widget 是窗口中的逻辑区域，不创建子 HWND、交换链或独立图形上下文。原 `NativeWidget` 已移除；`SlateWidget` 保留为普通容器，继承 `Widget`。
 
----
+一个 Window 通过 `AddWidget / RemoveWidget / GetWidgets` 登记多个区域，列表保存非拥有指针。业务层拥有 Widget，在销毁前移除，或先销毁使用它们的 Window。`SetRootWidget / GetRootWidgets` 仅为简单 Window 保留单区域兼容入口；ImMainWindow 应使用带布局参数的 AddWidget 和 RemoveWidget，避免绕过布局登记。
 
-## 2. 设计目标
+独立 OS 窗口应创建另一个 Window。普通菜单、提示、文件选择器等弹层继续属于逻辑 Widget，由 UI 框架在同一窗口内组织遮挡。
 
-`SlateCore` 的设计目标是把以下系统抽象统一起来：
+## 3. 几何、布局与输入
 
-- 窗口管理：`Window` / `PlatformSurface`
-- 控件树：`Widget` / `NativeWidget`
-- 事件分发：`EventHandler`
-- 视口与渲染目标：`SlateViewport`
-- 应用生命周期：`ApplicationBase`
+`WidgetGeometry` 保存相对所属窗口客户区的 X/Y/Width/Height。`SetGeometry` 触发位置、尺寸变化回调，`HitTest` 排除不可见区域。当前注册列表是扁平区域列表，不是完整的递归布局树。
 
-它本质上是一个轻量版 UI 框架，结构上类似 Unreal Slate 的核心概念，但这里的实现更偏“最小可用 UI 抽象”。
+窗口接收平台事件后：
 
----
+1. GUI 适配层优先向自身输入系统传递窗口坐标。
+2. GUI 未捕获的输入交给 Window，按注册逆序命中可见 Widget。
+3. Window 将鼠标坐标减去区域原点，再交给目标 Widget；键盘发给焦点 Widget。
+4. 被 Widget 处理的鼠标按下建立逻辑捕获，直到所有相关按键释放；拖动跨区域仍交给原控件。
+5. Win32 Surface 同时使用 OS 鼠标捕获，允许拖出客户区后接收到释放。失焦或捕获取消时，Window 补发释放，防止视口交互卡住。
 
-## 3. 窗口体系：`Window` 与 `WindowFactory`
+ImGui 的窗口、弹层内部排序与捕获由 ImGui 自己维护。当前 SlateCore 不提供通用弹层栈或跨框架遮挡排序器。
 
-`Window` 是 SlateCore 的最顶层对象，定义了一个平台窗口的通用接口：
+## 4. SlateWidget 与 SlateViewport
+
+`SlateWidget::Draw()` 转发给所挂载的视口，尺寸变化转发给 `SlateViewport::Resize`，输入与焦点也转发给它。该包装器不拥有视口，保留它是为了复用既有 Engine/Application 的挂载方式。
+
+`SlateViewport::GetViewportRenderTargetTexture()` 沿用既有 `void*` 接口。在当前 RHI 集成中，其值必须是有效的 `RenderCore::RenderTexture*`，不是原生纹理句柄。实际资源继续由视口或业务层拥有。
+
+保留离屏场景目标，可以复用渲染器的后处理与尺寸管理；合并的是窗口呈现环境，并非要求场景和 UI 必须在一个 RenderPass 内完成。
+
+## 5. 按 Window 提交的渲染接口
 
 ```cpp
-class SLATECORE_API Window : public PlatformSurfaceOwner
+struct DrawResources
 {
-public:
-    Window(int width, int height, const std::string& title);
-    virtual bool Initialize();
-    void PollEvents();
-    void Shutdown();
-    void Show();
-    void Hide();
-    void Close();
-
-    void SetRootWidget(Widget* widget);
-    Widget* GetRootWidgets() const;
+    std::vector<RenderCore::RenderTexture*> SampledTextures;
+    std::vector<RenderCore::RenderBuffer*> VertexOrIndexBuffers;
 };
+using DrawCallback = std::function<void(RHI::RHIGraphicCommandList&, RHI::RHITexture*, std::vector<RHI::RHIWaitInfo>&, DrawResources&)>;
+virtual uint64_t Render(Window* window, const DrawCallback& draw) = 0;
+virtual void ReleaseWindow(Window* window) = 0;
 ```
 
-关键点在于：
+SlateCore 只前置声明 RHI 和 RenderCore 资源类型。`SlateRHIRenderer` 依赖 RHI/RenderCore，实现每个 Window 的交换链、Acquire、状态转换、提交、Present 和清理。DrawCallback 在调用期间同步录制，可向 waits 添加所采样资源的 GPU 依赖，并向 DrawResources 登记本批命令采样的纹理和使用的顶点/索引缓冲。SlateRHIRenderer 在 ExecuteContext 返回后立即使用该次绘制提交的 Fence 更新这些资源的 Tracker，同时回写 SRV 或 VertexOrIndexBuffer 访问状态。调用方不可保留传入的命令列表和目标指针供未来任意使用。Render 返回覆盖 Present 的窗口完成值，适配器仅用它管理帧上传存储的轮转。
 
-- `Window` 不是直接绑定某个平台 API，而是通过 `PlatformSurface` 和 `PlatformSurfaceOwner` 抽象平台层
-- 它持有 `_rootWidget`，允许窗口拥有一个树形 UI 根节点
-- `WindowFactory` 负责创建不同平台窗口实现，使用注册机制 `REGISTER_WINDOW_PLATFORM(...)`
+每个有效窗口帧仅呈现一次：
 
-也就是说，`SlateCore` 设计上把“平台实现”和“窗口抽象”分离，便于后续扩展到 Win32、GLFW 或其它窗口后端。
-
----
-
-## 4. 输入事件体系：`EventHandler`
-
-`SlateCore::EventHandler` 是所有 UI 对象共享的事件基类。它定义了统一的输入与生命周期事件：
-
-```cpp
-class SLATECORE_API EventHandler
-{
-public:
-    virtual bool OnMouseMove(const MouseMoveEvent& event);
-    virtual bool OnMouseButton(const MouseButtonEvent& event);
-    virtual bool OnMouseWheel(const MouseWheelEvent& event);
-    virtual bool OnKeyDown(const KeyEvent& event);
-    virtual bool OnKeyUp(const KeyEvent& event);
-    virtual bool OnFocusReceived();
-    virtual bool OnFocusLost();
-    virtual bool OnResize(uint32_t width, uint32_t height);
-};
+```text
+Window.Draw
+  → 控件 Draw / 场景离屏纹理
+  → UI 生成绘制数据
+  → SlateRenderer.Render(Window, callback)
+      → Acquire → RenderTargetView → callback
+      → Present 状态 → Submit → Present
 ```
 
-其中事件数据结构包括：
+UI 适配器决定怎样把视口纹理与 UI 合成；交换链实现不认识 ImGui。这保留了其他 UI 框架通过 RHI 绘制回调接入的空间，但没有承诺任意原生渲染库可直接共用上下文。
 
-- `MouseMoveEvent`
-- `MouseButtonEvent`
-- `MouseWheelEvent`
-- `KeyEvent`
-- `ModifierKeys`
+## 6. 同步与释放
 
-这种结构非常符合 UI 事件系统的抽象方式：事件是独立的数据对象，控件只关心自己是否处理该事件。这样可以让 `Window`、`Widget`、`SlateViewport` 共享同一套事件契约。
+每个窗口的 GUI 后端轮转三组顶点/索引上传资源，复用时仅在该组 Fence 尚未完成的情况下等待对应值。正常提交不调用 WaitIdle，也不等待刚提交的帧完成；采样纹理的依赖放入 GPU WaitInfos，资源 Access 和 Fence 均在实际提交处手动回写，供后续场景绘制使用。若跨队列转换另行提交，也在该次提交后立即更新纹理 Tracker；最终绘制提交再记录 Graphics 队列的读取 Fence。
 
----
+Present 后提交一个空命令上下文作为窗口完成标记，它覆盖同一队列上排队的绘制与 Present。这样 OpenGL worker 尚未执行 Present 时，窗口释放不会只等绘制 Fence 就提前销毁原生窗口。该标记不阻塞 CPU，代价是每窗口帧多一次队列提交。
 
-## 5. 控件树：`Widget` 与 `NativeWidget`
+窗口释放/缩放只等待本窗口最后的完成值，不清空整条队列。OpenGL 在 Acquire 时保留本帧索引，排队的 Present 按捕获的索引呈现，不依赖 worker 推进索引后主线程才能继续。
 
-`Widget` 是 SlateCore 的核心抽象：
-
-```cpp
-class Widget : public EventHandler
-{
-public:
-    virtual void Tick(float dt);
-    virtual void Draw() = 0;
-    virtual void Resize(float width, float height);
-    virtual bool HitTest(float x, float y) const;
-
-    void SetGeometry(float x, float y, float width, float height);
-    const WidgetGeometry& GetGeometry() const;
-    void SetVisibility(EVisibility visibility);
-    EVisibility GetVisibility() const;
-};
-```
-
-`Widget` 中包含：
-
-- `WidgetGeometry`：位置与尺寸
-- `EVisibility`：显示/隐藏/折叠状态
-- `HitTest`：用于判断输入是否落在当前控件区域
-
-### 5.1 `NativeWidget`
-
-`NativeWidget` 进一步抽象“拥有原生平台句柄”的控件：
-
-```cpp
-class NativeWidget : public Widget, public PlatformSurfaceOwner
-{
-public:
-    void SetNativeHandle(void* nativeHandle);
-    void* GetNativeHandle() const override;
-};
-```
-
-这意味着某些 widget 可以直接绑定平台窗口或原生控件句柄，从而在窗口系统中与平台层协同。
-
----
-
-## 6. `SlateWidget` 与 `SlateViewport`
-
-### 6.1 `SlateWidget`
-
-`SlateWidget` 是 SlateCore 中更具体的容器控件：
-
-```cpp
-class SLATECORE_API SlateWidget : public NativeWidget
-{
-public:
-    bool AddChildWidget(SlateViewport* child);
-    void SetViewportChild(SlateViewport* viewport);
-    SlateViewport* GetViewportChild() const;
-    void Draw() override;
-};
-```
-
-它表现出一种层级式 UI 容器的思路：
-
-- 可挂载子窗口/视口
-- 负责网络式分发输入事件
-- 负责尺寸和焦点变化同步
-
-### 6.2 `SlateViewport`
-
-`SlateViewport` 是一个更强的抽象：
-
-```cpp
-class SLATECORE_API SlateViewport : public Widget
-{
-public:
-    virtual int GetWidth() const = 0;
-    virtual int GetHeight() const = 0;
-    virtual void Resize(int Width, int Height) = 0;
-    virtual void* GetViewportRenderTargetTexture() const = 0;
-};
-```
-
-它强调的是“渲染目标视口”，意味着节点不仅是 UI 组件，还可以成为可渲染区域，例如 3D 场景视口。其作用与现代图形应用中的 viewport 非常接近：
-
-- 持有渲染目标纹理
-- 可调整大小
-- 可作为 render target 让上层渲染器定向输出
-
----
-
-## 7. 渲染桥接：`SlateRenderer`
-
-`SlateCore` 定义了一个抽象渲染器接口：
-
-```cpp
-class SLATECORE_API SlateRenderer {
-public:
-    virtual void Render(SlateWidget* slateWidget) = 0;
-    virtual void CreateViewport(SlateWidget* slateWidget) = 0;
-};
-```
-
-和 `SlateRendererModule` 一起构成了渲染器扩展点：
-
-```cpp
-class SLATECORE_API SlateRendererModule : public Core::Module {
-public:
-    virtual SlateRenderer* CreateSlateRenderer() = 0;
-};
-```
-
-这说明 `SlateCore` 把“UI 框架”和“UI 渲染实现”严格分开：
-
-- `SlateCore` 提供通用 UI 抽象与生命周期机制
-- 具体渲染实现可以由不同模块提供，例如 `SlateRHIRenderer`
-
-这是一种典型的模块化架构：框架层为抽象，后端层为实现。
-
----
-
-## 8. 应用层基类：`ApplicationBase`
-
-`SlateCore` 中还有一个应用基类：
-
-```cpp
-class SLATECORE_API ApplicationBase
-{
-public:
-    virtual ~ApplicationBase() = default;
-    virtual void TickFrame() = 0;
-};
-```
-
-它把全局应用实例单例化，便于顶层 `Launcher` 或主循环访问：
-
-- `SetApplication(...)`
-- `GetApplication()`
-
-这意味着 `SlateCore` 也负责抽象“应用运行时”，形成 UI 层和业务应用层之间的桥接。上层 `Application` 会继承该对象，并在 main loop 中驱动实际逻辑。
-
----
-
-## 9. 架构总结
-
-`SlateCore` 的核心价值在于：
-
-1. 抽象窗口和原生平台表面：`Window` / `PlatformSurface` / `PlatformSurfaceOwner`
-2. 统一输入事件模型：`EventHandler` / `MouseKeyEvent` / `KeyEvent`
-3. 提供可组合的控件结构：`Widget` / `NativeWidget` / `SlateWidget`
-4. 把渲染目标视口抽象出来：`SlateViewport`
-5. 让渲染实现从 UI 框架中解耦：`SlateRenderer` / `SlateRendererModule`
-6. 为上层 `Application` 提供通用运行时基类
-
-因此，`SlateCore` 是整个 UI / 窗口系统的“框架中枢”，而具体可视化和布局逻辑则由更上层的 `ImGUISlate` 或专门的渲染器来实现。
+Window 析构会关闭其平台 Surface。`ReleaseWindow` 必须在原生窗口和 RHI 模块仍有效时调用。底层交换链销毁函数不自行添加 WaitIdle。

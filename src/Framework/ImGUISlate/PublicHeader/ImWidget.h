@@ -37,10 +37,10 @@ namespace ImGUISlate {
         virtual void Draw() override;
         virtual bool OnResize(uint32_t width, uint32_t height) override;
     };
-    class IMGUISLATE_API PopupImWidget : public SlateCore::NativeWidget, public ImWidgetBase {
+    class IMGUISLATE_API PopupImWidget : public ImWidget
+    {
     public:
-        explicit PopupImWidget(SlateCore::PlatformSurfaceOwner* parentOwner = nullptr);
-        virtual void Draw() override;
-        virtual bool OnResize(uint32_t width, uint32_t height) override;
+        PopupImWidget() = default;
+        using ImWidget::ImWidget;
     };
 }

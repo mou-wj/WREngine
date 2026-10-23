@@ -1,16 +1,9 @@
 #include "ImSlateRenderer.h"
-
-#include "ImWidget.h"
-
-#include "imgui.h"
-#include "backends/imgui_impl_opengl3.h"
-
-#include <memory>
-
-#ifdef _WIN32
-#include <Windows.h>
-#include <gl/GL.h>
-#endif
+#include "imgui_impl_rhi.h"
+#include "SlateWidget.h"
+#include "SlateViewport.h"
+#include "RHIApi.h"
+#include <chrono>
 
 ImGuiKey ConvertKey(SlateCore::EKey key)
 {
@@ -49,237 +42,71 @@ int ConvertMouseButton(SlateCore::EMouseButton button)
     return 0;
 }
 
-namespace ImGUISlate {
-
-    namespace {
-        std::unique_ptr<ImSlateRenderer> GImSlateRenderer;
-    }
-
-    ImSlateRenderer::ImSlateRenderer(SlateCore::Window* window)
+namespace ImGUISlate
+{
+    ImSlateRenderer::ImSlateRenderer(SlateCore::Window* window, SlateCore::SlateRenderer* renderer)
+        : m_Window(window), m_WindowRenderer(renderer)
     {
         IMGUI_CHECKVERSION();
         m_Context = ImGui::CreateContext();
         ImGui::SetCurrentContext(m_Context);
         ImGui::StyleColorsDark();
-        m_Window = window;
-        //ImGuiIO& io = ImGui::GetIO();
-        //unsigned char* fontPixels = nullptr;
-        //int fontWidth = 0;
-        //int fontHeight = 0;
-        //io.Fonts->GetTexDataAsRGBA32(&fontPixels, &fontWidth, &fontHeight);
-        EnsureOpenGLContext();
-
+        try
+        {
+            m_Backend = std::make_unique<ImGuiRHIBackend>();
+        }
+        catch (...)
+        {
+            ImGui::DestroyContext(m_Context);
+            throw;
+        }
     }
-
     ImSlateRenderer::~ImSlateRenderer()
     {
-        if (m_bOpenGLBackendInitialized)
-        {
-            ImGui::SetCurrentContext(m_Context);
-            ImGui_ImplOpenGL3_Shutdown();
-            m_bOpenGLBackendInitialized = false;
-        }
-
-        DestroyOpenGLContexts();
-
-        if (m_Context)
-        {
-            ImGui::SetCurrentContext(m_Context);
-            ImGui::DestroyContext(m_Context);
-            m_Context = nullptr;
-        }
+        ImGui::SetCurrentContext(m_Context);
+        m_WindowRenderer->ReleaseWindow(m_Window);
+        m_Backend.reset();
+        ImGui::DestroyContext(m_Context);
     }
-
-    bool ImSlateRenderer::EnsureOpenGLContext()
-    {
-        SlateCore::Window* window = m_Window;
-        if (!window)
-        {
-            return false;
-        }
-
-#ifndef _WIN32
-        return false;
-#else
-
-        HWND hwnd = static_cast<HWND>(window->GetNativeHandle());
-        if (!hwnd)
-        {
-            return false;
-        }
-
-        HDC hdc = GetDC(hwnd);
-        if (!hdc)
-        {
-            return false;
-        }
-
-        PIXELFORMATDESCRIPTOR pfd = {};
-        pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
-        pfd.nVersion = 1;
-        pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-        pfd.iPixelType = PFD_TYPE_RGBA;
-        pfd.cColorBits = 32;
-        pfd.cDepthBits = 24;
-        pfd.cStencilBits = 8;
-        pfd.iLayerType = PFD_MAIN_PLANE;
-
-        int pixelFormat = ChoosePixelFormat(hdc, &pfd);
-        if (pixelFormat == 0)
-        {
-            ReleaseDC(hwnd, hdc);
-            return false;
-        }
-
-        if (!SetPixelFormat(hdc, pixelFormat, &pfd))
-        {
-            ReleaseDC(hwnd, hdc);
-            return false;
-        }
-
-        HGLRC glrc = wglCreateContext(hdc);
-        if (!glrc)
-        {
-            ReleaseDC(hwnd, hdc);
-            return false;
-        }
-
-        if (!wglMakeCurrent(hdc, glrc))
-        {
-            wglDeleteContext(glrc);
-            ReleaseDC(hwnd, hdc);
-            return false;
-        }
-
-        m_DeviceContext = hdc;
-        m_GLContext = glrc;
-
-        if (!m_bOpenGLBackendInitialized)
-        {
-            ImGui::SetCurrentContext(m_Context);
-            m_bOpenGLBackendInitialized = ImGui_ImplOpenGL3_Init("#version 330");
-        }
-
-        return m_bOpenGLBackendInitialized;
-#endif
-    }
-
-    void ImSlateRenderer::DestroyOpenGLContexts()
-    {
-        if (m_GLContext)
-        {
-            wglMakeCurrent(nullptr, nullptr);
-
-            wglDeleteContext(
-                (HGLRC)m_GLContext);
-
-            m_GLContext = nullptr;
-        }
-
-        if (m_DeviceContext)
-        {
-            ReleaseDC(
-                (HWND)m_Window->GetNativeHandle(),
-                (HDC)m_DeviceContext);
-
-            m_DeviceContext = nullptr;
-        }
-    }
-
-    void ImSlateRenderer::Render()
-    {
-        if (!m_Window || !m_Context)
-        {
-            return;
-        }
-        ImGuiIO& io = ImGui::GetIO();
-        UpdateDisplaySize();
-
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui::NewFrame();
-
-        //-------------------------------------
-        // Draw Widgets
-        //-------------------------------------
-
-        for (ImWidget* widget : m_Widgets)
-        {
-            if (widget)
-            {
-                widget->Draw();
-            }
-        }
-
-        
-
-        //-------------------------------------
-        // Render
-        //-------------------------------------
-
-        ImGui::Render();
-
-#ifdef _WIN32
-
-        
-
-        glViewport(
-            0,
-            0,
-            static_cast<GLsizei>(io.DisplaySize.x),
-            static_cast<GLsizei>(io.DisplaySize.y));
-
-        glClearColor(
-            0.08f,
-            0.08f,
-            0.10f,
-            1.0f);
-
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        ImGui_ImplOpenGL3_RenderDrawData(
-            ImGui::GetDrawData());
-
-        SwapBuffers(
-            static_cast<HDC>(m_DeviceContext));
-
-#endif
-    }
-
-    void ImSlateRenderer::RegisterWidget(ImWidget* widget)
-    {
-        
-        if (!m_Window)
-        {
-            return;
-        }
-        m_Widgets.push_back(widget);
-    }
-
     void ImSlateRenderer::UpdateDisplaySize()
     {
-        ImGuiIO& io =
-            ImGui::GetIO();
-
-        const auto& geometry =
-            m_Window
-            ->GetFramebufferSize();
-
-        io.DisplaySize =
-            ImVec2(
-                geometry.X,
-                geometry.Y);
+        auto& io = ImGui::GetIO();
+        auto size = m_Window->GetFramebufferSize();
+        io.DisplaySize = ImVec2(static_cast<float>(size.X), static_cast<float>(size.Y));
+        io.DisplayFramebufferScale = ImVec2(1, 1);
     }
-
-    ImSlateRenderer* CreateSlateRenderer(SlateCore::Window* window)
+    void ImSlateRenderer::Render()
     {
-        if (!GImSlateRenderer)
+        ImGui::SetCurrentContext(m_Context);
+        UpdateDisplaySize();
+        if (ImGui::GetIO().DisplaySize.x <= 0 || ImGui::GetIO().DisplaySize.y <= 0) return;
+        const auto now = std::chrono::steady_clock::now();
+        ImGui::GetIO().DeltaTime = std::chrono::duration<float>(now - m_LastFrame).count();
+        m_LastFrame = now;
+        ImGui::NewFrame();
+        // All registered widgets share this GUI context and the window's final RHI target.
+        for (auto* widget : m_Window->GetWidgets())
         {
-            GImSlateRenderer = std::make_unique<ImSlateRenderer>(window);
+            if (widget->GetVisibility() != SlateCore::EVisibility::Visible) continue;
+            widget->Draw();
+            SlateCore::SlateViewport* viewport = nullptr;
+            if (widget->IsA<SlateCore::SlateViewport>()) viewport = widget->Cast<SlateCore::SlateViewport>();
+            else if (widget->IsA<SlateCore::SlateWidget>()) viewport = widget->Cast<SlateCore::SlateWidget>()->GetViewportChild();
+            if (viewport)
+            {
+                auto* texture = static_cast<RenderCore::RenderTexture*>(viewport->GetViewportRenderTargetTexture());
+                const auto& g = widget->GetGeometry();
+                ImGui::GetBackgroundDrawList()->AddImage(ImTextureRef(ImGuiRHIBackend::GetTextureID(texture)),
+                    ImVec2(g.X, g.Y), ImVec2(g.X + g.Width, g.Y + g.Height));
+            }
         }
-
-        return GImSlateRenderer.get();
+        ImGui::Render();
+        // CPU draw data is translated now; queued backends only retain RHI commands and owned uploads.
+        const auto fence = m_WindowRenderer->Render(m_Window, [this](RHI::RHIGraphicCommandList& cmd,
+            RHI::RHITexture* target, std::vector<RHI::RHIWaitInfo>& waits, SlateCore::SlateRenderer::DrawResources& resources)
+        { m_Backend->RenderDrawData(ImGui::GetDrawData(), cmd, target, waits, resources); });
+        if (fence) m_Backend->EndFrame(fence);
     }
-
     bool ImSlateRenderer::OnMouseMove(
         const SlateCore::MouseMoveEvent& event)
     {

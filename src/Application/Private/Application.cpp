@@ -5,6 +5,7 @@
 #include "ImMainWindow.h"
 
 #include "imgui.h"
+#include <stdexcept>
 
 namespace App {
 
@@ -39,25 +40,23 @@ bool Application::RequestExit()
 // 关闭
 void Application::Shutdown()
 {
+    // Release window submissions and GUI resources before the widgets they reference.
+    _window.reset();
     _imGuiWidget.reset();
     _sceneSlateWidget.reset();
     _sceneMainViewport.reset();
-    _sceneViewportClient->ReleaseResources();
+    if (_sceneViewportClient) _sceneViewportClient->ReleaseResources();
     _sceneViewportClient.reset();
-    _window = nullptr;
 }
 
 // 创建窗口
 std::shared_ptr<ImGUISlate::ImMainWindow> Application::CreateWindowSP(int width, int height, const char* title)
 {
     // WindowFactory 会根据平台创建对应 Surface 的 Window
-    std::shared_ptr<ImGUISlate::ImMainWindow> newWindow = std::make_shared<ImGUISlate::ImMainWindow>(width, height, std::string(title));
-    newWindow->Initialize(); // 初始化 OS 窗口
+    std::shared_ptr<ImGUISlate::ImMainWindow> newWindow = std::make_shared<ImGUISlate::ImMainWindow>(width, height, std::string(title), _renderer);
+    if (!newWindow->Initialize())
+        throw std::runtime_error("Failed to initialize application window");
     newWindow->Show();
-    newWindow->SetResizeCallback([this](int w, int h) {
-        if (_sceneMainViewport);
-            //SceneMainViewport->Resize(W, H);
-        });
     newWindow->SetCloseCallback([this]() {
         _bQuitFlag = true;
 	});
@@ -65,9 +64,9 @@ std::shared_ptr<ImGUISlate::ImMainWindow> Application::CreateWindowSP(int width,
 
     if (!_sceneSlateWidget)
     {
-        _sceneSlateWidget = std::make_unique<SlateCore::SlateWidget>(newWindow.get());
+        _sceneSlateWidget = std::make_unique<SlateCore::SlateWidget>();
     }
-    _sceneSlateWidget->SetSize(framebufferSize.X - 200, framebufferSize.Y);
+    _sceneSlateWidget->Resize(static_cast<float>(framebufferSize.X - 200), static_cast<float>(framebufferSize.Y));
     Core::Int2 slateWidgetSize;
     slateWidgetSize.X = framebufferSize.X - 200;
     slateWidgetSize.Y = framebufferSize.Y;
@@ -81,7 +80,6 @@ std::shared_ptr<ImGUISlate::ImMainWindow> Application::CreateWindowSP(int width,
 	ImGUISlate::LayoutParams layoutParams;
     layoutParams.Weight = 2;
     newWindow->AddWidget(_sceneSlateWidget.get(), layoutParams);
-    _renderer->CreateViewport(_sceneSlateWidget.get());
     if (!_imGuiWidget)
     {
         _imGuiWidget = std::make_unique<ImGUISlate::ImWidget>([](int x, int y, int w, int h) {
@@ -124,13 +122,6 @@ void Application::TickFrame()
     // Poll Window / Input
 
     _window->PollEvents();
-    if (_sceneMainViewport)
-        _sceneMainViewport->Draw();
-    // Draw 主 SceneViewport
-    if (_sceneSlateWidget)
-    {
-        _renderer->Render(_sceneSlateWidget.get());
-    }
     _window->Draw();
 
 }

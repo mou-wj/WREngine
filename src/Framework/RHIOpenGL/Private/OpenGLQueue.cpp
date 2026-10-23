@@ -113,6 +113,8 @@ namespace RHIOpenGL
         RHISwapchainSlot slot{};
 		slot.ReadySync = m_BackBufferFences[m_CurrentBackBufferIndex];
         slot.Texture = m_BackBufferTextures[m_CurrentBackBufferIndex].get();
+        m_AcquiredBackBufferIndex = m_CurrentBackBufferIndex;
+        m_CurrentBackBufferIndex = (m_CurrentBackBufferIndex + 1) % static_cast<uint32_t>(m_BackBufferTextures.size());
         return slot;
     }
 
@@ -129,12 +131,12 @@ namespace RHIOpenGL
             texture = std::make_shared<OpenGLTexture>(desc);
         }
     }
-    void OpenGLSwapchain::Present() {
+    void OpenGLSwapchain::Present(uint32_t backBufferIndex) {
         
-        if (m_CurrentBackBufferIndex > m_BackBufferTextures.size()) {
+        if (backBufferIndex >= m_BackBufferTextures.size()) {
             return;
         }
-        auto& texture = m_BackBufferTextures[m_CurrentBackBufferIndex];
+        auto& texture = m_BackBufferTextures[backBufferIndex];
 
 		bool makeCurrent = m_PlatformContext->MakeCurrent();
         
@@ -148,7 +150,6 @@ namespace RHIOpenGL
 		glBlitFramebuffer(0, 0, m_Width, m_Height, 0, 0, m_Width, m_Height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 		m_PlatformContext->SwapBuffers();
         
-		m_CurrentBackBufferIndex = (m_CurrentBackBufferIndex + 1) % m_BackBufferTextures.size();
 		m_PlatformContext->DoneCurrent();
         
     }
@@ -353,13 +354,15 @@ namespace RHIOpenGL
         QueueExecuteEntry entry;
         entry.WaitInfos = { waitInfo };
         entry.FenceValue = queue->AllocateNextFence();
-        entry.ExecuteFunction = [swapchain]()
+        auto* acquiredSwapchain = static_cast<OpenGLSwapchain*>(swapchain);
+        const auto backBufferIndex = acquiredSwapchain->GetAcquiredBackBufferIndex();
+        entry.ExecuteFunction = [swapchain, backBufferIndex]()
         {
             auto* glSwapchain = dynamic_cast<OpenGLSwapchain*>(swapchain);
             if (glSwapchain)
             {
                 
-                glSwapchain->Present();
+                glSwapchain->Present(backBufferIndex);
                 
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glViewport(0, 0, glSwapchain->GetWidth(), glSwapchain->GetHeight());

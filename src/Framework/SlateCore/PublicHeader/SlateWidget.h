@@ -1,21 +1,19 @@
 #pragma once
 
 #include "Widget.h"
-#include "PlatformSurfaceOwner.h"
 #include "SlateViewport.h"
 
 #include <memory>
 
 namespace SlateCore
 {
-    class PlatformSurface;
 
-    class SLATECORE_API SlateWidget : public NativeWidget
+    class SLATECORE_API SlateWidget : public Widget
     {
         DECLARE_TYPE_ID_DERIVED_TYPE(SlateWidget, Widget)
 
     public:
-        explicit SlateWidget(PlatformSurfaceOwner* parentOwner = nullptr);
+        SlateWidget() = default;
         virtual ~SlateWidget() override;
 
     public:
@@ -39,9 +37,7 @@ namespace SlateCore
 
     private:
         
-        virtual void OnVisibilityChanged() override;
         virtual void OnSetSize(float width, float height) override;
-        virtual void OnSetPosition(float x, float y) override;
     private:
 
         SlateViewport* m_ViewportChild = nullptr;

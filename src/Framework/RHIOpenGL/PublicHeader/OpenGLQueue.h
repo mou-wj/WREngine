@@ -51,7 +51,8 @@ namespace RHIOpenGL
         uint32_t GetWidth() const { return m_Width; }
         uint32_t GetHeight() const { return m_Height; }
 
-		void Present();
+		void Present(uint32_t backBufferIndex);
+        uint32_t GetAcquiredBackBufferIndex() const { return m_AcquiredBackBufferIndex; }
 
     private:
         
@@ -60,6 +61,7 @@ namespace RHIOpenGL
         uint32_t m_Height = 0;
         RHI::ERHIFormat m_Format = RHI::ERHIFormat::Unknown;
 		uint32_t m_CurrentBackBufferIndex = 0;
+        uint32_t m_AcquiredBackBufferIndex = 0;
         std::vector<OpenGLSyncPoint*> m_BackBufferFences;
 		std::vector<std::shared_ptr<OpenGLTexture>> m_BackBufferTextures;
 		OpenGLPlatformContext* m_PlatformContext = nullptr;

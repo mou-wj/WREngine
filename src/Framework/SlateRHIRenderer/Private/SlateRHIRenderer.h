@@ -1,38 +1,24 @@
 #pragma once
 #include "SlateRenderer.h"
-#include "SlateViewport.h"
 #include "RHIResource.h"
 #include "RHICommandContex.h"
-#include "Window.h"
-#include "SlateWidget.h"
 #include <map>
-namespace SlateRHIRenderer {
-
-
-	struct ViewportDrawItem
-	{
-		SlateCore::SlateViewport* Viewport;
-		int X, Y;
-		int Width, Height;
-	};
-
-	struct WindowViewportInfo {
-		RHI::RHISwapchainSP SwapchainRHI;
-		int Width, Height;
-
-	};
-
-	class SlateRHIRenderer : public SlateCore::SlateRenderer {
-	public:
-		SlateRHIRenderer();
-		~SlateRHIRenderer() override;
-		virtual void Render(SlateCore::SlateWidget* slateWidget) override;
-		void CreateViewport(SlateCore::SlateWidget* slateWidget) override;
-	private:
-
-		std::map<SlateCore::SlateWidget*, WindowViewportInfo> m_Viewports;
-	};
-
-
-
+namespace SlateRHIRenderer
+{
+    class SlateRHIRenderer : public SlateCore::SlateRenderer
+    {
+    public:
+        ~SlateRHIRenderer() override;
+        uint64_t Render(SlateCore::Window* window, const DrawCallback& draw) override;
+        void ReleaseWindow(SlateCore::Window* window) override;
+    private:
+        struct WindowViewportInfo
+        {
+            RHI::RHISwapchainSP Swapchain;
+            uint32_t Width = 0, Height = 0;
+            uint64_t LastSubmission = 0;
+            std::map<RHI::RHITexture*, RHI::ERHIResourceAccess> Access;
+        };
+        std::map<SlateCore::Window*, WindowViewportInfo> m_Windows;
+    };
 }

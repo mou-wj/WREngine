@@ -83,22 +83,15 @@ _sceneViewportClient->InitResources();
 `Shutdown()` 里清理顺序是：
 
 ```cpp
+_window.reset(); // 等待提交、释放 GUI 和交换链，再关闭平台窗口
 _imGuiWidget.reset();
 _sceneSlateWidget.reset();
 _sceneMainViewport.reset();
-_sceneViewportClient->ReleaseResources();
+if (_sceneViewportClient) _sceneViewportClient->ReleaseResources();
 _sceneViewportClient.reset();
-_window = nullptr;
 ```
 
-这说明应用层采用的是“倒序释放”的方式：
-
-- 先清理 UI 面板
-- 再清理视口
-- 再释放 viewport client
-- 最后释放窗口
-
-这是比较合理的资源管理顺序，避免窗口还存在时子对象被提前销毁。
+窗口必须先完成使用场景纹理的提交，并释放 GUI 上传资源与交换链，再释放业务拥有的 Widget、SceneViewport 和 viewport client。这样异步后端不会访问已销毁的控件资源。
 
 ---
 
@@ -108,7 +101,7 @@ _window = nullptr;
 
 ```cpp
 std::shared_ptr<ImGUISlate::ImMainWindow> newWindow =
-    std::make_shared<ImGUISlate::ImMainWindow>(width, height, std::string(title));
+    std::make_shared<ImGUISlate::ImMainWindow>(width, height, std::string(title), _renderer);
 newWindow->Initialize();
 newWindow->Show();
 ```
@@ -137,7 +130,7 @@ newWindow->AddWidget(_imGuiWidget.get(), layoutParams);
 `_sceneSlateWidget` 是用来承载场景视口的 `SlateCore::SlateWidget`：
 
 ```cpp
-_sceneSlateWidget = std::make_unique<SlateCore::SlateWidget>(newWindow.get());
+_sceneSlateWidget = std::make_unique<SlateCore::SlateWidget>();
 _sceneSlateWidget->SetViewportChild(_sceneMainViewport.get());
 ```
 
@@ -145,7 +138,7 @@ _sceneSlateWidget->SetViewportChild(_sceneMainViewport.get());
 
 - 窗口中放置一个 `SlateWidget`
 - 该 widget 的视口子节点指向 `Engine::SceneViewport`
-- 这个 viewport 负责渲染场景区域
+- 这个 viewport 负责场景离屏输出；SlateWidget 是没有原生句柄的逻辑容器
 
 ### 6.2 `_sceneMainViewport`
 
@@ -159,7 +152,7 @@ _sceneMainViewport = std::make_unique<Engine::SceneViewport>(_sceneViewportClien
 
 - 视口本身是场景展示区域
 - viewport client 负责注册输入与底层资源初始化
-- 调用 `_sceneMainViewport->Draw()` 时，会把场景渲染到当前窗口区域
+- 调用 `_sceneMainViewport->Draw()` 时产生 RenderTexture，由 ImSlateRenderer 加入 GUI 背景绘制列表合成到主窗口
 
 ### 6.3 `_imGuiWidget`
 
@@ -188,14 +181,6 @@ void Application::TickFrame()
 {
     _window->PollEvents();
 
-    if (_sceneMainViewport)
-        _sceneMainViewport->Draw();
-
-    if (_sceneSlateWidget)
-    {
-        _renderer->Render(_sceneSlateWidget.get());
-    }
-
     _window->Draw();
 }
 ```
@@ -203,9 +188,8 @@ void Application::TickFrame()
 这里体现了应用层的典型工作流：
 
 1. `_window->PollEvents()`：轮询窗口事件
-2. `_sceneMainViewport->Draw()`：绘制场景视口内容
-3. `_renderer->Render(_sceneSlateWidget.get())`：把 Slate widget 渲染输出到窗口
-4. `_window->Draw()`：执行真正的窗口绘制刷出帧
+2. `_window->Draw()`：驱动可见控件、SceneViewport 离屏绘制和 ImGui 数据生成
+3. ImGui RHI 后端将场景纹理和 GUI 一起绘制到 Window 的交换链，最终只 Present 一次
 
 这说明 `App::Application` 属于“应用驱动的渲染主循环”，而不是引擎内部的渲染循环本身。
 

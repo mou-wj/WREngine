@@ -9,6 +9,7 @@
 #include "VulkanCommandContex.h"
 #include "ThreadInfo.h"
 #include "VulkanQueue.h"
+#include "VulkanRenderPass.h"
 #include <algorithm> // for std::max
 #include <cstring>
 using namespace Core;
@@ -1254,9 +1255,16 @@ void VulkanRHISwapchain::CreateSwapchain()
 
 void VulkanRHISwapchain::DestroySwapchain()
 {
+    // Swapchain images are externally owned: their texture destructor does not enqueue image deletion.
+    // The caller guarantees GPU completion; only invalidate framebuffers referring to these images here.
+    for (const auto& texture : m_BackBufferTextures)
+    {
+        const auto image = texture->GetImage();
+        m_Device->GetRenderPassManager()->NotifyDeletedImage(image);
+    }
+    m_BackBufferTextures.clear();
     delete m_Swapchain;
     m_Swapchain = nullptr;
-    m_BackBufferTextures.clear();
     for (auto* semaphore : m_AcquireSemaphores) {
         delete semaphore;
     }
@@ -1382,7 +1390,13 @@ VulkanColorBlendState::VulkanColorBlendState(VulkanDevice* device, const RHIColo
 
         attachmentState.blendEnable = attachmentDesc.bBlendEnable;
         attachmentState.colorWriteMask = attachmentDesc.ColorWriteMask; // TODO: Support other write masks
-        // TODO: Support other blend factors and operations
+        // RHI currently exposes alpha blending as a switch, matching the other backends.
+        attachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        attachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        attachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+        attachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        attachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        attachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
     }
 
     ColorBlendInfo.pAttachments = AttachmentStates.data();
