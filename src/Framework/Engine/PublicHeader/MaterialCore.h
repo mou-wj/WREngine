@@ -1,5 +1,6 @@
 #pragma once
 #include "Shader.h"
+#include "RHIApi.h"
 #include "HashHelper.hpp"
 #include "EngineExport.h"
 #include <unordered_map>
@@ -49,6 +50,7 @@ namespace Engine {
     class MeshMaterialShaderType;
 
     struct MaterialShaderKey {
+        RHI::ERHIShaderPlatform Platform = RHI::GShaderPlatform;
         MaterialShaderType* ShaderType;
         RenderCore::ShaderPermutationId PermutationId;
         MaterialPermutationParameters MaterialParameter;
@@ -64,13 +66,14 @@ namespace Engine {
             ) : ShaderType(nullptr), PermutationId(), MaterialParameter(MaterialPermutationParameters()) {}
 
         bool operator==(const MaterialShaderKey& other) const {
-            return ShaderType == other.ShaderType &&
+            return Platform == other.Platform && ShaderType == other.ShaderType &&
                 PermutationId == other.PermutationId &&
                 MaterialParameter == other.MaterialParameter;
         }
 
         MaterialShaderKey& operator=(const MaterialShaderKey& other) {
             if (this != &other) {
+                Platform = other.Platform;
                 ShaderType = other.ShaderType;
                 PermutationId = other.PermutationId;
                 // 注意：引用成员不能重新赋值，只能在构造时初始化
@@ -81,6 +84,7 @@ namespace Engine {
     };
 
     struct MeshMaterialShaderKey {
+        RHI::ERHIShaderPlatform Platform = RHI::GShaderPlatform;
         MeshMaterialShaderType* ShaderType;
         RenderCore::VertexFactoryType* VF;
         RenderCore::ShaderPermutationId PermutationId;
@@ -101,7 +105,7 @@ namespace Engine {
         }
 
         bool operator==(const MeshMaterialShaderKey& other) const {
-            return ShaderType == other.ShaderType &&
+            return Platform == other.Platform && ShaderType == other.ShaderType &&
                 VF == other.VF &&
                 PermutationId == other.PermutationId &&
                 VertexFactoryFlags == other.VertexFactoryFlags &&
@@ -110,6 +114,7 @@ namespace Engine {
 
         MeshMaterialShaderKey& operator=(const MeshMaterialShaderKey& other) {
             if (this != &other) {
+                Platform = other.Platform;
                 ShaderType = other.ShaderType;
                 VF = other.VF;
                 PermutationId = other.PermutationId;
@@ -138,6 +143,7 @@ namespace std {
         size_t operator()(const Engine::MaterialShaderKey& key) const
         {
             size_t h = 0;
+            HashCombine(h, static_cast<uint32_t>(key.Platform));
             HashCombine(h, std::hash<void*>()(key.ShaderType));
             HashCombine(h, std::hash<RenderCore::ShaderPermutationId>()(key.PermutationId));
             HashCombine(h, std::hash<Engine::MaterialPermutationParameters>()(key.MaterialParameter));
@@ -149,6 +155,7 @@ namespace std {
         size_t operator()(const Engine::MeshMaterialShaderKey& key) const
         {
             size_t h = 0;
+            HashCombine(h, static_cast<uint32_t>(key.Platform));
             HashCombine(h, std::hash<void*>()(key.ShaderType));
             HashCombine(h, std::hash<void*>()(key.VF));
             HashCombine(h, std::hash<RenderCore::ShaderPermutationId>()(key.PermutationId));
@@ -246,6 +253,8 @@ namespace Engine {
     public:
 
         RenderCore::Shader* GetShader(const MeshMaterialShaderKey& key);
+        RenderCore::ShaderSP GetShaderShared(const MeshMaterialShaderKey& key);
+        const std::string& GetLastError() const { return m_LastError; }
 
     private:
         RenderCore::Shader* CompileShader(const MeshMaterialShaderKey& key);
@@ -255,6 +264,7 @@ namespace Engine {
             MeshMaterialShaderKey,
             RenderCore::ShaderSP
         > m_ShaderMap;
+        std::string m_LastError;
 
     private:
 
@@ -292,6 +302,7 @@ namespace Engine {
     public:
 
         RenderCore::Shader* GetShader(const MaterialShaderKey& key);
+        const std::string& GetLastError() const { return m_LastError; }
 
 
     private:
@@ -302,6 +313,7 @@ namespace Engine {
             MaterialShaderKey,
             RenderCore::ShaderSP
         > m_ShaderMap;
+        std::string m_LastError;
 
     private:
 
@@ -352,6 +364,27 @@ namespace Engine {
     };
 
     extern ENGINE_API MaterialShaderMap GMaterialShaderMap;
+
+    enum class EMaterialCompileState { Unrequested, Ready, Failed };
+
+    // Built-in Surface program resource. Dynamic parameter values are not compilation inputs.
+    // ShaderType, permutation and VertexFactory remain selected by Renderer passes.
+    class ENGINE_API MaterialResource
+    {
+    public:
+        explicit MaterialResource(EShadingModel shading) : m_ShadingModel(shading) {}
+        EShadingModel GetShadingModel() const { return m_ShadingModel; }
+        const char* GetProgramName() const { return "BuiltinSurface"; }
+        RenderCore::Shader* GetMeshShader(MeshMaterialShaderKey key);
+        EMaterialCompileState GetLastCompileState() const { return m_LastCompileState; }
+        const std::string& GetLastError() const { return m_LastError; }
+    private:
+        EShadingModel m_ShadingModel;
+        EMaterialCompileState m_LastCompileState = EMaterialCompileState::Unrequested;
+        std::string m_LastError;
+        // Preserve requested shader lifetimes; lookup/caching belongs to the global ShaderMap.
+        std::vector<RenderCore::ShaderSP> m_ShaderReferences;
+    };
 
 #define DECLARE_MATERIAL_SHADER_TYPE(ClassType) \
     DECLARE_SHADER_TYPE(ClassType)\

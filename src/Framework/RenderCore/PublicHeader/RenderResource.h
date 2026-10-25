@@ -540,6 +540,8 @@ using RenderTextureSP = std::shared_ptr<RenderTexture>;
 using RenderBufferSP = std::shared_ptr<RenderBuffer>;
 
 extern RENDERCORE_API RenderTextureSP GlobalTestTexture;
+extern RENDERCORE_API RenderTextureSP GlobalWhiteTexture;
+extern RENDERCORE_API RenderTextureSP GlobalFlatNormalTexture;
 extern RENDERCORE_API RenderTextureSP GlobalEmptyCubeTexture;
 extern RENDERCORE_API RenderTextureSP GlobalEmptyTexture2DArray;
 extern RENDERCORE_API RHI::RHISamplerSP GlobalSampler;

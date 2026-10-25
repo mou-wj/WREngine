@@ -41,14 +41,27 @@ namespace Engine
         MaterialInstance* GetMaterialInstance(uint32_t slotIndex) const;
         MaterialInstance* GetOrCreateMaterialInstance(uint32_t slotIndex);
         void ResetMaterialInstance(uint32_t slotIndex);
+        bool SetMaterialParameter(uint32_t slotIndex, const std::string& name, const MaterialParameterValue& value)
+        {
+            auto parameter = CreateMaterialParameter(name,value);
+            ValidateMaterialParameter(*parameter,true);
+            return GetOrCreateMaterialInstance(slotIndex)->SetParameter(name,value);
+        }
+        bool ResetMaterialParameter(uint32_t slotIndex, const std::string& name, EMaterialParameterType type)
+        {
+            FindMaterialParameterDefinition(name,type);
+            auto* instance = GetMaterialInstance(slotIndex);
+            return instance && instance->ResetParameter(name,type);
+        }
 
         template<EMaterialParameterSemantic Semantic, typename ParamType>
         void SetMaterialParameterValue(uint32_t slotIndex, const std::string& name,
                                        const typename ParamType::Type& value)
         {
+            TMaterialParameter<Semantic,ParamType> parameter(CanonicalMaterialParameterName(name),value);
+            ValidateMaterialParameter(parameter,true);
             auto* instance = GetOrCreateMaterialInstance(slotIndex);
             instance->SetParameterValue<Semantic, ParamType>(name, value);
-            MarkRenderStateDirty();
         }
 
         //----------------------------------------

@@ -532,6 +532,24 @@ void RenderTargetPool::Clear()
 
 
 
+namespace {
+RenderTextureSP CreateDefaultTexture(const char* name, const std::array<uint8_t,4>& pixel)
+{
+    RHITextureDesc desc{};
+    desc.Width = 1;
+    desc.Height = 1;
+    desc.Format = ERHIFormat::R8G8B8A8_UNorm;
+    desc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest | ERHITextureCreateFlag::TransferSrc;
+    desc.DebugName = name;
+    auto texture = std::make_shared<RenderTexture>(desc);
+    texture->InitRHIResource();
+    texture->UploadData(pixel.data(),0,0);
+    return texture;
+}
+}
+
+RenderTextureSP GlobalWhiteTexture = nullptr;
+RenderTextureSP GlobalFlatNormalTexture = nullptr;
 RenderTextureSP GlobalTestTexture = nullptr;
 RenderTextureSP GlobalEmptyTexture2DArray = nullptr;
 RenderTextureSP GlobalEmptyCubeTexture = nullptr;
@@ -539,6 +557,8 @@ RHI::RHISamplerSP GlobalSampler = nullptr;
 RHI::RHISamplerSP GlobalNearestSampler = nullptr;
  RenderBufferSP GlobalEmptyBuffer = nullptr;
 bool InitGlobalRenderResource() {
+    GlobalWhiteTexture = CreateDefaultTexture("GlobalWhiteTexture",{255,255,255,255});
+    GlobalFlatNormalTexture = CreateDefaultTexture("GlobalFlatNormalTexture",{128,128,255,255});
     auto rootPath = Core::GetProjectDir();
 	GlobalTestTexture = CreateTexture(rootPath + "/resources/pic/OIP.jpg");
 	RHI::RHISamplerDesc samplerDesc{};
@@ -574,6 +594,8 @@ bool InitGlobalRenderResource() {
     return true;
 }
 void ReleaseGlobalRenderResource() {
+    GlobalWhiteTexture.reset();
+    GlobalFlatNormalTexture.reset();
 	GlobalTestTexture.reset();
 	GlobalSampler.reset();
 	GlobalNearestSampler.reset();

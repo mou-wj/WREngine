@@ -39,7 +39,7 @@ namespace Renderer {
 
         // 核心渲染状态（一个批次内必须严格一致，触发同一个 PSO）
         RenderCore::VertexFactory* VertexFactory = nullptr;
-        Engine::MaterialRenderProxy * MaterialProxy = nullptr;
+        std::shared_ptr<const Engine::MaterialRenderProxy> MaterialProxy;
 
         // 几何数据源指针挪到了 Batch 状态层，完美适配你的 RenderCore 资源
         RenderCore::RenderBuffer* IndexBuffer = nullptr;

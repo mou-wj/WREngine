@@ -1,120 +1,169 @@
 #include "Material.h"
-#include "RenderResource.h" // 包含你的基类以及 RenderTexture 的定义
 #include "MaterialAsset.h"
+#include "TextureAsset.h"
+#include <algorithm>
 #include <stdexcept>
-#include "Shader.h"
-#include "MaterialShaderParameter.h"
-#include "RenderGraphBuilder.h"
-using namespace RenderCore;
+
 namespace Engine {
-    MeshMaterialShaderMap GMeshMaterialShaderMap;
-    MaterialShaderMap GMaterialShaderMap;
+MeshMaterialShaderMap GMeshMaterialShaderMap;
+MaterialShaderMap GMaterialShaderMap;
 
-    // ============================================================================
-// MaterialParameter 实现
-// ============================================================================
-    MaterialParameter::MaterialParameter(const std::string& inName, EMaterialParameterSemantic inSemantic)
-        : m_Name(inName), m_Semantic(inSemantic) {
-    }
+namespace {
+MaterialParameterMap CloneParameters(const MaterialParameterMap& source)
+{
+    MaterialParameterMap result;
+    for (const auto& [key,parameter] : source) result.emplace(key,parameter->Clone());
+    return result;
+}
+bool StoreParameter(MaterialParameterMap& parameters, std::unique_ptr<MaterialParameter> parameter)
+{
+    const auto key = parameter->GetKey();
+    auto found = parameters.find(key);
+    if (found != parameters.end() && found->second->GetValueVariant() == parameter->GetValueVariant()) return false;
+    parameters[key] = std::move(parameter);
+    return true;
+}
+MaterialParameterKey ParameterKey(const std::string& name, EMaterialParameterType type)
+{
+    const auto& definition = FindMaterialParameterDefinition(name,type);
+    return {definition.Name,definition.Semantic,definition.Type};
+}
+}
 
-    MaterialRenderProxy::MaterialRenderProxy(const MaterialInterface* parent) : m_Parent(parent) {
-
-    }
-
-    // ============================================================================
-    // MaterialRenderProxy 实现
-    // ============================================================================
-    void MaterialRenderProxy::AddParameter(std::unique_ptr<MaterialParameter> param) {
-        if (param) {
-            m_Parameters.push_back(std::move(param));
-        }
-    }
-
-    // ============================================================================
-    // Material 实现
-    // ============================================================================
-    void Material::SetBlendMode(EBlendMode inMode) {
-        if (m_BlendMode != inMode) {
-            m_BlendMode = inMode;
-            m_bProxyDirty = true;
-            ++m_Revision;
-        }
-    }
-    void Material::SetShadingModel(EShadingModel inModel) {
-		if (m_ShadingModel != inModel) {
-			m_ShadingModel = inModel;
-			m_bProxyDirty = true;
-            ++m_Revision;
-		}
-    }
-
-    MaterialRenderProxy* Material::GetRenderProxy() const {
-        if (m_bProxyDirty || !m_CachedProxy) {
-            m_CachedProxy = std::make_unique<MaterialRenderProxy>(this);
-            // 将资产内持有的基础默认数据全部 Clone 进只读代理
-            for (const auto& [Name, Param] : m_DefaultParameters) {
-                m_CachedProxy->AddParameter(Param->Clone());
-            }
-            m_bProxyDirty = false;
-        }
-        return m_CachedProxy.get();
-    }
-
-    void Material::SetParameterValueImpl(EMaterialParameterSemantic semantic, const std::string& name, std::unique_ptr<MaterialParameter> param) {
-        const auto key = name + ":" + std::to_string(static_cast<int>(semantic)) + ":" + typeid(*param).name();
-        m_DefaultParameters[key] = std::move(param);
-        ++m_Revision;
-        m_bProxyDirty = true;
-    }
-
-    // ============================================================================
-    // MaterialInstance 实现
-    // ============================================================================
-    MaterialInstance::MaterialInstance(std::shared_ptr<MaterialAsset> inParent)
-        : m_ParentAsset(std::move(inParent))
+MaterialRenderProxy::MaterialRenderProxy(std::shared_ptr<MaterialResource> resource, MaterialRenderState renderState,
+                                       MaterialRevisions revisions, MaterialParameterMap parameters)
+    : m_Resource(std::move(resource)), m_RenderState(renderState), m_Revisions(revisions), m_Parameters(std::move(parameters)) {}
+EBlendMode MaterialRenderProxy::GetBlendMode() const { return m_RenderState.BlendMode; }
+EShadingModel MaterialRenderProxy::GetShadingModel() const { return m_Resource->GetShadingModel(); }
+bool MaterialRenderProxy::IsTwoSided() const { return m_RenderState.bTwoSided; }
+RHI::ERHICullMode MaterialRenderProxy::ResolveCullMode(std::optional<RHI::ERHICullMode> passOverride) const
+{
+    return passOverride.value_or(m_RenderState.bTwoSided ? RHI::ERHICullMode::None : m_RenderState.CullMode);
+}
+void MaterialRenderProxy::ValidateSurfacePass() const
+{
+    if (m_RenderState.BlendMode != EBlendMode::Opaque)
+        throw std::runtime_error("BuiltinSurface currently supports opaque rendering only; Masked/Translucent passes are not implemented");
+}
+const MaterialParameter* MaterialRenderProxy::GetParameter(const std::string& name, EMaterialParameterType type) const
+{
+    const auto found = m_Parameters.find(ParameterKey(name,type));
+    return found == m_Parameters.end() ? nullptr : found->second.get();
+}
+bool MaterialInterface::SetParameter(const std::string& name, const MaterialParameterValue& value)
+{
+    return SetParameterValueImpl(CreateMaterialParameter(name,value));
+}
+Material::Material()
+{
+    for (const auto& definition : GetParameterDefinitions())
     {
-        if (!m_ParentAsset || !m_ParentAsset->GetMaterial())
-            throw std::invalid_argument("A material instance requires a loaded parent MaterialAsset");
+        auto parameter = CreateMaterialParameter(definition.Name,definition.DefaultValue);
+        const auto key = parameter->GetKey();
+        m_DefaultParameters.emplace(key,std::move(parameter));
     }
-
-    const Material* MaterialInstance::GetMaterial() const { return m_ParentAsset->GetMaterial(); }
-    EBlendMode MaterialInstance::GetBlendMode() const { return GetMaterial()->GetBlendMode(); }
-    EShadingModel MaterialInstance::GetShadingModel() const { return GetMaterial()->GetShadingModel(); }
-    uint64_t MaterialInstance::GetRevision() const { return m_Revision + GetMaterial()->GetRevision(); }
-
-    MaterialRenderProxy* MaterialInstance::GetRenderProxy() const {
-        const auto parentRevision = GetMaterial()->GetRevision();
-        if (m_bProxyDirty || !m_CachedProxy || m_CachedParentRevision != parentRevision) {
-            m_CachedParentRevision = parentRevision;
-            m_CachedProxy = std::make_unique<MaterialRenderProxy>(this);
-
-            const Material* baseMaterial = GetMaterial();
-            if (baseMaterial) {
-                // 1. 倒装父材质的默认参数
-                for (const auto& [Name, Param] : baseMaterial->GetDefaultParameters()) {
-                    if (!m_OverriddenParameters.contains(Name)) {
-                        m_CachedProxy->AddParameter(Param->Clone());
-                    }
-                }
-            }
-
-            // 2. 倒装实例自己重写（Override）的参数覆盖默认数据
-            for (const auto& [Name, Param] : m_OverriddenParameters) {
-                m_CachedProxy->AddParameter(Param->Clone());
-            }
-
-            m_bProxyDirty = false;
-        }
-        return m_CachedProxy.get();
+}
+void Material::SetBlendMode(EBlendMode mode)
+{
+    if (mode != EBlendMode::Opaque && mode != EBlendMode::Masked && mode != EBlendMode::Translucent)
+        throw std::invalid_argument("Invalid material blend mode");
+    if (m_RenderState.BlendMode == mode) return;
+    m_RenderState.BlendMode = mode;
+    ++m_Revision; ++m_Revisions.RenderState;
+    m_CachedProxy.reset();
+}
+void Material::SetShadingModel(EShadingModel model)
+{
+    if (model != EShadingModel::Lit && model != EShadingModel::Unlit) throw std::invalid_argument("Invalid material shading model");
+    if (m_ShadingModel == model) return;
+    m_ShadingModel = model;
+    ++m_Revision; ++m_Revisions.Compilation; ++m_Revisions.RenderState;
+    m_Resource.reset(); m_CachedProxy.reset();
+}
+void Material::SetTwoSided(bool bTwoSided)
+{
+    if (m_RenderState.bTwoSided == bTwoSided) return;
+    m_RenderState.bTwoSided = bTwoSided;
+    ++m_Revision; ++m_Revisions.RenderState;
+    m_CachedProxy.reset();
+}
+void Material::SetCullMode(RHI::ERHICullMode mode)
+{
+    if (mode != RHI::ERHICullMode::None && mode != RHI::ERHICullMode::Front && mode != RHI::ERHICullMode::Back)
+        throw std::invalid_argument("Unsupported material cull mode");
+    if (m_RenderState.CullMode == mode) return;
+    m_RenderState.CullMode = mode;
+    ++m_Revision; ++m_Revisions.RenderState;
+    m_CachedProxy.reset();
+}
+bool Material::SetParameterValueImpl(std::unique_ptr<MaterialParameter> parameter)
+{
+    ValidateMaterialParameter(*parameter,false);
+    if (!StoreParameter(m_DefaultParameters,std::move(parameter))) return false;
+    ++m_Revision; ++m_Revisions.Parameters;
+    m_CachedProxy.reset();
+    return true;
+}
+bool Material::ResetParameter(const std::string& name, EMaterialParameterType type)
+{
+    return SetParameter(name,FindMaterialParameterDefinition(name,type).DefaultValue);
+}
+std::shared_ptr<MaterialResource> Material::GetResource() const
+{
+    if (!m_Resource) m_Resource = std::make_shared<MaterialResource>(m_ShadingModel);
+    return m_Resource;
+}
+std::shared_ptr<const MaterialRenderProxy> Material::GetRenderProxyShared() const
+{
+    if (!m_CachedProxy) m_CachedProxy = std::make_shared<MaterialRenderProxy>(GetResource(),m_RenderState,m_Revisions,CloneParameters(m_DefaultParameters));
+    return m_CachedProxy;
+}
+MaterialInstance::MaterialInstance(std::shared_ptr<MaterialAsset> parent) : m_ParentAsset(std::move(parent))
+{
+    if (!m_ParentAsset || !m_ParentAsset->GetMaterial()) throw std::invalid_argument("A material instance requires a loaded parent MaterialAsset");
+}
+const Material* MaterialInstance::GetMaterial() const { return m_ParentAsset->GetMaterial(); }
+EBlendMode MaterialInstance::GetBlendMode() const { return GetMaterial()->GetBlendMode(); }
+EShadingModel MaterialInstance::GetShadingModel() const { return GetMaterial()->GetShadingModel(); }
+uint64_t MaterialInstance::GetRevision() const { return m_Revision + GetMaterial()->GetRevision(); }
+MaterialRevisions MaterialInstance::GetRevisions() const
+{
+    auto revisions = GetMaterial()->GetRevisions();
+    revisions.Parameters += m_Revision;
+    return revisions;
+}
+std::shared_ptr<const MaterialRenderProxy> MaterialInstance::GetRenderProxyShared() const
+{
+    const auto parentRevision = GetMaterial()->GetRevision();
+    if (!m_CachedProxy || m_CachedParentRevision != parentRevision)
+    {
+        auto parameters = CloneParameters(GetMaterial()->GetDefaultParameters());
+        for (const auto& [key,parameter] : m_OverriddenParameters) parameters[key] = parameter->Clone();
+        m_CachedProxy = std::make_shared<MaterialRenderProxy>(GetMaterial()->GetResource(),GetMaterial()->GetRenderState(),GetRevisions(),std::move(parameters));
+        m_CachedParentRevision = parentRevision;
     }
-
-    void MaterialInstance::SetParameterValueImpl(EMaterialParameterSemantic semantic, const std::string& name, std::unique_ptr<MaterialParameter> param) {
-        const auto key = name + ":" + std::to_string(static_cast<int>(semantic)) + ":" + typeid(*param).name();
-        m_OverriddenParameters[key] = std::move(param);
-        ++m_Revision;
-        m_bProxyDirty = true;
-    }
-
-    
-
-} // namespace Engine
+    return m_CachedProxy;
+}
+bool MaterialInstance::SetParameterValueImpl(std::unique_ptr<MaterialParameter> parameter)
+{
+    ValidateMaterialParameter(*parameter,true);
+    if (!StoreParameter(m_OverriddenParameters,std::move(parameter))) return false;
+    ++m_Revision; m_CachedProxy.reset();
+    return true;
+}
+bool MaterialInstance::HasOverride(const std::string& name, EMaterialParameterType type) const
+{
+    return m_OverriddenParameters.contains(ParameterKey(name,type));
+}
+bool MaterialInstance::ResetParameter(const std::string& name, EMaterialParameterType type)
+{
+    if (!m_OverriddenParameters.erase(ParameterKey(name,type))) return false;
+    ++m_Revision; m_CachedProxy.reset();
+    return true;
+}
+void MaterialInstance::ResetAllParameters()
+{
+    if (m_OverriddenParameters.empty()) return;
+    m_OverriddenParameters.clear(); ++m_Revision; m_CachedProxy.reset();
+}
+}

@@ -4,6 +4,7 @@
 #include "RenderGraphBuilder.h"
 #include "IBLPrecomputeShader.h"
 #include "StaticMeshProcess.h"
+#include <optional>
 namespace Renderer {
     
     struct SceneTextures
@@ -56,6 +57,7 @@ namespace Renderer {
         Scene* Scene;
         Engine::SceneViewFamily* Views;
         SceneTextures SceneTextures;
+        std::optional<RHI::ERHICullMode> CullModeOverride;
 
         virtual ~SceneRenderer() = default;
 
@@ -65,12 +67,12 @@ namespace Renderer {
         static void BuildSceneLightShadowMap(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder);
         
         static void UploadShadowMapInfo(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder);
-        static void AddPreDepthPass(RenderCore::RenderGraphBuilder& graphBuilder,const MeshBatchList& meshBatchList,const Core::Mat4& viewProj, RenderCore::RenderGraphTextureRef depth);
+        static void AddPreDepthPass(RenderCore::RenderGraphBuilder& graphBuilder,const MeshBatchList& meshBatchList,const Core::Mat4& viewProj, RenderCore::RenderGraphTextureRef depth, std::optional<RHI::ERHICullMode> cullModeOverride = std::nullopt);
     protected:
         static void BuildSceneLightCascadeShadowMap(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder, const Engine::SceneView& view);
         static void UpdateCascadeShadowInfo(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder, const Engine::SceneView& view);
         static void AddClearShadowMapPass( RenderCore::RenderGraphBuilder& graphBuilder, std::vector<ShadowRenderView>& shadowRenderViews);
-        static void BuildLightShadow(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder , std::vector<ShadowRenderView>& shadowRenderViews);
+        static void BuildLightShadow(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder , std::vector<ShadowRenderView>& shadowRenderViews, std::optional<RHI::ERHICullMode> cullModeOverride = std::nullopt);
     };
     using SceneRendererSP = std::shared_ptr<SceneRenderer>;
 

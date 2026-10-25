@@ -2,9 +2,7 @@
 #include "/core/GBufferCommon.sf"
 #define SHADINGMODEL_UNLIT   0
 #define SHADINGMODEL_LIT 1
-#if MATERIAL_SHADING_MODEL == SHADINGMODEL_LIT
 #include "/core/MaterialParametersHelper.sf"
-#endif 
 
 FGBufferOutput MainPS(VertexFactoryVSToPS Input) : SV_Target0
 {
@@ -44,7 +42,8 @@ FGBufferOutput MainPS(VertexFactoryVSToPS Input) : SV_Target0
     WriteShadingModelId(Out, SHADINGMODEL_LIT);
 
 #elif MATERIAL_SHADING_MODEL == SHADINGMODEL_UNLIT
-    WriteBaseColor(Out, BaseColor);
+    float2 uv = GetMaterialUV(Context.UV0);
+    WriteBaseColor(Out, SampleBaseColor(uv) + SampleEmissive(uv));
     WriteShadingModelId(Out, SHADINGMODEL_UNLIT);
 #endif
     return Out;

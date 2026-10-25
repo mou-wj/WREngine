@@ -261,7 +261,13 @@ Shader
 
 ---
 
-## 10. 架构总结
+## 10. 公共默认资源
+
+RenderResource 提供 GlobalWhiteTexture 和 GlobalFlatNormalTexture，分别上传白色与平面法线像素，由 InitGlobalRenderResource / ReleaseGlobalRenderResource 统一管理。Engine 的材质绑定只引用这些 RenderTexture，不创建默认 TextureAsset。
+
+材质调整不改变 RenderGraphBuilder 的 Pass 管理、提交及资源 Tracker 更新流程。RenderResource 没有新增通用 retained 对象容器；同步和释放继续遵守既有约定，调用方仍须在实际访问提交处更新资源跟踪。
+
+## 11. 架构总结
 
 `RenderCore` 模块的本质是“渲染基础设施层”，其核心架构可以概括为：
 

@@ -301,7 +301,7 @@ namespace Test {
                 RenderGraphBuilder builder;
 
                 for (auto& batch : list) {
-					auto materialOwner = batch.MaterialProxy->GetParent();
+					auto materialOwner = batch.MaterialProxy.get();
                     
                     //颜色混合
                     if (materialOwner->GetBlendMode() == EBlendMode::Opaque)

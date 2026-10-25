@@ -464,7 +464,7 @@ namespace Renderer {
         
 
     }
-    void SceneRenderer::AddPreDepthPass(RenderCore::RenderGraphBuilder& graphBuilder, const MeshBatchList& meshBatchList, const Core::Mat4& viewProj, RenderCore::RenderGraphTextureRef depth)
+    void SceneRenderer::AddPreDepthPass(RenderCore::RenderGraphBuilder& graphBuilder, const MeshBatchList& meshBatchList, const Core::Mat4& viewProj, RenderCore::RenderGraphTextureRef depth, std::optional<RHI::ERHICullMode> cullModeOverride)
     {
         // 创建深度模板状态
         RHI::RHIDepthStencilStateDesc depthStencilDesc;
@@ -499,11 +499,11 @@ namespace Renderer {
                 flags.SupportsInstanceData = true;
                 vfFlags = flags.PackedFlags;
             }
-            if (meshBatch.MaterialProxy->GetParent()->GetBlendMode() == EBlendMode::Opaque) {
+            if (meshBatch.MaterialProxy->GetBlendMode() == EBlendMode::Opaque) {
                 // 创建光栅化状态
                 RHI::RHIRasterizerStateDesc rasterizerDesc;
                 rasterizerDesc.PolygonMode = RHI::ERHIPolygonMode::Fill;
-                rasterizerDesc.CullMode = RHI::ERHICullMode::Back;
+                rasterizerDesc.CullMode = meshBatch.MaterialProxy->ResolveCullMode(cullModeOverride);
                 rasterizerDesc.FrontFace = meshBatch.FrontFace;
                 rasterizerDesc.LineWidth = 1.0f;
                 rasterizerDesc.bDepthBiasEnable = false;
@@ -677,7 +677,7 @@ namespace Renderer {
         }
 
     }
-    void SceneRenderer::BuildLightShadow(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder, std::vector<ShadowRenderView>& shadowRenderViews)
+    void SceneRenderer::BuildLightShadow(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder, std::vector<ShadowRenderView>& shadowRenderViews, std::optional<RHI::ERHICullMode> cullModeOverride)
     {
 
         auto vsShaderType =
@@ -770,7 +770,7 @@ namespace Renderer {
                 // 创建光栅化状态
                 RHI::RHIRasterizerStateDesc rasterizerDesc;
                 rasterizerDesc.PolygonMode = RHI::ERHIPolygonMode::Fill;
-                rasterizerDesc.CullMode = RHI::ERHICullMode::Back;
+                rasterizerDesc.CullMode = batch.MaterialProxy->ResolveCullMode(cullModeOverride);
                 rasterizerDesc.FrontFace = batch.FrontFace;
                 rasterizerDesc.LineWidth = 1.0f;
                 rasterizerDesc.bDepthBiasEnable = false;

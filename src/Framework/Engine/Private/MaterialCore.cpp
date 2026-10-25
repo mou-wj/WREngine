@@ -2,6 +2,8 @@
 #include "VertexFactory.h"
 #include "RHIApi.h"
 #include "ShaderCompiler.h"
+#include <stdexcept>
+#include <algorithm>
 using namespace RenderCore;
 namespace Engine {
 
@@ -41,6 +43,7 @@ namespace Engine {
     RenderCore::Shader* MeshMaterialShaderMap::GetShader(
         const MeshMaterialShaderKey& key
     ) {
+        m_LastError.clear();
         auto it = m_ShaderMap.find(key);
         if (it != m_ShaderMap.end()) {
             return it->second.get();
@@ -55,11 +58,12 @@ namespace Engine {
 
         if (!st)
         {
+            m_LastError = "Material shader type is null";
             return nullptr;
         }
 
         RHI::ERHIShaderPlatform platform =
-            GShaderPlatform;
+            key.Platform;
         auto vfType = key.VF;
 
 
@@ -73,6 +77,7 @@ namespace Engine {
         permParams.VFType = vfType;
         if (st->ShouldCompilePermutation && !st->ShouldCompilePermutation(permParams))
         {
+            m_LastError = "Material shader permutation is unsupported";
             return nullptr;
         }
 
@@ -83,7 +88,11 @@ namespace Engine {
             VertexFactoryShaderPermutationParameters vfPermParams;
             vfPermParams.VertexFactoryFlags = key.VertexFactoryFlags;
             vfPermParams.Platform = platform;
-            if (!vfType->ShouldCompile(vfPermParams)) return nullptr;
+            if (!vfType->ShouldCompile(vfPermParams))
+            {
+                m_LastError = "VertexFactory permutation is unsupported";
+                return nullptr;
+            }
             auto parameterInfos = ShaderCompiler::GenerateOrGetShaderPrameterMetaDataSF(*(vfType->RootParametersMetadata));
             vfType->ModifyCompilationEnvironment(vfPermParams, env);
 
@@ -117,6 +126,7 @@ namespace Engine {
 
         if (!output.bSuccess)
         {
+            m_LastError = output.ErrorMessage;
             // 记录错误并跳过此变体
             // LOG_ERROR("Failed to compile %s (Permutation %d)", st->Name.c_str(), permId);
             return nullptr;
@@ -130,8 +140,13 @@ namespace Engine {
 
         // ShaderMap 结构: std::unordered_map<ShaderType*, std::map<ShaderPermutationId, ShaderSP>>
 
-        m_ShaderMap[key] =
-            shaderInstance;
+        if (!shaderInstance)
+        {
+            m_LastError = "Material shader construction returned null";
+            return nullptr;
+        }
+        m_ShaderMap[key] = shaderInstance;
+        return shaderInstance.get();
 
 
     }
@@ -162,6 +177,7 @@ namespace Engine {
     RenderCore::Shader* MaterialShaderMap::GetShader(
         const MaterialShaderKey& key
     ) {
+        m_LastError.clear();
         auto it = m_ShaderMap.find(key);
         if (it != m_ShaderMap.end()) {
             return it->second.get();
@@ -176,11 +192,12 @@ namespace Engine {
 
         if (!st)
         {
+            m_LastError = "Material shader type is null";
             return nullptr;
         }
 
         RHI::ERHIShaderPlatform platform =
-            GShaderPlatform;
+            key.Platform;
 
 
         // 2. 遍历该 ShaderType 的所有变体组合 (由 IMPLEMENT_SHADER_TYPE 宏自动提取)
@@ -192,6 +209,7 @@ namespace Engine {
         permParams.MaterialParams = key.MaterialParameter;
         if (st->ShouldCompilePermutation && !st->ShouldCompilePermutation(permParams))
         {
+            m_LastError = "Material shader permutation is unsupported";
             return nullptr;
         }
 
@@ -226,6 +244,7 @@ namespace Engine {
 
         if (!output.bSuccess)
         {
+            m_LastError = output.ErrorMessage;
             // 记录错误并跳过此变体
             // LOG_ERROR("Failed to compile %s (Permutation %d)", st->Name.c_str(), permId);
             return nullptr;
@@ -239,8 +258,38 @@ namespace Engine {
 
         // ShaderMap 结构: std::unordered_map<ShaderType*, std::map<ShaderPermutationId, ShaderSP>>
 
-        m_ShaderMap[key] =
-            shaderInstance;
+        if (!shaderInstance)
+        {
+            m_LastError = "Material shader construction returned null";
+            return nullptr;
+        }
+        m_ShaderMap[key] = shaderInstance;
+        return shaderInstance.get();
+    }
+
+    RenderCore::ShaderSP MeshMaterialShaderMap::GetShaderShared(const MeshMaterialShaderKey& key)
+    {
+        if (!GetShader(key)) return nullptr;
+        return m_ShaderMap.at(key);
+    }
+
+    RenderCore::Shader* MaterialResource::GetMeshShader(MeshMaterialShaderKey key)
+    {
+        key.MaterialParameter.ShadingModel = m_ShadingModel;
+        auto shader = GMeshMaterialShaderMap.GetShaderShared(key);
+        if (!shader)
+        {
+            m_LastCompileState = EMaterialCompileState::Failed;
+            m_LastError = GMeshMaterialShaderMap.GetLastError();
+            if (m_LastError.empty()) m_LastError = "Material shader is unavailable";
+            throw std::runtime_error(m_LastError);
+        }
+        m_LastCompileState = EMaterialCompileState::Ready;
+        m_LastError.clear();
+        auto* result = shader.get();
+        if (std::find(m_ShaderReferences.begin(),m_ShaderReferences.end(),shader) == m_ShaderReferences.end())
+            m_ShaderReferences.push_back(std::move(shader));
+        return result;
     }
 
 }

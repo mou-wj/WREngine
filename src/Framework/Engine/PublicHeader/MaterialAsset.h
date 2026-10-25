@@ -14,6 +14,7 @@ public:
     const std::string& GetName() const override { return m_Name; }
     const std::string& GetPath() const override { return m_Path; }
     bool Load() override;
+    bool SaveToFile(const std::string& path) const;
     Material* GetMaterial() const { return m_MaterialPtr.get(); }
 
     // Embedded/imported materials still have an asset owner; they need no separate file.
@@ -23,7 +24,6 @@ public:
 private:
     std::string m_Name;
     std::string m_Path;
-    std::vector<std::shared_ptr<TextureAsset>> m_Textures;
     std::unique_ptr<Material> m_MaterialPtr;
 };
 

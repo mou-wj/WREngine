@@ -15,7 +15,7 @@ struct MeshBatchKey
 {
     // PSO相关
     RenderCore::VertexFactory* VertexFactory;
-    Engine::MaterialRenderProxy* MaterialProxy;
+    std::shared_ptr<const Engine::MaterialRenderProxy> MaterialProxy;
     RenderCore::RenderBuffer* IndexBuffer;
     RHI::ERHIFrontFace FrontFace;
     bool operator==(const MeshBatchKey& other) const
@@ -256,7 +256,7 @@ namespace Renderer {
 
                 MeshBatchKey batchKey;
                 batchKey.VertexFactory = lod.VertexFactory.get();
-                batchKey.MaterialProxy = material->GetRenderProxy();
+                batchKey.MaterialProxy = material->GetRenderProxyShared();
                 batchKey.IndexBuffer = lod.IndexBuffer.Buffer.get();
                 batchKey.FrontFace = RHI::ERHIFrontFace::CounterClockwise;
 
@@ -279,6 +279,7 @@ namespace Renderer {
             }
         }
 		BuildMeshBatchFromMap(GMeshBatchElementMap, outDrawMeshList);
+        GMeshBatchElementMap.clear(); // Batches now retain the snapshots; do not keep the last frame globally.
 		AllocateInstanceDataIds(scene, outDrawMeshList);
 	}
 

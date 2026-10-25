@@ -42,8 +42,9 @@ namespace Renderer {
 					flags.SupportsInstanceData = true;
                     vfFlags = flags.PackedFlags;
                 }
-                auto shdingMode = meshBatch.MaterialProxy->GetParent()->GetShadingModel();
-                shdingMode = EShadingModel::Lit;
+                meshBatch.MaterialProxy->ValidateSurfacePass();
+                const auto materialResource = meshBatch.MaterialProxy->GetResource();
+                const auto shdingMode = meshBatch.MaterialProxy->GetShadingModel();
             
                 MeshMaterialShaderKey vsKey;
                 vsKey.ShaderType = static_cast<MeshMaterialShaderType*>(vsfShaderType);
@@ -52,7 +53,7 @@ namespace Renderer {
                 vsKey.VertexFactoryFlags = vfFlags;
                 vsKey.MaterialParameter.ShadingModel = shdingMode;
             
-                auto vertexShader = GMeshMaterialShaderMap.GetShader(vsKey);
+                auto vertexShader = materialResource->GetMeshShader(vsKey);
             
                 // Select the pixel shader permutation.
                 MeshMaterialShaderKey psKey;
@@ -61,13 +62,13 @@ namespace Renderer {
                 psKey.PermutationId = 0;
                 psKey.VertexFactoryFlags = vfFlags;
                 psKey.MaterialParameter.ShadingModel = shdingMode;
-                auto pixelShader = GMeshMaterialShaderMap.GetShader(psKey);
+                auto pixelShader = materialResource->GetMeshShader(psKey);
             
             
                 // Create the rasterizer state.
                 RHI::RHIRasterizerStateDesc rasterizerDesc;
                 rasterizerDesc.PolygonMode = RHI::ERHIPolygonMode::Fill;
-                rasterizerDesc.CullMode = RHI::ERHICullMode::Back;
+                rasterizerDesc.CullMode = meshBatch.MaterialProxy->ResolveCullMode(CullModeOverride);
                 rasterizerDesc.FrontFace = meshBatch.FrontFace;
                 rasterizerDesc.LineWidth = 1.0f;
                 rasterizerDesc.bDepthBiasEnable = false;
@@ -112,17 +113,17 @@ namespace Renderer {
                     SHADER_PARAMETER_STRUCT_REFERENCE(StaticMeshMaterialShaderPSParameters, pixelParameters)
                 END_SHADER_PARAMETER_STRUCT(PassParameters)
                 auto* params = builder.AllocateParameter<PassParameters>();
-                if (shdingMode == EShadingModel::Lit) {
+                {
                     // Build scene and material shader parameters.
                     BuildShaderParameters(Scene, builder, params->pixelParameters.Scene);
-                    BuildShaderParameters(meshBatch.MaterialProxy, builder, params->pixelParameters.Material);
+                    BuildShaderParameters(meshBatch.MaterialProxy.get(), builder, params->pixelParameters.Material);
                 }
             
 				auto& batch = meshBatch;
-                auto materialOwner = batch.MaterialProxy->GetParent();
+                const auto& materialProxy = batch.MaterialProxy;
             
                 // Configure color blending.
-                if (materialOwner->GetBlendMode() == EBlendMode::Opaque)
+                if (materialProxy->GetBlendMode() == EBlendMode::Opaque)
                 {
                     RHI::RHIColorBlendStateDesc blendDesc;
                     // Configure opaque color blending.
