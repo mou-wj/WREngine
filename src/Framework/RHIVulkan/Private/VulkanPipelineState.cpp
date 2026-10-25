@@ -6,6 +6,7 @@
 #include "VulkanRHIUtils.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanMemory.h"
+#include <algorithm>
 #include <vector>
 
 using namespace RHI;
@@ -371,6 +372,7 @@ VulkanRayTracingPipeline::VulkanRayTracingPipeline(VulkanDevice* device, const R
     m_CreateInfo.layout = _pipelineLayout->GetHandle();
 
     CreatePipeline();
+    CreateShaderBindingTable(m_CreateInfo.groupCount);
 }
 
 VulkanRayTracingPipeline::~VulkanRayTracingPipeline() {
@@ -390,11 +392,19 @@ VulkanRayTracingPipeline::~VulkanRayTracingPipeline() {
 PipelineLayoutInfo VulkanRayTracingPipeline::BuildPipelineLayoutInfo(const RHIRayTracingPipelineStateDesc& pipelineDesc)
 {
     PipelineLayoutInfo layoutInfo;
+    std::vector<VulkanRHIShader*> processedShaders;
 
-    auto processShader = [&](VulkanRHIShader* shader)
+    auto processShader = [&](RHIRayTracingShader* rhiShader)
         {
-            if (!shader)
+            if (!rhiShader)
                 return;
+            auto* shader = dynamic_cast<VulkanRHIShader*>(rhiShader);
+            if (!shader)
+                throw std::runtime_error("Ray tracing pipeline requires Vulkan shaders");
+            // 同一阶段 Shader 可被多个命中组复用，反射布局只处理一次。
+            if (std::find(processedShaders.begin(), processedShaders.end(), shader) != processedShaders.end())
+                return;
+            processedShaders.push_back(shader);
 
             const auto& header = shader->GetShaderReflection();
             RHI::ERHIShaderFrequency frequency = header.Frequency;
@@ -404,26 +414,30 @@ PipelineLayoutInfo VulkanRayTracingPipeline::BuildPipelineLayoutInfo(const RHIRa
             PipelineLayoutInfo::ShaderFrequencyLayoutInfo& freqInfo =
                 layoutInfo.SetLayoutsByFrequency[freqKey];
 
-            auto ensureSet = [&](uint32_t set)
+            auto addBinding = [&](uint32_t set, uint32_t binding, VkDescriptorType type, uint32_t count)
                 {
                     if (layoutInfo.Layouts.size() <= set)
                     {
                         layoutInfo.Layouts.resize(set + 1);
                     }
+                    auto& setLayout = layoutInfo.Layouts[set];
+                    for (auto& existing : setLayout.Bindings)
+                    {
+                        if (existing.Binding != binding)
+                            continue;
+                        // 各阶段共享绑定时合并可见性，不生成重复的 Vulkan binding。
+                        if (existing.Type != type || existing.Count != count)
+                            throw std::runtime_error("Ray tracing shader descriptor bindings conflict");
+                        existing.StageFlags |= stageMask;
+                        return;
+                    }
+                    setLayout.AddBinding(binding, type, count, stageMask);
                 };
 
             for (const auto& binding : header.DescriptorBindings)
             {
-                ensureSet(binding.Set);
-
-                DescriptorSetLayoutInfo& setLayout = layoutInfo.Layouts[binding.Set];
                 VkDescriptorType vkType = TransformDescriptorTypeFrom(binding.Type);
-
-                setLayout.AddBinding(
-                    binding.Binding,
-                    vkType,
-                    binding.Count,
-                    stageMask);
+                addBinding(binding.Set, binding.Binding, vkType, binding.Count);
 
                 PipelineLayoutInfo::ShaderResourceParameterLayoutInfo rpLayout;
                 rpLayout.SetIndex = binding.Set;
@@ -434,14 +448,7 @@ PipelineLayoutInfo VulkanRayTracingPipeline::BuildPipelineLayoutInfo(const RHIRa
 
             for (const auto& binding : header.UniformBufferBindings)
             {
-                ensureSet(binding.Set);
-
-                DescriptorSetLayoutInfo& setLayout = layoutInfo.Layouts[binding.Set];
-                setLayout.AddBinding(
-                    binding.Binding,
-                    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    1,
-                    stageMask);
+                addBinding(binding.Set, binding.Binding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 
                 PipelineLayoutInfo::ShaderUniformBufferLayoutInfo ubLayout;
                 ubLayout.SetIndex = binding.Set;
@@ -454,7 +461,7 @@ PipelineLayoutInfo VulkanRayTracingPipeline::BuildPipelineLayoutInfo(const RHIRa
             {
                 layoutInfo.bHasPushConstant = true;
                 layoutInfo.PushConstant.offset = 0;
-                layoutInfo.PushConstant.size = header.PushConstant.Size;
+                layoutInfo.PushConstant.size = std::max<uint32_t>(layoutInfo.PushConstant.size, header.PushConstant.Size);
                 layoutInfo.PushConstant.stageFlags |= stageMask;
             }
         };
@@ -463,20 +470,25 @@ PipelineLayoutInfo VulkanRayTracingPipeline::BuildPipelineLayoutInfo(const RHIRa
         {
             for (RHIRayTracingShader* shader : shaders)
             {
-                processShader(dynamic_cast<VulkanRHIShader*>(shader));
+                processShader(shader);
             }
         };
 
     processTable(pipelineDesc.RayGenTable);
     processTable(pipelineDesc.MissTable);
-    processTable(pipelineDesc.HitGroupTable);
+    for (const auto& hitGroup : pipelineDesc.HitGroupTable)
+    {
+        processShader(hitGroup.ClosestHitShader);
+        processShader(hitGroup.AnyHitShader);
+        processShader(hitGroup.IntersectionShader);
+    }
     processTable(pipelineDesc.CallableTable);
-    processTable(pipelineDesc.IntersectTable);
 
     return layoutInfo;
 }
 
 void VulkanRayTracingPipeline::CreatePipeline() {
+    // stages 保存程序入口；groups 的各 Shader 字段引用 stages 下标，而非 group 下标。
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
     std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups;
 
@@ -504,12 +516,14 @@ void VulkanRayTracingPipeline::CreatePipeline() {
             groupInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
             groupInfo.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
             groupInfo.generalShader = appendStage(shader);
+            // 0 是有效的 stage 下标；未使用的字段必须显式设置为 VK_SHADER_UNUSED_KHR。
             groupInfo.closestHitShader = VK_SHADER_UNUSED_KHR;
             groupInfo.anyHitShader = VK_SHADER_UNUSED_KHR;
             groupInfo.intersectionShader = VK_SHADER_UNUSED_KHR;
             shaderGroups.push_back(groupInfo);
         };
 
+    // SBT 按同样的 RayGen / Miss / Hit / Callable 顺序复制各组的 handle。
     for (RHIRayTracingShader* shader : _desc.RayGenTable)
     {
         addGeneralGroup(shader);
@@ -520,7 +534,7 @@ void VulkanRayTracingPipeline::CreatePipeline() {
         addGeneralGroup(shader);
     }
 
-    for (size_t i = 0; i < _desc.HitGroupTable.size(); ++i)
+    for (const auto& hitGroup : _desc.HitGroupTable)
     {
         VkRayTracingShaderGroupCreateInfoKHR groupInfo = {};
         groupInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
@@ -529,23 +543,24 @@ void VulkanRayTracingPipeline::CreatePipeline() {
         groupInfo.closestHitShader = VK_SHADER_UNUSED_KHR;
         groupInfo.intersectionShader = VK_SHADER_UNUSED_KHR;
 
-        RHIRayTracingShader* closestHitShader = _desc.HitGroupTable[i];
-        RHIRayTracingShader* intersectionShader =
-            i < _desc.IntersectTable.size() ? _desc.IntersectTable[i] : nullptr;
-
-        if (intersectionShader)
+        if (hitGroup.IntersectionShader)
         {
+            // 程序化几何由 Intersection 求交；三角形组使用原生三角形求交流程。
             groupInfo.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
-            groupInfo.intersectionShader = appendStage(intersectionShader);
+            groupInfo.intersectionShader = appendStage(hitGroup.IntersectionShader);
         }
         else
         {
             groupInfo.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
         }
 
-        if (closestHitShader)
+        if (hitGroup.ClosestHitShader)
         {
-            groupInfo.closestHitShader = appendStage(closestHitShader);
+            groupInfo.closestHitShader = appendStage(hitGroup.ClosestHitShader);
+        }
+        if (hitGroup.AnyHitShader)
+        {
+            groupInfo.anyHitShader = appendStage(hitGroup.AnyHitShader);
         }
 
         shaderGroups.push_back(groupInfo);
@@ -571,15 +586,15 @@ void VulkanRayTracingPipeline::CreatePipeline() {
         throw std::runtime_error("The RHI trace command requires exactly one ray-generation shader");
     if (!VKFunc::CreateRayTracingPipelinesKHR(_device->GetHandle(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &m_CreateInfo, &_pipeline))
         throw std::runtime_error("Failed to create the ray tracing pipeline");
+}
 
-    VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtProperties{
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
-    VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
-    properties.pNext = &rtProperties;
-    VKFunc::GetPhysicalDeviceProperties2(_device->GetPhysicalDevice(), &properties);
+void VulkanRayTracingPipeline::CreateShaderBindingTable(uint32_t shaderGroupCount)
+{
+    const auto& rtProperties = _device->GetRayTracingPipelineProperties();
     const auto alignUp = [](VkDeviceSize value, VkDeviceSize alignment) {
         return (value + alignment - 1) / alignment * alignment;
     };
+    // record 的字节步长按 HandleAlignment 对齐，各表的起始地址按 BaseAlignment 对齐。
     const VkDeviceSize stride = alignUp(rtProperties.shaderGroupHandleSize, rtProperties.shaderGroupHandleAlignment);
     const VkDeviceSize alignment = rtProperties.shaderGroupBaseAlignment;
     if (!stride || stride > rtProperties.maxShaderGroupStride)
@@ -594,12 +609,14 @@ void VulkanRayTracingPipeline::CreatePipeline() {
         offsets[i] = tableSize;
         tableSize += counts[i] * stride;
     }
-    std::vector<uint8_t> handles(shaderGroups.size() * rtProperties.shaderGroupHandleSize);
+    // handle 属于已创建的 pipeline group；只分配 SBT Buffer 而不写入 handle 无法完成程序选择。
+    std::vector<uint8_t> handles(static_cast<size_t>(shaderGroupCount) * rtProperties.shaderGroupHandleSize);
     if (!VKFunc::GetRayTracingShaderGroupHandlesKHR(_device->GetHandle(), _pipeline, 0,
-        static_cast<uint32_t>(shaderGroups.size()), handles.size(), handles.data()))
+        shaderGroupCount, handles.size(), handles.data()))
         throw std::runtime_error("Failed to retrieve ray tracing shader group handles");
 
     VkBufferCreateInfo bufferInfo{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+    // 预留实际 Buffer 设备地址向上对齐时所需的额外空间。
     bufferInfo.size = tableSize + alignment - 1;
     bufferInfo.usage = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -620,12 +637,14 @@ void VulkanRayTracingPipeline::CreatePipeline() {
     if (!mapped || !address)
         throw std::runtime_error("The shader binding table has no mapped memory or device address");
     memset(mapped, 0, static_cast<size_t>(bufferInfo.size));
+    // CPU 写入位置必须与传给 GPU 的对齐后起始地址保持相同偏移。
     mapped += m_ShaderBindingTableDeviceAddress - address;
     VkStridedDeviceAddressRegionKHR* regions[] = { &m_RayGenShaderBindingTableRegion,
         &m_MissShaderBindingTableRegion, &m_HitShaderBindingTableRegion, &m_CallableShaderBindingTableRegion };
     uint32_t group = 0;
     for (uint32_t table = 0; table < 4; ++table)
     {
+        // 空表不指向占位记录；例如没有 Callable 时保持 address/stride/size 全零。
         *regions[table] = {};
         if (!counts[table]) continue;
         regions[table]->deviceAddress = m_ShaderBindingTableDeviceAddress + offsets[table];

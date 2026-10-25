@@ -56,8 +56,17 @@ bool VulkanDevice::Init(const std::vector<const char*>& enabledLayers,
 {
     SelectQueueFamilies(m_PhysicalDevice);
     CreateLogicalDevice(m_PhysicalDevice, enabledExtensions, enabledLayers);
+    QueryDeviceProperties();
     m_GlobalCommandContext = new VulkanGraphicContext(this, m_GraphicsQueue);
     return true;
+}
+
+void VulkanDevice::QueryDeviceProperties()
+{
+    // 物理设备的固定限制在初始化时统一查询，供后续创建光追管线和 SBT 复用。
+    VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
+    properties.pNext = &m_RayTracingPipelineProperties;
+    VKFunc::GetPhysicalDeviceProperties2(m_PhysicalDevice, &properties);
 }
 
 void VulkanDevice::SelectQueueFamilies(VkPhysicalDevice physicalDevice)

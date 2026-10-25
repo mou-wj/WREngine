@@ -551,7 +551,7 @@ private:
         RHI::RHIRayTracingPipelineStateDesc pipelineDesc{};
         pipelineDesc.RayGenTable.push_back(m_RayGenShader.get());
         pipelineDesc.MissTable.push_back(m_MissShader.get());
-        pipelineDesc.HitGroupTable.push_back(m_ClosestHitShader.get());
+        pipelineDesc.HitGroupTable.push_back({ m_ClosestHitShader.get(), nullptr, nullptr });
 
         m_RayTracingPipelineState = api->CreateRayTracingsPipelineState(pipelineDesc);
         if (!m_RayTracingPipelineState)

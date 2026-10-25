@@ -74,6 +74,8 @@ class RHIVULKAN_API VulkanRHIApi : public RHIApi
 
 这里可以看出，`VulkanRHIApi` 本身不是一个单独的设备对象，而是整个 Vulkan 后端实现的统一入口对象。
 
+`VulkanDevice::Init()` 在创建逻辑设备后调用 `QueryDeviceProperties()`，一次性查询并缓存 `VkPhysicalDeviceRayTracingPipelinePropertiesKHR`。后续管线通过只读接口 `GetRayTracingPipelineProperties()` 获取设备限制；`VulkanRayTracingPipeline::CreateShaderBindingTable()` 直接使用该缓存计算 SBT 的步长和对齐，不再在每次创建管线时重复查询物理设备属性。
+
 ---
 
 ## 4. 资源实现体系
@@ -202,6 +204,8 @@ class VulkanGraphicsPipelineState : public VulkanPipelineBase, public RHIGraphic
 - `VulkanRayTracingPipeline : public VulkanPipelineBase, public RHIRayTracingPipelineState`
 
 这说明 Vulkan 后端在统一抽象接口下，支持把不同管线类型都映射到具体的 Vulkan 对象中。
+
+光追管线遍历 `HitGroupTable` 中的 `RHIRayTracingHitGroupDesc`，将组合内各阶段展开到 `pStages`，并将阶段下标写入同一个 `VkRayTracingShaderGroupCreateInfoKHR`。Intersection 是否存在决定程序化几何或三角形组类型；未提供的阶段使用 `VK_SHADER_UNUSED_KHR`。布局收集包含 AnyHit 在内的全部非空阶段，同一 Shader 复用时只处理一次反射，相同 set/binding 合并阶段可见性并拒绝描述符类型或数量冲突。SBT 仍按 RayGen / Miss / HitGroup / Callable 顺序存放 group handle，记录数量取命中组数量，与组内阶段数量无关。
 
 ---
 

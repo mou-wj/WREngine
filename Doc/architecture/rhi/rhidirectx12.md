@@ -97,6 +97,8 @@ SRV 表达逻辑只读访问，UAV 表达无序读写访问；它们不要求与
 
 着色器对象共用 `DirectX12ShaderBase`，解包 DXIL 并通过 DXC 反射取得资源寄存器、常量缓冲区大小和顶点输入语义。创建时还会保存每个缓冲区 UAV 是否已确认只读，避免在每次参数绑定时重新分析。
 
+光追管线通过 `RHIRayTracingHitGroupDesc` 显式组合阶段 Shader。后端收集全部非空的 ClosestHit、AnyHit、Intersection，用于 DXIL 导出与全局 Root Signature 的反射合并；每个组合生成一个 `D3D12_HIT_GROUP_DESC`，分别填写三个入口。存在 Intersection 时使用程序化几何组，否则使用三角形组。SBT 保存命中组的 shader identifier，不为组内各阶段分别创建命中记录；此调整沿用现有逐阶段编译和 Shader 所有权约定。
+
 访问分析支持 SM 6.0–6.5 的 `createHandle` 和 SM 6.6 起的 `createHandleFromBinding` / `annotateHandle`。它保守识别已知的句柄与只读指令，不是通用 LLVM 优化器；phi / select、句柄逃逸和未知指令会使只读映射不可用，调用方此时需要提供 UAV。指令语义参考 [Microsoft DXIL 规范](https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/DXIL.rst)。
 
 创建管线时：

@@ -6,3 +6,4 @@ deps
 depsbc
 cmake/Find3rdsGenerated.cmake
 __pycache__
+/temp/

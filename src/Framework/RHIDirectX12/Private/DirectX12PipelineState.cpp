@@ -126,8 +126,12 @@ namespace RHIDirectX12
         };
         for (auto* shader : desc.RayGenTable) add(shader);
         for (auto* shader : desc.MissTable) add(shader);
-        for (auto* shader : desc.HitGroupTable) if (shader) add(shader);
-        for (auto* shader : desc.IntersectTable) if (shader) add(shader);
+        for (const auto& hitGroup : desc.HitGroupTable)
+        {
+            if (hitGroup.ClosestHitShader) add(hitGroup.ClosestHitShader);
+            if (hitGroup.AnyHitShader) add(hitGroup.AnyHitShader);
+            if (hitGroup.IntersectionShader) add(hitGroup.IntersectionShader);
+        }
         for (auto* shader : desc.CallableTable) add(shader);
         CreateReflectedRootSignature(device->GetNativeDevice(), reflected, false, RootSignature, Bindings, true);
         std::vector<std::wstring> shaderNames;
@@ -159,12 +163,14 @@ namespace RHIDirectX12
         {
             hitNames.push_back(L"RHIHitGroup" + std::to_wstring(i));
             hits[i].HitGroupExport = hitNames.back().c_str();
+            const auto& hitGroup = desc.HitGroupTable[i];
             hits[i].Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-            if (desc.HitGroupTable[i]) hits[i].ClosestHitShaderImport = exportName(desc.HitGroupTable[i]).c_str();
-            if (i < desc.IntersectTable.size() && desc.IntersectTable[i])
+            if (hitGroup.ClosestHitShader) hits[i].ClosestHitShaderImport = exportName(hitGroup.ClosestHitShader).c_str();
+            if (hitGroup.AnyHitShader) hits[i].AnyHitShaderImport = exportName(hitGroup.AnyHitShader).c_str();
+            if (hitGroup.IntersectionShader)
             {
                 hits[i].Type = D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE;
-                hits[i].IntersectionShaderImport = exportName(desc.IntersectTable[i]).c_str();
+                hits[i].IntersectionShaderImport = exportName(hitGroup.IntersectionShader).c_str();
             }
             objects.push_back({ D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hits[i] });
         }

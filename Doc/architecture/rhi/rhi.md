@@ -202,6 +202,8 @@ RHI 定义了大量渲染状态对象，例如：
 
 它们在 `RHIApi` 中被统一创建，说明 RHI 把管线和状态对象抽象成一层“平台无关的渲染配置模型”。
 
+光追管线的 `RHIRayTracingPipelineStateDesc` 保留 RayGen、Miss、HitGroup、Callable 四张表。`HitGroupTable` 的每项为 `RHIRayTracingHitGroupDesc`，显式组合 `ClosestHitShader`、`AnyHitShader`、`IntersectionShader`，不再通过独立的 Intersection 表按下标配对。三个字段均为非拥有的阶段 Shader 指针，沿用现有生命周期约定，调用方负责保活；此描述不创建新的 Shader 资源，也不改变逐阶段编译流程。Intersection 非空表示程序化几何命中组，否则为三角形命中组；ClosestHit 和 AnyHit 可为空。每项组合对应一个原生命中组及其 SBT group handle，后端需处理所有非空阶段的反射与入口。
+
 ---
 
 ## 8. 资源转换与临时资源管理

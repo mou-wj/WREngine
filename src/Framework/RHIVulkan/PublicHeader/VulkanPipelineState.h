@@ -265,6 +265,8 @@ private:
     VkDeviceAddress m_ShaderBindingTableDeviceAddress = 0;
 
     void CreatePipeline() override;
+    // 原生管线创建成功后，查询 group handles 并生成四类 SBT region。
+    void CreateShaderBindingTable(uint32_t shaderGroupCount);
 };
 
 using VulkanPipelineSP = std::shared_ptr<VulkanPipelineBase>;

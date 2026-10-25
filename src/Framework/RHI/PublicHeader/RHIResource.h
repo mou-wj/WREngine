@@ -600,14 +600,22 @@ protected:
     RHIComputePipelineStateDesc _desc;
 };
 
+// 一个命中组关联各阶段入口；非拥有指针，调用方需按现有 Shader 生命周期约定保活。
+struct RHI_API RHIRayTracingHitGroupDesc
+{
+    RHICloseHitShader* ClosestHitShader = nullptr;
+    RHIAnyHitShader* AnyHitShader = nullptr;
+    // 非空时为程序化几何命中组；为空时使用原生三角形求交。
+    RHIIntersectionShader* IntersectionShader = nullptr;
+};
+
 // RayTracing Pipeline
 struct RHI_API RHIRayTracingPipelineStateDesc
 {
     std::vector<RHIRayTracingShader*> RayGenTable;
     std::vector<RHIRayTracingShader*> MissTable;
-    std::vector<RHIRayTracingShader*> HitGroupTable;
+    std::vector<RHIRayTracingHitGroupDesc> HitGroupTable;
     std::vector<RHIRayTracingShader*> CallableTable;
-    std::vector<RHIRayTracingShader*> IntersectTable;
 };
 
 class RHI_API RHIRayTracingPipelineState : public RHIResource

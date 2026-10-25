@@ -104,6 +104,10 @@ public:
     VulkanRHIApi* GetRhiApi() const { return m_RhiApi; }
     VkDevice GetHandle() const { return m_Device; }
     VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
+    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR& GetRayTracingPipelineProperties() const
+    {
+        return m_RayTracingPipelineProperties;
+    }
     VulkanQueue* GetGraphicsQueue() const { return m_GraphicsQueue; }
     VulkanQueue* GetComputeQueue() const { return m_ComputeQueue; }
     VulkanQueue* GetTransferQueue() const { return m_TransferQueue; }
@@ -149,11 +153,14 @@ private:
     void CreateLogicalDevice(VkPhysicalDevice physicalDevice,
                              const std::vector<const char*>& extensions,
                              const std::vector<const char*>& layers);
+    void QueryDeviceProperties();
 
     VulkanRHIApi *m_RhiApi;
 
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
     VkDevice m_Device{VK_NULL_HANDLE};
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR m_RayTracingPipelineProperties{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
 	VkPhysicalDeviceFeatures2 m_SupportedFeatures2{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
 	VkPhysicalDeviceTimelineSemaphoreFeatures m_TimelineSemaphoreFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES };
 
