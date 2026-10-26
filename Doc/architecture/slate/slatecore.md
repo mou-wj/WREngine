@@ -78,3 +78,9 @@ Present 后提交一个空命令上下文作为窗口完成标记，它覆盖同
 窗口释放/缩放只等待本窗口最后的完成值，不清空整条队列。OpenGL 在 Acquire 时保留本帧索引，排队的 Present 按捕获的索引呈现，不依赖 worker 推进索引后主线程才能继续。
 
 Window 析构会关闭其平台 Surface。`ReleaseWindow` 必须在原生窗口和 RHI 模块仍有效时调用。底层交换链销毁函数不自行添加 WaitIdle。
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [窗口合成、完成点与释放细节](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)

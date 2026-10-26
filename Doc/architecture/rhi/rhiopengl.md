@@ -279,3 +279,12 @@ RHI 格式与纹理类型转换主要集中在 `OpenGLUtils`：
 - [OpenGLResource.cpp](../../../src/Framework/RHIOpenGL/Private/OpenGLResource.cpp)
 - [OpenGLTransientResource.cpp](../../../src/Framework/RHIOpenGL/Private/OpenGLTransientResource.cpp)
 - [ShaderCompiler.cpp](../../../src/Framework/RenderCore/Private/ShaderCompiler.cpp)
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [context worker、逻辑队列与完成语义](../../key_implemetion/performance/02-rhi-queues-and-sync.md)
+- [GL 对象和 transient 回收](../../key_implemetion/performance/04-memory-and-transient-resources.md)
+- [GLSL 与纹理采样器映射](../../key_implemetion/performance/06-shader-compilation-and-binding.md)
+- [UI 命令接入和坐标处理](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)

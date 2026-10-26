@@ -273,3 +273,12 @@ Vulkan 后端中，同步对象和队列能力也与 RHI 抽象接口相对应�
 6. 最终，RHI 上层代码只需要依赖抽象接口，而无需了解底层 Vulkan 细节
 
 因此，`RHIVulkan` 的实现方式本质上是“抽象接口层 + Vulkan 具体实现层”的典型后端结构，它是整个渲染系统中最贴近真实 GPU API 的一个模块。
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [队列和 timeline 完成](../../key_implemetion/performance/02-rhi-queues-and-sync.md)
+- [分配、staging 与 transient 回收](../../key_implemetion/performance/04-memory-and-transient-resources.md)
+- [反射、布局和 descriptor 寿命](../../key_implemetion/performance/06-shader-compilation-and-binding.md)
+- [AS 构建/更新、scratch 和 SBT](../../key_implemetion/performance/07-ray-tracing-as-and-sbt.md)

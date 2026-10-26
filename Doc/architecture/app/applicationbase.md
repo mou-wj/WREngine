@@ -168,3 +168,9 @@ ApplicationBase::GetApplication()->TickFrame();
 - shutdown 清理
 
 因此，`ApplicationBase` 是 `App::Application` 这类具体程序的基础骨架，也是项目中从“框架层”走向“业务应用层”的关键边界。
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [窗口事件、绘制与生命周期细节](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)

@@ -5,10 +5,12 @@
 ## 1. 总览
 
 - [overall.md](overall.md) — 项目整体模块组织、启动流程、模块依赖和主循环
+- [core.md](core.md) — Core 基础设施、模块管理、任务与数学工具的职责边界
 
 ## 2. Engine
 
 - [engine.md](engine.md) — Engine 模块的核心结构、运行时与场景能力
+- [material.md](material.md) — 材质参数、编译资源、光栅状态及编辑接口
 
 ## 3. RHI
 
@@ -44,3 +46,5 @@
 - 运行时核心：Engine
 
 如果需要进一步查看特定模块的源码实现，可以按文档中的模块名直接定位到对应的 `src/Framework` 或 `src/Application` 目录。
+
+并发、内存、资源同步及关键数学/图形算法的详细实现，见 [核心实现索引](../key_implemetion/README.md)；该目录补充本架构索引，不替代现有模块划分。

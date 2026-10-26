@@ -82,3 +82,9 @@ VulkanRHI 已用负高度 Viewport 统一 Y 轴，所以 GUI 正交投影不再�
 - 支持 ResetRenderState 回调；其他 ImDrawCallback 在录制线程执行，不能假设存在 current GL context，不能直接调用官方原生后端函数。
 - 未启用 ImGui 平台多视口。独立窗口由显式创建 Window 管理。
 - 平台输入沿用现有 SlateCore 的有限 EKey 集合；完整文本/IME、全部快捷键和多 DPI 窗口仍需单独完善。
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [ImDrawData 转换、纹理访问和上传缓冲复用](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)

@@ -215,3 +215,12 @@ RHI 到原生 API 的枚举转换集中在 `Private/DirectX12RHIUtils.h/.cpp`：
 - `RHI_DX12_DIAGNOSTICS=<目录>`：保存前四帧、读取前四次 Dispatch 的缓冲区结果并记录呈现计数。
 
 诊断默认关闭。两个基础测试无法覆盖整个 RHI 契约，仍需结合访问冲突、子资源范围和瞬态生命周期等独立验证。
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [原生 fence、queue 等待与 context 复用](../../key_implemetion/performance/02-rhi-queues-and-sync.md)
+- [内存和完整 transient 资源复用](../../key_implemetion/performance/04-memory-and-transient-resources.md)
+- [DXIL 只读 storage 映射与参数绑定](../../key_implemetion/performance/06-shader-compilation-and-binding.md)
+- [DXR AS、shader identifier 与 table](../../key_implemetion/performance/07-ray-tracing-as-and-sbt.md)

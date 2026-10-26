@@ -450,3 +450,12 @@ DefaultWhite 显式使用金属度 0.8、粗糙度 0.2，保留重构前实际�
 7. 资源管理和场景接口为引擎的各类功能提供统一扩展入口。
 
 因此，当前 `Engine` 模块不是简单的“单一逻辑类”，而是一个以分层对象体系和模块化生命周期为核心的中间层架构。
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [资产并发、材质与实例数据](../key_implemetion/performance/05-assets-materials-and-instance-data.md)
+- [局部/全局距离场](../key_implemetion/algorithm/04-distance-fields-and-jump-flood.md)
+- [网格导入与切线空间](../key_implemetion/algorithm/08-mesh-import-and-geometry.md)
+- [层级变换与视锥](../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)

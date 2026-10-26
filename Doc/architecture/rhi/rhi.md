@@ -233,3 +233,12 @@ RHI 不仅提供资源创建能力，还提供了资源转换和临时分配机�
 6. 让具体后端（如 Vulkan）只需要实现这一套接口，而不影响上层代码结构
 
 因此，`RHI` 模块本质上是整个渲染系统的“硬件接口抽象层”，它是 `Renderer` 和 `Engine` 之间的关键桥接层。
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [队列、context 与完成点](../../key_implemetion/performance/02-rhi-queues-and-sync.md)
+- [内存与 transient 分配复用](../../key_implemetion/performance/04-memory-and-transient-resources.md)
+- [显式 transition 与 Tracker](../../key_implemetion/performance/03-rdg-execution-and-state.md)
+- [原生 AS、scratch 与 SBT](../../key_implemetion/performance/07-ray-tracing-as-and-sbt.md)

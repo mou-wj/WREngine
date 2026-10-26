@@ -238,3 +238,10 @@ Lancher
 ``` 
 
 是从框架到实际业务运行的最终组装点。
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [窗口与离屏场景的渲染链路](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)
+- [启动和模块依赖的执行顺序](../../key_implemetion/performance/09-module-build-and-startup.md)

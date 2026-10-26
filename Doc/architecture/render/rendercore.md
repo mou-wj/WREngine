@@ -280,3 +280,12 @@ RenderResource 提供 GlobalWhiteTexture 和 GlobalFlatNormalTexture，分别上
 7. 这些能力共同为 `Renderer` 层提供更高层的渲染实现平台
 
 因此，`RenderCore` 是整个渲染系统中最关键的中间层之一：它把底层 `RHI` 能力提升为可以进行渲染图编排和线程级调度的基础设施。
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [CPU 任务和渲染线程](../../key_implemetion/performance/01-task-and-render-threads.md)
+- [RDG 依赖、录制、提交和状态更新](../../key_implemetion/performance/03-rdg-execution-and-state.md)
+- [内存和瞬态资源](../../key_implemetion/performance/04-memory-and-transient-resources.md)
+- [参数布局、反射和 descriptor 回收](../../key_implemetion/performance/06-shader-compilation-and-binding.md)

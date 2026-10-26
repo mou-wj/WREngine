@@ -100,3 +100,11 @@ MaterialAsset::SaveToFile(path) 写入现有 version=1 分组格式，保存状�
 后续属性编辑器可以直接使用参数定义、运行时类型值、覆盖查询 / 恢复接口和编译错误。节点图、静态参数变体、撤销重做、资产热重载与导入器扩展应分别增加，避免与本轮运行时边界调整混合。
 
 验证入口包括原 AssetOwnershipTest、新 MaterialContractTest，以及 Langcher 场景回归；实际执行结果记录在当日故障与修复文档。
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [资产所有权、参数快照和更新](../key_implemetion/performance/05-assets-materials-and-instance-data.md)
+- [Shader 编译与实际绑定](../key_implemetion/performance/06-shader-compilation-and-binding.md)
+- [PBR、IBL 与参数的算法含义](../key_implemetion/algorithm/05-pbr-ibl-and-sampling.md)

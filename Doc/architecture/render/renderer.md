@@ -215,3 +215,14 @@ Scene Objects
 - 为 `Engine` 提供稳定的渲染能力抽象接口
 
 在整个工程中，它是从 `RenderCore` 走向真实输出画面的关键桥接层。
+
+## 相关核心实现细节
+
+本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
+
+- [场景空间索引](../../key_implemetion/algorithm/02-bvh-octree-and-scene-query.md)
+- [距离场和体素 GI](../../key_implemetion/algorithm/04-distance-fields-and-jump-flood.md)
+- [PBR 与环境预计算](../../key_implemetion/algorithm/05-pbr-ibl-and-sampling.md)
+- [阴影与级联](../../key_implemetion/algorithm/06-shadow-mapping-and-cascades.md)
+- [屏幕空间效果与抗锯齿](../../key_implemetion/algorithm/07-screen-space-and-antialiasing.md)
+- [实例批次与几何数据](../../key_implemetion/algorithm/08-mesh-import-and-geometry.md)
