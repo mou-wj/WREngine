@@ -95,6 +95,8 @@ TextureMask 与 MaterialParametersHelper.sf 一致：BaseColor=bit0、Opacity=bi
 
 ## 7. 保存与后续编辑器
 
+首版 [Editor](app/editor.md) 已使用这些属性接口实现母材质/组件实例编辑、继承恢复、纹理赋值及母材质保存副本。实例仍是网格内部资源，不引入实例资产；没有节点图或撤销重做。
+
 MaterialAsset::SaveToFile(path) 写入现有 version=1 分组格式，保存状态、参数及文件纹理依赖。根字段 cullMode 使用 None / Front / Back，缺省为 Back，旧资产行为保持不变。保存副本不修改当前资产路径或 AssetManager 索引；嵌入材质需要给出独立文件路径。显式指定的运行时纹理没有文件依赖路径，保存时明确报错；RenderCore 的默认纹理不参与序列化。
 
 后续属性编辑器可以直接使用参数定义、运行时类型值、覆盖查询 / 恢复接口和编译错误。节点图、静态参数变体、撤销重做、资产热重载与导入器扩展应分别增加，避免与本轮运行时边界调整混合。

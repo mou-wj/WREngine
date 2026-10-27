@@ -9,7 +9,7 @@
 - `Engine` 提供底层运行时能力，如场景、资源、相机等核心功能
 - `Renderer / RenderCore / RHIVulkan` 提供渲染和图形接口能力
 - `SlateCore / SlateRHIRenderer` 提供窗口、UI 和渲染桥接能力
-- `Application` 作为最终业务应用，继承自 `ApplicationBase` 并在帧循环中进行应用级更新
+- `Editor` 或 `Application` 作为最终业务应用，继承自 `ApplicationBase`，由 apps.json 与 `-app=` 选择
 
 ---
 
@@ -17,15 +17,10 @@
 
 启动入口在 `src/Lancher/Loop.cpp` 中，核心流程如下：
 
-1. `Loop::Init()` 中依次调用 `ModuleManager::LoadModule(...)` 加载所需模块。
-2. 这些模块包括：
-   - `RHIVulkan`
-   - `Renderer`
-   - `Engine`
-   - `SlateRHIRenderer`
-   - `Application`
-3. 接着通过 `AddModuleDependency(...)` 建立模块间依赖关系，保证启动顺序符合依赖约束。
-4. 最后调用 `ModuleManager::StartupAll()`，由模块管理器按拓扑顺序启动各模块。
+1. `Loop::Init(argc, argv)` 从运行目录读取 apps.json，使用 `-app=xxx` 或 defaultApp 选择配置。
+2. 校验模块列表、依赖端点和循环，再按所选条目 LoadModule；默认 Editor 条目包含 RHIVulkan、Engine、Renderer、SlateRHIRenderer、SceneEditor、AssetEditor、MaterialEditor、NodeEditor、Editor。
+3. 核对模块已注册，并将 JSON dependencies 转为既有 AddModuleDependency 调用。
+4. StartupAll 按拓扑启动，检查 ApplicationBase 已创建，再进入原有帧循环。无效参数或配置明确报错；`-help` 不启动应用。
 
 从代码上看，`Loop::Init()` 的职责不是直接初始化各个系统，而是通过统一的模块管理机制来完成初始化，这样可以把模块注册、依赖解析和生命周期管理集中起来。
 
@@ -115,12 +110,13 @@ while (!ApplicationBase::GetApplication()->RequestExit()) {
 
 当前项目中的典型依赖关系可以概括为：
 
-- `Renderer` 依赖 `RHIVulkan`
+- `Renderer` 依赖 `Engine`，`Engine` 依赖 `RHIVulkan`
 - `Engine` 依赖 `RHIVulkan`
-- `SlateRHIRenderer` 依赖 `Engine`
+- `SlateRHIRenderer` 依赖 `Renderer`
 - `Application` 依赖 `Engine`
 - `Application` 依赖 `Renderer`
 - `Application` 依赖 `SlateRHIRenderer`
+- `Editor` 与 Application 处于同一层，组装独立的 SceneEditor、AssetEditor、MaterialEditor、NodeEditor 功能模块，并依赖 Engine、SlateRHIRenderer；一次只选择一个应用入口。工程菜单/路径由 Editor 协调，节点属性由 NodeEditor 提供，材质编辑按资源选择浮动打开
 
 这说明项目的设计思路是：
 
@@ -140,17 +136,16 @@ flowchart TD
     B --> D[Renderer]
     B --> E[Engine]
     B --> F[SlateRHIRenderer]
-    B --> G[Application]
+    B --> G[Editor 或 Application]
 
-    C --> D
     C --> E
-    D --> E
-    E --> H[SlateCore]
-    E --> I[RenderCore]
-    F --> E
-    G --> E
-    G --> D
-    G --> F
+    E --> D
+    D --> F
+    H[SlateCore] --> E
+    I[RenderCore] --> E
+    E --> G
+    D --> G
+    F --> G
 
     A --> J[主循环]
     J --> K[Engine::Tick]

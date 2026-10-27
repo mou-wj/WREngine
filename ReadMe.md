@@ -62,6 +62,10 @@ cmake --build out --config Release
 
 Run
 
+`Langcher.exe` starts Editor by default. Use `Langcher.exe -app=Application` for the original application, or `-help` to list apps. App modules and startup dependencies are declared in `src/Lancher/apps.json`, copied to the runtime directory during CMake configure. See [Editor architecture](Doc/architecture/app/editor.md).
+
+Editor starts without a project or sample models. Use Project > New/Open to select a project directory, Import resources into its Content folder, then drag a GLB/glTF card into the viewport to create a static mesh node. Node properties appear on the right; clicking a material opens its floating editor. Project > Close clears the workspace. Scene placement is not yet serialized.
+
 Notes
 The Python setup step is mandatory.
 If dependencies are updated, rerun:

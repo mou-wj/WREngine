@@ -38,6 +38,9 @@ target_include_directories(${TARGET_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}/PublicHeader"
 )
 target_link_libraries(${TARGET_NAME} PUBLIC Core)
+if(WIN32)
+    target_link_libraries(${TARGET_NAME} PRIVATE shell32)
+endif()
 
 # Position independent code for shared libs
 set_target_properties(${TARGET_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)

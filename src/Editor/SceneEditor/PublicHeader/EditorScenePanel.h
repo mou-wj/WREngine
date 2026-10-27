@@ -1,0 +1,38 @@
+#pragma once
+#include "Widgets/ImCommonWidgets.h"
+#include "SlateWidget.h"
+#include <filesystem>
+
+namespace Editor
+{
+    class EditorScene;
+    class SCENEEDITOR_API EditorSceneViewportWidget final : public SlateCore::SlateWidget
+    {
+        DECLARE_TYPE_ID_DERIVED_TYPE(EditorSceneViewportWidget, SlateCore::SlateWidget)
+    public:
+        void SetOnResourceDropped(std::function<void(const std::filesystem::path&)> callback);
+        void Draw() override;
+    private:
+        std::function<void(const std::filesystem::path&)> m_OnResourceDropped;
+    };
+    // The host owns placement; view actions remain part of SceneEditor.
+    class SCENEEDITOR_API EditorViewToolbar final : public ImGUISlate::ImWidget
+    {
+    public:
+        explicit EditorViewToolbar(EditorScene& scene);
+        void Draw() override;
+    private:
+        EditorScene& m_Scene;
+    };
+
+    class SCENEEDITOR_API EditorScenePanel final : public ImGUISlate::ImPanelWidget
+    {
+    public:
+        explicit EditorScenePanel(EditorScene& scene);
+    protected:
+        void DrawContent() override;
+    private:
+        EditorScene& m_Scene;
+        ImGUISlate::ImListWidget m_Objects;
+    };
+}

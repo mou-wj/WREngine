@@ -10,5 +10,9 @@ file(GLOB_RECURSE MODULE_SOURCES
 )
 
 add_executable(Langcher ${HEADERS} ${MODULE_SOURCES})
-target_link_libraries(Langcher PRIVATE Engine SlateCore Application Core RHIVulkan)
+find_package(nlohmann_json REQUIRED)
+target_link_libraries(Langcher PRIVATE Engine SlateCore Core nlohmann_json::nlohmann_json)
+# Build runtime-selected apps without importing/starting both ApplicationBase owners.
+add_dependencies(Langcher Application Editor RHIVulkan Renderer SlateRHIRenderer)
+configure_file(apps.json "${BINARY_DIR}/apps.json" COPYONLY)
 target_include_directories(Langcher PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

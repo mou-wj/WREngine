@@ -18,6 +18,21 @@ ImGuiKey ConvertKey(SlateCore::EKey key)
 
     case SlateCore::EKey::Space:   return ImGuiKey_Space;
     case SlateCore::EKey::Escape:  return ImGuiKey_Escape;
+    case SlateCore::EKey::Backspace: return ImGuiKey_Backspace;
+    case SlateCore::EKey::Delete: return ImGuiKey_Delete;
+    case SlateCore::EKey::Enter: return ImGuiKey_Enter;
+    case SlateCore::EKey::Tab: return ImGuiKey_Tab;
+    case SlateCore::EKey::Left: return ImGuiKey_LeftArrow;
+    case SlateCore::EKey::Right: return ImGuiKey_RightArrow;
+    case SlateCore::EKey::Up: return ImGuiKey_UpArrow;
+    case SlateCore::EKey::Down: return ImGuiKey_DownArrow;
+    case SlateCore::EKey::Home: return ImGuiKey_Home;
+    case SlateCore::EKey::End: return ImGuiKey_End;
+    case SlateCore::EKey::C: return ImGuiKey_C;
+    case SlateCore::EKey::V: return ImGuiKey_V;
+    case SlateCore::EKey::X: return ImGuiKey_X;
+    case SlateCore::EKey::Y: return ImGuiKey_Y;
+    case SlateCore::EKey::Z: return ImGuiKey_Z;
 
     case SlateCore::EKey::Shift:   return ImGuiKey_LeftShift;
     case SlateCore::EKey::Ctrl:    return ImGuiKey_LeftCtrl;
@@ -44,6 +59,12 @@ int ConvertMouseButton(SlateCore::EMouseButton button)
 
 namespace ImGUISlate
 {
+    bool ImSlateRenderer::OnTextInput(uint16_t character)
+    {
+        ImGui::SetCurrentContext(m_Context);
+        ImGui::GetIO().AddInputCharacterUTF16(character);
+        return ImGui::GetIO().WantTextInput;
+    }
     ImSlateRenderer::ImSlateRenderer(SlateCore::Window* window, SlateCore::SlateRenderer* renderer)
         : m_Window(window), m_WindowRenderer(renderer)
     {
@@ -51,6 +72,7 @@ namespace ImGUISlate
         m_Context = ImGui::CreateContext();
         ImGui::SetCurrentContext(m_Context);
         ImGui::StyleColorsDark();
+        ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
         try
         {
             m_Backend = std::make_unique<ImGuiRHIBackend>();
@@ -74,6 +96,13 @@ namespace ImGUISlate
         auto size = m_Window->GetFramebufferSize();
         io.DisplaySize = ImVec2(static_cast<float>(size.X), static_cast<float>(size.Y));
         io.DisplayFramebufferScale = ImVec2(1, 1);
+    }
+    void ImSlateRenderer::WaitForLastDraw()
+    {
+        // Render returns the existing window completion marker, covering UI
+        // sampling and Present. Preserve the swapchain during internal relayout.
+        if (m_LastSubmission)
+            RHI::GRHIApi->GetQueue(RHI::EQueueType::Graphics)->WaitValue(m_LastSubmission);
     }
     void ImSlateRenderer::Render()
     {
@@ -101,11 +130,36 @@ namespace ImGUISlate
             }
         }
         ImGui::Render();
+        if (!(ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange))
+        {
+            SlateCore::EMouseCursor cursor = SlateCore::EMouseCursor::Arrow;
+            switch (ImGui::GetMouseCursor())
+            {
+            case ImGuiMouseCursor_TextInput: cursor = SlateCore::EMouseCursor::TextInput; break;
+            case ImGuiMouseCursor_ResizeAll: cursor = SlateCore::EMouseCursor::ResizeAll; break;
+            case ImGuiMouseCursor_ResizeNS: cursor = SlateCore::EMouseCursor::ResizeNS; break;
+            case ImGuiMouseCursor_ResizeEW: cursor = SlateCore::EMouseCursor::ResizeEW; break;
+            case ImGuiMouseCursor_ResizeNESW: cursor = SlateCore::EMouseCursor::ResizeNESW; break;
+            case ImGuiMouseCursor_ResizeNWSE: cursor = SlateCore::EMouseCursor::ResizeNWSE; break;
+            case ImGuiMouseCursor_Hand: cursor = SlateCore::EMouseCursor::Hand; break;
+            case ImGuiMouseCursor_Wait: cursor = SlateCore::EMouseCursor::Wait; break;
+            case ImGuiMouseCursor_Progress: cursor = SlateCore::EMouseCursor::Progress; break;
+            case ImGuiMouseCursor_NotAllowed: cursor = SlateCore::EMouseCursor::NotAllowed; break;
+            case ImGuiMouseCursor_None: cursor = SlateCore::EMouseCursor::None; break;
+            default: break;
+            }
+            if (ImGui::GetIO().MouseDrawCursor) cursor = SlateCore::EMouseCursor::None;
+            m_Window->SetMouseCursor(cursor);
+        }
         // CPU draw data is translated now; queued backends only retain RHI commands and owned uploads.
         const auto fence = m_WindowRenderer->Render(m_Window, [this](RHI::RHIGraphicCommandList& cmd,
             RHI::RHITexture* target, std::vector<RHI::RHIWaitInfo>& waits, SlateCore::SlateRenderer::DrawResources& resources)
         { m_Backend->RenderDrawData(ImGui::GetDrawData(), cmd, target, waits, resources); });
-        if (fence) m_Backend->EndFrame(fence);
+        if (fence)
+        {
+            m_LastSubmission = fence;
+            m_Backend->EndFrame(fence);
+        }
     }
     bool ImSlateRenderer::OnMouseMove(
         const SlateCore::MouseMoveEvent& event)

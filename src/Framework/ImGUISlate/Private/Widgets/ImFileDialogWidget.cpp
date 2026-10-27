@@ -1,4 +1,5 @@
 #include "Widgets/ImFileDialogWidget.h"
+#include "Widgets/ImCommonWidgets.h"
 
 #include "imgui.h"
 
@@ -8,6 +9,12 @@
 #include <system_error>
 
 namespace {
+
+    std::string PathText(const std::filesystem::path& path)
+    {
+        const auto text = path.generic_u8string();
+        return { reinterpret_cast<const char*>(text.data()), text.size() };
+    }
 
     std::filesystem::path NormalizePath(const std::filesystem::path& path)
     {
@@ -39,7 +46,7 @@ namespace {
 
     std::string NormalizeForCompare(const std::filesystem::path& path)
     {
-        std::string normalized = NormalizePath(path).generic_string();
+        std::string normalized = PathText(NormalizePath(path));
         std::transform(
             normalized.begin(),
             normalized.end(),
@@ -65,19 +72,19 @@ namespace {
 
     std::string GetDisplayName(const std::filesystem::path& path)
     {
-        const auto filename = path.filename().string();
+        const auto filename = PathText(path.filename());
         if (!filename.empty())
         {
             return filename;
         }
 
-        const auto rootName = path.root_name().string();
+        const auto rootName = PathText(path.root_name());
         if (!rootName.empty())
         {
             return rootName;
         }
 
-        return path.generic_string();
+        return PathText(path);
     }
 
     std::string FormatSize(std::uintmax_t size)
@@ -151,6 +158,10 @@ namespace ImGUISlate {
         {
             RefreshEntries();
         }
+        if (m_bRootsDirty)
+        {
+            RefreshRootDirectories();
+        }
 
         m_CloseReason = PendingCloseReason::None;
 
@@ -164,6 +175,7 @@ namespace ImGUISlate {
             DrawToolbar();
             DrawEntryTable();
             DrawFooter();
+            DrawNewDirectoryPopup();
             ImGui::EndGroup();
         }
         ImGui::End();
@@ -195,6 +207,8 @@ namespace ImGUISlate {
     void ImFileDialogWidget::Open()
     {
         m_bDialogOpen = true;
+        m_bRootsDirty = true;
+        m_bOpenNewDirectoryPopup = false;
         m_CloseReason = PendingCloseReason::None;
     }
 
@@ -316,6 +330,7 @@ namespace ImGUISlate {
 
         if (!IsDirectory(targetDirectory))
         {
+            m_LastError = "Directory is unavailable: " + PathText(targetDirectory);
             return;
         }
 
@@ -400,6 +415,23 @@ namespace ImGUISlate {
             });
     }
 
+    void ImFileDialogWidget::RefreshRootDirectories()
+    {
+        m_bRootsDirty = false;
+        m_RootDirectories.clear();
+#ifdef _WIN32
+        // Probe only when opening or refreshing, not on every UI frame.
+        // Filesystem operations stay here; no native window or drive handles are kept.
+        for (char letter = 'A'; letter <= 'Z'; ++letter)
+        {
+            const auto root = std::filesystem::path(std::string(1, letter) + ":/");
+            if (IsDirectory(root)) m_RootDirectories.push_back(root);
+        }
+#else
+        m_RootDirectories.emplace_back("/");
+#endif
+    }
+
     void ImFileDialogWidget::DrawPresetPane()
     {
         ImGui::BeginChild("##preset-directories", ImVec2(220.0f, 0.0f), ImGuiChildFlags_Borders);
@@ -416,7 +448,7 @@ namespace ImGUISlate {
 
         for (const auto& preset : m_PresetDirectories)
         {
-            const auto label = preset.Label.empty() ? preset.Path.generic_string() : preset.Label;
+            const auto label = preset.Label.empty() ? PathText(preset.Path) : preset.Label;
             if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f)))
             {
                 NavigateTo(preset.Path, false);
@@ -424,7 +456,17 @@ namespace ImGUISlate {
 
             if (ImGui::IsItemHovered())
             {
-                ImGui::SetTooltip("%s", preset.Path.generic_string().c_str());
+                ImGui::SetTooltip("%s", PathText(preset.Path).c_str());
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::TextUnformatted("Drives");
+        for (const auto& root : m_RootDirectories)
+        {
+            if (ImGui::Selectable(PathText(root).c_str(), m_CurrentDirectory.root_path() == root))
+            {
+                NavigateTo(root, false);
             }
         }
 
@@ -446,7 +488,11 @@ namespace ImGUISlate {
         if (ImGui::Button("Refresh"))
         {
             m_bEntriesDirty = true;
+            m_bRootsDirty = true;
         }
+
+        ImGui::SameLine();
+        if (ImGui::Button("New folder")) m_bOpenNewDirectoryPopup = true;
 
         if (!m_InitialDirectory.empty())
         {
@@ -458,7 +504,7 @@ namespace ImGUISlate {
         }
 
         ImGui::Separator();
-        ImGui::TextWrapped("%s", m_CurrentDirectory.generic_string().c_str());
+        ImGui::TextWrapped("%s", PathText(m_CurrentDirectory).c_str());
         ImGui::Separator();
     }
 
@@ -550,6 +596,16 @@ namespace ImGUISlate {
 
                 ImGui::EndTable();
             }
+
+            // A scrolling table is a child window. Include it when testing the
+            // entry area, so right click works on rows as well as empty space.
+            if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+                ImGui::OpenPopup("Directory actions");
+            if (ImGui::BeginPopup("Directory actions"))
+            {
+                if (ImGui::MenuItem("New folder")) m_bOpenNewDirectoryPopup = true;
+                ImGui::EndPopup();
+            }
         }
         ImGui::EndChild();
     }
@@ -572,7 +628,7 @@ namespace ImGUISlate {
         }
         else if (m_Mode == SelectionMode::Directory)
         {
-            ImGui::TextWrapped("Current folder: %s", m_CurrentDirectory.generic_string().c_str());
+            ImGui::TextWrapped("Current folder: %s", PathText(m_CurrentDirectory).c_str());
         }
 
         ImGui::Separator();
@@ -601,6 +657,49 @@ namespace ImGUISlate {
         if (!CanConfirmSelection())
         {
             ImGui::EndDisabled();
+        }
+    }
+
+    void ImFileDialogWidget::DrawNewDirectoryPopup()
+    {
+        if (m_bOpenNewDirectoryPopup)
+        {
+            m_bOpenNewDirectoryPopup = false;
+            m_NewDirectoryName.clear();
+            m_NewDirectoryError.clear();
+            ImGui::OpenPopup("New folder");
+        }
+        if (ImGui::BeginPopupModal("New folder", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::TextWrapped("Create in: %s", PathText(m_CurrentDirectory).c_str());
+            if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+            ImPropertyControls::Text("Name", m_NewDirectoryName);
+            if (!m_NewDirectoryError.empty())
+                ImGui::TextColored({0.8f, 0.2f, 0.2f, 1.0f}, "%s", m_NewDirectoryError.c_str());
+            if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+            ImGui::SameLine();
+            if (ImGui::Button("Create"))
+            {
+                // Accept one name only. Never turn this action into a path walk
+                // or silently reuse an existing directory/file.
+                const auto& name = m_NewDirectoryName;
+                if (name.empty() || name == "." || name == ".." || name.back() == '.' || name.back() == ' ' ||
+                    name.find_first_of("/\\:*?\"<>|") != std::string::npos ||
+                    std::any_of(name.begin(), name.end(), [](unsigned char c) { return c < 32; }))
+                    m_NewDirectoryError = "Enter a folder name without paths or reserved characters.";
+                else
+                {
+                    std::error_code error;
+                    const auto directory = m_CurrentDirectory / std::filesystem::u8path(name);
+                    if (std::filesystem::create_directory(directory, error))
+                    {
+                        NavigateTo(directory, false);
+                        ImGui::CloseCurrentPopup();
+                    }
+                    else m_NewDirectoryError = error ? error.message() : "A file or folder with this name already exists.";
+                }
+            }
+            ImGui::EndPopup();
         }
     }
 
@@ -685,7 +784,7 @@ namespace ImGUISlate {
             return {};
         }
 
-        std::filesystem::path candidate = typedValue;
+        std::filesystem::path candidate = std::filesystem::u8path(typedValue);
         if (!candidate.is_absolute())
         {
             candidate = m_CurrentDirectory / candidate;
@@ -716,7 +815,7 @@ namespace ImGUISlate {
     {
         if (m_Mode == SelectionMode::Directory)
         {
-            CopyStringToBuffer(m_CurrentDirectory.generic_string(), m_SelectionText);
+            CopyStringToBuffer(PathText(m_CurrentDirectory), m_SelectionText);
             return;
         }
 

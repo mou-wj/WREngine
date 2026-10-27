@@ -83,10 +83,12 @@ namespace ImGUISlate {
 
         void NavigateTo(const std::filesystem::path& directory, bool updateInitialDirectory);
         void RefreshEntries();
+        void RefreshRootDirectories();
         void DrawPresetPane();
         void DrawToolbar();
         void DrawEntryTable();
         void DrawFooter();
+        void DrawNewDirectoryPopup();
 
         void SelectFile(const std::filesystem::path& path, bool toggleSelection);
         bool ConfirmSelection();
@@ -102,12 +104,15 @@ namespace ImGUISlate {
         std::filesystem::path m_CurrentDirectory;
 
         std::vector<PresetDirectory> m_PresetDirectories;
+        std::vector<std::filesystem::path> m_RootDirectories;
         std::vector<FileEntry> m_Entries;
         SelectionList m_SelectedPaths;
 
         std::array<char, 512> m_SelectionText{};
 
         std::string m_LastError;
+        std::string m_NewDirectoryName;
+        std::string m_NewDirectoryError;
 
         ConfirmCallback m_OnConfirm;
         CancelCallback m_OnCancel;
@@ -115,6 +120,8 @@ namespace ImGUISlate {
         bool m_bDialogOpen = true;
         bool m_bSelectionConfirmed = false;
         bool m_bEntriesDirty = true;
+        bool m_bRootsDirty = true;
+        bool m_bOpenNewDirectoryPopup = false;
         PendingCloseReason m_CloseReason = PendingCloseReason::None;
     };
 }

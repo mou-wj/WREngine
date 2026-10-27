@@ -2,7 +2,7 @@
 
 本目录回答“具体怎样实现、依赖哪些条件、哪里尚不可靠”。模块职责与接口关系仍以 [architecture](../architecture/README.md) 的既有结构组织。目录名沿用需求首次指定的 `key_implemetion`。
 
-整理完成日期：2026-10-26，代码基线为提交 `04f910d`。本轮只修改文档；没有重新构建、运行测试或测量性能。下文“已接入”来自实际调用方，“存在实现”不代表运行验证通过。
+首次整理完成于 2026-10-26，原始基线为 `04f910d`；随后按 `5bb415e` 及本次 Editor 工作区实现同步启动、UI、场景更新和顶点流缓存说明。首轮文档整理没有运行测试；Editor 调整的实际检查另见 [当日记录](../dev/bugfix/故障与修复记录-2026-10-26.md)。下文“已接入”来自实际调用方，“存在实现”不代表所有路径验证通过。
 
 ## 工程实现：performance
 
@@ -14,10 +14,10 @@
 | [RHI 队列与同步](performance/02-rhi-queues-and-sync.md) | 录制、提交、worker 执行和 GPU 完成有什么区别？ |
 | [RDG 执行与资源状态](performance/03-rdg-execution-and-state.md) | 参数怎样变成依赖、屏障、物理资源和提交？ |
 | [内存、资源池与瞬态资源](performance/04-memory-and-transient-resources.md) | 对齐、切分、复用、回收分别由谁负责？ |
-| [资产、材质与实例数据](performance/05-assets-materials-and-instance-data.md) | 如何合并加载请求、维持所有权、更新 GPU 数据？ |
+| [资产、材质与实例数据](performance/05-assets-materials-and-instance-data.md) | 如何合并加载请求、维持所有权、导入工程依赖和更新 GPU 数据？ |
 | [Shader 编译与绑定](performance/06-shader-compilation-and-binding.md) | C++ 参数怎样进入 HLSL、反射和各后端绑定？ |
 | [光追 AS 与 SBT](performance/07-ray-tracing-as-and-sbt.md) | AS 存储、scratch、group handle 和 SBT 怎样衔接？ |
-| [UI 合成与窗口生命周期](performance/08-ui-rendering-and-window-lifetime.md) | ImGui 怎样共用 RHI，纹理与窗口完成点怎样维护？ |
+| [UI 合成与窗口生命周期](performance/08-ui-rendering-and-window-lifetime.md) | ImGui 怎样共用 RHI，工程切换/投放怎样安排，纹理与窗口完成点怎样维护？ |
 | [构建与模块启动](performance/09-module-build-and-startup.md) | 依赖准备、DLL 注册、拓扑启动和逆序关闭怎样串起来？ |
 
 ## 原理与算法：algorithm
@@ -41,7 +41,7 @@
 
 清单表示检索覆盖，不等于对每行代码做了正确性审计。专题对核心调用链进行源码核对；普通知识、未接入的实验和已知缺口分别标注。此前运行结果仍查 [当日故障记录](../dev/bugfix/故障与修复记录-2026-10-25.md)，不能将其自动推广为本次文档中所有路径已通过测试。
 
-交付检查包括：覆盖清单与实际文件集合一致、逐文件内容摘要核对、本文档集的本地链接解析、UTF-8 解码与差异空白检查。源码、Shader、测试和构建配置没有本轮差异；这些静态检查不替代编译、运行或算法数值验证。
+文档检查包括：覆盖清单与实际文件集合一致、逐文件内容摘要核对、本文档集的本地链接解析、UTF-8 解码与差异空白检查。这些静态检查不替代编译、运行或算法数值验证。后续实现调整必须同步相关专题，当前 Editor 入口见 [架构说明](../architecture/app/editor.md)。
 
 ## 阅读时应特别留意的现状
 

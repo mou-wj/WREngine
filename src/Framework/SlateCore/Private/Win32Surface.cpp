@@ -4,6 +4,7 @@
 
 #include "PlatformSurfaceOwner.h"
 #include <Windowsx.h>
+#include <shellapi.h>
 
 namespace SlateCore
 {
@@ -33,12 +34,13 @@ namespace SlateCore
             }
         }
 
-        WNDCLASS wc = {};
+        WNDCLASSW wc = {};
+        m_Cursor = ::LoadCursor(nullptr, IDC_ARROW);
         wc.lpfnWndProc = Win32Surface::WndProcSetup;
         wc.hInstance = GetModuleHandle(nullptr);
-        wc.lpszClassName = "SlateCoreWin32Surface";
+        wc.lpszClassName = L"SlateCoreWin32Surface";
 
-        if (!RegisterClass(&wc) &&
+        if (!RegisterClassW(&wc) &&
             GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
         {
             return false;
@@ -52,10 +54,13 @@ namespace SlateCore
         const int posX = parentHwnd ? 0 : CW_USEDEFAULT;
         const int posY = parentHwnd ? 0 : CW_USEDEFAULT;
 
-        m_HWnd = CreateWindowEx(
+        const int titleLength = MultiByteToWideChar(CP_UTF8, 0, _title.c_str(), -1, nullptr, 0);
+        std::wstring title(static_cast<size_t>(titleLength), L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, _title.c_str(), -1, title.data(), titleLength);
+        m_HWnd = CreateWindowExW(
             0,
             wc.lpszClassName,
-            _title.c_str(),
+            title.c_str(),
             windowStyle,
             posX,
             posY,
@@ -66,17 +71,47 @@ namespace SlateCore
             wc.hInstance,
             this);
 
+        if (m_HWnd) DragAcceptFiles(m_HWnd, TRUE);
         return m_HWnd != nullptr;
     }
 
     void Win32Surface::PollEvents()
     {
         MSG msg;
-        while (::PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+        while (::PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
         {
             ::TranslateMessage(&msg);
-            ::DispatchMessage(&msg);
+            ::DispatchMessageW(&msg);
         }
+    }
+
+    void Win32Surface::SetMouseCursor(EMouseCursor cursor)
+    {
+        LPCTSTR resource = IDC_ARROW;
+        switch (cursor)
+        {
+        case EMouseCursor::TextInput: resource = IDC_IBEAM; break;
+        case EMouseCursor::ResizeAll: resource = IDC_SIZEALL; break;
+        case EMouseCursor::ResizeNS: resource = IDC_SIZENS; break;
+        case EMouseCursor::ResizeEW: resource = IDC_SIZEWE; break;
+        case EMouseCursor::ResizeNESW: resource = IDC_SIZENESW; break;
+        case EMouseCursor::ResizeNWSE: resource = IDC_SIZENWSE; break;
+        case EMouseCursor::Hand: resource = IDC_HAND; break;
+        case EMouseCursor::Wait: resource = IDC_WAIT; break;
+        case EMouseCursor::Progress: resource = IDC_APPSTARTING; break;
+        case EMouseCursor::NotAllowed: resource = IDC_NO; break;
+        default: break;
+        }
+        m_Cursor = cursor == EMouseCursor::None ? nullptr : ::LoadCursor(nullptr, resource);
+        POINT position{};
+        RECT client{};
+        // Updating one window must not replace another application's cursor or
+        // the native non-client border resize cursor.
+        if (::GetCapture() == m_HWnd)
+            ::SetCursor(m_Cursor);
+        else if (::GetCursorPos(&position) && ::WindowFromPoint(position) == m_HWnd &&
+            ::ScreenToClient(m_HWnd, &position) && ::GetClientRect(m_HWnd, &client) && ::PtInRect(&client, position))
+            ::SetCursor(m_Cursor);
     }
 
     void Win32Surface::Shutdown()
@@ -196,7 +231,7 @@ namespace SlateCore
 
         if (msg == WM_NCCREATE)
         {
-            CREATESTRUCT* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
+            CREATESTRUCTW* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
             surface = reinterpret_cast<Win32Surface*>(cs->lpCreateParams);
             ::SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(surface));
         }
@@ -210,7 +245,7 @@ namespace SlateCore
             return surface->WndProc(hwnd, msg, wParam, lParam);
         }
 
-        return ::DefWindowProc(hwnd, msg, wParam, lParam);
+        return ::DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 
     LRESULT Win32Surface::WndProc(
@@ -221,6 +256,38 @@ namespace SlateCore
     {
         switch (msg)
         {
+        case WM_SETCURSOR:
+            if (LOWORD(lParam) == HTCLIENT)
+            {
+                ::SetCursor(m_Cursor);
+                return TRUE;
+            }
+            break;
+        case WM_DROPFILES:
+        {
+            const auto drop = reinterpret_cast<HDROP>(wParam);
+            struct DropGuard
+            {
+                HDROP Handle;
+                ~DropGuard() { DragFinish(Handle); }
+            } guard{drop};
+            POINT point{};
+            if (!_owner || !DragQueryPoint(drop, &point)) return 0;
+            FileDropEvent event;
+            event.X = point.x;
+            event.Y = point.y;
+            const auto count = DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
+            for (UINT index = 0; index < count; ++index)
+            {
+                const UINT length = DragQueryFileW(drop, index, nullptr, 0);
+                std::wstring path(static_cast<size_t>(length) + 1, L'\0');
+                DragQueryFileW(drop, index, path.data(), length + 1);
+                path.resize(length);
+                event.Paths.emplace_back(path);
+            }
+            _owner->OnFilesDropped(event);
+            return 0;
+        }
         case WM_CLOSE:
             if (_owner)
             {
@@ -267,7 +334,7 @@ namespace SlateCore
             return 0;
         }
 
-        return ::DefWindowProc(hwnd, msg, wParam, lParam);
+        return ::DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 
     EKey Win32Surface::TranslateKey(WPARAM key) const
@@ -280,6 +347,11 @@ namespace SlateCore
         case 'D': return EKey::D;
         case 'Q': return EKey::Q;
         case 'E': return EKey::E;
+        case 'C': return EKey::C;
+        case 'V': return EKey::V;
+        case 'X': return EKey::X;
+        case 'Y': return EKey::Y;
+        case 'Z': return EKey::Z;
 
         case VK_SHIFT: return EKey::Shift;
         case VK_CONTROL: return EKey::Ctrl;
@@ -287,6 +359,16 @@ namespace SlateCore
 
         case VK_SPACE: return EKey::Space;
         case VK_ESCAPE: return EKey::Escape;
+        case VK_BACK: return EKey::Backspace;
+        case VK_DELETE: return EKey::Delete;
+        case VK_RETURN: return EKey::Enter;
+        case VK_TAB: return EKey::Tab;
+        case VK_LEFT: return EKey::Left;
+        case VK_RIGHT: return EKey::Right;
+        case VK_UP: return EKey::Up;
+        case VK_DOWN: return EKey::Down;
+        case VK_HOME: return EKey::Home;
+        case VK_END: return EKey::End;
         default: return EKey::Unknown;
         }
     }
@@ -397,6 +479,9 @@ namespace SlateCore
             KeyEvent event;
             event.Key = TranslateKey(wParam);
             event.Event = EInputEvent::Pressed;
+            event.Modifiers.bCtrl = (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            event.Modifiers.bShift = (::GetKeyState(VK_SHIFT) & 0x8000) != 0;
+            event.Modifiers.bAlt = (::GetKeyState(VK_MENU) & 0x8000) != 0;
             return _owner->OnKeyDown(event);
         }
 
@@ -406,8 +491,13 @@ namespace SlateCore
             KeyEvent event;
             event.Key = TranslateKey(wParam);
             event.Event = EInputEvent::Released;
+            event.Modifiers.bCtrl = (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            event.Modifiers.bShift = (::GetKeyState(VK_SHIFT) & 0x8000) != 0;
+            event.Modifiers.bAlt = (::GetKeyState(VK_MENU) & 0x8000) != 0;
             return _owner->OnKeyUp(event);
         }
+        case WM_CHAR:
+            return _owner->OnTextInput(static_cast<uint16_t>(wParam));
         }
 
         return false;

@@ -973,6 +973,9 @@ namespace RHIVulkan {
             
             m_StencilRef = 0;
             m_PrimitiveType = PT_Num;
+            // Command-buffer state starts undefined. A previous submission may have
+            // used buffers which were replaced after its fence completed.
+            for (auto& stream : m_PendingStreams) stream = {};
             m_bDirtyVertexStreams = true;
 
             m_CurrentPipeline = nullptr;

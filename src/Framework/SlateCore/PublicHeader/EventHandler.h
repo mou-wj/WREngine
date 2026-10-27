@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
+#include <vector>
 
 namespace SlateCore
 {
@@ -40,7 +42,24 @@ namespace SlateCore
 
         MouseLeft,
         MouseRight,
-        MouseMiddle
+        MouseMiddle,
+
+        Backspace,
+        Delete,
+        Enter,
+        Tab,
+        Left,
+        Right,
+        Up,
+        Down,
+        Home,
+        End,
+
+        C,
+        V,
+        X,
+        Y,
+        Z
     };
 
     struct ModifierKeys
@@ -90,6 +109,13 @@ namespace SlateCore
         ModifierKeys Modifiers;
     };
 
+    struct FileDropEvent
+    {
+        std::vector<std::filesystem::path> Paths;
+        int32_t X = 0;
+        int32_t Y = 0;
+    };
+
     class SLATECORE_API EventHandler
     {
     public:
@@ -110,6 +136,10 @@ namespace SlateCore
 
         virtual bool OnKeyUp(
             const KeyEvent& event);
+
+        // UTF-16 code units from the platform; default handlers ignore text.
+        virtual bool OnTextInput(uint16_t character) { return false; }
+        virtual bool OnFilesDropped(const FileDropEvent&) { return false; }
 
         virtual bool OnFocusReceived();
 

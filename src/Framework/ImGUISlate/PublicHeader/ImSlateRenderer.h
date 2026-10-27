@@ -21,6 +21,7 @@ namespace ImGUISlate {
         ~ImSlateRenderer();
 
         void Render();
+        void WaitForLastDraw();
 
 
         virtual bool OnMouseMove(
@@ -40,6 +41,8 @@ namespace ImGUISlate {
 
         virtual bool OnFocusReceived() override;
 
+        bool OnTextInput(uint16_t character) override;
+
         virtual bool OnFocusLost()override;
 
         virtual bool OnResize(
@@ -52,6 +55,7 @@ namespace ImGUISlate {
         SlateCore::Window* m_Window = nullptr;
         SlateCore::SlateRenderer* m_WindowRenderer = nullptr;
         std::unique_ptr<ImGuiRHIBackend> m_Backend;
+        uint64_t m_LastSubmission = 0;
         std::chrono::steady_clock::time_point m_LastFrame = std::chrono::steady_clock::now();
     };
 }

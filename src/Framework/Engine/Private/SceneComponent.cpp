@@ -245,7 +245,7 @@ namespace Engine
     }
 
     const Core::Mat4&
-        SceneComponent::GetComponentTransform()
+        SceneComponent::GetComponentTransform() const
     {
         UpdateTransformIfDirty();
 

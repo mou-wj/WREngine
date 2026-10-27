@@ -34,6 +34,8 @@ LocalVertexFactory.sf 当前用 LocalToWorld 的 3×3 变换 normal/tangent，�
 
 CPU AABB 由 position 扩张得到；对象变换后用于场景查询的 bounds 必须是世界空间保守界，负缩放/旋转不能只变换 min/max 两点。SceneComponent/PrimitiveComponent 的更新路径与 proxy bounds 需要一起核查，算法判断的空间不能混用。
 
+2026-10-26 的编辑器接入修正 StaticMeshProxy：此前只构造局部平移矩阵，现在从 const GetComponentTransform 取得完整世界矩阵，再求其逆；场景变换通知在 Flush 时替换代理缓存。矩阵/包围体应随编辑一起更新，但这不修复 Shader 中非均匀缩放法线仍未用逆转置的问题。
+
 MeshBatch key 包含 VF、材质快照、索引资源、FrontFace 等状态，同一批次还按 section/element 等信息组合实例 ID。索引缓冲的 FirstIndex、VertexOffset/BaseVertex 和 StartInstance 各控制不同寻址阶段；不能用单个“offset”概念替代。
 
 Shader 通过实例 ID 流查结构化参数 buffer，模型矩阵、材质快照和 draw element 必须对应同一实例序列。GPU 数据的更新与完成点另见 [实例数据工程实现](../performance/05-assets-materials-and-instance-data.md)。

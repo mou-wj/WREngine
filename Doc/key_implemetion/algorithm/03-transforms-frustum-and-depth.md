@@ -24,6 +24,29 @@ f=normalize(center-eye)，s=normalize(cross(f,up))，u=cross(s,f)。view 的前�
 
 eye=center 或 up 与 f 平行不能建立有效正交基，需要调用方排除；Normalize 的零长度处理不等价于修复退化相机。
 
+### Editor 的六向视角
+
+[EditorScene::SetViewDirection / UpdateCamera](../../../src/Editor/SceneEditor/Private/EditorScene.cpp) 用 EEditorViewDirection 表示六个固定方向及自由 Orbit。[EditorViewToolbar](../../../src/Editor/SceneEditor/Private/EditorScenePanel.cpp) 的 View 页调用它，不在 UI 内复制相机数学。
+
+沿用世界 Y-up、右手 LookAtRH。输入为当前目标点 t、正距离 d，以及所选方向；输出为相机 eye、forward 和 up。统一 `eye=t-forward*d`，因此切换不改变目标点或缩放距离。表中的“相机侧”是相对目标的位置，不是世界绝对坐标。
+
+| 视图 | 相机侧 | forward | up |
+| --- | --- | --- | --- |
+| Top | +Y | (0,-1,0) | (0,0,-1) |
+| Bottom | -Y | (0,1,0) | (0,0,1) |
+| Left | -X | (1,0,0) | (0,1,0) |
+| Right | +X | (-1,0,0) | (0,1,0) |
+| Front | +Z | (0,0,-1) | (0,1,0) |
+| Back | -Z | (0,0,1) | (0,1,0) |
+
+Top/Bottom 的 forward 与世界 Y 平行，若继续用 (0,1,0) 作为 up，`cross(forward,up)=0`。显式选用 ∓Z 后，屏幕 right 均为 +X，可构造有效正交基。固定方向使用表中的精确向量，不依赖 cos(π/2) 接近零的浮点残差来避免退化。
+
+自由模式使用弧度制 yaw ψ、pitch θ：`forward=(cosψ*cosθ, sinθ, sinψ*cosθ)`，up=(0,1,0)。切换固定方向时同时设置与之对应的 yaw/pitch，右键拖动转回 Orbit 后从该方向继续；自由 pitch 限制到 [-1.5,1.5]，不会停在 ±π/2 的极点，首次离开极点会有约 0.071 弧度的夹角修正。Orbit 按钮恢复原斜向角度，保留当前目标与距离。
+
+平移以 `right=normalize(cross(forward,up))` 和修正后的屏幕 up 建立偏移基，缩放只调整 d（既有 [0.2,1000] 范围）。Focus selected 更新 t，三者都保留所选方向。每次转换为常数复杂度、无额外堆分配。当前六向只调整朝向，Draw 仍使用 45°、真实视口宽高比、ZO 透视投影；没有把它宣称为正交视图，也未改造依赖透视的 Renderer/后处理。
+
+2026-10-26 定向检查使用两颗不同位置的红/蓝 Unlit 球，六方向各渲染并读回 384×384 像素，核查可见性及蓝球位于预期屏幕象限，包含 Top/Bottom。另检查方向在平移/缩放时保持、在环绕时解除，以及 ribbon 绘制数据/布局。临时验证源位于 out/diagnostics/editor-smoke/view-main.cpp，未改动 src/Tests 流程；结果和桌面交互限制见 [同日记录](../../dev/bugfix/故障与修复记录-2026-10-26.md)。
+
 ## NO 与 ZO 透视
 
 设 q=1/tan(fovy/2)，aspect=a，near=n，far=f，右手相机 z<0：

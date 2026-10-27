@@ -1,0 +1,117 @@
+# Editor 编辑器应用
+
+## 模块和边界
+
+`src/Editor/CMakeLists.txt` 纳入 SceneEditor、AssetEditor、MaterialEditor、NodeEditor、Editor 五个独立 DLL。Editor 与原 Application 都提供 ApplicationBase 实现，由 Launcher 选择其一；Editor 负责工程生命周期、菜单与应用组装，功能面板由各自模块实现。
+
+| 实现 | 职责 |
+| --- | --- |
+| [EditorModule.cpp](../../../src/Editor/Editor/Private/EditorModule.cpp) | 独占应用对象，初始化成功后发布 ApplicationBase，关闭时清空 |
+| [EditorApplication](../../../src/Editor/Editor/Private/EditorApplication.cpp) | 唯一原生窗口、顶部 ribbon 与内容区域的组装布局、轮询绘制与按依赖释放 |
+| [SceneEditor / EditorScene](../../../src/Editor/SceneEditor/Private/EditorScene.cpp) | 场景和组件所有者、ViewportClient、选择、复制、删除、相机与视图 |
+| [SceneEditor / EditorScenePanel](../../../src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h) | 场景节点列表、选择、复制、移除；视口拖放接收 |
+| [SceneEditor / EditorViewToolbar](../../../src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h) | ribbon 的 View 页、六向相机按钮、恢复自由视角与聚焦 |
+| [AssetEditor / EditorAssetPanel](../../../src/Editor/AssetEditor/PublicHeader/EditorAssetPanel.h) | 文件系统树、当前目录资源网格、导航/筛选、资产加载与材质/纹理选择 |
+| [MaterialEditor / EditorMaterialPanel](../../../src/Editor/MaterialEditor/PublicHeader/EditorMaterialPanel.h) | 按需打开的浮动材质编辑窗口，保留材质库/属性页 |
+| [MaterialEditor / MaterialLibrary](../../../src/Editor/MaterialEditor/PublicHeader/MaterialLibrary.h) | 项目材质文件的元数据扫描、新建、复制与依赖文件导入，不持有运行时资产 |
+| [NodeEditor / EditorNodePanel](../../../src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h) | 右侧节点属性，借用当前选择编辑局部 TRS，显示网格与材质槽信息 |
+
+## 依赖和模块协作
+
+```mermaid
+flowchart LR
+    Engine --> SceneEditor
+    ImGuiSlate --> SceneEditor
+    Engine --> AssetEditor
+    ImGuiSlate --> AssetEditor
+    Engine --> MaterialEditor
+    ImGuiSlate --> MaterialEditor
+    SceneEditor --> Editor
+    AssetEditor --> Editor
+    MaterialEditor --> Editor
+    Engine --> NodeEditor
+    ImGuiSlate --> NodeEditor
+    NodeEditor --> Editor
+    SlateRHIRenderer --> Editor
+```
+
+箭头从被依赖模块指向使用者。四个功能模块的公共接口导出到各自 PublicHeader，按目标名导出跨 DLL 接口。它们不依赖 Editor，也不相互依赖。Engine/ImGUISlate 不反向依赖任何编辑功能模块。NodeEditor 仅依赖 Engine/ImGuiSlate，通过同步查询/变更回调连接场景。
+
+AssetEditor 不再保存 EditorScene 引用：打开网格时调用 SetOnMeshOpened 设置的回调；赋材质时调用 SetOnMaterialAssigned 设置的回调，由宿主决定目标和是否成功。无网格处理回调时明确报错，无赋材质处理回调时禁用该操作。
+
+MaterialEditor 不再引用场景模块或资产面板类型。公共 MaterialEditorCallbacks 只包含查询当前组件、材质、纹理及通知变更的函数；EditorApplication 用 lambda 将这些接口连接到 SceneEditor/AssetEditor。Draw 时查询当前选择，避免额外缓存或固定一帧前的选择状态。函数在 UI 线程同步执行，组件指针只在当前调用中借用；没有异步回调或新资源管理器。
+
+五个模块均通过既有 ModuleManager 注册并提供启动/关闭状态。功能模块不全局持有窗口、场景或面板，EditorApplication 显式拥有其实例；先销毁窗口、面板和场景，再关闭功能模块。模块实例存在，不代表应该为它创建新的全局业务单例。
+
+Editor 不改变 Asset 的资源所有权：组件引用 StaticMeshAsset/MaterialAsset，MaterialInstance 仅在真正编辑网格参数时按槽位创建，属于该组件。资产文件通过既有 AssetManager 加载；面板只保留当前选中的材质和纹理，不再建立一套资产缓存。
+
+## 界面和操作
+
+### 工程生命周期
+
+菜单栏的 Project → New / Open 打开既有 ImFileDialogWidget 的目录选择界面，Cancel 不改变当前工程；Close 关闭当前工程而不退出应用。New 在选定目录创建 Content 及 RenderingLearn.project.json，不覆盖已有工程或非空 Content。Open 先验证描述和内容目录，再关闭旧工程，非法路径不会先清空当前工作区。描述格式为：
+
+```json
+{"version": 1, "name": "MyProject", "contentDirectory": "Content"}
+```
+
+运行时工程路径由 EditorApplication 保存，Core::GetProjectDir 仍表示引擎源码/内置资源根，不为项目切换改写全局路径或环境变量。关闭工程会清空场景节点/选择、资源树/过滤/历史、材质窗口与导入/投放的待执行操作，并释放资产管理器的驻留引用；仍被内置预览环境持有的资产继续有效。
+
+工程描述目前只保存内容目录信息，不保存场景节点布局；重新打开会恢复资源浏览，场景仍为空，场景保存/恢复尚未实现。源文件保留在原目录，Import 或桌面拖入 Assets 会复制到当前内容目录的新包中，重名用后缀避让。支持嵌入资源的 GLB、带本地依赖的 glTF、原生材质 JSON 和 PNG/JPG/BMP/TGA；glTF 的外部 buffer/image 与材质贴图一起复制并改为包内相对路径。外部依赖 GLB 明确拒绝，需导出为嵌入 GLB 或使用 glTF。
+
+UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行；网格投放同样保存路径并延迟到下一帧创建，避免销毁本帧已经生成的纹理/资源引用。详细等待与所有权见 [UI 生命周期](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
+
+窗口顶部先预留 24 像素菜单栏，再是 112 像素 ribbon，下面从左到右为 Scene、离屏 SceneViewport，以及选中节点时展开的 Node Properties；Assets 横跨整个窗口底部。没有选中组件时，右侧属性栏及其分隔条一起折叠，视口延伸到客户区右边缘，不保留空白列。材质编辑器作为浮动窗口显示，不占右侧固定区域。Editor 的局部 EditorLayout 通过 ImMainWindow::SetLayout 接入，保存两侧宽度和底部高度的比例，初始左右宽度为可用宽度的 1/7、2/7，底部为可用高度的 35%。可见区域间留出 6 像素分隔条；尺寸改变或拖动时统一重算几何，浮动材质窗口不被布局器覆盖位置。
+
+两条竖向分隔条控制 Scene/Viewport 和 Viewport/Node Properties 的宽度，横向分隔条控制上方区域与 Assets 的高度。悬停/按住时显示对应的左右或上下系统拉伸光标，左键拖动实时调整相邻区域，松开或失焦结束。菜单和 ribbon 高度固定。常规客户区下最小宽度为 Scene 160、Viewport 240、Node Properties 260；最小高度为上方 220、Assets 140 像素。客户区小于这些总尺寸时按比例缩小下限，避免负尺寸；窗口改变大小仍保留用户选择的比例。目前比例仅在本次运行中保存，不持久化到配置文件。
+
+资产区采用左侧文件系统树、右侧资源网格，二者之间可拖动调整宽度。顶部为 Import、前进/后退、上级、刷新和路径栏，底部保留 Open / Add mesh、Assign material 与状态。初始没有打开的工程、模型节点或材质弹窗；视口保留内置天空和预览灯光作为编辑背景，它们不显示为项目资源或节点。仍共用一个 ImGui/RHI 绘制环境，没有新增原生子窗口。
+
+- Scene：列表选择、复制与移除网格、聚焦所选对象。右侧 Node Properties 只在存在选中组件时显示，编辑其局部平移/旋转/缩放；空工程、未选中组件或移除最后一个节点后不生成属性窗口，也不命中该面板。折叠会将原栏宽和分隔条空间交给视口；重新选中时恢复已保存的右栏比例。复制保留材质资产和稀疏参数覆盖，但创建独立组件实例。
+- Ribbon → View：Top / Bottom / Left / Right / Front / Back 六向切换，按钮第二行注明相机所在轴侧，当前固定方向高亮。Orbit 恢复默认斜向环绕角度，Focus selected 聚焦所选对象。切换保留当前焦点和距离，沿用既有透视投影；这里的六向视图不表示已实现正交编辑管线。
+- 视口：右键拖动环绕、中键平移、滚轮缩放。投影使用实际视口宽高比；场景通过既有 Renderer 绘制。
+- Assets：左侧参考文件系统树展开目录及其文件，右侧按当前目录显示带类型图标/名称/类型的资源卡片；双击进入目录或打开资产，材质单击打开浮窗。加载图片作为待赋纹理、将 glTF 加入场景、将已加载母材质赋给网格槽 0，继续使用原有回调。网格创建延至下一 TickFrame 的绘制前；实际加载仍同步执行，复杂资源会阻塞 UI。
+- Material Editor：通常不提交绘制窗口；点击资源管理器中的材质后加载并打开浮动窗口，默认选中 Properties 页。关闭后不会因保留上次材质选择而自动重开，再次点击才重开。Library 页保留当前工程内容中的目录分类、搜索、卡片、新建、复制和应用能力。
+- Properties 保留参数继承/恢复、纹理选择/清除、CullMode、TwoSided、Lit/Unlit 和保存副本。打开库中资产后编辑母材质；Inspect mesh 切换到所选网格，只有实际修改参数时创建其独占实例。Assets 的材质/纹理选择仍经原有宿主回调接入。
+
+保存副本不重命名资产，也不导出实例资产。路径已存在时拒绝覆盖；保存后可在 Assets 中刷新并加载。Opaque 以外的 Surface 绘制仍未实现，不通过界面静默启用。首版没有撤销重做、场景序列化、材质节点图、视口点击拾取或完整编辑器快捷键。
+
+方向切换属于 EditorScene，不依赖 Editor 或材质/资产面板。世界坐标 Y 向上：Top 从 +Y 看向 -Y，Bottom 相反；Left 从 -X 看向 +X，Right 相反；Front 从 +Z 看向 -Z，Back 相反。顶部/底部使用 -Z/+Z 作为屏幕 Up，避免 LookAtRH 的叉积退化。平移、缩放和 Focus 保留方向；右键环绕转回自由状态并从所选方向继续。详细公式见 [相机与坐标专题](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)。
+
+### 资源文件系统与卡片视图
+
+Editor 宿主将当前工程的 Content 设为 `res://`，未打开工程时面板只显示提示、不浏览引擎资源。树中目录优先排列，文件按名称排序；点击文件同步选中卡片，材质单击即加载并通知弹窗，其他资源在双击/Open 时加载。左侧 Filter files 递归筛选并保留匹配文件的父目录，右侧 Search resources 只筛选当前目录；右侧还有类型过滤和尺寸设置。导航记录只保存当前会话。
+
+路径栏接受 res://、当前目录下的相对路径以及内容根内的绝对路径；不能通过上级/路径栏越出内容根。Refresh 重新读取目录元数据，不执行资产原地热重载。右键卡片可打开或复制 res:// 路径。不可读、已删除、未支持的文件显示错误，界面继续运行。
+
+文件夹、网格、纹理、JSON 候选材质、普通文件采用不同类型图标；不批量生成真实缩略图。JSON 是否为有效材质由 MaterialAsset 加载验证。目录树与网格共用 CPU 元数据，不增加第二套资产管理器。资源导入不自动生成节点；从 GLB/glTF 卡片拖到视口后，宿主在下一次绘制前加载并通过原 EditorScene::AddMesh 流程创建静态网格，初始位置为世界原点。详细边界见 [资产工程细节](../../key_implemetion/performance/05-assets-materials-and-instance-data.md)。
+
+### 材质库与桌面导入
+
+将文件从资源管理器/桌面拖到已打开的 Material Editor 或其展开的 Material Library 中，导入到当前选中的目录分类；All materials 对应当前工程 Content。未显示的材质窗口不接收文件投递。支持项目 version 1 材质 JSON，以及 PNG/JPG/JPEG/BMP/TGA 图片。图片生成引用该图片的 Lit/Opaque BaseColor 材质；JSON 的 textureParameters 依赖一并复制并改为相对路径。目录、任意 JSON、USD/MaterialX 等格式明确报错，不冒充已支持。
+
+导入使用独立新目录，重名加后缀，不移动或覆盖源文件。先复制依赖，再写 material.json；失败只清理本次新建的目标。UI 显示批次进度、失败原因，可取消尚未处理的文件。每帧最多处理一个文件，单个大文件的复制/解码仍同步阻塞该帧，未实现后台导入。
+
+MaterialLibrary 只保存路径、名字、分类、ShadingModel、BaseColor 等 CPU 元数据；卡片是颜色球形示意，不是实际 PBR 材质缩略图，也不为整个库加载 GPU 资产。实际选择/导入仍由 Engine::AssetManager 加载，MaterialAsset/TextureAsset 保持资源所有权。Editor 通过 SetContentRoot 随工程切换库根，无工程时库为空；公共构造接口仍允许其他宿主指定根目录，不将 USD/贴图目录伪装成已导入材质。
+
+原生拖放、路径副本、处理时序和失败边界见 [UI 工程细节](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md) 及 [资产导入细节](../../key_implemetion/performance/05-assets-materials-and-instance-data.md)。
+
+## 场景更新和同步
+
+`EditorScene` 仅在增删、变换或材质编辑后刷新 pending updates，正常帧不重复重建实例块。由于现有场景刷新会替换 GPU 缓冲，编辑前读取视口输出纹理 Tracker 的具体 `(QueueType, Value)` 并 WaitValue；GUI 对它的最终采样记录覆盖此前场景提交。没有新增 WaitIdle 或全局 retained 列表。窗口 resize 沿用已有窗口完成点等待。
+
+`Scene::NotifyComponentChanged` 对 Primitive 创建新代理并进入现有 keyed AddPrimitive 命令，在 Flush 时替换旧代理；只设 dirty 标志不能更新代理缓存。StaticMeshProxy 读取完整组件世界矩阵，SceneComponent 的矩阵读取接口因此为 const。未替换 RDG 的资源状态或 Pass 生命周期设计。
+
+关闭先销毁窗口，由既有 ReleaseWindow 完成该窗口提交，再销毁面板、视口和场景；移除组件前先消费借用它的移除命令。RHI/Renderer 由模块依赖保证此时仍可用。更详细的时序见 [UI 工程实现](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
+
+分隔条是 ImGUISlate 的 ImSplitterWidget，只负责当前 ImGuiContext 的命中、光标请求和拖动增量。布局比例仍属于 EditorLayout；回调只在数值实际改变时调用 ImMainWindow::UpdateLayout。三个分隔条在任何视口/面板绘制前登记，重新布局前等待上一窗口完成标记，再经既有 SetGeometry/SceneViewport::Resize 更新纹理。内部拖动不销毁窗口交换链，不添加 WaitIdle 或资源保活容器；边界达到下限时也不重复等待。
+
+## 启动
+
+`Langcher.exe` 默认 Editor；`Langcher.exe -app=Application` 保留旧应用，`-app=Editor` 显式选择编辑器，`-help` 显示可选项。参数只来自 argv，无环境变量回退。
+
+[apps.json](../../../src/Lancher/apps.json) 是实际装配源，CMake configure 时 COPYONLY 到 BINARY_DIR。默认两应用均为 Vulkan，图形后端由所选条目的模块/依赖决定，不提供未经接入的 `-rhi` 参数。配置校验、依赖排序和 DLL 链接边界见 [启动实现](../../key_implemetion/performance/09-module-build-and-startup.md)。
+
+Editor 条目显式列出四个功能模块：SceneEditor 在 Engine/Renderer 之后启动，AssetEditor、MaterialEditor、NodeEditor 在 Engine 之后启动，Editor 最后组装。Application 条目不加载这些功能模块。Langcher 仍只通过 add_dependencies 建立应用构建前置，不把具体应用 DLL 静态导入到 EXE。
+
+本轮验证及限制见 [2026-10-26 故障记录](../../dev/bugfix/故障与修复记录-2026-10-26.md)，界面实现存在不等于完成了全部鼠标、文本、DPI 交互验证。

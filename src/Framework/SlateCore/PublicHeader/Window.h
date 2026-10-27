@@ -53,6 +53,7 @@ namespace SlateCore {
         bool OnMouseWheel(const MouseWheelEvent& event) override;
         bool OnKeyDown(const KeyEvent& event) override;
         bool OnKeyUp(const KeyEvent& event) override;
+        bool OnFilesDropped(const FileDropEvent& event) override;
 
     protected:
         PlatformSurface* GetOwnedSurface() const override;

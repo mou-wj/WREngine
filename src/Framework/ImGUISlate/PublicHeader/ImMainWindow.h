@@ -20,6 +20,11 @@ namespace ImGUISlate
         bool Initialize() override;
     public:
         ImSlateRenderer* GetRenderer() const;
+        // Select the layout after Initialize and before registering widgets.
+        void SetLayout(std::unique_ptr<LayoutManager> layout);
+        // Used after interactive layout values change; finishes this window's users.
+        void UpdateLayout();
+        void WaitForLastDraw();
         void AddWidget(SlateCore::Widget* widget, const LayoutParams& params);
         void RemoveWidget(SlateCore::Widget* widget) override;
         // Window registrations must stay synchronized with the layout.
@@ -45,6 +50,8 @@ namespace ImGUISlate
 
         bool OnKeyUp(
             const SlateCore::KeyEvent& event) override;
+
+        bool OnTextInput(uint16_t character) override;
 
     private:
         SlateCore::SlateRenderer* m_WindowRenderer = nullptr;

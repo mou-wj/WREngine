@@ -214,6 +214,16 @@ namespace SlateCore {
     bool Window::OnKeyDown(const KeyEvent& event) { return _focusedWidget && _focusedWidget->OnKeyDown(event); }
     bool Window::OnKeyUp(const KeyEvent& event) { return _focusedWidget && _focusedWidget->OnKeyUp(event); }
 
+    bool Window::OnFilesDropped(const FileDropEvent& event)
+    {
+        auto* widget = FindWidget(event.X, event.Y);
+        if (!widget) return false;
+        auto local = event;
+        local.X -= static_cast<int>(widget->GetGeometry().X);
+        local.Y -= static_cast<int>(widget->GetGeometry().Y);
+        return widget->OnFilesDropped(local);
+    }
+
     WindowSP WindowFactory::CreateWindowSP(int w, int h, const std::string& title) {
         return m_Creator(w, h, title);
     }

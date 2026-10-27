@@ -33,6 +33,16 @@
 
 ImGui 的窗口、弹层内部排序与捕获由 ImGui 自己维护。当前 SlateCore 不提供通用弹层栈或跨框架遮挡排序器。
 
+### 鼠标光标
+
+PlatformSurface 定义 EMouseCursor 与 SetMouseCursor，PlatformSurfaceOwner/Window 负责转发。Win32Surface 将箭头、文本、横纵/对角拉伸、手形、等待、禁止及隐藏等形态映射到系统共享光标。WM_SETCURSOR 只在 HTCLIENT 使用当前形态，非客户区继续交给系统，保留窗口外边框的默认缩放光标；每帧主动更新时仅影响本窗口客户区或本窗口捕获期间，不修改其他应用的鼠标样式。具体 ImGui 光标转换属于 ImGUISlate。
+
+### 桌面文件拖放
+
+`EventHandler::OnFilesDropped(FileDropEvent)` 表达文件路径列表与落点，不依赖 ImGui。Win32 Surface 在窗口创建后启用 DragAcceptFiles，通过 WM_DROPFILES / DragQueryFileW 拷贝 UTF-16 路径到 std::filesystem::path，离开处理函数时总是 DragFinish。Window 按原有逆序命中 Widget，将客户区落点转换为该 Widget 的局部坐标，仅向命中的控件投递，不向全窗口广播。
+
+文件事件同步进入 UI 线程。处理方若需要导入，应自行保存路径值，离开原生回调后再处理，不持有 HDROP 或在消息分派中创建图形资源。MaterialEditor 的较大模态库由自身 HitTest 补充可见矩形，并在 Editor 中最后登记；该能力没有引入通用跨框架弹层排序器。Windows 外壳向不同权限级别进程拖放的限制仍由系统决定。
+
 ## 4. SlateWidget 与 SlateViewport
 
 `SlateWidget::Draw()` 转发给所挂载的视口，尺寸变化转发给 `SlateViewport::Resize`，输入与焦点也转发给它。该包装器不拥有视口，保留它是为了复用既有 Engine/Application 的挂载方式。

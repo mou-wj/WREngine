@@ -65,7 +65,7 @@ namespace Engine
 
     public:
         const Core::Mat4&
-            GetComponentTransform();
+            GetComponentTransform() const;
 
         Core::Float3 GetForwardVector() const;
         Core::Float3 GetRightVector();

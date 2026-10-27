@@ -454,6 +454,7 @@ namespace Renderer {
 
     void Scene::NotifyComponentChanged(SceneComponent* component)
     {
+        if (!component) return;
         if (component->IsA<Engine::LightComponent>())
         {
             auto* light = static_cast<Engine::LightComponent*>(component);
@@ -486,6 +487,18 @@ namespace Renderer {
 
         if (component->IsA<Engine::PrimitiveComponent>())
         {
+            // Replacing the keyed proxy at FlushPendingUpdates refreshes its cached
+            // transform/bounds; setting the GPU dirty bit alone leaves the old proxy.
+            auto* primitive = static_cast<Engine::PrimitiveComponent*>(component);
+            SceneCommand command;
+            command.Type = ESceneCommandType::AddPrimitive;
+            command.PrimitiveComponent = primitive;
+            command.PrimitiveProxy.reset(primitive->CreateSceneProxy());
+            if (command.PrimitiveProxy)
+            {
+                std::scoped_lock lock(m_PendingCommandMutex);
+                m_PendingCommands.push_back(std::move(command));
+            }
             m_GPUResourceInfo.DirtyFlags |=
                 ESceneGPUResourceDirty
                 ::Primitive;

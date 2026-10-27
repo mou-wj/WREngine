@@ -10,7 +10,7 @@ Core 位于框架底层，提供 DLL 模块管理、路径、日志、时间、�
 
 [Module.h](../../src/Framework/Core/PublicHeader/Module.h) 定义 Module 的 StartupModule、ShutdownModule、IsLoaded 等契约。IMPLEMENT_SIMPLE_MODULE 在 DLL 静态初始化时注册共享模块对象；LoadModule 从可执行目录加载动态库，注册不等于启动。
 
-ModuleManager 根据依赖做 DFS，visiting 检测递归环，visited 防止重复访问，依赖先入启动序列。ShutdownAll 逆序关闭。当前 Launcher 仍在 Loop::Init 手工列出 DLL 和依赖；不存在已启用的 apps.json 加载方案。
+ModuleManager 根据依赖做 DFS，visiting 检测递归环，visited 防止重复访问，依赖先入启动序列。ShutdownAll 逆序关闭。Launcher 在 Loop::Init 读取运行目录 apps.json，选择应用并校验其依赖，再调用这些既有接口；JSON 解析不下沉到 Core。
 
 ModuleManager 的注册、查找、启动和关闭使用 recursive_mutex；AddModuleDependency 不持锁，按当前启动阶段串行使用理解，不能据此宣称任意线程可修改依赖图。加载错误处理、重复 StartupAll 的序列维护等限制见 [构建与模块启动](../key_implemetion/performance/09-module-build-and-startup.md)。
 

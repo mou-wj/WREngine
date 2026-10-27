@@ -1,0 +1,5 @@
+add_subdirectory(SceneEditor)
+add_subdirectory(AssetEditor)
+add_subdirectory(MaterialEditor)
+add_subdirectory(NodeEditor)
+add_subdirectory(Editor)

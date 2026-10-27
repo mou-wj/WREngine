@@ -30,6 +30,7 @@ namespace SlateCore
 
         void SetPosition(int x, int y) override;
         void SetSize(int width, int height) override;
+        void SetMouseCursor(EMouseCursor cursor) override;
 
         void* GetNativeHandle() const override;
         Core::Int2 GetFramebufferSize() const override;
@@ -57,6 +58,7 @@ namespace SlateCore
 
     private:
         HWND m_HWnd = nullptr;
+        HCURSOR m_Cursor = nullptr;
         uint32_t m_PressedButtons = 0;
     };
 }

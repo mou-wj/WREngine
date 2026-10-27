@@ -46,6 +46,11 @@ namespace SlateCore
         return nullptr;
     }
 
+    void PlatformSurfaceOwner::SetMouseCursor(EMouseCursor cursor)
+    {
+        if (auto* surface = GetOwnedSurface()) surface->SetMouseCursor(cursor);
+    }
+
     void PlatformSurfaceOwner::OnSurfaceCloseRequested()
     {
         if (_closeCallback)

@@ -7,6 +7,7 @@
 namespace SlateCore
 {
     class PlatformSurface;
+    enum class EMouseCursor;
 
     using WindowCloseCallback = std::function<void()>;
     using WindowResizeCallback = std::function<void(int width, int height)>;
@@ -43,6 +44,7 @@ namespace SlateCore
 
         void SetPosition(int x, int y);
         void SetSize(int width, int height);
+        void SetMouseCursor(EMouseCursor cursor);
 
         virtual void OnSurfaceCloseRequested();
         bool OnResize(uint32_t width, uint32_t height) override;

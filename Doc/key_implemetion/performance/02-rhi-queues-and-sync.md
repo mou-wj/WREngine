@@ -26,6 +26,8 @@ ExecuteContext 用 m_FlushContextMutex 串行组装提交；waitInfos 被转换�
 
 swapchain acquire 的 binary semaphore 与长期 timeline 是两种同步对象：acquire 解决后缓冲图像可用，timeline 解决引擎提交的完成。GarbageCollect 处理提交记录，不能把“调用 ReleaseCommandContext”理解为硬件自动允许重录。
 
+复用 context 还必须清空 CPU 侧的原生状态缓存。VulkanPendingGfxState::Reset 现会清空所有 pending vertex streams；上一提交完成后旧缓冲可合法销毁，不能在新 command buffer 的后续 Draw 中把旧句柄重新绑定，即便当前管线没有使用那个槽位。2026-10-26 的实例缓冲重建测试暴露并修复了这个问题，没有延长旧资源寿命来绕过缓存错误。
+
 ## D3D12：原生 queue fence 和 context 引用
 
 DirectX12SyncPoint::Signal 分配值并调用 queue Signal；Wait 首先比较 GetCompletedValue，必要时 SetEventOnCompletion + Windows event 等待。GetCompletedValue 为 UINT64_MAX 时检查设备移除。

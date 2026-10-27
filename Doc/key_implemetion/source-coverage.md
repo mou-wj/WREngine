@@ -1,12 +1,12 @@
 # 源码检索与文档覆盖清单
 
-整理完成日期：2026-10-26；代码基线：`04f910d`。本清单来自全量文件枚举、全文件文本关键词检索及专题调用链核对；不是逐行正确性审计，也不是运行验证。每行列出的专题是阅读入口，不保证已解释该文件的每个辅助函数。
+更新日期：2026-10-26；基于 `5bb415e` 及本次 Editor 工作区实现。首次整理基线为 `04f910d`。本清单来自全量文件枚举、全文件文本关键词检索及专题调用链核对；不是逐行正确性审计，也不是运行验证。每行列出的专题是阅读入口，不保证已解释该文件的每个辅助函数。
 
 范围：自有 src、全部 Shader、CMake/BuildDeps、依赖元信息和 VS Code 配置。extern/glad 是外部生成 loader；deps、构建目录、生成文件、二进制资源、validation 产物、temp 实验不逐项展开。外部库的使用边界见工程专题，驱动和第三方算法不冒充自有实现。
 
 检索标记：并发=线程/锁/任务/完成点；内存=分配/回收/临时工作区；算法=几何/数学/空间查询；渲染=Shader/管线/绘制。标记只是命中，不是已确认问题；未命中不代表没有核心语义。
 
-本次清单共 **396 个文件、73969 行**；文件数包含接口、配置和构建声明。原始逐文件内容 hash 与关键词计数仅保存在忽略目录 `out/diagnostics/key-implementation-source-scan.json`，正式阅读以本清单和源码链接为准。
+本次清单共 **424 个文件、77030 行**；文件数包含接口、配置和构建声明。原始逐文件内容 hash 与关键词计数仅保存在忽略目录 `out/diagnostics/key-implementation-source-scan.json`，正式阅读以本清单和源码链接为准。
 
 ## 现有 architecture 的补充关系
 
@@ -123,7 +123,37 @@
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
-| [src/CMakeLists.txt](../../src/CMakeLists.txt) | 8 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/CMakeLists.txt](../../src/CMakeLists.txt) | 9 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+
+## src/Editor（25 个文件）
+
+| 源码/配置 | 行数 | 检索标记 | 阅读入口 |
+| --- | ---: | --- | --- |
+| [src/Editor/AssetEditor/CMakeLists.txt](../../src/Editor/AssetEditor/CMakeLists.txt) | 10 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Editor/AssetEditor/Private/AssetEditorModule.cpp](../../src/Editor/AssetEditor/Private/AssetEditorModule.cpp) | 15 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/AssetEditor/Private/EditorAssetPanel.cpp](../../src/Editor/AssetEditor/Private/EditorAssetPanel.cpp) | 418 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/AssetEditor/PublicHeader/EditorAssetPanel.h](../../src/Editor/AssetEditor/PublicHeader/EditorAssetPanel.h) | 73 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/CMakeLists.txt](../../src/Editor/CMakeLists.txt) | 5 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Editor/Editor/CMakeLists.txt](../../src/Editor/Editor/CMakeLists.txt) | 10 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Editor/Editor/Private/EditorApplication.cpp](../../src/Editor/Editor/Private/EditorApplication.cpp) | 332 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/Editor/Private/EditorModule.cpp](../../src/Editor/Editor/Private/EditorModule.cpp) | 24 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/Editor/PublicHeader/EditorApplication.h](../../src/Editor/Editor/PublicHeader/EditorApplication.h) | 60 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/MaterialEditor/CMakeLists.txt](../../src/Editor/MaterialEditor/CMakeLists.txt) | 10 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Editor/MaterialEditor/Private/EditorMaterialPanel.cpp](../../src/Editor/MaterialEditor/Private/EditorMaterialPanel.cpp) | 403 | 内存、渲染 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/MaterialEditor/Private/MaterialEditorModule.cpp](../../src/Editor/MaterialEditor/Private/MaterialEditorModule.cpp) | 15 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/MaterialEditor/Private/MaterialLibrary.cpp](../../src/Editor/MaterialEditor/Private/MaterialLibrary.cpp) | 198 | 内存 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/MaterialEditor/PublicHeader/EditorMaterialPanel.h](../../src/Editor/MaterialEditor/PublicHeader/EditorMaterialPanel.h) | 74 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/MaterialEditor/PublicHeader/MaterialLibrary.h](../../src/Editor/MaterialEditor/PublicHeader/MaterialLibrary.h) | 41 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/NodeEditor/CMakeLists.txt](../../src/Editor/NodeEditor/CMakeLists.txt) | 9 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Editor/NodeEditor/Private/EditorNodePanel.cpp](../../src/Editor/NodeEditor/Private/EditorNodePanel.cpp) | 42 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/NodeEditor/Private/NodeEditorModule.cpp](../../src/Editor/NodeEditor/Private/NodeEditorModule.cpp) | 14 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h](../../src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h) | 20 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/CMakeLists.txt](../../src/Editor/SceneEditor/CMakeLists.txt) | 9 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Editor/SceneEditor/Private/EditorScene.cpp](../../src/Editor/SceneEditor/Private/EditorScene.cpp) | 291 | 并发、算法 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/Private/EditorScenePanel.cpp](../../src/Editor/SceneEditor/Private/EditorScenePanel.cpp) | 114 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/Private/SceneEditorModule.cpp](../../src/Editor/SceneEditor/Private/SceneEditorModule.cpp) | 15 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/PublicHeader/EditorScene.h](../../src/Editor/SceneEditor/PublicHeader/EditorScene.h) | 73 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h](../../src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h) | 38 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 
 ## src/Framework（1 个文件）
 
@@ -238,23 +268,25 @@
 | [src/Framework/Engine/PublicHeader/Viewport.h](../../src/Framework/Engine/PublicHeader/Viewport.h) | 30 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/Engine/PublicHeader/ViewportClient.h](../../src/Framework/Engine/PublicHeader/ViewportClient.h) | 23 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 
-## src/Framework/ImGUISlate（13 个文件）
+## src/Framework/ImGUISlate（15 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
 | [src/Framework/ImGUISlate/CMakeLists.txt](../../src/Framework/ImGUISlate/CMakeLists.txt) | 73 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Framework/ImGUISlate/Private/imgui_impl_rhi.cpp](../../src/Framework/ImGUISlate/Private/imgui_impl_rhi.cpp) | 351 | 并发、内存、渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/ImGUISlate/Private/imgui_impl_rhi.h](../../src/Framework/ImGUISlate/Private/imgui_impl_rhi.h) | 47 | 内存、渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/ImGUISlate/Private/ImMainWindow.cpp](../../src/Framework/ImGUISlate/Private/ImMainWindow.cpp) | 191 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/ImGUISlate/Private/ImSlateRenderer.cpp](../../src/Framework/ImGUISlate/Private/ImSlateRenderer.cpp) | 243 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/ImGUISlate/Private/ImMainWindow.cpp](../../src/Framework/ImGUISlate/Private/ImMainWindow.cpp) | 217 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/ImGUISlate/Private/ImSlateRenderer.cpp](../../src/Framework/ImGUISlate/Private/ImSlateRenderer.cpp) | 297 | 并发、渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/ImGUISlate/Private/ImWidget.cpp](../../src/Framework/ImGUISlate/Private/ImWidget.cpp) | 173 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/ImGUISlate/Private/LayoutMgr.cpp](../../src/Framework/ImGUISlate/Private/LayoutMgr.cpp) | 197 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/ImGUISlate/Private/Widgets/ImFileDialogWidget.cpp](../../src/Framework/ImGUISlate/Private/Widgets/ImFileDialogWidget.cpp) | 748 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/ImGUISlate/PublicHeader/ImMainWindow.h](../../src/Framework/ImGUISlate/PublicHeader/ImMainWindow.h) | 54 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/ImGUISlate/PublicHeader/ImSlateRenderer.h](../../src/Framework/ImGUISlate/PublicHeader/ImSlateRenderer.h) | 57 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/ImGUISlate/Private/Widgets/ImCommonWidgets.cpp](../../src/Framework/ImGUISlate/Private/Widgets/ImCommonWidgets.cpp) | 197 | 算法 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/ImGUISlate/Private/Widgets/ImFileDialogWidget.cpp](../../src/Framework/ImGUISlate/Private/Widgets/ImFileDialogWidget.cpp) | 847 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/ImGUISlate/PublicHeader/ImMainWindow.h](../../src/Framework/ImGUISlate/PublicHeader/ImMainWindow.h) | 61 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/ImGUISlate/PublicHeader/ImSlateRenderer.h](../../src/Framework/ImGUISlate/PublicHeader/ImSlateRenderer.h) | 61 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/ImGUISlate/PublicHeader/ImWidget.h](../../src/Framework/ImGUISlate/PublicHeader/ImWidget.h) | 46 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/ImGUISlate/PublicHeader/LayoutMgr.h](../../src/Framework/ImGUISlate/PublicHeader/LayoutMgr.h) | 127 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/ImGUISlate/PublicHeader/Widgets/ImFileDialogWidget.h](../../src/Framework/ImGUISlate/PublicHeader/Widgets/ImFileDialogWidget.h) | 120 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/ImGUISlate/PublicHeader/Widgets/ImCommonWidgets.h](../../src/Framework/ImGUISlate/PublicHeader/Widgets/ImCommonWidgets.h) | 91 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/ImGUISlate/PublicHeader/Widgets/ImFileDialogWidget.h](../../src/Framework/ImGUISlate/PublicHeader/Widgets/ImFileDialogWidget.h) | 127 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 
 ## src/Framework/RenderCore（28 个文件）
 
@@ -321,7 +353,7 @@
 | [src/Framework/Renderer/Private/PostProcess/AntiAliasingPostProcess.cpp](../../src/Framework/Renderer/Private/PostProcess/AntiAliasingPostProcess.cpp) | 21 | 渲染 | [07-screen-space-and-antialiasing](algorithm/07-screen-space-and-antialiasing.md) |
 | [src/Framework/Renderer/Private/PostProcess/AntiAliasingPostProcess.h](../../src/Framework/Renderer/Private/PostProcess/AntiAliasingPostProcess.h) | 66 | 渲染 | [07-screen-space-and-antialiasing](algorithm/07-screen-space-and-antialiasing.md) |
 | [src/Framework/Renderer/Private/RenderModule.cpp](../../src/Framework/Renderer/Private/RenderModule.cpp) | 297 | 内存、算法、渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
-| [src/Framework/Renderer/Private/Scene.cpp](../../src/Framework/Renderer/Private/Scene.cpp) | 1066 | 内存、算法、渲染 | [02-bvh-octree-and-scene-query](algorithm/02-bvh-octree-and-scene-query.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Framework/Renderer/Private/Scene.cpp](../../src/Framework/Renderer/Private/Scene.cpp) | 1079 | 内存、算法、渲染 | [02-bvh-octree-and-scene-query](algorithm/02-bvh-octree-and-scene-query.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Renderer/Private/Scene.h](../../src/Framework/Renderer/Private/Scene.h) | 329 | 并发、内存 | [02-bvh-octree-and-scene-query](algorithm/02-bvh-octree-and-scene-query.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Renderer/Private/SceneRenderer.cpp](../../src/Framework/Renderer/Private/SceneRenderer.cpp) | 894 | 内存、算法、渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
 | [src/Framework/Renderer/Private/SceneRenderer.h](../../src/Framework/Renderer/Private/SceneRenderer.h) | 80 | 内存、渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
@@ -449,7 +481,7 @@
 | [src/Framework/RHIVulkan/PublicHeader/VulkanDevice.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanDevice.h) | 193 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanFuncWrapper.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanFuncWrapper.h) | 199 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanMemory.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanMemory.h) | 139 | 并发、内存 | [04-memory-and-transient-resources](performance/04-memory-and-transient-resources.md) |
-| [src/Framework/RHIVulkan/PublicHeader/VulkanPendingPipelineState.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanPendingPipelineState.h) | 1517 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
+| [src/Framework/RHIVulkan/PublicHeader/VulkanPendingPipelineState.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanPendingPipelineState.h) | 1520 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanPipelineState.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanPipelineState.h) | 277 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanPlatformSurport.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanPlatformSurport.h) | 15 | 渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanQueue.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanQueue.h) | 91 | 并发、内存 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
@@ -466,24 +498,24 @@
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
-| [src/Framework/SlateCore/CMakeLists.txt](../../src/Framework/SlateCore/CMakeLists.txt) | 62 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Framework/SlateCore/CMakeLists.txt](../../src/Framework/SlateCore/CMakeLists.txt) | 65 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Framework/SlateCore/Private/ApplicationBase.cpp](../../src/Framework/SlateCore/Private/ApplicationBase.cpp) | 15 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/SlateCore/Private/EventHandler.cpp](../../src/Framework/SlateCore/Private/EventHandler.cpp) | 53 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/SlateCore/Private/PlatformSurfaceOwner.cpp](../../src/Framework/SlateCore/Private/PlatformSurfaceOwner.cpp) | 103 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/SlateCore/Private/PlatformSurfaceOwner.cpp](../../src/Framework/SlateCore/Private/PlatformSurfaceOwner.cpp) | 108 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/SlateCore/Private/SlateWidget.cpp](../../src/Framework/SlateCore/Private/SlateWidget.cpp) | 131 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/SlateCore/Private/Widget.cpp](../../src/Framework/SlateCore/Private/Widget.cpp) | 1 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/SlateCore/Private/Win32Surface.cpp](../../src/Framework/SlateCore/Private/Win32Surface.cpp) | 417 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/SlateCore/Private/Window.cpp](../../src/Framework/SlateCore/Private/Window.cpp) | 229 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/SlateCore/Private/Win32Surface.cpp](../../src/Framework/SlateCore/Private/Win32Surface.cpp) | 507 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/SlateCore/Private/Window.cpp](../../src/Framework/SlateCore/Private/Window.cpp) | 239 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/SlateCore/PublicHeader/ApplicationBase.h](../../src/Framework/SlateCore/PublicHeader/ApplicationBase.h) | 26 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/SlateCore/PublicHeader/EventHandler.h](../../src/Framework/SlateCore/PublicHeader/EventHandler.h) | 122 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/SlateCore/PublicHeader/PlatformSurface.h](../../src/Framework/SlateCore/PublicHeader/PlatformSurface.h) | 62 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/SlateCore/PublicHeader/PlatformSurfaceOwner.h](../../src/Framework/SlateCore/PublicHeader/PlatformSurfaceOwner.h) | 66 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/SlateCore/PublicHeader/EventHandler.h](../../src/Framework/SlateCore/PublicHeader/EventHandler.h) | 152 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/SlateCore/PublicHeader/PlatformSurface.h](../../src/Framework/SlateCore/PublicHeader/PlatformSurface.h) | 68 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/SlateCore/PublicHeader/PlatformSurfaceOwner.h](../../src/Framework/SlateCore/PublicHeader/PlatformSurfaceOwner.h) | 68 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/SlateCore/PublicHeader/SlateRenderer.h](../../src/Framework/SlateCore/PublicHeader/SlateRenderer.h) | 33 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/SlateCore/PublicHeader/SlateViewport.h](../../src/Framework/SlateCore/PublicHeader/SlateViewport.h) | 22 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/SlateCore/PublicHeader/SlateWidget.h](../../src/Framework/SlateCore/PublicHeader/SlateWidget.h) | 45 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/SlateCore/PublicHeader/Widget.h](../../src/Framework/SlateCore/PublicHeader/Widget.h) | 137 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/SlateCore/PublicHeader/Win32Surface.h](../../src/Framework/SlateCore/PublicHeader/Win32Surface.h) | 64 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/SlateCore/PublicHeader/Window.h](../../src/Framework/SlateCore/PublicHeader/Window.h) | 93 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/SlateCore/PublicHeader/Win32Surface.h](../../src/Framework/SlateCore/PublicHeader/Win32Surface.h) | 66 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/SlateCore/PublicHeader/Window.h](../../src/Framework/SlateCore/PublicHeader/Window.h) | 94 | 渲染 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 
 ## src/Framework/SlateRHIRenderer（5 个文件）
 
@@ -495,14 +527,15 @@
 | [src/Framework/SlateRHIRenderer/Private/SlateRHIRenderer.h](../../src/Framework/SlateRHIRenderer/Private/SlateRHIRenderer.h) | 24 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/SlateRHIRenderer/PublicHeader/SlateRHIModule.h](../../src/Framework/SlateRHIRenderer/PublicHeader/SlateRHIModule.h) | 22 | 接口/配置/基础辅助 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 
-## src/Lancher（4 个文件）
+## src/Lancher（5 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
-| [src/Lancher/CMakeLists.txt](../../src/Lancher/CMakeLists.txt) | 14 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
-| [src/Lancher/Loop.cpp](../../src/Lancher/Loop.cpp) | 37 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Lancher/apps.json](../../src/Lancher/apps.json) | 27 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Lancher/CMakeLists.txt](../../src/Lancher/CMakeLists.txt) | 18 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Lancher/Loop.cpp](../../src/Lancher/Loop.cpp) | 95 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Lancher/Loop.h](../../src/Lancher/Loop.h) | 8 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
-| [src/Lancher/main.cpp](../../src/Lancher/main.cpp) | 8 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Lancher/main.cpp](../../src/Lancher/main.cpp) | 16 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
 ## src/Tests（12 个文件）
 

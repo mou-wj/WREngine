@@ -33,6 +33,7 @@
 
 - [app/applicationbase.md](app/applicationbase.md) — ApplicationBase 应用生命周期抽象
 - [app/application.md](app/application.md) — App::Application 具体应用入口实现
+- [app/editor.md](app/editor.md) — Editor 工程生命周期、场景/资产/材质/节点模块及 JSON 应用选择
 
 ## 7. 说明
 

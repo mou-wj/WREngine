@@ -1,0 +1,27 @@
+{
+  "defaultApp": "Editor",
+  "apps": {
+    "Application": {
+      "modules": ["RHIVulkan", "Engine", "Renderer", "SlateRHIRenderer", "Application"],
+      "dependencies": {
+        "Engine": ["RHIVulkan"],
+        "Renderer": ["Engine"],
+        "SlateRHIRenderer": ["Renderer"],
+        "Application": ["Engine", "Renderer", "SlateRHIRenderer"]
+      }
+    },
+    "Editor": {
+      "modules": ["RHIVulkan", "Engine", "Renderer", "SlateRHIRenderer", "SceneEditor", "AssetEditor", "MaterialEditor", "NodeEditor", "Editor"],
+      "dependencies": {
+        "Engine": ["RHIVulkan"],
+        "Renderer": ["Engine"],
+        "SlateRHIRenderer": ["Renderer"],
+        "SceneEditor": ["Engine", "Renderer"],
+        "AssetEditor": ["Engine"],
+        "MaterialEditor": ["Engine"],
+        "NodeEditor": ["Engine"],
+        "Editor": ["Engine", "SlateRHIRenderer", "SceneEditor", "AssetEditor", "MaterialEditor", "NodeEditor"]
+      }
+    }
+  }
+}

@@ -3,6 +3,7 @@
 #include "ImSlateRenderer.h"
 #include "ImWidget.h"
 #include <algorithm>
+#include <stdexcept>
 
 namespace ImGUISlate
 {
@@ -17,6 +18,11 @@ namespace ImGUISlate
     }
 
     ImMainWindow::~ImMainWindow() = default;
+
+    bool ImMainWindow::OnTextInput(uint16_t character)
+    {
+        return m_Renderer && m_Renderer->OnTextInput(character);
+    }
 
     void ImMainWindow::Draw()
     {
@@ -36,6 +42,14 @@ namespace ImGUISlate
         return m_Renderer.get();
     }
 
+    void ImMainWindow::SetLayout(std::unique_ptr<LayoutManager> layout)
+    {
+        if (!layout) throw std::invalid_argument("Window layout cannot be null");
+        if (!m_Renderer || !_widgets.empty())
+            throw std::logic_error("Select the layout after Initialize and before AddWidget");
+        m_Layout = std::move(layout);
+    }
+
     void ImMainWindow::AddWidget(SlateCore::Widget* widget,const LayoutParams& params)
     {
         if (!widget || std::find(_widgets.begin(), _widgets.end(), widget) != _widgets.end()) return;
@@ -44,6 +58,18 @@ namespace ImGUISlate
         const auto size = GetFramebufferSize();
         m_Layout->Layout(static_cast<float>(size.X), static_cast<float>(size.Y));
 
+    }
+
+    void ImMainWindow::UpdateLayout()
+    {
+        const auto size = GetFramebufferSize();
+        if (!m_Layout || size.X <= 0 || size.Y <= 0) return;
+        if (m_Renderer) m_Renderer->WaitForLastDraw();
+        m_Layout->Layout(static_cast<float>(size.X), static_cast<float>(size.Y));
+    }
+    void ImMainWindow::WaitForLastDraw()
+    {
+        if (m_Renderer) m_Renderer->WaitForLastDraw();
     }
 
     void ImMainWindow::RemoveWidget(SlateCore::Widget* widget)

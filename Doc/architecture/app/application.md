@@ -2,6 +2,8 @@
 
 ## 1. 模块定位
 
+本篇描述保留的演示应用，可通过 `Langcher.exe -app=Application` 选择。默认应用已改为 [Editor](editor.md)，装配信息位于 src/Lancher/apps.json，两者不会同时作为应用入口启动。
+
 `App::Application` 是当前项目中具体应用层的实现类，继承自 `SlateCore::ApplicationBase`。它负责把窗口、视口、编辑器 UI 面板和渲染器整合起来，形成最终可运行的应用程序入口。
 
 对应源码：

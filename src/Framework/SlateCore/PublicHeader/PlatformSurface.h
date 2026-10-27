@@ -5,6 +5,11 @@
 
 namespace SlateCore
 {
+    enum class EMouseCursor
+    {
+        Arrow, TextInput, ResizeAll, ResizeNS, ResizeEW, ResizeNESW, ResizeNWSE,
+        Hand, Wait, Progress, NotAllowed, None
+    };
     class PlatformSurfaceOwner;
 
     class SLATECORE_API PlatformSurface
@@ -29,6 +34,7 @@ namespace SlateCore
 
         virtual void SetPosition(int x, int y) = 0;
         virtual void SetSize(int width, int height) = 0;
+        virtual void SetMouseCursor(EMouseCursor cursor) = 0;
 
         virtual void* GetNativeHandle() const = 0;
         virtual Core::Int2 GetFramebufferSize() const = 0;
