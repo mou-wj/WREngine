@@ -61,17 +61,24 @@ namespace Editor
         m_ImportDialog.SetSelectionMode(ImGUISlate::ImFileDialogWidget::SelectionMode::MultipleFiles);
         m_ImportDialog.SetOnConfirm([this](const auto& files) { QueueImport(files); });
         m_Grid.SetOnSelectionChanged([this](const std::string& id, bool activated) {
-            SelectPath(std::filesystem::u8path(id),true);
-            if (activated) OpenSelected();
+            // A material click opens on release, allowing a drag to start first.
+            SelectPath(std::filesystem::u8path(id));
+            if (activated && FileType(std::filesystem::u8path(id)) != 2) OpenSelected();
         });
         m_Grid.SetOnItemActions([this](const std::string& id) {
             std::error_code error;
             const auto path=std::filesystem::u8path(id);
-            if (FileType(path) == 1 && std::filesystem::is_regular_file(path,error) && ImGui::BeginDragDropSource())
+            const auto type = FileType(path);
+            if ((type == 1 || type == 2) && std::filesystem::is_regular_file(path,error) && ImGui::BeginDragDropSource())
             {
-                ImGui::SetDragDropPayload("EDITOR_ASSET_PATH",id.c_str(),id.size()+1);
-                ImGui::TextUnformatted("Drop mesh into the scene viewport"); ImGui::EndDragDropSource(); return;
+                ImGui::SetDragDropPayload(type == 1 ? "EDITOR_ASSET_PATH" : "EDITOR_MATERIAL_PATH",id.c_str(),id.size()+1);
+                ImGui::TextUnformatted(type == 1 ? "Drop mesh into the scene viewport" : "Drop material onto a mesh surface");
+                ImGui::EndDragDropSource(); return;
             }
+            const auto& io = ImGui::GetIO();
+            if (type == 2 && ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
+                io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] < io.MouseDragThreshold*io.MouseDragThreshold && !ImGui::GetDragDropPayload())
+                SelectPath(path,true);
             if (ImGui::BeginPopupContextItem("Asset actions"))
             {
                 if (ImGui::MenuItem("Open / Add mesh")) { SelectPath(std::filesystem::u8path(id)); OpenSelected(); }

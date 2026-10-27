@@ -100,6 +100,10 @@ CloseProject 调用 ImMainWindow::WaitForLastDraw，复用 ImSlateRenderer 已�
 
 网格拖动载荷只含 UTF-8 路径。视口在载荷活动时增加透明逻辑窗口和标准 ImGui DragDropTarget，正常相机操作时不生成这层目标。投递接受只通知宿主记录路径；下一 TickFrame 在当前 Content 内重新检查并创建组件，因此不在当前 Draw 过程中加载后立即替换场景缓冲。最终 Access/Fence 仍由原场景与 GUI 实际提交维护。投放位置当前为世界原点，没有视口拾取/吸附。导入只保存文件、不会自动生成模型，详见 [资源实现](05-assets-materials-and-instance-data.md)。
 
+材质投递沿用同一个逻辑接收区域，载荷类型为 EDITOR_MATERIAL_PATH，回调只复制路径与视口左上原点的归一化 UV，不传组件或资产裸指针。Assets 材质卡片的普通点击在未发生拖动的释放时才打开浮窗，避免按下即打开导致拖动来源被遮挡。EditorApplication 消费顺序为工程动作、网格、材质、节点栏布局，然后开始当前 UI/场景帧；关闭工程会清掉待执行材质路径。未添加后台任务、全局管理器或资源保活容器。
+
+ApplyMaterialAt 在这次选择引起视口尺寸变化之前，用最近显示帧的投影与当前相机视图反投影落点，最近三角形决定实际目标和槽位；背景不回退为当前选择。CPU 命中成功后，先等待现有视口 Tracker 的实际访问完成点，再调用组件 SetMaterial，之后通知代理更新并置场景 dirty，下一次场景 Draw 按原流程 Flush。这样旧材质/实例资源在已有访问完成后才替换，资源 Access/Fence 仍在实际 RHI 提交位置维护。只有投递命中需要该编辑等待，不在悬停时每帧求交或等待。计算及当前几何限制见 [射线算法](../algorithm/01-ray-triangle-and-distance.md)。
+
 EditorApplication 在 TickFrame 消费工程/网格操作后、Draw/NewFrame 前，根据现有场景选择将 NodePanel 设为 Visible 或 Collapsed，仅状态改变时调用原 UpdateLayout。初始状态为 Collapsed，布局器将右栏和右分隔条宽度归零，视口使用腾出的空间。视口纹理重建沿用上述窗口完成 marker 等待；普通帧不重排、不增加等待，没有为折叠改 RHI 或资源保活策略。选择若在 Scene 面板 Draw 中改变，布局在下一 TickFrame 生效，避免重建本帧已记录引用的纹理。
 
 节点面板本身仍在 Draw 时查询当前选择；无选中组件时在 ImPanelWidget::Draw/ImGui::Begin 前返回，HitTest 同样拒绝命中，避免当帧删除后继续生成旧属性窗口。局部变换通过现有组件接口修改，场景通知负责具体 Fence 与代理更新；该面板没有跨帧持有裸组件指针或另存选择状态。用户可见的节点列表为空不代表没有预览灯光，空工程保持背景而无演示模型。实际创建/导入/投放及读回检查范围见 [2026-10-26 记录](../../dev/bugfix/故障与修复记录-2026-10-26.md)，整栏折叠的后续检查见 [2026-10-27 记录](../../dev/bugfix/故障与修复记录-2026-10-27.md)。

@@ -133,6 +133,9 @@ namespace Editor
         m_Viewport = std::make_unique<Engine::SceneViewport>(m_Scene.get(), Core::Int2{800, 800});
         auto viewportWidget = std::make_unique<EditorSceneViewportWidget>();
         viewportWidget->SetOnResourceDropped([this](const auto& path) { if (!m_ProjectDirectory.empty()) m_DroppedMesh=path; });
+        viewportWidget->SetOnMaterialDropped([this](const auto& path, const auto& position) {
+            if (!m_ProjectDirectory.empty()) { m_DroppedMaterial=path; m_DroppedMaterialPosition=position; }
+        });
         m_ViewportWidget = std::move(viewportWidget);
         m_ViewportWidget->SetViewportChild(m_Viewport.get());
         m_ScenePanel = std::make_unique<EditorScenePanel>(*m_Scene);
@@ -243,6 +246,20 @@ namespace Editor
                     m_Scene->AddMesh(Engine::AssetManager::Get().LoadSync<Engine::StaticMeshAsset>(candidate.string()));
                 }
             }
+            if (!m_DroppedMaterial.empty())
+            {
+                const auto path=std::move(m_DroppedMaterial); m_DroppedMaterial.clear();
+                if (!m_ProjectDirectory.empty())
+                {
+                    const auto root=std::filesystem::weakly_canonical(m_ProjectDirectory/"Content");
+                    const auto candidate=std::filesystem::weakly_canonical(path);
+                    const auto relative=candidate.lexically_relative(root);
+                    if (relative.empty() || relative.is_absolute() || *relative.begin()=="..") throw std::runtime_error("Material must be inside the current project");
+                    if (!m_Scene->ApplyMaterialAt(Engine::AssetManager::Get().LoadSync<Engine::MaterialAsset>(candidate.string()),m_DroppedMaterialPosition))
+                        throw std::runtime_error("Drop the material on a mesh surface");
+                    m_ProjectError.clear();
+                }
+            }
         }
         catch (const std::exception& error) { m_ProjectError=error.what(); std::cerr<<"[Editor] "<<m_ProjectError<<std::endl; }
         const auto nodeVisibility = m_Scene->GetSelected() ? SlateCore::EVisibility::Visible : SlateCore::EVisibility::Collapsed;
@@ -298,7 +315,7 @@ namespace Editor
     void EditorApplication::CloseProject()
     {
         m_Window->WaitForLastDraw();
-        m_ProjectDialog->Close(); m_DroppedMesh.clear(); m_PendingProjectAction=ProjectAction::None;
+        m_ProjectDialog->Close(); m_DroppedMesh.clear(); m_DroppedMaterial.clear(); m_DroppedMaterialPosition={}; m_PendingProjectAction=ProjectAction::None;
         m_PendingProjectDirectory.clear();
         m_MaterialPanel->SetContentRoot({}); m_AssetPanel->SetContentRoot({}); m_Scene->ClearObjects();
         Engine::AssetManager::Get().Clear();

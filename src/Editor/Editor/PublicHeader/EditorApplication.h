@@ -53,6 +53,8 @@ namespace Editor
         std::filesystem::path m_ProjectDirectory;
         std::filesystem::path m_PendingProjectDirectory;
         std::filesystem::path m_DroppedMesh;
+        std::filesystem::path m_DroppedMaterial;
+        Core::Float2 m_DroppedMaterialPosition;
         std::string m_ProjectError;
         bool m_bQuit = false;
         bool m_bLoggedFrame = false;

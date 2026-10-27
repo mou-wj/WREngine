@@ -72,9 +72,10 @@ UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行
 - 视口：右键拖动环绕、中键平移、滚轮缩放。投影使用实际视口宽高比；场景通过既有 Renderer 绘制。
 - Assets：左侧参考文件系统树展开目录及其文件，右侧按当前目录显示带类型图标/名称/类型的资源卡片；双击进入目录或打开资产，材质单击打开浮窗。加载图片作为待赋纹理、将 glTF 加入场景、将已加载母材质赋给网格槽 0，继续使用原有回调。网格创建延至下一 TickFrame 的绘制前；实际加载仍同步执行，复杂资源会阻塞 UI。
 - Material Editor：通常不提交绘制窗口；点击资源管理器中的材质后加载并打开浮动窗口，默认选中 Properties 页。关闭后不会因保留上次材质选择而自动重开，再次点击才重开。Library 页保留当前工程内容中的目录分类、搜索、卡片、新建、复制和应用能力。
+- 从 Assets 材质卡片拖到场景网格表面，会将材质赋给鼠标射线最近命中组件的对应材质槽并选中该组件；拖到背景不赋值，也不回退到当前选择。操作覆盖组件该槽位的材质引用，不改共享网格默认材质、不创建材质实例，重新赋值会按既有 SetMaterial 清除该槽旧实例覆盖。仅支持当前渲染器已有的 Opaque 材质。
 - Properties 保留参数继承/恢复、纹理选择/清除、CullMode、TwoSided、Lit/Unlit 和保存副本。打开库中资产后编辑母材质；Inspect mesh 切换到所选网格，只有实际修改参数时创建其独占实例。Assets 的材质/纹理选择仍经原有宿主回调接入。
 
-保存副本不重命名资产，也不导出实例资产。路径已存在时拒绝覆盖；保存后可在 Assets 中刷新并加载。Opaque 以外的 Surface 绘制仍未实现，不通过界面静默启用。首版没有撤销重做、场景序列化、材质节点图、视口点击拾取或完整编辑器快捷键。
+保存副本不重命名资产，也不导出实例资产。路径已存在时拒绝覆盖；保存后可在 Assets 中刷新并加载。Opaque 以外的 Surface 绘制仍未实现，不通过界面静默启用。首版没有撤销重做、场景序列化、材质节点图、普通视口单击拾取或完整编辑器快捷键；材质拖放已使用独立的落点几何查询。
 
 方向切换属于 EditorScene，不依赖 Editor 或材质/资产面板。世界坐标 Y 向上：Top 从 +Y 看向 -Y，Bottom 相反；Left 从 -X 看向 +X，Right 相反；Front 从 +Z 看向 -Z，Back 相反。顶部/底部使用 -Z/+Z 作为屏幕 Up，避免 LookAtRH 的叉积退化。平移、缩放和 Focus 保留方向；右键环绕转回自由状态并从所选方向继续。详细公式见 [相机与坐标专题](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)。
 
@@ -85,6 +86,8 @@ Editor 宿主将当前工程的 Content 设为 `res://`，未打开工程时面�
 路径栏接受 res://、当前目录下的相对路径以及内容根内的绝对路径；不能通过上级/路径栏越出内容根。Refresh 重新读取目录元数据，不执行资产原地热重载。右键卡片可打开或复制 res:// 路径。不可读、已删除、未支持的文件显示错误，界面继续运行。
 
 文件夹、网格、纹理、JSON 候选材质、普通文件采用不同类型图标；不批量生成真实缩略图。JSON 是否为有效材质由 MaterialAsset 加载验证。目录树与网格共用 CPU 元数据，不增加第二套资产管理器。资源导入不自动生成节点；从 GLB/glTF 卡片拖到视口后，宿主在下一次绘制前加载并通过原 EditorScene::AddMesh 流程创建静态网格，初始位置为世界原点。详细边界见 [资产工程细节](../../key_implemetion/performance/05-assets-materials-and-instance-data.md)。
+
+Assets 网格中的材质卡片支持拖放。单击/双击在松开且没有发生拖动时打开编辑器，避免按下时浮窗抢走拖动。载荷只保存 UTF-8 路径，视口同时接受网格与材质两种路径载荷；材质投递额外记录归一化落点，EditorApplication 下一次 Draw 前加载并调用 EditorScene::ApplyMaterialAt。SceneEditor 用当前显示相机反投影，对实际绘制的 LOD0 三角形求最近交点并取 Section.MaterialIndex。数学与边界见 [射线拾取细节](../../key_implemetion/algorithm/01-ray-triangle-and-distance.md)，提交时序见 [UI 核心实现](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
 ### 材质库与桌面导入
 

@@ -1,6 +1,7 @@
 #pragma once
 #include "Widgets/ImCommonWidgets.h"
 #include "SlateWidget.h"
+#include "Math.hpp"
 #include <filesystem>
 
 namespace Editor
@@ -11,9 +12,11 @@ namespace Editor
         DECLARE_TYPE_ID_DERIVED_TYPE(EditorSceneViewportWidget, SlateCore::SlateWidget)
     public:
         void SetOnResourceDropped(std::function<void(const std::filesystem::path&)> callback);
+        void SetOnMaterialDropped(std::function<void(const std::filesystem::path&, const Core::Float2&)> callback);
         void Draw() override;
     private:
         std::function<void(const std::filesystem::path&)> m_OnResourceDropped;
+        std::function<void(const std::filesystem::path&, const Core::Float2&)> m_OnMaterialDropped;
     };
     // The host owns placement; view actions remain part of SceneEditor.
     class SCENEEDITOR_API EditorViewToolbar final : public ImGUISlate::ImWidget

@@ -10,25 +10,37 @@ namespace Editor
     using Controls = ImGUISlate::ImPropertyControls;
     void EditorSceneViewportWidget::SetOnResourceDropped(std::function<void(const std::filesystem::path&)> callback)
     { m_OnResourceDropped = std::move(callback); }
+    void EditorSceneViewportWidget::SetOnMaterialDropped(std::function<void(const std::filesystem::path&, const Core::Float2&)> callback)
+    { m_OnMaterialDropped = std::move(callback); }
     void EditorSceneViewportWidget::Draw()
     {
         SlateWidget::Draw();
         const auto* payload = ImGui::GetDragDropPayload();
-        if (!payload || !payload->IsDataType("EDITOR_ASSET_PATH")) return;
+        if (!payload || (!payload->IsDataType("EDITOR_ASSET_PATH") && !payload->IsDataType("EDITOR_MATERIAL_PATH"))) return;
+        const bool material = payload->IsDataType("EDITOR_MATERIAL_PATH");
         const auto& geometry = GetGeometry();
+        if (geometry.Width <= 0 || geometry.Height <= 0) return;
         ImGui::SetNextWindowPos({geometry.X,geometry.Y}); ImGui::SetNextWindowSize({geometry.Width,geometry.Height});
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0,0});
         const auto flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
             ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar;
-        if (ImGui::Begin("Scene mesh drop target", nullptr, flags))
+        if (ImGui::Begin("Scene resource drop target", nullptr, flags))
         {
-            ImGui::InvisibleButton("Drop mesh", {geometry.Width,geometry.Height});
+            ImGui::InvisibleButton("Drop resource", {geometry.Width,geometry.Height});
             if (ImGui::BeginDragDropTarget())
             {
-                if (const auto* accepted = ImGui::AcceptDragDropPayload("EDITOR_ASSET_PATH"))
-                    if (accepted->DataSize > 0 && static_cast<const char*>(accepted->Data)[accepted->DataSize-1] == '\0' && m_OnResourceDropped)
-                        m_OnResourceDropped(std::filesystem::u8path(static_cast<const char*>(accepted->Data)));
+                if (const auto* accepted = ImGui::AcceptDragDropPayload(material ? "EDITOR_MATERIAL_PATH" : "EDITOR_ASSET_PATH"))
+                    if (accepted->DataSize > 0 && static_cast<const char*>(accepted->Data)[accepted->DataSize-1] == '\0')
+                    {
+                        const auto path = std::filesystem::u8path(static_cast<const char*>(accepted->Data));
+                        if (material && m_OnMaterialDropped)
+                        {
+                            const auto mouse = ImGui::GetIO().MousePos;
+                            m_OnMaterialDropped(path, {(mouse.x-geometry.X)/geometry.Width, (mouse.y-geometry.Y)/geometry.Height});
+                        }
+                        else if (!material && m_OnResourceDropped) m_OnResourceDropped(path);
+                    }
                 ImGui::EndDragDropTarget();
             }
         }

@@ -24,7 +24,7 @@
 
 | 专题 | 要解决的阅读问题 |
 | --- | --- |
-| [射线求交与三角形距离](algorithm/01-ray-triangle-and-distance.md) | 怎样求 t、重心坐标和最近点，epsilon 意味着什么？ |
+| [射线求交与三角形距离](algorithm/01-ray-triangle-and-distance.md) | 怎样求 t、重心坐标和最近点，视口投放怎样选择最近网格与材质槽？ |
 | [BVH、八叉树与场景查询](algorithm/02-bvh-octree-and-scene-query.md) | 如何分割、剪枝，候选集和精确命中有什么区别？ |
 | [矩阵、视锥与深度](algorithm/03-transforms-frustum-and-depth.md) | 行主存储、列向量运算、NO/ZO 深度如何区分？ |
 | [距离场与 Jump Flood](algorithm/04-distance-fields-and-jump-flood.md) | 有符号距离怎样生成、存储、合并和步进？ |

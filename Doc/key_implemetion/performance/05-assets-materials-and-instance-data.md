@@ -57,7 +57,7 @@ BeginUpdateGPUResources 清空本次可见实例 ID 并置 dirty；参数数组�
 
 [EditorAssetPanel](../../../src/Editor/AssetEditor/Private/EditorAssetPanel.cpp) 将文件显示与实际资产加载分开。FileEntry 只保存路径和 bDirectory；m_TreeEntries 按目录保存已访问的子项，目录树与右侧网格读取同一份 CPU 元数据。未展开的目录按需读取，文件树过滤时可能递归扫描其他分支；不在每个正常 UI 帧重新进行全盘枚举。Refresh 清除此元数据并重新读取，不清空 AssetManager，也不执行资产热重载。没有文件 watcher，外部变化要显式刷新。
 
-调用链为目录树选择/卡片双击/路径栏/历史导航 → NavigateTo → 目录检查与读取 → 更新当前目录/选择/路径栏 → DrawResources 生成 ImGridItem。m_SelectedPath 是 UI 选择，不是另一个资产 Id；普通单击设置路径与卡片高亮，材质 JSON 的用户单击额外调用 OpenSelected，加载成功后通知宿主打开浮动材质编辑器。Import/Refresh 的程序选中不触发此弹窗。OpenSelected 调用原有 LoadSync：glb/gltf 加载后交给宿主的 MeshOpenedCallback，材质/纹理由面板保留当前强引用，网格/材质依赖仍由实际拥有者维持。Editor 宿主保存网格路径，在下一次 TickFrame 绘制前创建组件。关闭时面板自身销毁，文件路径/历史/元数据同步释放，不存在后台回调。
+调用链为目录树选择/卡片双击/路径栏/历史导航 → NavigateTo → 目录检查与读取 → 更新当前目录/选择/路径栏 → DrawResources 生成 ImGridItem。m_SelectedPath 是 UI 选择，不是另一个资产 Id；普通单击设置路径与卡片高亮，材质 JSON 的用户点击额外调用 OpenSelected，加载成功后通知宿主打开浮动材质编辑器。卡片的材质打开延至松开且未超过拖动阈值，目录树的原打开方式保留；Import/Refresh 的程序选中不触发弹窗。OpenSelected 调用原有 LoadSync：glb/gltf 加载后交给宿主的 MeshOpenedCallback，材质/纹理由面板保留当前强引用，网格/材质依赖仍由实际拥有者维持。Editor 宿主保存网格路径，在下一次 TickFrame 绘制前创建组件。关闭时面板自身销毁，文件路径/历史/元数据同步释放，不存在后台回调。
 
 文件系统路径使用 filesystem::path，显示转为 UTF-8。Editor 将当前工程的 Content 设为 res://，无工程时根目录为空，不浏览引擎内置 resources；无参面板构造保留 resources 默认值供其他宿主使用。导航先 weakly_canonical 再检查位于内容根；跳过文件系统判为符号链接的条目，避免直接遍历这些链接。没有把该检查宣称为全文件系统身份/GUID 机制；Engine 既有窄字符串加载和中文字体覆盖仍有限制。
 
@@ -84,6 +84,8 @@ ImportFile 的执行顺序为：
 网格卡片只为普通 GLB/glTF 文件发布 EDITOR_ASSET_PATH，载荷为含结束符的 UTF-8 路径副本，不是 StaticMeshAsset/组件裸指针。SceneEditor 的 EditorSceneViewportWidget 仅在该载荷活动时显示透明逻辑投放区域；接受后调用宿主保存路径，下一 TickFrame 在当前工程 Content 内重新校验路径，通过 LoadSync<StaticMeshAsset> 和 EditorScene::AddMesh 创建世界原点的静态网格并选中。资源导入与场景实例化是两次显式操作，不把鼠标屏幕位置当成已实现的射线落点。
 
 Project Close 先等待该窗口既有提交完成值，在下一帧绘制开始前清空面板引用/场景组件，消费场景移除命令后释放组件，最后 AssetManager::Clear 移除驻留引用；仍被预览天空资产/灯光持有的内置资源继续有效。没有更改 Engine 的强/弱资产表或资源拥有关系。工程描述与清理调用链见 [Editor 架构](../../architecture/app/editor.md)，CPU/GPU 时序见 [UI 生命周期](08-ui-rendering-and-window-lifetime.md)。
+
+材质卡片使用 EDITOR_MATERIAL_PATH；路径与归一化落点由宿主保存，下一 TickFrame 在当前 Content 内重新核查并经 LoadSync<MaterialAsset> 加载。SceneEditor::ApplyMaterialAt 的最近几何命中决定组件及 Section.MaterialIndex，沿用 StaticMeshComponent::SetMaterial。组件强引用 MaterialAsset，旧槽位实例由原接口清理；网格默认材质、其他槽位和其他组件不变，不新建材质实例或另一套资产缓存。失败/背景投递不修改组件，错误显示于宿主菜单状态；工程关闭也清理尚未执行的材质路径。数学见 [视口拾取](../algorithm/01-ray-triangle-and-distance.md)。
 
 ## 材质文件库与显式导入
 

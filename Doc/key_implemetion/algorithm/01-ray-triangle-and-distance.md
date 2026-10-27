@@ -74,4 +74,20 @@ GPU 版本返回距离平方，避免每个候选都 sqrt；包含法线长度�
 
 当前 RayIntersectAABB 直接计算 1/D，没有显式处理 D=0；平行轴且恰好位于边界可能产生 0×∞/NaN，需要单独核查。边界接触使用 tMax<tMin，保留相等的接触点。
 
-三角形求交/最近点与单个 AABB 检测均为 O(1)。加速查询复杂度见 [BVH 专题](02-bvh-octree-and-scene-query.md)。现有 MathTest 主要打印矩阵变换结果，未构成这些几何边界条件的自动断言集；本轮没有新增或运行几何测试。
+三角形求交/最近点与单个 AABB 检测均为 O(1)。加速查询复杂度见 [BVH 专题](02-bvh-octree-and-scene-query.md)。现有 MathTest 主要打印矩阵变换结果，未构成这些几何边界条件的自动断言集；最初专题整理没有新增或运行几何测试，后续编辑器拾取检查见下节。
+
+## 编辑器材质投放：从视口落点到最近三角形
+
+源码：[EditorScene::ApplyMaterialAt](../../../src/Editor/SceneEditor/Private/EditorScene.cpp)、[视口落点转换](../../../src/Editor/SceneEditor/Private/EditorScenePanel.cpp)。这是编辑器一次性 CPU 查询，不调用 Vulkan/DXR，不依赖网格距离场数据，也未把 GI 的未导出 TriangleBVHTraits 作为跨模块接口。
+
+输入 viewportPosition=(u,v) 为当前显示区域的归一化坐标，左上为 (0,0)、右下接近 (1,1)。Widget 从 ImGui 窗口坐标减去 geometry.X/Y，再除以 Width/Height。无效/非有限 UV 不产生命中；确认的输出为组件下标、section.MaterialIndex，并触发该槽材质覆盖。失败返回 false，不改变选择/材质。
+
+1. 构造裁剪点 C=(2u-1,1-2v,z,1)，使用相机 GetInverseViewProjectionMatrix 得齐次世界点 H，再以 H.xyz/H.w 作透视除法。W 接近零时明确报错。当前相机为右手、ZO 深度，近远 z 为 0/1；代码也按相机深度枚举保留 NO 的 -1/1 选择。
+2. origin=Pnear，ray=Pfar-Pnear，direction=ray/length(ray)，nearest 初始为 length(ray)。因此所有命中的 distance 都是世界长度，并限定在近远裁剪之间；不从相机位置向无限远投射而误选近裁剪前物体。
+3. 遍历场景组件与 LOD0 的 section，和当前 StaticMeshDrawBuild 的 LOD 选择一致。索引区间为 FirstIndex 至 FirstIndex+NumIndices，三角形索引加 BaseVertexIndex 后按 PositionBuffer.NumComponents 读取前三个分量；检查范围、负索引和至少三个位置分量，异常区间跳过。
+4. 对三个局部顶点用组件完整 GetComponentTransform 转到世界，再执行上文的 Möller–Trumbore 公式，源码 determinant/u/v/distance 对应 det/u/v/t。世界空间计算使平移、旋转、层级变换、非均匀/镜像缩放下的 distance 仍可直接比较，无需对逆变换后的方向重新定标。
+5. 此处平行/退化判断为 abs(determinant)<=1e-7×length(edge1)×length(edge2)，区别于距离场函数的固定 epsilon。重心条件使用 0<=u<=1、v>=0、u+v<=1；满足 0<=distance<nearest 才替换结果，因而返回最近命中而非列表首项/当前选择，同距离保留先遇到的三角形。
+
+该查询为双面几何拾取，不根据材质 CullMode 模拟背面剔除；没有透明度/裁剪贴图检测。零缩放产生的退化三角形会被拒绝，但算法不是 watertight，共享边、极大坐标和很瘦的三角形仍有浮点边界。遍历成本为总三角形数 O(T)、额外空间 O(1)，只在投递时执行，没有新建 BVH/缓存或每帧悬停扫描；大型场景可有明显点击延迟。
+
+查询只覆盖当前 Renderer 使用的静态 LOD0 与其 CPU 保留位置/索引，不包括骨骼、GPU 顶点位移或未保留 CPU 几何。既有 glTF 多 primitive 合并限制依旧存在，本次没有为拾取重写导入器。材质只支持已有 Opaque 绘制，其他模式报错。组件覆盖/提交时序见 [UI 生命周期](../performance/08-ui-rendering-and-window-lifetime.md)、[资产所有权](../performance/05-assets-materials-and-instance-data.md)。实际检查与限制见 [2026-10-27 记录](../../dev/bugfix/故障与修复记录-2026-10-27.md)。

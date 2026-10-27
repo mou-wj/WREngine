@@ -4,6 +4,7 @@
 #include "EngineGlobal.h"
 #include "SceneInterface.h"
 #include "StaticMeshComponent.h"
+#include "MaterialAsset.h"
 #include "PathInfo.h"
 #include "Transform.hpp"
 #include "RHIApi.h"
@@ -101,6 +102,88 @@ namespace Editor
         m_Objects.clear(); m_SelectedIndex = -1; m_NextObjectId = 1; m_bSceneDirty = false;
         m_Camera.SetTarget({0,0,0}); m_Distance = 3.4641f;
         SetViewDirection(EEditorViewDirection::Orbit);
+    }
+
+    bool EditorScene::ApplyMaterialAt(const std::shared_ptr<Engine::MaterialAsset>& material, const Core::Float2& viewportPosition)
+    {
+        if (!material || !material->GetMaterial()) throw std::invalid_argument("A valid material asset is required");
+        if (material->GetMaterial()->GetBlendMode() != Engine::EBlendMode::Opaque)
+            throw std::runtime_error("The scene renderer currently supports Opaque materials only");
+        if (!m_Scene || !m_Viewport || !std::isfinite(viewportPosition.X) || !std::isfinite(viewportPosition.Y) ||
+            viewportPosition.X < 0 || viewportPosition.X >= 1 || viewportPosition.Y < 0 || viewportPosition.Y >= 1) return false;
+
+        // UV is relative to the last displayed viewport (top-left origin). Use
+        // that camera projection before a selection change can resize the view.
+        const auto& inverse = m_Camera.GetInverseViewProjectionMatrix();
+        auto unproject = [&](float depth) {
+            const Core::Float4 clip{2*viewportPosition.X-1, 1-2*viewportPosition.Y, depth, 1};
+            Core::Float4 world;
+            for (int row=0; row<4; ++row)
+                for (int column=0; column<4; ++column) world[row] += inverse(row,column)*clip[column];
+            if (std::abs(world.W) < 1e-6f) throw std::runtime_error("Cannot unproject the material drop position");
+            return Core::Float3{world.X/world.W, world.Y/world.W, world.Z/world.W};
+        };
+        const auto origin = unproject(m_Camera.GetDepthRangeMode() == Engine::Camera::ZeroToOne ? 0.0f : -1.0f);
+        const auto ray = unproject(1.0f)-origin;
+        float nearest = ray.Length();
+        if (!std::isfinite(nearest) || nearest <= 0) return false;
+        const auto direction = ray/nearest;
+        int objectIndex = -1;
+        uint32_t materialSlot = 0;
+        for (size_t index=0; index<m_Objects.size(); ++index)
+        {
+            auto* component = m_Objects[index].Component.get();
+            auto* mesh = component->GetStaticMesh();
+            if (!mesh || !mesh->GetLODCount()) continue;
+            const auto& lod = mesh->GetLODResource(0); // Matches StaticMeshDrawBuild's current LOD selection.
+            const auto& positions = lod.VertexBuffers.PositionBuffer;
+            const auto& indices = lod.IndexBuffer.Indices;
+            if (!positions.bValid || positions.NumComponents < 3) continue;
+            const auto& transform = component->GetComponentTransform();
+            for (const auto& section : lod.Sections)
+            {
+                if (section.MaterialIndex < 0 || !component->GetMaterial(section.MaterialIndex) ||
+                    section.FirstIndex > indices.size() || section.NumIndices > indices.size()-section.FirstIndex) continue;
+                for (size_t offset=0; offset+2<section.NumIndices; offset+=3)
+                {
+                    Core::Float3 vertices[3];
+                    bool valid = true;
+                    for (int corner=0; corner<3; ++corner)
+                    {
+                        const int64_t vertex = static_cast<int64_t>(indices[section.FirstIndex+offset+corner])+section.BaseVertexIndex;
+                        if (vertex < 0 || static_cast<uint64_t>(vertex) >= positions.GetNumVertices()) { valid = false; break; }
+                        const auto start = static_cast<size_t>(vertex)*positions.NumComponents;
+                        vertices[corner] = Core::TransformPoint(transform, Core::Float3{positions.Vertices[start],positions.Vertices[start+1],positions.Vertices[start+2]});
+                    }
+                    if (!valid) continue;
+                    // Two-sided Moller-Trumbore intersection in world space:
+                    // distances remain comparable under nonuniform/negative scale.
+                    const auto edge1 = vertices[1]-vertices[0], edge2 = vertices[2]-vertices[0];
+                    const auto p = Core::Cross(direction,edge2);
+                    const float determinant = Core::Dot(edge1,p);
+                    if (std::abs(determinant) <= 1e-7f*edge1.Length()*edge2.Length()) continue;
+                    const auto fromVertex = origin-vertices[0];
+                    const float u = Core::Dot(fromVertex,p)/determinant;
+                    if (u < 0 || u > 1) continue;
+                    const auto q = Core::Cross(fromVertex,edge1);
+                    const float v = Core::Dot(direction,q)/determinant;
+                    if (v < 0 || u+v > 1) continue;
+                    const float distance = Core::Dot(edge2,q)/determinant;
+                    if (distance >= 0 && distance < nearest)
+                    {
+                        nearest = distance; objectIndex = static_cast<int>(index); materialSlot = section.MaterialIndex;
+                    }
+                }
+            }
+        }
+        if (objectIndex < 0) return false;
+        WaitForLastDraw();
+        auto* component = m_Objects[objectIndex].Component.get();
+        component->SetMaterial(materialSlot, material->GetMaterial());
+        Select(objectIndex);
+        m_Scene->NotifyComponentChanged(component);
+        m_bSceneDirty = true;
+        return true;
     }
 
     void EditorScene::DuplicateSelected()

@@ -10,6 +10,7 @@ namespace Engine
 {
     class SceneInterface;
     class StaticMeshAsset;
+    class MaterialAsset;
     class StaticMeshComponent;
     class LightComponent;
     class SkyLightAsset;
@@ -34,6 +35,7 @@ namespace Editor
         void Shutdown();
         void ClearObjects();
         void AddMesh(const std::shared_ptr<Engine::StaticMeshAsset>& asset);
+        bool ApplyMaterialAt(const std::shared_ptr<Engine::MaterialAsset>& material, const Core::Float2& viewportPosition);
         void DuplicateSelected();
         void RemoveSelected();
         void Select(int index);
