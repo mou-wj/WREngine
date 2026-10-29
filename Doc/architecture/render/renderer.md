@@ -129,6 +129,14 @@ SceneRenderer
 
 ---
 
+### 5.1 按视图追加绘制 Pass
+
+[RenderModule::BeginRender](../../../src/Framework/Renderer/Private/RenderModule.cpp) 在 `sceneRenderer->Build(builder)` 之后遍历 `views->GetViews()`，再遍历每个视图的 `DrawExtensions`。非空 `Callback` 接收当前 Builder、当前 SceneView、`SceneTextures.SceneColor` 和 `SceneTextures.SceneDepth`。调用顺序为视图顺序、列表顺序；GPU 执行顺序仍由 Pass 声明的资源依赖决定。
+
+这是当前场景主体结束后的固定扩展点，扩展与场景使用同一个 Builder，并在统一的 `builder.Execute()` 前完成构图。扩展可通过公开的 RenderCore 接口声明参数、申请图内资源和添加 Pass。叠加颜色通常使用 Load_Store，深度是否测试、写入须与具体绘制及访问声明一致；回调本身不会自动声明附件访问。不增加额外队列提交、Present 或等待。
+
+接口与列表定义在 Engine 的 [SceneView.h](../../../src/Framework/Engine/PublicHeader/SceneView.h)，具体工具的回调由上层填入。当前没有多个渲染阶段的 hook，也没有颜色替换返回值；将来添加后处理时需明确叠加点与颜色处理的先后。生命周期与注册示例见 [RDG 核心实现](../../key_implemetion/performance/03-rdg-execution-and-state.md)。
+
 ## 6. 渲染管线中的角色分工
 
 可以把整个渲染系统分成 4 层：

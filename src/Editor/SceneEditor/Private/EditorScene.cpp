@@ -1,4 +1,5 @@
 #include "EditorScene.h"
+#include "EditorViewAxes.h"
 #include "AssetManager.h"
 #include "LightComponent.h"
 #include "EngineGlobal.h"
@@ -274,6 +275,9 @@ namespace Editor
         default: throw std::invalid_argument("Unknown editor view direction");
         }
         m_ViewDirection = direction;
+        m_OrbitUp = {0,1,0};
+        m_PressedAxis = -1;
+        m_bAxisDragging = false;
         m_bRotating = m_bPanning = false;
         UpdateCamera();
     }
@@ -301,6 +305,9 @@ namespace Editor
         view.bDepthRangeZeroToOne = true;
         view.Viewport.Width = viewport->GetWidth();
         view.Viewport.Height = viewport->GetHeight();
+        view.DrawExtensions.push_back({[](auto& builder, const auto& sceneView, auto color, auto depth) {
+            ViewAxes::AddPass(builder,sceneView,color);
+        }});
         m_ViewFamily.Scene = m_Scene.get();
         m_ViewFamily.RenderTarget = viewport;
         m_ViewFamily.ClearViews();
@@ -311,14 +318,71 @@ namespace Editor
     bool EditorScene::OnMouseButton(const SlateCore::MouseButtonEvent& event)
     {
         const bool pressed = event.Event != SlateCore::EInputEvent::Released;
+        if (event.Button == SlateCore::EMouseButton::Left)
+        {
+            if (pressed && m_Viewport && !m_bRotating && !m_bPanning)
+            {
+                m_PressedAxis = ViewAxes::HitTest(m_Camera.GetViewMatrix(),m_Viewport->GetWidth(),m_Viewport->GetHeight(),
+                    {static_cast<float>(event.X),static_cast<float>(event.Y)});
+                if (m_PressedAxis < 0) return false;
+                m_AxisPressPosition = {static_cast<float>(event.X),static_cast<float>(event.Y)};
+                m_AxisStartOffset = m_Camera.GetPosition()-m_Camera.GetTarget();
+                m_AxisStartUp = Core::Normalize(m_Camera.GetUp());
+                m_bAxisDragging = false;
+                return true;
+            }
+            if (!pressed && m_PressedAxis >= 0)
+            {
+                const int endpoint = m_PressedAxis;
+                const bool click = !m_bAxisDragging && m_Viewport && endpoint == ViewAxes::HitTest(m_Camera.GetViewMatrix(),
+                    m_Viewport->GetWidth(),m_Viewport->GetHeight(),{static_cast<float>(event.X),static_cast<float>(event.Y)});
+                m_PressedAxis = -1; m_bAxisDragging = false;
+                if (click)
+                {
+                    const EEditorViewDirection directions[] = {EEditorViewDirection::Right,EEditorViewDirection::Left,
+                        EEditorViewDirection::Top,EEditorViewDirection::Bottom,EEditorViewDirection::Front,EEditorViewDirection::Back};
+                    SetViewDirection(directions[endpoint]);
+                }
+                return true;
+            }
+            return false;
+        }
+        if (m_PressedAxis >= 0) return true;
         if (event.Button == SlateCore::EMouseButton::Right) { m_bRotating = pressed; return true; }
         if (event.Button == SlateCore::EMouseButton::Middle) { m_bPanning = pressed; return true; }
         return false;
     }
     bool EditorScene::OnMouseMove(const SlateCore::MouseMoveEvent& event)
     {
+        if (m_PressedAxis >= 0)
+        {
+            const float dx = event.X-m_AxisPressPosition.X, dy = event.Y-m_AxisPressPosition.Y;
+            if (dx*dx+dy*dy >= 16) m_bAxisDragging = true;
+            if (m_bAxisDragging)
+            {
+                // Compose yaw and pitch from the press-time basis. Rotate the up
+                // vector with pitch as well, so pole views stay continuous.
+                const auto rotate = [](const Core::Float3& vector, const Core::Float3& axis, float angle) {
+                    const float cosine = std::cos(angle), sine = std::sin(angle);
+                    return vector*cosine + Core::Cross(axis,vector)*sine +
+                        axis*(Core::Dot(axis,vector)*(1-cosine));
+                };
+                const auto yawOffset = rotate(m_AxisStartOffset,m_AxisStartUp,-dx*0.005f);
+                const auto right = Core::Normalize(Core::Cross(m_AxisStartUp,yawOffset));
+                const auto offset = rotate(yawOffset,right,-dy*0.005f);
+                const auto forward = -Core::Normalize(offset);
+                m_Yaw = std::atan2(forward.Z,forward.X);
+                m_Pitch = std::asin(std::clamp(forward.Y,-1.0f,1.0f));
+                m_OrbitUp = rotate(m_AxisStartUp,right,-dy*0.005f);
+                m_ViewDirection = EEditorViewDirection::Orbit;
+                m_Camera.SetUp(m_OrbitUp);
+                m_Camera.SetPosition(m_Camera.GetTarget()+offset);
+            }
+            return true;
+        }
         if (m_bRotating)
         {
+            m_OrbitUp = {0,1,0};
             m_ViewDirection = EEditorViewDirection::Orbit;
             m_Yaw += event.DeltaX * 0.005f;
             m_Pitch = std::clamp(m_Pitch - event.DeltaY * 0.005f, -1.5f, 1.5f);
@@ -339,11 +403,13 @@ namespace Editor
     }
     bool EditorScene::OnMouseWheel(const SlateCore::MouseWheelEvent& event)
     {
+        if (m_PressedAxis >= 0) return true;
         m_Distance = std::clamp(m_Distance - event.Delta * 0.25f, 0.2f, 1000.0f);
         UpdateCamera();
         return true;
     }
-    bool EditorScene::OnFocusLost() { m_bRotating = m_bPanning = false; return true; }
+    bool EditorScene::OnFocusLost()
+    { m_bRotating = m_bPanning = m_bAxisDragging = false; m_PressedAxis = -1; return true; }
     void EditorScene::WaitForLastDraw()
     {
         if (!m_Viewport || !m_Viewport->GetRenderTarget()) return;
@@ -356,7 +422,7 @@ namespace Editor
     {
         const float cosine = std::cos(m_Pitch);
         Core::Float3 forward{std::cos(m_Yaw) * cosine, std::sin(m_Pitch), std::sin(m_Yaw) * cosine};
-        Core::Float3 up{0, 1, 0};
+        Core::Float3 up = m_OrbitUp;
         switch (m_ViewDirection)
         {
         // Exact pole directions need a non-parallel up vector for LookAtRH.

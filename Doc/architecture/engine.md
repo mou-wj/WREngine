@@ -265,6 +265,14 @@ class ENGINE_API ViewportClient : public SlateCore::EventHandler
 
 ---
 
+### 4.4 SceneView 的扩展绘制
+
+[SceneView.h](../../src/Framework/Engine/PublicHeader/SceneView.h) 在同一文件定义 `SceneViewDrawExtension`，只保存 `Callback`。回调参数为 `RenderCore::RenderGraphBuilder&`、`const SceneView&`、场景颜色和深度的 `RenderGraphTextureRef`。`SceneView::DrawExtensions` 按值保存扩展列表；上层在提交视图前填入，复制/移动视图时列表和函数对象一起复制/移动，默认列表为空。
+
+Renderer 在所有主体场景 Pass 构建完成后，按视图顺序和各自列表顺序调用非空回调，然后执行同一个渲染图。回调负责添加 Pass，实际绘制发生在图执行阶段；相机矩阵和 Viewport 来自传入的当前视图。该入口用于在现有场景附件上追加绘制，不负责 Gizmo 交互或替换主颜色资源，也不让 Renderer 依赖 Editor/ImGui。
+
+Builder 和附件是本次图的借用对象，不允许跨图保存。捕获到函数对象的业务指针仍由上层保证有效，Pass 应使用本帧稳定数据并声明资源访问；具体调用链、录制线程与 CPU/GPU 生命周期见 [RDG 核心实现](../key_implemetion/performance/03-rdg-execution-and-state.md)。
+
 ## 5. 场景交互接口：`SceneInterface`
 
 `SceneInterface` 不是具体类，而是一个抽象接口，用于连接游戏线程与渲染线程之间的场景数据流：

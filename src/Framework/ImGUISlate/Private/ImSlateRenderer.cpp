@@ -3,7 +3,39 @@
 #include "SlateWidget.h"
 #include "SlateViewport.h"
 #include "RHIApi.h"
+#include "imgui_internal.h"
 #include <chrono>
+
+namespace
+{
+    bool WantsMouseAtPosition(int x, int y)
+    {
+        const auto& context = *ImGui::GetCurrentContext();
+        const auto& io = context.IO;
+        if (context.WantCaptureMouseNextFrame != -1)
+            return context.WantCaptureMouseNextFrame != 0;
+        if (!context.OpenPopupStack.empty()) return true;
+
+        // Preserve ImGui's press ownership. Re-running its frame update here
+        // would reassign a still-latched MouseClicked at the new mouse position.
+        int earliestButton = -1;
+        bool anyDown = false;
+        for (int button = 0; button < IM_ARRAYSIZE(io.MouseDown); ++button)
+        {
+            anyDown |= io.MouseDown[button];
+            if ((io.MouseDown[button] || io.MouseReleased[button]) &&
+                (earliestButton < 0 || io.MouseClickedTime[button] < io.MouseClickedTime[earliestButton]))
+                earliestButton = button;
+        }
+        if (earliestButton >= 0 && !io.MouseDownOwned[earliestButton]) return false;
+
+        ImGuiWindow* hovered = nullptr;
+        ImGuiWindow* underMovingWindow = nullptr;
+        if (!(io.ConfigFlags & ImGuiConfigFlags_NoMouse))
+            ImGui::FindHoveredWindowEx({static_cast<float>(x),static_cast<float>(y)}, false, &hovered, &underMovingWindow);
+        return anyDown || hovered != nullptr;
+    }
+}
 
 ImGuiKey ConvertKey(SlateCore::EKey key)
 {
@@ -172,7 +204,7 @@ namespace ImGUISlate
             static_cast<float>(event.X),
             static_cast<float>(event.Y));
 
-        return io.WantCaptureMouse;
+        return WantsMouseAtPosition(event.X,event.Y);
     }
     bool ImSlateRenderer::OnMouseButton(
         const SlateCore::MouseButtonEvent& event)
@@ -189,7 +221,7 @@ namespace ImGUISlate
             ConvertMouseButton(event.Button),
             event.Event != SlateCore::EInputEvent::Released);
 
-        return io.WantCaptureMouse;
+        return WantsMouseAtPosition(event.X,event.Y);
     }
     bool ImSlateRenderer::OnMouseWheel(
         const SlateCore::MouseWheelEvent& event)
@@ -206,7 +238,7 @@ namespace ImGUISlate
             0.0f,
             event.Delta);
 
-        return io.WantCaptureMouse;
+        return WantsMouseAtPosition(event.X,event.Y);
     }
     bool ImSlateRenderer::OnKeyDown(
         const SlateCore::KeyEvent& event)

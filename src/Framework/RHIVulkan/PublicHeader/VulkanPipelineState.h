@@ -1,6 +1,7 @@
 #pragma once
 
 #include "VulkanDevice.h"
+#include <algorithm>
 #include <vector>
 #include <unordered_map>
 #include <memory>
@@ -70,6 +71,37 @@ namespace RHIVulkan{
                 HashCombine(h, std::hash<uint64_t>()((uint64_t)DescriptorSetLayoutInfo::CalculateHash(layout)));
             }
 
+            // The cached object also owns CPU parameter mappings and UBO sizes.
+            // Native descriptor compatibility alone does not make these interchangeable.
+            std::vector<uint32_t> frequencies;
+            frequencies.reserve(info.SetLayoutsByFrequency.size());
+            for (const auto& entry : info.SetLayoutsByFrequency)
+            {
+                frequencies.push_back(entry.first);
+            }
+            std::sort(frequencies.begin(), frequencies.end());
+            HashCombine(h, frequencies.size());
+            for (uint32_t frequency : frequencies)
+            {
+                HashCombine(h, frequency);
+                const auto& frequencyInfo = info.SetLayoutsByFrequency.at(frequency);
+                HashCombine(h, frequencyInfo.ResourceParameterLayouts.size());
+                for (const auto& binding : frequencyInfo.ResourceParameterLayouts)
+                {
+                    HashCombine(h, binding.SetIndex);
+                    HashCombine(h, binding.BindingIndex);
+                    HashCombine(h, binding.DescriptorCount);
+                }
+                HashCombine(h, frequencyInfo.UniformBufferLayouts.size());
+                for (const auto& binding : frequencyInfo.UniformBufferLayouts)
+                {
+                    HashCombine(h, binding.SetIndex);
+                    HashCombine(h, binding.BindingIndex);
+                    HashCombine(h, binding.Size);
+                }
+            }
+
+            HashCombine(h, info.bHasPushConstant);
             if (info.bHasPushConstant)
             {
                 HashCombine(h, info.PushConstant.offset);

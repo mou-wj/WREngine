@@ -8,6 +8,33 @@ AddPass 保存名称、参数指针、反射元数据、graphics/compute 标志�
 
 图内纹理/缓冲以描述符创建；外部资源注册时借用 RenderTexture/RenderBuffer 的 RHI 对象、Tracker 和 ViewCache。名称缓存与原生资源身份是不同维度，当前材质绑定用实际 RHI 地址区分同名纹理替换。
 
+## SceneView 扩展的构图与生命周期
+
+接口：[SceneView.h](../../../src/Framework/Engine/PublicHeader/SceneView.h) 的 `SceneViewDrawExtension::Callback` 与 `SceneView::DrawExtensions`；调用方：[RenderModule::BeginRender](../../../src/Framework/Renderer/Private/RenderModule.cpp)。架构边界见 [Engine](../../architecture/engine.md) 和 [Renderer](../../architecture/render/renderer.md)。
+
+上层在传入 SceneViewFamily 之前，将函数对象加入单个 SceneView，例如：
+
+```cpp
+view.DrawExtensions.push_back({
+    [](RenderCore::RenderGraphBuilder& builder, const Engine::SceneView& sceneView,
+       RenderCore::RenderGraphTextureRef sceneColor,
+       RenderCore::RenderGraphTextureRef sceneDepth) {
+        // AllocateParameter + resource declarations + AddPass.
+        // Read view matrices/Viewport from sceneView for this frame.
+    }
+});
+```
+
+DrawExtensions 是视图拥有的值容器，SceneViewFamily::AddView 的复制和移动沿用标准函数对象/容器语义，不借用上层栈上的 extension 对象。空列表不做额外工作，空 Callback 被跳过。回调捕获的裸指针/引用不会因此获得所有权；扩展需要在 BeginRender 前准备好，调用期间不能修改视图、列表或与之并发修改捕获状态。
+
+当前调用链为 BeginRender → 主体 sceneRenderer->Build → 按视图、列表顺序调用 Callback → 原有 GPU 数据更新 → builder.Execute。Callback 同步运行在调用 BeginRender 的线程上，不自动切换到名为 RenderThread 的线程。Callback 调用 AddPass 只构图；Pass 的执行闭包在 Execute 的任务录制阶段运行，可能处于其他工作线程。因此相机/矩阵等小数据应按值捕获，或放入 Builder 参数区；不能捕获回调栈上临时变量的引用，也不应直接读取正在编辑的组件/UI 容器。
+
+颜色和深度引用属于当前图，不可保存到下一帧或其他图。多个视图可能共用附件，应按传入 SceneView::Viewport 限定绘制范围；扩展之间的资源依赖仍由参数元数据建立，不能用闭包的 CPU 调用先后来替代 GPU 顺序。叠加需保留原颜色时使用 Load_Store；深度读取/写入、SRV/UAV 和额外图内资源同样必须声明。仅捕获纹理指针不会产生依赖。当前接口在已有附件上追加绘制，不将局部替换的 texture 句柄传回 Renderer。
+
+回调返回不代表 Pass 已录制，Execute 返回也不代表 GPU 已完成。图内资源由原瞬态分配器控制；外部场景目标与池化深度沿用既有所有权、显式 Access/Fence 和复用条件。扩展不得自行 Execute 当前图、额外提交队列或增加 WaitIdle；本次没有为扩展增加资源保活容器。视图销毁或列表清空时释放函数对象；其调用代码所在模块及捕获对象须保持有效。执行异常沿原调用栈传播，未增加吞异常或新的关闭路径；当前 BeginRender 构图异常会跳过末尾资源池 MarkUsed(false)，本轮没有修复其原有异常清理缺口。空列表每个视图仅做空遍历，新增开销随扩展数量及其 Pass/资源规模增加。
+
+2026-10-28 已通过真实 Renderer 的 Vulkan 扩展回调/纹理读回检查，默认 Launcher 亦已启动。只读深度附件仍触发既有 Vulkan RenderPass 布局不一致，DirectX12/OpenGL 的 Renderer 启动未完成；具体检查与限制见 [验证记录](../../dev/bugfix/故障与修复记录-2026-10-28.md)。这些结果不代表三后端全部通过。
+
 ## Execute 的真实顺序
 
 ```mermaid

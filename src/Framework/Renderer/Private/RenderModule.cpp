@@ -124,6 +124,17 @@ namespace Renderer {
 		sceneRenderer->BuildSceneLightShadowMap(sceneRenderer->Scene,builder);
         sceneRenderer->UploadShadowMapInfo(sceneRenderer->Scene,builder);
         sceneRenderer->Build(builder);
+        // Append view-local overlays to the same graph after all scene passes.
+        // Each extension must declare its texture access in its pass parameters.
+        for (const auto& view : views->GetViews()) {
+            for (const auto& extension : view.DrawExtensions) {
+                if (extension.Callback) {
+                    extension.Callback(builder, view,
+                        sceneRenderer->SceneTextures.SceneColor,
+                        sceneRenderer->SceneTextures.SceneDepth);
+                }
+            }
+        }
         LocalVertexFactoryInstanceManager::Get().UpdateGPUResources();
         sceneRenderer->Scene->UpdateGlobalDistanceFieldIfNeeded();
         builder.Execute();

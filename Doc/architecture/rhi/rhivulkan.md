@@ -207,6 +207,14 @@ class VulkanGraphicsPipelineState : public VulkanPipelineBase, public RHIGraphic
 
 光追管线遍历 `HitGroupTable` 中的 `RHIRayTracingHitGroupDesc`，将组合内各阶段展开到 `pStages`，并将阶段下标写入同一个 `VkRayTracingShaderGroupCreateInfoKHR`。Intersection 是否存在决定程序化几何或三角形组类型；未提供的阶段使用 `VK_SHADER_UNUSED_KHR`。布局收集包含 AnyHit 在内的全部非空阶段，同一 Shader 复用时只处理一次反射，相同 set/binding 合并阶段可见性并拒绝描述符类型或数量冲突。SBT 仍按 RayGen / Miss / HitGroup / Callable 顺序存放 group handle，记录数量取命中组数量，与组内阶段数量无关。
 
+### 5.4 Pipeline layout 缓存与 CPU 参数布局
+
+[VulkanPipelineState.h](../../../src/Framework/RHIVulkan/PublicHeader/VulkanPipelineState.h) 的 `VulkanPipelineLayout` 同时拥有原生 `VkPipelineLayout` 和 `PipelineLayoutInfo` 的副本。后者除 descriptor set 布局和 push constant 外，还保存 `SetLayoutsByFrequency`：各 Shader 阶段的资源 set/binding/count 映射及 UBO set/binding/Size。Pending descriptor state 会读取这些 CPU 信息生成参数映射和暂存缓冲，因此原生 descriptor 布局相同不代表这个缓存对象可以互换；例如相同位置的 uniform-buffer descriptor 并不区分 Shader 内部需要 96 还是 128 字节。
+
+`PipelineLayoutInfo::CalculateHash` 保留原生布局序列的哈希，并加入上述 CPU 元数据。阶段键来自 unordered_map，先排序再合并；阶段数量、每阶段资源/UBO 数量和各条目字段均参与，push constant 的存在标记及有效范围也参与。条目 vector 保留本身顺序，尤其 UBO 顺序会影响当前暂存缓冲的打包偏移。公共哈希合并复用 Core 的 HashHelper.hpp。
+
+缓存仍由 VulkanDevice 持有，管线借用其 layout 对象，设备按原关闭顺序清空缓存并销毁原生对象；本次没有增加同步或改变资源寿命。当前 map 仍只按 hash 命中，未做完整内容相等性检查，也没有新增内部互斥；不能把缓存键补全解释为解决哈希碰撞或并发访问问题。详细调用链和成本见 [Shader 布局与绑定](../../key_implemetion/performance/06-shader-compilation-and-binding.md)，相关故障见 [2026-10-29 记录](../../dev/bugfix/故障与修复记录-2026-10-29.md)。
+
 ---
 
 ## 6. 着色器实现

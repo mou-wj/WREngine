@@ -42,6 +42,31 @@ ShaderType/GlobalShader/MaterialShaderMap 通过静态注册构造排列。Mater
 - D3D12 用反射生成 Root Signature 与描述符绑定，context 管理上传常量及 shader-visible heap 的寿命；原生寄存器类别不等于 RHI 逻辑访问权限。
 - OpenGL 将常量写入 UBO/相关 uniform，纹理与 sampler 根据 combined mapping 绑定；所有原生 GL 操作必须进入 worker 的 context。
 
+## Vulkan pipeline layout：原生兼容与 CPU 元数据不能混为一谈
+
+源码：[VulkanPipelineState.h](../../../src/Framework/RHIVulkan/PublicHeader/VulkanPipelineState.h)、[管线构建](../../../src/Framework/RHIVulkan/Private/VulkanPipelineState.cpp)、[VulkanPendingPipelineState.h](../../../src/Framework/RHIVulkan/PublicHeader/VulkanPendingPipelineState.h)。架构边界见 [RHIVulkan](../../architecture/rhi/rhivulkan.md)。
+
+调用链为 Shader 反射 → BuildPipelineLayoutInfo → VulkanPipelineLayoutCache::GetOrCreateLayout → VulkanPipelineLayout::GetInfo → VulkanCommonPipelineDescriptorState::ParsePipelineLayout → SetPackedGlobalParameter。VulkanPipelineLayout 构造时复制整个 PipelineLayoutInfo；原生 VkPipelineLayout 由其中 Layouts/PushConstant 创建，CPU 侧则从 SetLayoutsByFrequency 生成资源映射和按阶段的 PackedUniformBuffer。缓存对象同时承担这两种信息，键必须覆盖两者的实际内容。
+
+原生 descriptor set layout 描述 binding、descriptor 类型/数量和 stage 可见性，不记录 uniform buffer 内部的成员字节布局。本项目的方向轴 VS 反射出 96 字节 UBO，PositionOnlyVS 的两个矩阵反射出 128 字节；它们可以具有相同原生 descriptor 布局，却不能共用同一份 CPU UBO Size。旧键仅比较原生布局，会把后创建的模型管线关联到先前方向轴缓存的 96 字节元数据。实际写入 frequency=1、binding=100、byteOffset=64、numBytes=64 时，逻辑上限为 96，触发 64+64<=96 的断言失败。
+
+这里的 96 是 PackedUniformBinding::Size，不等于 Data 总分配字节数。当前 PackedUniformBuffer 构造按 64 字节对齐各 binding，96 字节条目本身也会占 128 字节暂存区；额外 padding 不能替代正确的反射 Size，更不能作为取消断言或扩大某个 Shader 声明的理由。参数写入、上传/descriptor 范围都应使用当前管线真正对应的元数据。
+
+当前 CalculateHash 的输入为：
+
+- 原有原生 descriptor set layout 序列的哈希。
+- 排序后的 Shader frequency 键及阶段数量；每阶段资源条目数量和 set/binding/descriptorCount。
+- 每阶段 UBO 条目数量和 set/binding/Size。
+- push constant 存在标记，以及存在时的 offset/size/stageFlags。
+
+阶段 map 是 unordered_map，不能把迭代顺序当作身份；先复制并排序键，使相同内容不因插入/rehash 顺序不同而产生无意义的不同键。条目 vector 不做这种重排：尤其 UBO 的顺序会决定 ParsePipelineLayout 的 CPUOffset 打包顺序。所有新增组合继续使用 [Core/HashHelper.hpp](../../../src/Framework/Core/PublicHeader/HashHelper.hpp) 的 HashCombine，没有新增局部哈希算法。
+
+新增 CPU 成本发生在后端管线创建时的 layout 查询：若有 F 个阶段、R 个资源映射和 U 个 UBO 条目，新增 O(F log F+R+U) 工作和 O(F) 临时键数组。命中已有上层 RHI 管线缓存时不需要重新执行这次 layout 构建；没有每次参数写入都重做排序。原生可兼容但 CPU 元数据不同的 layout 会保留为不同缓存对象，增加相应小量 CPU/Vulkan layout 存储。
+
+缓存由 VulkanDevice 拥有，layout 对象中的元数据副本随其 unique_ptr 释放，管线只借用 layout 指针。设备关闭清空 map 后销毁 VkPipelineLayout，沿用原有管线/设备关闭顺序；键补全没有新增锁、Fence、WaitIdle 或跨帧保活机制。该缓存目前仍以 uint64_t hash 直接命中，不比较完整内容；哈希碰撞仍可能错误命中。共享 m_Layouts 未新增内部互斥，不能假定图形/计算上层各自的锁已形成统一并发协议。这些旧限制未在本次扩大修复。
+
+本问题的颜色附件已由方向轴 Pass 参数声明给 RDG；修复位置是 Vulkan 布局缓存身份，不修改 RenderGraphBuilder。故障复现和修改后验证状态见 [2026-10-29 记录](../../dev/bugfix/故障与修复记录-2026-10-29.md)。
+
 ## Vulkan descriptor set 的分配与回收
 
 [VulkanDescriptorSets.cpp](../../../src/Framework/RHIVulkan/Private/VulkanDescriptorSets.cpp) 按 layout hash 找 TypedDescriptorPool，每个原生 pool 初始以 256 sets 为容量单位；优先取该 layout 的 FreeSets，否则从 pool 分配，登记到 InUseSets。BindDescriptorSets 将 set 集合与当前 command buffer 关联到 pending 列表。

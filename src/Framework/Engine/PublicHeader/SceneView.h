@@ -7,6 +7,7 @@
 #include <functional>
 #include "EngineExport.h"
 #include "BoxSphereBounds.h"
+#include "RenderGraphResource.h"
 
 // 包含你刚才定义的数学基础头文件
 #include "Math.hpp"
@@ -15,6 +16,20 @@ namespace Engine {
     // 前置声明
     class SceneInterface;
     class RenderTarget;
+    class SceneView;
+
+    // Adds passes after the scene has been built, before the graph executes.
+    // The builder and textures are borrowed for this graph only; capture pass
+    // data by value rather than referencing mutable UI/component state.
+    struct SceneViewDrawExtension {
+        using DrawCallback = std::function<void(
+            RenderCore::RenderGraphBuilder& graphBuilder,
+            const SceneView& view,
+            RenderCore::RenderGraphTextureRef sceneColor,
+            RenderCore::RenderGraphTextureRef sceneDepth)>;
+
+        DrawCallback Callback;
+    };
 
     // 结构体对齐定义
     struct ViewRect { int X; int Y; int Width; int Height; };
@@ -72,6 +87,10 @@ namespace Engine {
         double FrameTimeSeconds;
 
         uint32_t Flags;
+
+        // Invoked in list order for this view. Empty callbacks are skipped.
+        // Populate before BeginRender; do not modify the list while rendering.
+        std::vector<SceneViewDrawExtension> DrawExtensions;
 
         // 视锥体缓存
         Frustum CachedFrustum;

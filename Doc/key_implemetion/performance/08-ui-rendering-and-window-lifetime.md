@@ -8,6 +8,14 @@ Widget 表示区域与事件目标，SceneViewport 渲染场景到 RenderTexture
 
 ImGui 生成布局与 ImDrawData，项目后端消费绘制数据；没有拦截同名 GL 函数，也不依赖 imgui_impl_opengl3 发出 GL 命令。实际原生调用仍由当前 RHI 后端完成，OpenGL 仍须进入 context worker。
 
+## 当前鼠标位置与既有按下所有权
+
+平台消息在下一次 NewFrame 前入队，ImGuiIO::WantCaptureMouse 表示上一帧的捕获结论，不能直接用它拦截当前窗口坐标的事件。真实 ImMainWindow 诊断已复现：先悬停 GUI 使该标记为 true，再在同一批消息中移入空场景并按下右键，SceneViewport 收不到按下；新打开 popup 后也可能出现相反的漏发。
+
+ImSlateRenderer 的三个鼠标入口继续各投递原有 IO 事件，然后做当前坐标的只读捕获查询：尊重显式捕获设置，popup/modal 阻挡场景；已有按下/本帧释放时复用最早鼠标键的 MouseDownOwned；其余情况用本地 ImGui 的 FindHoveredWindowEx 查询实际位置，NoMouse 不产生普通 GUI 命中。没有添加第二套按下状态、提前 NewFrame、轮询线程或额外资源等待，状态仍由 ImGui 原流程持有。
+
+不能在每条事件里直接调用 UpdateHoveredWindowAndCaptureFlags：io.MouseClicked 在一帧内保持 true，该函数会按移动后的窗口重新写入按下所有权。已复现 GUI 内按下后同帧移出会丢失 MouseDownOwned，所以最终查询不修改 ImGuiIO 或上下文的捕获状态；ImMainWindow 原有的场景 capture 继续保证移出区域后的移动/释放。工程是否打开不参与判断，菜单/模态与普通视口输入按各自所有权处理。修复证据与检查见 [2026-10-28 记录](../../dev/bugfix/故障与修复记录-2026-10-28.md)。
+
 ## 顶点、索引和剪裁
 
 后端拼接所有 CmdList 的顶点与索引，使用 uint32 索引并烘焙 vertexBase + draw.VtxOffset；绘制时 FirstIndex=indexBase+IdxOffset，避免大 draw list 溢出 16 位索引。
@@ -107,6 +115,16 @@ ApplyMaterialAt 在这次选择引起视口尺寸变化之前，用最近显示�
 EditorApplication 在 TickFrame 消费工程/网格操作后、Draw/NewFrame 前，根据现有场景选择将 NodePanel 设为 Visible 或 Collapsed，仅状态改变时调用原 UpdateLayout。初始状态为 Collapsed，布局器将右栏和右分隔条宽度归零，视口使用腾出的空间。视口纹理重建沿用上述窗口完成 marker 等待；普通帧不重排、不增加等待，没有为折叠改 RHI 或资源保活策略。选择若在 Scene 面板 Draw 中改变，布局在下一 TickFrame 生效，避免重建本帧已记录引用的纹理。
 
 节点面板本身仍在 Draw 时查询当前选择；无选中组件时在 ImPanelWidget::Draw/ImGui::Begin 前返回，HitTest 同样拒绝命中，避免当帧删除后继续生成旧属性窗口。局部变换通过现有组件接口修改，场景通知负责具体 Fence 与代理更新；该面板没有跨帧持有裸组件指针或另存选择状态。用户可见的节点列表为空不代表没有预览灯光，空工程保持背景而无演示模型。实际创建/导入/投放及读回检查范围见 [2026-10-26 记录](../../dev/bugfix/故障与修复记录-2026-10-26.md)，整栏折叠的后续检查见 [2026-10-27 记录](../../dev/bugfix/故障与修复记录-2026-10-27.md)。
+
+## 方向示意的 RDG 叠加与视口输入
+
+[EditorScene::Draw](../../../src/Editor/SceneEditor/Private/EditorScene.cpp) 为本帧 SceneView 填入无业务对象捕获的 DrawExtension，复制进入 SceneViewFamily 后，由 Renderer 在主体构图后调用 [ViewAxes::AddPass](../../../src/Editor/SceneEditor/Private/EditorViewAxes.cpp)。具体轴图形留在 SceneEditor；Renderer 不包含端点颜色、输入或相机控制。参数化球面和坐标/偏航公式见 [相机算法](../algorithm/03-transforms-frustum-and-depth.md)。
+
+EditorViewAxesVS/PS 沿 GlobalShader 注册和现有 GShaderMap 编译/拥有，两个图形管线按 LineList/TriangleList 进入既有 RHIPipelineStateCache。每帧颜色附件声明 Load_Store；不绑定场景深度、不采样场景纹理，叠加图形不受模型遮挡。12 组顶点参数由 Builder::AllocateParameter 分配，执行闭包按值捕获参数指针数组、排序与区域，不引用 UI 的可变状态。SV_VertexID 生成线和缩放单位球，无额外顶点/索引缓冲、资源池、Frame 或跨帧保活容器。
+
+Pass 录制先绑定管线，再设置局部 viewport/scissor，随后绘制；相关资源依赖、提交及 UpdateLastAccessFence 仍由 RDG 原有路径维护，不额外提交、Present 或等待。参数区只需在本次图录制期间有效，Shader/管线继续遵循原缓存和模块关闭顺序。Shader 不可用时明确抛出错误；不静默隐藏方向轴来掩盖编译失败。
+
+输入沿 Window 的几何命中、局部坐标转换和 _capturedWidget/_capturedButtons 传给现有 SlateWidget/SceneViewport，再到 EditorScene。只有球面命中才消费左键按下，轴线和背景不捕获。捕获后允许移出视口继续拖动；松开和失焦清除捕获/业务按下状态。球体点击和偏航不创建独立原生窗口或 ImGui 输入层，浮动菜单/材质窗口仍按既有 UI 捕获遮挡场景。极小视口同步省略绘制和命中，布局改变后按实际视口尺寸重新计算位置。
 
 ## 文件拖入材质库的执行顺序
 

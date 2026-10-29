@@ -67,6 +67,12 @@ namespace Editor
         float m_Distance = 3.4641f;
         float m_Yaw = -2.3561945f;
         float m_Pitch = -0.6154797f;
+        Core::Float3 m_OrbitUp{0,1,0};
+        int m_PressedAxis = -1;
+        Core::Float2 m_AxisPressPosition;
+        Core::Float3 m_AxisStartOffset;
+        Core::Float3 m_AxisStartUp;
+        bool m_bAxisDragging = false;
         EEditorViewDirection m_ViewDirection = EEditorViewDirection::Orbit;
         bool m_bRotating = false;
         bool m_bPanning = false;

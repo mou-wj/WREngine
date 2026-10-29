@@ -88,3 +88,28 @@ DepthPyramidGenerateCS 当前取四邻域 min。标准 Z 中，保守“最远�
 另有 viewport/scissor、窗口客户区与请求尺寸、GL 纹理原点等差异。既往三角形测试的尺寸差异来自 BeginRenderPass 覆盖显式视口的后端差别，不应通过改投影矩阵绕过；见 [RHI 回归记录](../../dev/bugfix/故障与修复记录-2026-10-25.md)。
 
 验证入口：MathTest 打印 LookAt/Perspective/VP；不能代替 NO/ZO 近远平面、逆变换、负缩放、非均匀缩放和跨后端图像的数值断言。本轮仅源码核对。
+
+## 编辑器方向轴：球面、屏幕命中与相对偏航
+
+源码：[EditorViewAxes.cpp](../../../src/Editor/SceneEditor/Private/EditorViewAxes.cpp)、[ViewAxes.sf](../../../shaders/editor/ViewAxes.sf)、[EditorScene 输入](../../../src/Editor/SceneEditor/Private/EditorScene.cpp)。此处为叠加示意的正交投影，不修改场景相机已有的透视投影；架构见 [Editor](../../architecture/app/editor.md)。
+
+令视口宽高为 W/H，S=min(144,min(W,H)-24)，S<48 时不绘制、不命中。局部区域左上为 (W-S-12,12)，中心 c=(W-S/2-12,12+S/2)。从 ViewMatrix 取旋转 R，以 w=0 忽略平移；对世界单位半轴 e=±X/±Y/±Z 得 q=R e，端点像素坐标为 p=c+(a q.x,-a q.y)，a=0.62S/2，屏幕 Y 向下。绘制加入 SceneView::Viewport.X/Y，输入已由 Window 减去 Widget 位置，使用同一局部坐标。
+
+端点为以 e 为中心、半径 r=0.22 的球面：n=(sinθ cosφ,cosθ,sinθ sinφ)，v=e+r n；θ=πi/12，φ=2πj/16，每格两个三角形，由 SV_VertexID 生成顶点。背面剔除，法线同样乘 R，采用相机空间固定方向的简单明暗，不参与场景光照。负端点颜色为 C-=0.45 C+0.55，正端点保持 X 红/Y 蓝/Z 绿。细分数和 0.62 缩放由 C++ 向 Shader 注入宏，绘制与命中共用缩放来源。
+
+先画轴线，再按 q.z 从小到大绘制球体；相机空间 +Z 更靠近观察者。图标不使用场景深度，重叠采用画家顺序。命中按相反顺序检查 |mouse-p|² <= (ar)²，优先选择画在上面的球。命中采用理想投影圆，不逐三角形求交，细分球边缘可能有不足一个像素的差异；轴正对相机时前后端点重合，选择前端点。
+
+按下命中后保存初始偏移 v0=CameraPosition-Target、单位相机上方向 k 和鼠标位置。累计移动达到 4 像素前不改变视图；超过阈值后，水平差 Δx 控制偏航 α=-0.005Δx，垂直差 Δy 控制俯仰 β=-0.005Δy（弧度，屏幕 Y 向下）：
+
+```text
+Rotate(v,n,δ) = v cosδ + (n × v) sinδ + n (n·v) (1-cosδ)
+yawOffset = Rotate(v0,k,α)
+right = normalize(k × yawOffset)
+v = Rotate(yawOffset,right,β)
+CameraPosition = Target + v
+CameraUp = Rotate(k,right,β)
+```
+
+这是两次 Rodrigues 旋转，先绕按下时相机上方向偏航，再绕偏航后的相机右方向俯仰。偏移和上方向随俯仰一同旋转，保留距离 |v0|、焦点以及二者原有夹角，避免只改偏移导致极点视图基底退化；两次角度均从按下位置累计计算，不重复累加已应用的旋转。Top/Bottom 视图同样可连续旋转。前向 -normalize(v) 回写 yaw=atan2(forward.z,forward.x)、pitch=asin(clamp(forward.y,-1,1))；m_OrbitUp 保留旋转后的上方向，后续平移/滚轮重建相机时继续使用该基底。既有右键环绕仍采用世界 Y 向上的常规控制。
+
+未拖动且松开位置仍命中原球体才触发六向切换；拖动释放不切换。水平、垂直和斜向拖动都改变相机，失焦清除按下状态。规模固定为六条线、六个 384 三角形球、12 次 Draw；排序/命中最多六个元素。实际输入链、像素和退出检查见 [2026-10-28 记录](../../dev/bugfix/故障与修复记录-2026-10-28.md)，本项验证不推及整个 MathTest。

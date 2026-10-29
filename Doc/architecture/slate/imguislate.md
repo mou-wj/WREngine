@@ -86,6 +86,8 @@ VulkanRHI 已用负高度 Viewport 统一 Y 轴，所以 GUI 正交投影不再�
 
 平台事件先进入 ImMainWindow，由 ImSlateRenderer 在窗口坐标中向 ImGuiIO 投递一次。ImGui 未捕获的事件转给 SlateCore 的逻辑区域；场景已捕获拖动时仍接收后续移动/释放。
 
+鼠标分发使用当前事件坐标的只读命中判断，不能直接将上一帧 io.WantCaptureMouse 当成本次事件是否被 GUI 捕获的结论。判断保留 ImGui 的按下所有权、弹窗/模态阻挡和显式捕获设置；不在事件回调中重新计算整帧捕获标记或修改 MouseClicked/MouseDownOwned。这样从 GUI 移入场景后可立即操作，也不会把 GUI 中开始的拖动错误地交给场景。此路由不依赖 Editor 是否打开工程，普通空场景仍可操作相机和坐标球。
+
 主线程负责 ImGui NewFrame、Widget 回调、Render，以及把 ImDrawData 同步翻译成 RHI 录制。异步后端执行的是已经录制好的命令和有效期受控的 RHI 资源，不跨线程持有下一帧会被改写的 ImDrawData。OpenGL 原生调用继续由 OpenGLRHI 的 worker 与 current context 执行，ImGUISlate 不迁移或借用它的上下文。
 
 ImSlateRenderer 将 ImGui::GetMouseCursor 的结果转换为 SlateCore::EMouseCursor，经 Window/PlatformSurfaceOwner 交给平台 Surface。它声明 HasMouseCursors，尊重 NoMouseCursorChange；ImGui 自行绘制光标时隐藏系统光标。UI 模块不调用 Windows API，平台层不识别 ImGui 枚举。

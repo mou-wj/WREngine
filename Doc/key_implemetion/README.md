@@ -12,12 +12,12 @@
 | --- | --- |
 | [任务池和渲染线程](performance/01-task-and-render-threads.md) | 谁执行 CPU 工作，等待什么，异常如何传播？ |
 | [RHI 队列与同步](performance/02-rhi-queues-and-sync.md) | 录制、提交、worker 执行和 GPU 完成有什么区别？ |
-| [RDG 执行与资源状态](performance/03-rdg-execution-and-state.md) | 参数怎样变成依赖、屏障、物理资源和提交？ |
+| [RDG 执行与资源状态](performance/03-rdg-execution-and-state.md) | SceneView 扩展怎样添加 Pass，参数怎样变成依赖、屏障、物理资源和提交？ |
 | [内存、资源池与瞬态资源](performance/04-memory-and-transient-resources.md) | 对齐、切分、复用、回收分别由谁负责？ |
 | [资产、材质与实例数据](performance/05-assets-materials-and-instance-data.md) | 如何合并加载请求、维持所有权、导入工程依赖和更新 GPU 数据？ |
-| [Shader 编译与绑定](performance/06-shader-compilation-and-binding.md) | C++ 参数怎样进入 HLSL、反射和各后端绑定？ |
+| [Shader 编译与绑定](performance/06-shader-compilation-and-binding.md) | C++ 参数怎样进入 HLSL、反射和各后端绑定，布局缓存怎样保持 CPU 参数信息一致？ |
 | [光追 AS 与 SBT](performance/07-ray-tracing-as-and-sbt.md) | AS 存储、scratch、group handle 和 SBT 怎样衔接？ |
-| [UI 合成与窗口生命周期](performance/08-ui-rendering-and-window-lifetime.md) | ImGui 怎样共用 RHI，工程切换/投放怎样安排，纹理与窗口完成点怎样维护？ |
+| [UI 合成与窗口生命周期](performance/08-ui-rendering-and-window-lifetime.md) | 当前鼠标事件怎样分发，ImGui 怎样共用 RHI，纹理与窗口完成点怎样维护？ |
 | [构建与模块启动](performance/09-module-build-and-startup.md) | 依赖准备、DLL 注册、拓扑启动和逆序关闭怎样串起来？ |
 
 ## 原理与算法：algorithm
@@ -26,7 +26,7 @@
 | --- | --- |
 | [射线求交与三角形距离](algorithm/01-ray-triangle-and-distance.md) | 怎样求 t、重心坐标和最近点，视口投放怎样选择最近网格与材质槽？ |
 | [BVH、八叉树与场景查询](algorithm/02-bvh-octree-and-scene-query.md) | 如何分割、剪枝，候选集和精确命中有什么区别？ |
-| [矩阵、视锥与深度](algorithm/03-transforms-frustum-and-depth.md) | 行主存储、列向量运算、NO/ZO 深度如何区分？ |
+| [矩阵、视锥与深度](algorithm/03-transforms-frustum-and-depth.md) | NO/ZO 深度如何区分，方向球怎样投影、命中和叠加偏航/俯仰？ |
 | [距离场与 Jump Flood](algorithm/04-distance-fields-and-jump-flood.md) | 有符号距离怎样生成、存储、合并和步进？ |
 | [PBR、IBL 与采样](algorithm/05-pbr-ibl-and-sampling.md) | BRDF 项、采样 PDF、环境预滤波怎样对应？ |
 | [阴影与级联](algorithm/06-shadow-mapping-and-cascades.md) | 光源投影、CSM 分割、Atlas 与 PCF 怎样衔接？ |
@@ -42,6 +42,8 @@
 清单表示检索覆盖，不等于对每行代码做了正确性审计。专题对核心调用链进行源码核对；普通知识、未接入的实验和已知缺口分别标注。此前运行结果仍查 [当日故障记录](../dev/bugfix/故障与修复记录-2026-10-25.md)，不能将其自动推广为本次文档中所有路径已通过测试。
 
 文档检查包括：覆盖清单与实际文件集合一致、逐文件内容摘要核对、本文档集的本地链接解析、UTF-8 解码与差异空白检查。这些静态检查不替代编译、运行或算法数值验证。后续实现调整必须同步相关专题，当前 Editor 入口见 [架构说明](../architecture/app/editor.md)。
+
+2026-10-29 补充了 Vulkan 管线布局缓存的 CPU 反射信息与复用条件；模型和方向轴共同绘制的故障、修复及实际验证范围见 [故障记录](../dev/bugfix/故障与修复记录-2026-10-29.md)。
 
 ## 阅读时应特别留意的现状
 

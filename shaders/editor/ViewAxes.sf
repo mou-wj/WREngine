@@ -1,0 +1,44 @@
+struct AxisVertexOutput
+{
+    float4 Position : SV_Position;
+    float4 Color : COLOR0;
+    float4 Normal : TEXCOORD0;
+};
+
+#if VERTEX_SHADER
+#include "/Generated/ShaderParameters/EditorViewAxesVertexParameters.sf"
+
+AxisVertexOutput MainVS(uint vertexId : SV_VertexID)
+{
+    float3 position = vertexId == 0 ? float3(0,0,0) : Axis.xyz;
+    float3 normal = float3(0,0,1);
+    if (Axis.w > 0)
+    {
+        // Two triangles per UV cell form a scaled unit sphere at the endpoint.
+        const uint2 corners[6] = {uint2(0,0),uint2(1,0),uint2(1,1),uint2(0,0),uint2(1,1),uint2(0,1)};
+        uint cell = vertexId / 6;
+        uint2 grid = uint2(cell % AXIS_LONGITUDES, cell / AXIS_LONGITUDES) + corners[vertexId % 6];
+        float latitude = grid.y * (3.14159265359 / AXIS_LATITUDES);
+        float longitude = grid.x * (6.28318530718 / AXIS_LONGITUDES);
+        normal = float3(sin(latitude)*cos(longitude), cos(latitude), sin(latitude)*sin(longitude));
+        position = Axis.xyz + normal * Axis.w;
+    }
+    float3 cameraPosition = mul(ViewRotation, float4(position,0)).xyz;
+    AxisVertexOutput output;
+    output.Position = float4(cameraPosition.xy * AXIS_SCALE, 0.5, 1);
+    output.Color = AxisColor;
+    output.Normal = float4(mul(ViewRotation,float4(normal,0)).xyz, Axis.w > 0 ? 1 : 0);
+    return output;
+}
+#else
+float4 MainPS(AxisVertexOutput input) : SV_Target0
+{
+    float lighting = 1;
+    if (input.Normal.w > 0.5)
+    {
+        float3 normal = normalize(input.Normal.xyz);
+        lighting = 0.55 + 0.45 * max(dot(normal,normalize(float3(-0.4,0.6,0.8))),0);
+    }
+    return float4(input.Color.rgb * lighting, 1);
+}
+#endif
