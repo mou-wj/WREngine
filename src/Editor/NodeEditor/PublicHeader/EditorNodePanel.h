@@ -9,6 +9,9 @@ namespace Editor
     {
     public:
         EditorNodePanel(std::function<Engine::StaticMeshComponent*()> getSelected, std::function<void()> onChanged);
+        void SetTranslationGizmoCallbacks(std::function<bool()> isEnabled, std::function<void(bool)> setEnabled);
+        void SetRotationGizmoCallbacks(std::function<bool()> isEnabled, std::function<void(bool)> setEnabled);
+        void SetScaleGizmoCallbacks(std::function<bool()> isEnabled, std::function<void(bool)> setEnabled);
         void Draw() override;
         bool HitTest(float x, float y) const override;
     protected:
@@ -16,5 +19,11 @@ namespace Editor
     private:
         std::function<Engine::StaticMeshComponent*()> m_GetSelected;
         std::function<void()> m_OnChanged;
+        std::function<bool()> m_IsTranslationGizmoEnabled;
+        std::function<void(bool)> m_SetTranslationGizmoEnabled;
+        std::function<bool()> m_IsRotationGizmoEnabled;
+        std::function<void(bool)> m_SetRotationGizmoEnabled;
+        std::function<bool()> m_IsScaleGizmoEnabled;
+        std::function<void(bool)> m_SetScaleGizmoEnabled;
     };
 }

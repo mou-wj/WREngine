@@ -159,6 +159,15 @@ namespace Editor
         m_MaterialPanel = std::make_unique<EditorMaterialPanel>(std::move(callbacks),std::filesystem::path{});
         m_AssetPanel->SetOnMaterialOpened([this](const auto& asset) { m_MaterialPanel->ShowMaterial(asset); });
         m_NodePanel=std::make_unique<EditorNodePanel>([this] { return m_Scene->GetSelected(); },[this] { m_Scene->NotifySelectedChanged(); });
+        m_NodePanel->SetTranslationGizmoCallbacks(
+            [this] { auto* selected = m_Scene->GetSelected(); return selected && m_Scene->GetTranslationTarget() == selected; },
+            [this](bool enabled) { m_Scene->SetTranslationTarget(enabled ? m_Scene->GetSelected() : nullptr); });
+        m_NodePanel->SetRotationGizmoCallbacks(
+            [this] { auto* selected = m_Scene->GetSelected(); return selected && m_Scene->GetRotationTarget() == selected; },
+            [this](bool enabled) { m_Scene->SetRotationTarget(enabled ? m_Scene->GetSelected() : nullptr); });
+        m_NodePanel->SetScaleGizmoCallbacks(
+            [this] { auto* selected = m_Scene->GetSelected(); return selected && m_Scene->GetScaleTarget() == selected; },
+            [this](bool enabled) { m_Scene->SetScaleTarget(enabled ? m_Scene->GetSelected() : nullptr); });
         m_NodePanel->SetVisibility(SlateCore::EVisibility::Collapsed);
         m_MenuWidget=std::make_unique<ImGUISlate::ImWidget>([this](int,int,int,int) { DrawProjectMenu(); });
         m_ProjectDialog=std::make_unique<ImGUISlate::ImFileDialogWidget>(); m_ProjectDialog->Close();
@@ -270,6 +279,10 @@ namespace Editor
             m_Window->UpdateLayout();
         }
         m_Window->Draw();
+        const auto& io = ImGui::GetIO();
+        if (!m_Window->HasMouseCapture() &&
+            (io.WantCaptureMouse || !m_ViewportWidget->HitTest(io.MousePos.x,io.MousePos.y)))
+            m_Scene->ClearTransformHover();
         if (!m_bLoggedFrame)
         {
             std::cout << "[Editor] First scene and GUI frame submitted" << std::endl;

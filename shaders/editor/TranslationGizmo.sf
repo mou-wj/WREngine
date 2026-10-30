@@ -1,0 +1,22 @@
+struct TranslationVertexOutput
+{
+    float4 Position : SV_Position;
+    float4 Color : COLOR0;
+};
+
+#if VERTEX_SHADER
+#include "/Generated/ShaderParameters/EditorTranslationVertexParameters.sf"
+
+TranslationVertexOutput MainVS(uint vertexId : SV_VertexID)
+{
+    TranslationVertexOutput output;
+    output.Position = vertexId == 0 ? Point0 : (vertexId == 1 ? Point1 : Point2);
+    output.Color = HandleColor;
+    return output;
+}
+#else
+float4 MainPS(TranslationVertexOutput input) : SV_Target0
+{
+    return input.Color;
+}
+#endif

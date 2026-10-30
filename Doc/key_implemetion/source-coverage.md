@@ -1,12 +1,12 @@
 # 源码检索与文档覆盖清单
 
-更新日期：2026-10-29；基于 `01b0180` 及本次 SceneView 扩展、编辑器方向轴与 Vulkan 布局缓存修复工作区实现。首次整理基线为 `04f910d`。本清单来自全量文件枚举、全文件文本关键词检索及专题调用链核对；不是逐行正确性审计，也不是运行验证。每行列出的专题是阅读入口，不保证已解释该文件的每个辅助函数。
+更新日期：2026-10-31；基于 `9e6d934` 及本次编辑器位移、缩放和旋转工具工作区实现。首次整理基线为 `04f910d`。本清单来自全量文件枚举、全文件文本关键词检索及专题调用链核对；不是逐行正确性审计，也不是运行验证。每行列出的专题是阅读入口，不保证已解释该文件的每个辅助函数。
 
 范围：自有 src、全部 Shader、CMake/BuildDeps、依赖元信息和 VS Code 配置。extern/glad 是外部生成 loader；deps、构建目录、生成文件、二进制资源、validation 产物、temp 实验不逐项展开。外部库的使用边界见工程专题，驱动和第三方算法不冒充自有实现。
 
 检索标记：并发=线程/锁/任务/完成点；内存=分配/回收/临时工作区；算法=几何/数学/空间查询；渲染=Shader/管线/绘制。标记只是命中，不是已确认问题；未命中不代表没有核心语义。
 
-本次清单共 **427 个文件、77548 行**；文件数包含接口、配置和构建声明。原始逐文件内容 hash 与关键词计数仅保存在忽略目录 `out/diagnostics/key-implementation-source-scan.json`，正式阅读以本清单和源码链接为准。
+本次清单共 **432 个文件、78792 行**；文件数包含接口、配置和构建声明。原始逐文件内容 hash 与关键词计数仅保存在忽略目录 `out/diagnostics/key-implementation-source-scan.json`，正式阅读以本清单和源码链接为准。
 
 ## 现有 architecture 的补充关系
 
@@ -59,7 +59,7 @@
 | [config/3rds/tinygltf.json](../../config/3rds/tinygltf.json) | 41 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [config/3rds/vulkan.json](../../config/3rds/vulkan.json) | 39 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## shaders（38 个文件）
+## shaders（39 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -74,6 +74,7 @@
 | [shaders/core/ShadingCommon.sf](../../shaders/core/ShadingCommon.sf) | 405 | 算法 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/ShadingContext.sf](../../shaders/core/ShadingContext.sf) | 32 | 接口/配置/基础辅助 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/ShadowParametersHelper.sf](../../shaders/core/ShadowParametersHelper.sf) | 276 | 渲染 | [06-shadow-mapping-and-cascades](algorithm/06-shadow-mapping-and-cascades.md) |
+| [shaders/editor/TranslationGizmo.sf](../../shaders/editor/TranslationGizmo.sf) | 22 | 渲染 | [03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/editor/ViewAxes.sf](../../shaders/editor/ViewAxes.sf) | 44 | 算法、渲染 | [03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/GI/GlobalDiffuseLightMapDiffuseCS.sf](../../shaders/GI/GlobalDiffuseLightMapDiffuseCS.sf) | 85 | 内存、算法、渲染 | [04-distance-fields-and-jump-flood](algorithm/04-distance-fields-and-jump-flood.md) |
 | [shaders/GI/GlobalDiffuseLightMapInitCS.sf](../../shaders/GI/GlobalDiffuseLightMapInitCS.sf) | 73 | 算法、渲染 | [04-distance-fields-and-jump-flood](algorithm/04-distance-fields-and-jump-flood.md) |
@@ -126,7 +127,7 @@
 | --- | ---: | --- | --- |
 | [src/CMakeLists.txt](../../src/CMakeLists.txt) | 9 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## src/Editor（27 个文件）
+## src/Editor（31 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -136,7 +137,7 @@
 | [src/Editor/AssetEditor/PublicHeader/EditorAssetPanel.h](../../src/Editor/AssetEditor/PublicHeader/EditorAssetPanel.h) | 73 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/CMakeLists.txt](../../src/Editor/CMakeLists.txt) | 5 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Editor/Editor/CMakeLists.txt](../../src/Editor/Editor/CMakeLists.txt) | 10 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
-| [src/Editor/Editor/Private/EditorApplication.cpp](../../src/Editor/Editor/Private/EditorApplication.cpp) | 349 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/Editor/Private/EditorApplication.cpp](../../src/Editor/Editor/Private/EditorApplication.cpp) | 362 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/Editor/Private/EditorModule.cpp](../../src/Editor/Editor/Private/EditorModule.cpp) | 24 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/Editor/PublicHeader/EditorApplication.h](../../src/Editor/Editor/PublicHeader/EditorApplication.h) | 62 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/MaterialEditor/CMakeLists.txt](../../src/Editor/MaterialEditor/CMakeLists.txt) | 10 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
@@ -146,17 +147,21 @@
 | [src/Editor/MaterialEditor/PublicHeader/EditorMaterialPanel.h](../../src/Editor/MaterialEditor/PublicHeader/EditorMaterialPanel.h) | 74 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/MaterialEditor/PublicHeader/MaterialLibrary.h](../../src/Editor/MaterialEditor/PublicHeader/MaterialLibrary.h) | 41 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/NodeEditor/CMakeLists.txt](../../src/Editor/NodeEditor/CMakeLists.txt) | 9 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
-| [src/Editor/NodeEditor/Private/EditorNodePanel.cpp](../../src/Editor/NodeEditor/Private/EditorNodePanel.cpp) | 42 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/NodeEditor/Private/EditorNodePanel.cpp](../../src/Editor/NodeEditor/Private/EditorNodePanel.cpp) | 83 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/NodeEditor/Private/NodeEditorModule.cpp](../../src/Editor/NodeEditor/Private/NodeEditorModule.cpp) | 14 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
-| [src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h](../../src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h) | 20 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h](../../src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h) | 29 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/SceneEditor/CMakeLists.txt](../../src/Editor/SceneEditor/CMakeLists.txt) | 9 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
-| [src/Editor/SceneEditor/Private/EditorScene.cpp](../../src/Editor/SceneEditor/Private/EditorScene.cpp) | 440 | 并发、算法 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/Private/EditorRotationGizmo.cpp](../../src/Editor/SceneEditor/Private/EditorRotationGizmo.cpp) | 287 | 算法 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
+| [src/Editor/SceneEditor/Private/EditorScaleGizmo.cpp](../../src/Editor/SceneEditor/Private/EditorScaleGizmo.cpp) | 188 | 算法 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
+| [src/Editor/SceneEditor/Private/EditorScene.cpp](../../src/Editor/SceneEditor/Private/EditorScene.cpp) | 556 | 并发、算法 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/SceneEditor/Private/EditorScenePanel.cpp](../../src/Editor/SceneEditor/Private/EditorScenePanel.cpp) | 126 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/Private/EditorTranslationGizmo.cpp](../../src/Editor/SceneEditor/Private/EditorTranslationGizmo.cpp) | 440 | 渲染 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/EditorViewAxes.cpp](../../src/Editor/SceneEditor/Private/EditorViewAxes.cpp) | 171 | 渲染 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/EditorViewAxes.h](../../src/Editor/SceneEditor/Private/EditorViewAxes.h) | 11 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/SceneEditorModule.cpp](../../src/Editor/SceneEditor/Private/SceneEditorModule.cpp) | 15 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
-| [src/Editor/SceneEditor/PublicHeader/EditorScene.h](../../src/Editor/SceneEditor/PublicHeader/EditorScene.h) | 81 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/PublicHeader/EditorScene.h](../../src/Editor/SceneEditor/PublicHeader/EditorScene.h) | 97 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h](../../src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h) | 41 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h](../../src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h) | 112 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 
 ## src/Framework（1 个文件）
 

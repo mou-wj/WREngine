@@ -67,6 +67,7 @@ namespace Editor
 
     void EditorScene::Shutdown()
     {
+        ClearTransformTargets();
         if (!m_Scene) return;
         m_Viewport = nullptr; // The application has already released its window submissions.
         for (const auto& object : m_Objects) m_Scene->RemovePrimitive(object.Component.get());
@@ -97,6 +98,7 @@ namespace Editor
 
     void EditorScene::ClearObjects()
     {
+        ClearTransformTargets();
         WaitForLastDraw();
         for (const auto& object : m_Objects) m_Scene->RemovePrimitive(object.Component.get());
         m_Scene->FlushPendingUpdates(); // Consume borrowed pointers before their owners go away.
@@ -217,6 +219,7 @@ namespace Editor
     {
         auto* selected = GetSelected();
         if (!selected) return;
+        ClearTransformTargets();
         WaitForLastDraw();
         m_Scene->RemovePrimitive(selected);
         // Pending removal borrows the component: consume it before destroying its owner.
@@ -228,8 +231,43 @@ namespace Editor
     }
     void EditorScene::Select(int index)
     {
-        m_SelectedIndex = index >= 0 && index < static_cast<int>(m_Objects.size()) ? index : -1;
+        const int selectedIndex = index >= 0 && index < static_cast<int>(m_Objects.size()) ? index : -1;
+        if (selectedIndex != m_SelectedIndex) ClearTransformTargets();
+        m_SelectedIndex = selectedIndex;
     }
+    void EditorScene::SetTranslationTarget(Engine::SceneComponent* component)
+    {
+        if (component && component->GetSceneOwner() != m_Scene.get())
+            throw std::invalid_argument("Translation target must belong to the editor scene");
+        if (component && m_TranslationGizmo.GetTarget() != component) ClearTransformTargets();
+        m_TranslationGizmo.SetTarget(component);
+    }
+    void EditorScene::SetRotationTarget(Engine::SceneComponent* component)
+    {
+        if (component && component->GetSceneOwner() != m_Scene.get())
+            throw std::invalid_argument("Rotation target must belong to the editor scene");
+        if (component && m_RotationGizmo.GetTarget() != component) ClearTransformTargets();
+        m_RotationGizmo.SetTarget(component);
+    }
+    void EditorScene::SetScaleTarget(Engine::SceneComponent* component)
+    {
+        if (component && component->GetSceneOwner() != m_Scene.get())
+            throw std::invalid_argument("Scale target must belong to the editor scene");
+        if (component && m_ScaleGizmo.GetTarget() != component) ClearTransformTargets();
+        m_ScaleGizmo.SetTarget(component);
+    }
+    void EditorScene::ClearTransformTargets()
+    {
+        m_TranslationGizmo.SetTarget(nullptr);
+        m_RotationGizmo.SetTarget(nullptr);
+        m_ScaleGizmo.SetTarget(nullptr);
+    }
+    void EditorScene::ClearTransformHover()
+    { m_TranslationGizmo.ClearHover(); m_RotationGizmo.ClearHover(); m_ScaleGizmo.ClearHover(); }
+    void EditorScene::EndTransformDrag()
+    { m_TranslationGizmo.EndDrag(); m_RotationGizmo.EndDrag(); m_ScaleGizmo.EndDrag(); ClearTransformHover(); }
+    bool EditorScene::IsTransformDragging() const
+    { return m_TranslationGizmo.IsDragging() || m_RotationGizmo.IsDragging() || m_ScaleGizmo.IsDragging(); }
     Engine::StaticMeshComponent* EditorScene::GetSelected() const
     {
         return m_SelectedIndex >= 0 ? m_Objects[m_SelectedIndex].Component.get() : nullptr;
@@ -253,6 +291,7 @@ namespace Editor
     {
         if (auto* component = GetSelected())
         {
+            EndTransformDrag();
             m_Camera.SetTarget(component->GetWorldLocation());
             UpdateCamera();
         }
@@ -275,6 +314,7 @@ namespace Editor
         default: throw std::invalid_argument("Unknown editor view direction");
         }
         m_ViewDirection = direction;
+        EndTransformDrag();
         m_OrbitUp = {0,1,0};
         m_PressedAxis = -1;
         m_bAxisDragging = false;
@@ -305,6 +345,11 @@ namespace Editor
         view.bDepthRangeZeroToOne = true;
         view.Viewport.Width = viewport->GetWidth();
         view.Viewport.Height = viewport->GetHeight();
+        view.DrawExtensions.push_back({[this](auto& builder, const auto& sceneView, auto color, auto depth) {
+            m_TranslationGizmo.AddPass(builder,sceneView,color);
+            m_RotationGizmo.AddPass(builder,sceneView,color);
+            m_ScaleGizmo.AddPass(builder,sceneView,color);
+        }});
         view.DrawExtensions.push_back({[](auto& builder, const auto& sceneView, auto color, auto depth) {
             ViewAxes::AddPass(builder,sceneView,color);
         }});
@@ -320,11 +365,29 @@ namespace Editor
         const bool pressed = event.Event != SlateCore::EInputEvent::Released;
         if (event.Button == SlateCore::EMouseButton::Left)
         {
+            if (!pressed && IsTransformDragging())
+            {
+                EndTransformDrag();
+                if (const auto* view = m_ViewFamily.GetView(0))
+                {
+                    m_TranslationGizmo.UpdateHover(*view,{static_cast<float>(event.X),static_cast<float>(event.Y)});
+                    m_RotationGizmo.UpdateHover(*view,{static_cast<float>(event.X),static_cast<float>(event.Y)});
+                    m_ScaleGizmo.UpdateHover(*view,{static_cast<float>(event.X),static_cast<float>(event.Y)});
+                }
+                return true;
+            }
             if (pressed && m_Viewport && !m_bRotating && !m_bPanning)
             {
                 m_PressedAxis = ViewAxes::HitTest(m_Camera.GetViewMatrix(),m_Viewport->GetWidth(),m_Viewport->GetHeight(),
                     {static_cast<float>(event.X),static_cast<float>(event.Y)});
-                if (m_PressedAxis < 0) return false;
+                if (m_PressedAxis < 0)
+                {
+                    const auto* view = m_ViewFamily.GetView(0);
+                    const Core::Float2 position{static_cast<float>(event.X),static_cast<float>(event.Y)};
+                    return view && (m_TranslationGizmo.BeginDrag(*view,position) ||
+                        m_RotationGizmo.BeginDrag(*view,position) || m_ScaleGizmo.BeginDrag(*view,position));
+                }
+                ClearTransformHover();
                 m_AxisPressPosition = {static_cast<float>(event.X),static_cast<float>(event.Y)};
                 m_AxisStartOffset = m_Camera.GetPosition()-m_Camera.GetTarget();
                 m_AxisStartUp = Core::Normalize(m_Camera.GetUp());
@@ -347,13 +410,48 @@ namespace Editor
             }
             return false;
         }
-        if (m_PressedAxis >= 0) return true;
+        if (m_PressedAxis >= 0 || IsTransformDragging()) return true;
+        ClearTransformHover();
         if (event.Button == SlateCore::EMouseButton::Right) { m_bRotating = pressed; return true; }
         if (event.Button == SlateCore::EMouseButton::Middle) { m_bPanning = pressed; return true; }
         return false;
     }
     bool EditorScene::OnMouseMove(const SlateCore::MouseMoveEvent& event)
     {
+        if (IsTransformDragging())
+        {
+            const auto* view = m_ViewFamily.GetView(0);
+            const Core::Float2 position{static_cast<float>(event.X),static_cast<float>(event.Y)};
+            Core::Float3 value;
+            if (!view) return true;
+            if (m_TranslationGizmo.IsDragging() && m_TranslationGizmo.Drag(*view,position,value) &&
+                (value-m_TranslationGizmo.GetTarget()->GetWorldLocation()).LengthSquared() > 1e-12f)
+            {
+                // PrimitiveComponent's dirty override is a placeholder. Publish
+                // explicitly, as the node inspector does, after the normal wait.
+                WaitForLastDraw();
+                m_TranslationGizmo.GetTarget()->SetWorldLocation(value);
+                m_Scene->NotifyComponentChanged(m_TranslationGizmo.GetTarget());
+                m_bSceneDirty = true;
+            }
+            else if (m_RotationGizmo.IsDragging() && m_RotationGizmo.Drag(*view,position,value) &&
+                (value-m_RotationGizmo.GetTarget()->GetLocalRotation()).LengthSquared() > 1e-12f)
+            {
+                WaitForLastDraw();
+                m_RotationGizmo.GetTarget()->SetLocalRotation(value);
+                m_Scene->NotifyComponentChanged(m_RotationGizmo.GetTarget());
+                m_bSceneDirty = true;
+            }
+            else if (m_ScaleGizmo.IsDragging() && m_ScaleGizmo.Drag(*view,position,value) &&
+                (value-m_ScaleGizmo.GetTarget()->GetLocalScale()).LengthSquared() > 1e-12f)
+            {
+                WaitForLastDraw();
+                m_ScaleGizmo.GetTarget()->SetLocalScale(value);
+                m_Scene->NotifyComponentChanged(m_ScaleGizmo.GetTarget());
+                m_bSceneDirty = true;
+            }
+            return true;
+        }
         if (m_PressedAxis >= 0)
         {
             const float dx = event.X-m_AxisPressPosition.X, dy = event.Y-m_AxisPressPosition.Y;
@@ -399,17 +497,35 @@ namespace Editor
             UpdateCamera();
             return true;
         }
+        if (const auto* view = m_ViewFamily.GetView(0))
+        {
+            if (m_Viewport && ViewAxes::HitTest(m_Camera.GetViewMatrix(),m_Viewport->GetWidth(),m_Viewport->GetHeight(),
+                {static_cast<float>(event.X),static_cast<float>(event.Y)}) < 0)
+            {
+                const Core::Float2 position{static_cast<float>(event.X),static_cast<float>(event.Y)};
+                m_TranslationGizmo.UpdateHover(*view,position);
+                m_RotationGizmo.UpdateHover(*view,position);
+                m_ScaleGizmo.UpdateHover(*view,position);
+            }
+            else ClearTransformHover();
+        }
         return false;
     }
     bool EditorScene::OnMouseWheel(const SlateCore::MouseWheelEvent& event)
     {
-        if (m_PressedAxis >= 0) return true;
+        if (m_PressedAxis >= 0 || IsTransformDragging()) return true;
+        ClearTransformHover();
         m_Distance = std::clamp(m_Distance - event.Delta * 0.25f, 0.2f, 1000.0f);
         UpdateCamera();
         return true;
     }
     bool EditorScene::OnFocusLost()
-    { m_bRotating = m_bPanning = m_bAxisDragging = false; m_PressedAxis = -1; return true; }
+    {
+        EndTransformDrag();
+        m_bRotating = m_bPanning = m_bAxisDragging = false; m_PressedAxis = -1; return true;
+    }
+    void EditorScene::OnViewportResized(int, int)
+    { EndTransformDrag(); }
     void EditorScene::WaitForLastDraw()
     {
         if (!m_Viewport || !m_Viewport->GetRenderTarget()) return;

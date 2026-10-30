@@ -26,7 +26,7 @@
 | --- | --- |
 | [射线求交与三角形距离](algorithm/01-ray-triangle-and-distance.md) | 怎样求 t、重心坐标和最近点，视口投放怎样选择最近网格与材质槽？ |
 | [BVH、八叉树与场景查询](algorithm/02-bvh-octree-and-scene-query.md) | 如何分割、剪枝，候选集和精确命中有什么区别？ |
-| [矩阵、视锥与深度](algorithm/03-transforms-frustum-and-depth.md) | NO/ZO 深度如何区分，方向球怎样投影、命中和叠加偏航/俯仰？ |
+| [矩阵、视锥与深度](algorithm/03-transforms-frustum-and-depth.md) | NO/ZO 深度如何区分，方向球怎样旋转视图，组件怎样约束平移、局部缩放和绕轴旋转，扇形怎样表示角度？ |
 | [距离场与 Jump Flood](algorithm/04-distance-fields-and-jump-flood.md) | 有符号距离怎样生成、存储、合并和步进？ |
 | [PBR、IBL 与采样](algorithm/05-pbr-ibl-and-sampling.md) | BRDF 项、采样 PDF、环境预滤波怎样对应？ |
 | [阴影与级联](algorithm/06-shadow-mapping-and-cascades.md) | 光源投影、CSM 分割、Atlas 与 PCF 怎样衔接？ |
@@ -44,6 +44,8 @@
 文档检查包括：覆盖清单与实际文件集合一致、逐文件内容摘要核对、本文档集的本地链接解析、UTF-8 解码与差异空白检查。这些静态检查不替代编译、运行或算法数值验证。后续实现调整必须同步相关专题，当前 Editor 入口见 [架构说明](../architecture/app/editor.md)。
 
 2026-10-29 补充了 Vulkan 管线布局缓存的 CPU 反射信息与复用条件；模型和方向轴共同绘制的故障、修复及实际验证范围见 [故障记录](../dev/bugfix/故障与修复记录-2026-10-29.md)。
+
+2026-10-30 补充了局部缩放与旋转编辑工具、连续角度/扇形、Euler 转换和组件代理更新；模型独立读回、完整 Editor UI 与 Launcher 验证范围见 [故障记录](../dev/bugfix/故障与修复记录-2026-10-30.md)。
 
 ## 阅读时应特别留意的现状
 

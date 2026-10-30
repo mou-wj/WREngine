@@ -113,3 +113,113 @@ CameraUp = Rotate(k,right,β)
 这是两次 Rodrigues 旋转，先绕按下时相机上方向偏航，再绕偏航后的相机右方向俯仰。偏移和上方向随俯仰一同旋转，保留距离 |v0|、焦点以及二者原有夹角，避免只改偏移导致极点视图基底退化；两次角度均从按下位置累计计算，不重复累加已应用的旋转。Top/Bottom 视图同样可连续旋转。前向 -normalize(v) 回写 yaw=atan2(forward.z,forward.x)、pitch=asin(clamp(forward.y,-1,1))；m_OrbitUp 保留旋转后的上方向，后续平移/滚轮重建相机时继续使用该基底。既有右键环绕仍采用世界 Y 向上的常规控制。
 
 未拖动且松开位置仍命中原球体才触发六向切换；拖动释放不切换。水平、垂直和斜向拖动都改变相机，失焦清除按下状态。规模固定为六条线、六个 384 三角形球、12 次 Draw；排序/命中最多六个元素。实际输入链、像素和退出检查见 [2026-10-28 记录](../../dev/bugfix/故障与修复记录-2026-10-28.md)，本项验证不推及整个 MathTest。
+
+## 节点位移编辑轴：投影、约束命中与世界空间拖动
+
+源码：[EditorTranslationGizmo.h](../../../src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h)、[实现](../../../src/Editor/SceneEditor/Private/EditorTranslationGizmo.cpp)、[TranslationGizmo.sf](../../../shaders/editor/TranslationGizmo.sf)。`SetTarget` 借用 SceneComponent，`HitTest`/`BeginDrag` 接收当前 SceneView 和视口内部鼠标像素位置，`Drag` 只输出候选世界位置，由宿主在原有资源更新时序中应用。绘制通过 SceneViewDrawExtension 加入当前 RDG，架构和场景变更时序见 [Editor](../../architecture/app/editor.md) 与 [UI 工程实现](../performance/08-ui-rendering-and-window-lifetime.md)。本节描述世界空间位移；局部缩放和旋转见后续两节，当前工具不包含吸附和撤销。
+
+坐标基固定为世界单位轴 eX/eY/eZ，不随组件自身或父节点旋转。X 红、Y 蓝、Z 绿，与右上方向示意一致；`ETranslationHandle` 包含 X/Y/Z 单轴和 XY/XZ/YZ 双轴平面。原点 O 取 `target->GetWorldLocation()`。设 `c=ViewProjectionMatrix·(O,1)`，视口尺寸为 W/H，`Project` 计算局部屏幕像素 `sx=(c.x/c.w+1)W/2`、`sy=(1-c.y/c.w)H/2`；屏幕 Y 向下。鼠标输入已经相对于视口，不再叠加窗口坐标或 Viewport.X/Y；实际 RHI viewport/scissor 才使用视图在附件中的 X/Y。
+
+`BuildGeometry` 按 `AxisPixels=90` 估算世界长度：
+
+```text
+L = 2 × AxisPixels × c.w / (abs(ProjectionMatrix(1,1)) × H)
+axisEnd[i] = O + L × e[i]
+```
+
+由屏幕纵向的投影导数 `pixelsPerWorldUnit=abs(P11)H/(2c.w)` 得此逆比例。90 像素是与像平面平行的参考长度，世界轴仍会因朝向和透视产生缩短，并非三条轴的实际投影都固定为 90 像素。常规正交矩阵的 c.w=1 时此式也成立；当前 Editor 仍使用透视场景相机，不将公式适用性当作 Renderer 正交流程已验证。`Project` 拒绝非有限值、c.w<=1e-5 及近远裁剪范围之外的点；NO 使用 -c.w<=c.z<=c.w，ZO 使用 0<=c.z<=c.w。Origin 不可投影时整个工具不绘制/命中，某个端点不可投影时跳过对应轴；屏幕边界外的几何由视口裁剪。
+
+三个平面四边形分别为 `{O, O+0.30L·a, O+0.30L·(a+b), O+0.30L·b}`，其中 `(a,b)` 为 `(eX,eY)`、`(eX,eZ)`、`(eY,eZ)`。O 确实是四边形的一个顶点。平面使用缺失轴的颜色并半透明显示；悬停或按住的句柄为黄色。平面先按中心的视线距离从远到近绘制，再绘制箭头轴；没有场景深度测试，因此作为可操作的编辑叠加显示在模型上方。
+
+`MakeRay` 以鼠标 `(x,y)` 计算 NDC `(2x/W-1, 1-2y/H)`，将近 z=0（ZO）或 -1（NO）及远 z=1 分别乘 InvVP、除 w，得到近点 R 和单位方向 d。源视图的深度约定必须与投影对应。局部坐标与视口尺寸非有限/非法、齐次 w 过小或近远点重合时返回失败。
+
+`HitTest` 先检查三条轴，再检查平面：
+
+- 轴使用投影端点与原点形成屏幕线段，只允许外侧 `t∈[0.38,1]`，与原点附近平面区域分开；取鼠标到此段的距离，最近且小于 `HitPixels=7` 像素者命中。投影长度小于 `MinAxisPixels=12` 的轴不参与交互，避免正对视线的轴被误选。
+- 轴还要求 `GetAxisPlaneNormal` 能建立稳定拖动平面，即 `|d-e(d·e)|²>=0.01`。这样命中结果本身已经排除了近乎沿轴观察的退化射线。
+- 平面使用射线与世界平面求交，法线 n=a×b。`IntersectPlane` 计算 `t=dot(O-R,n)/dot(d,n)`、`Q=R+t·d`；要求 `abs(dot(d,n))>=MinPlaneCosine=0.06`、t>=0 且结果有限。再要求 `dot(Q-O,a)/L` 与 `dot(Q-O,b)/L` 均在 `[0,0.30]`，多平面覆盖时取最近交点。绘制/命中都按原点中心射线排除近乎侧视的平面，鼠标自身射线仍须通过相同分母检查。
+
+`BeginDrag` 保存 `m_StartOrigin`、首次交点 `m_StartHit`、`m_DragNormal`，以及按下时的 InvVP、Viewport 和 NO/ZO 标记。单轴句柄以按下射线 d0 构造法线 `n=normalize(d0-e·dot(d0,e))`：n 与 e 垂直，故平面包含选定轴；同时它是视线在轴正交平面上的分量，使平面尽量面向观察方向。平面句柄直接使用 a×b。由首次鼠标交点作为锚点，按下不会把对象中心吸到鼠标射线上。
+
+后续 `Drag` 始终用按下的相机与固定世界平面求当前交点 Q，令 Δ=Q-m_StartHit，输出位置：
+
+```text
+单轴：   candidate = m_StartOrigin + e × dot(Δ,e)
+双轴：   candidate = m_StartOrigin + a × dot(Δ,a) + b × dot(Δ,b)
+```
+
+式中的乘号表示标量乘向量，不是叉积。实现利用世界单位基，直接将 candidate 初始化为 m_StartOrigin，再只累加选中的一个或两个数组分量；未选分量不会被浮点投影计算改写。位移从按下位置累计，未重复累加已经应用的量，也不随着移动中的对象重新设置拖动平面。Viewport 的 X/Y/Width/Height 改变会拒绝候选输出；宿主在 resize、切换工具/目标、失焦等取消边界中结束拖动。平面交点退化或输出非有限时保持原位置；不能以任意大倍率放大鼠标移动掩盖退化。
+
+世界约束与节点属性中的局部 Position 需要区分。宿主调用既有 [SceneComponent::SetWorldLocation](../../../src/Framework/Engine/Private/SceneComponent.cpp)，无父时 local=candidate，有父时 `local=inverse(parentWorld)·(candidate,1)`；只改变位置，保留局部旋转和缩放。父节点有旋转时，沿一个世界轴移动可能改变多个局部 Position 分量，世界空间仍只沿选定方向移动。非均匀/负缩放同样经过完整父逆矩阵，而非只除以一个缩放数。
+
+`CanSetWorldLocation` 检查父矩阵元素有限，设其前三列长度之积为 V，要求 V>0、det 有限且 `abs(det)>1e-6·V`，按相对体积排除零缩放和近奇异基底，同时允许合法的小尺度。Core::Inverse 本身仍没有奇异保护；本检查属于该编辑工具的输入约束，没有改写公共数学接口。固定三个轴与三个平面使几何、命中和拖动均为常数规模；箭头/平面最多形成 15 个屏幕三角形，既有 Shader 参数和 Builder arena 承载本帧快照，不需要为命中建立场景加速结构。
+
+独立公式检查入口为忽略目录 `out/diagnostics/translation-gizmo-math.py`，结果保存在同名 JSON。2026-10-29 的 float64 检查覆盖 NO/ZO × Orbit/Front/Top/Right 共 8 组视图，逐轴/逐平面验证约束、父旋转加非均匀负缩放的世界/局部往返，以及 90 像素参考尺度；正对视线轴和近乎侧视平面明确拒绝。最大拖动误差 2.44e-14、父变换往返误差 3.02e-16、参考像素长度误差 2.84e-14。它验证独立公式，不代替实际 C++ float、命中所有分支、GPU 画面或完整 UI 流程验收；后者的真实检查范围见 [2026-10-29 位移工具记录](../../dev/bugfix/故障与修复记录-2026-10-29.md)。
+
+## 局部缩放编辑轴：单位标记与轴向拖动倍率
+
+新增实现：[EditorScaleGizmo.cpp](../../../src/Editor/SceneEditor/Private/EditorScaleGizmo.cpp)。声明与共享绘制函数继续位于 [EditorTranslationGizmo.h](../../../src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h)，三个具体工具复用同一个 Shader 和 `GizmoDrawing::AddPass`，没有为缩放另建 GPU 几何或 Shader 文件。
+
+缩放和旋转使用局部编辑语义。`GizmoDrawing::RotationBasis` 从目标向父链逐层左乘 `MakeRotationMatrix(LocalRotation)`，得到 `B=R_parent0·...·R_target`，其列为编辑工具的三个正交、右手单位方向。父子所有缩放均不参与 B，因此负缩放不会反转工具颜色轴，非均匀缩放也不会把圆环拉成椭圆。原点仍取目标真实世界位置。这个 B 表示层级旋转形成的编辑方向，不是对可能带 shear 的完整世界矩阵做分解；有非均匀缩放父级时，实际模型几何仍保留其仿射变形。
+
+`BuildGeometry` 使用 `UnitAxisPixels=55` 计算单位参考长度，再按对应局部缩放分量的绝对值伸缩：
+
+```text
+unitLength = GizmoDrawing::WorldLength(view, O, 55)
+end[i] = O + B[i] × unitLength × abs(LocalScale[i])
+midpoint[i] = O + B[i] × unitLength × abs(LocalScale[i]) × 0.5
+```
+
+缩放绝对值为 1 时采用 55 像素参考尺度，比原先的 90 像素标尺更接近原点；这不是 1 世界单位，轴的实际屏幕长度仍受朝向和透视影响。各端点随组件当前 LocalScale 改变，负值只影响长度的绝对值，不反转 B 的颜色轴方向；父级缩放不参与该长度计算。每条轴端放半径 5 像素的圆点，连接三条轴各自世界长度 50% 处的中点形成三角形，端点圆点仍留在完整轴长处。中点先在世界空间求出，再独立调用 `Project`，不能直接平均屏幕原点和端点，因为透视除 w 后的屏幕中点通常不是世界中点。连接边只作视觉辅助，不提供额外的均匀缩放或双轴缩放句柄。绘制和命中都调用同一个 `BuildGeometry`，不会出现画面端点已移动但仍命中旧位置的两套几何。
+
+命中先检查端点圆点（中心距离小于 8 像素），再检查当前轴段的 `t∈[0.15,1]`（距离小于 7 像素），选择最近项；这里 t 为当前整条轴段的比例，共享原点不单独命中。轴投影长度至少为 12 像素，所选 LocalScale 必须有限且绝对值在 `[0.01,10000]` 内，否则对应轴淡化且不接受拖动。悬停和按住项以黄色绘制；零或超出范围的输入不会被工具在按下时偷偷改写。没有另加最短/最长显示长度钳制：极小但仍在数值范围内的缩放也可能因 12 像素下限无法重新命中，极大缩放可能使端点越过近远裁剪面而不显示，或投影到视口外而被裁剪；可通过属性数值恢复，不保证整个允许数值区间内各轴始终可拖。
+
+`BeginDrag` 保存完整 m_StartScale、鼠标 m_PressPosition、所选 m_Active 和视口，并保存按下时从投影原点指向所选轴投影端点的单位屏幕方向 m_DragDirection。由至少 12 像素的可操作轴建立该方向，后续不随端点伸缩重新计算。鼠标坐标和方向都采用屏幕 Y 向下的同一约定：
+
+```text
+dragDirection = normalize(screenEndAtPress - screenOriginAtPress)
+distance = dot(currentMouse - pressMouse, dragDirection)
+exponent = clamp(0.01 × distance, -20, 20)
+magnitude = clamp(abs(startScale[axis]) × exp(exponent), 0.01, 10000)
+candidate = startScale
+candidate[axis] = copysign(magnitude, startScale[axis])
+```
+
+沿按下轴的屏幕方向向外拖时 distance 为正，绝对缩放增大；向原点拖时为负，绝对缩放减小。垂直于该方向的位移不参与倍率，不能再将“水平移动不变”用于任意朝向的轴；distance 为 0 时原样返回按下值。以按下值和固定方向重新计算，既避免重复累乘已经生效的比例，也避免移动端点改变倍率方向或灵敏度；未碰上下限时反向等距离拖动具有相反的对数倍率。仅替换选定数组分量，其他缩放分量逐值保留，位置和旋转由宿主保持；负尺度保留符号且不会跨过零，因此向外拖会让负值的绝对值增大。输出为 LocalScale，宿主使用 `SetLocalScale`，不调用当前尚未实现严格父空间转换的 SetWorldScale。视口变动或非有限输入拒绝输出，具体取消捕获与同步沿已有宿主路径进行。
+
+规模固定为三条轴、三个 12 段圆点和三条连接线，最多 48 个屏幕三角形。当前共享路径每个三角形提交一次 Draw，便于复用已有参数/Shader，但并不等于做过绘制调用批处理优化。
+
+2026-10-30 的 C++ 检查覆盖 24 组相机方向、组件旋转及正负尺度组合，验证向外增大绝对值、向内缩小、垂直方向不变、回到按下位置和重复事件幂等。Vulkan 实际窗口输入及 GPU 读回验证了三轴方向、动态端点/命中和中点连线；完整 Editor UI 与 Launcher 正常关闭范围见 [验证记录](../../dev/bugfix/故障与修复记录-2026-10-30.md)。
+
+## 局部旋转编辑轴：圆环、连续角度与旋转扇形
+
+新增实现：[EditorRotationGizmo.cpp](../../../src/Editor/SceneEditor/Private/EditorRotationGizmo.cpp)。三个颜色圆环的法线分别为上述 B 的 X/Y/Z 列，参考半径使用 `WorldLength(...,75)`；每环 64 段。对轴 i，选择循环基 `u=B[(i+1)%3]`、`v=B[(i+2)%3]`，因 `u×v=B[i]`，正角方向与所选局部轴的右手方向一致：
+
+```text
+direction(φ) = u cosφ + v sinφ
+point(φ) = O + radius × direction(φ)
+```
+
+`PickRing` 对可投影线段求鼠标到线段的最近点，7 像素内可命中；近似重合时以视图深度选择较近的圆弧。`DragReference` 同时供 HitTest 与 BeginDrag 使用，只有能够建立稳定拖动参考的部位才显示可交互高亮。普通视角将反投影射线与选定圆环平面相交，要求 `abs(dot(rayDirection,normal))>=0.08`、交点在射线前方且径向长度至少为 `0.1×radius`；投影到平面后归一化为径向方向。
+
+按下保存 O、半径、起始 B、局部 Euler/旋转矩阵、起始径向、InvVP 和视口。普通拖动用按下平面及相机求当前径向 vc，将上次有效方向 vp 到 vc 的有符号小角累加：
+
+```text
+increment = atan2(dot(normal,cross(vp,vc)), clamp(dot(vp,vc),-1,1))
+angle = previousAngle + increment
+R_local_candidate = R_local_press × R_axis(angle)
+```
+
+小角累加允许跨越 ±π 和多圈，不能每帧只比较起始方向的 atan2。失效交点不推进 m_LastDirection 或 m_Angle。每次相邻采样仍需要足够连续：只凭两个采样方向无法判断一次事件是否跳过了半圈以上，当前没有推断缺失的鼠标轨迹。m_Angle 使用弧度，`MakeRotationMatrix` 接收的增量为角度制。
+
+近乎侧对视线的圆环不能稳定求平面交点时，按下阶段固定选择屏幕切线方式。取命中圆弧方向，在正向旋转 0.01 弧度前后投影，令 `T=(screenNext-screenStart)/0.01`（像素/弧度），后续按 `angle=dot(mouse-pressMouse,T)/dot(T,T)` 求角。T 必须有限且长度至少 4 像素/弧度，否则拒绝命中/激活。此方式接受左右或上下位移在圆弧切线上的分量，径向移动不旋转；选择后的方式在同一次拖动内不切换，避免平面/切线之间发生角度跳变。
+
+右乘增量意味着围绕按下时的组件局部轴旋转；位置和 LocalScale 不变。有旋转父节点时通过父链 B 显示该局部轴在世界中的方向，没有使用只把输入写入 local 的 SetWorldRotation。局部旋转矩阵写回 Euler 时，一个轴的物理旋转可能改变多个 Euler 字段，这是 `Rz(Z)·Ry(Y)·Rx(X)` 参数化的结果，不等同于多个轴同时自由旋转。
+
+当前通用 `GetEulerRotation` 返回的 Y/Z 次序与 `MakeRotationMatrix` 不一致：例如输入 `(0,30,0)` 构造的矩阵会被解成 `(0,0,30)`。本次未修改公共数学接口，`NearEuler` 在新旋转实现中明确提取与 RzRyRx 配套的结果。普通姿态使用 `x=atan2(R21,R22)`、`y=atan2(-R20,hypot(R00,R10))`、`z=atan2(R10,R00)`；当 `abs(cos(y))<=1e-5` 时保留参考 X，解 `z=atan2(-R01,R11)+sign(y)·x`。再比较标准解与等价解 `(x+180,180-y,z+180)`，各分量按 360 度整数倍调整到当前属性附近，选距离较小者。极点附近的等价 Euler 不唯一；阈值分支允许约 1e-5 量级的矩阵近似，不能当作任意角度下绝无属性跳变的保证。
+
+拖动时以按下 O、起始径向和所选法线生成半透明黄色扇形，并绘制圆心到起始/当前方向的两条径向线。扇形可视扫角限制在 `[-2π,2π]`，最多 64 片；实际 m_Angle 继续累计，多圈后填满一盘，当前径向线仍随最终角度变化。扇形本身不区分已转过几整圈，当前接口可查询未包裹的 `GetAngleRadians`。圆环随后以当前组件基底绘制；所选轴法线在自身绕轴旋转时保持不变，起始扇形不会随对象反复重设参考。
+
+三环线条最多 384 个屏幕三角形，扇形与两条径向线再增加最多 68 个，总计不超过 452 个三角形/Draw。CPU 命中扫描固定 192 段，属于常量规模；现有逐三角形参数上传和 Draw 有真实 CPU/驱动成本，尚未批处理。Pass 仍只声明颜色附件 Load_Store，不测试或更新场景深度。屏幕投影、完成点、参数快照和组件所有权沿用前述公共路径。
+
+2026-10-30 独立公式检查入口为忽略目录 `out/diagnostics/rotation-scale-math.py`，结果保存在同名 JSON。2943 组局部旋转组合覆盖任意起始 Euler、Y=±90 及其邻域、三个局部轴、正负和超过一圈的增量；父旋转组合、63 组有符号缩放与上下限、±200/±450/±1080 度跨界累计均通过。最大旋转矩阵误差约 1.68e-5、乘父旋转后约 1.71e-5，主要来自极点阈值近似；旧 Euler 顺序问题也有独立反例。该脚本使用 NumPy float64 验证公式，不替代实际 C++ float、GPU 扇形和完整编辑器 UI 检查；真实运行、模型读回与 Launcher 正常关闭结果见 [验证记录](../../dev/bugfix/故障与修复记录-2026-10-30.md)。

@@ -126,6 +126,24 @@ Pass 录制先绑定管线，再设置局部 viewport/scissor，随后绘制；�
 
 输入沿 Window 的几何命中、局部坐标转换和 _capturedWidget/_capturedButtons 传给现有 SlateWidget/SceneViewport，再到 EditorScene。只有球面命中才消费左键按下，轴线和背景不捕获。捕获后允许移出视口继续拖动；松开和失焦清除捕获/业务按下状态。球体点击和偏航不创建独立原生窗口或 ImGui 输入层，浮动菜单/材质窗口仍按既有 UI 捕获遮挡场景。极小视口同步省略绘制和命中，布局改变后按实际视口尺寸重新计算位置。
 
+## 位移工具的目标、参数快照与组件更新
+
+[EditorTranslationGizmo](../../../src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h) 与 [实现](../../../src/Editor/SceneEditor/Private/EditorTranslationGizmo.cpp) 属于 SceneEditor；EditorScene 按值拥有工具，工具只借用 SceneComponent。NodeEditor 的 Position/Move 不拥有组件，通过 EditorApplication 注入的同步查询/设置回调启停。切换选择或删除、清空、Shutdown 前清除目标，避免组件释放后仍被绘制/命中读取；这些操作都沿原 UI/窗口线程执行，没有后台编辑任务。
+
+AddPass 只在启用目标并可投影时调用，读取当前世界位置、当前视图矩阵、悬停/按下状态，投影为屏幕三角形，写入 Builder arena 的参数对象。执行闭包只捕获稳定参数指针、三角形数量、管线和视口，不读取工具、组件或可变 UI。最多 15 个三角形通过 SV_VertexID 生成顶点，无新增顶点/索引缓冲。Pass 声明场景颜色 Load_Store，不使用深度；RDG 继续维护依赖、状态转换、提交与访问 Fence。录制先绑定管线，再设 viewport/scissor；没有额外 Execute、Present 或 WaitIdle。
+
+Shader VS 使用生成的 EditorTranslationVertexParameters 虚拟头，PS 保留自己的附件元数据；PS 编译环境显式注册 VS 头，因为现有 include 展开器先展开文本而不评估阶段宏，不能依赖 GlobalShader unordered_map 恰好先编译 VS。注册沿既有 ShaderCompiler 接口完成，不改公共编译/反射流程。
+
+输入仍走 Window → SlateWidget → SceneViewport → EditorScene。右上方向球先做命中；变换工具激活时拦截相机滚轮和右/中键。Drag 只算候选，EditorScene 对实际变化先调用原 WaitForLastDraw 等待视口纹理 Tracker 的具体队列完成值，再分别调用 SetWorldLocation / SetLocalRotation / SetLocalScale，随后显式 NotifyComponentChanged，并置 m_bSceneDirty，使下一次 Draw 沿既有 FlushPendingUpdates 更新代理和 GPU 数据。这里必须显式通知：PrimitiveComponent 覆写的 MarkRenderStateDirty 仍是占位代码，不能把 SceneComponent 基类 setter 看作已经刷新代理；2026-10-30 的模型读回检查暴露并修正了之前的错误判断。无变化时不重建代理，不额外重复调用带等待的 NotifySelectedChanged。
+
+拖动按下保存射线平面、原点、锚点、逆 VP 和视口；移动对象不会改变这份参考。松开、失焦、resize、相机视图切换/聚焦和目标替换清除拖动。数学和父变换退化检查见 [位移约束](../algorithm/03-transforms-frustum-and-depth.md)。资源、Shader 和管线仍使用原有设备缓存与窗口关闭顺序；组件借用解除不代表 GPU 已完成，完成条件继续由原资源 Tracker 和窗口释放路径保证。
+
+鼠标移出视口后，Window 不再向 SceneViewport 投递移动事件。EditorApplication 在当前帧 GUI 绘制结束后，用 ImGui 当前捕获结果及视口区域命中清除普通 hover，下一帧移除黄色；场景正在捕获拖动时保留 active 反馈，不伪造额外鼠标事件或修改通用窗口路由。
+
+缩放和旋转的类声明复用既有 [EditorTranslationGizmo.h](../../../src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h)，各自算法位于新增的 EditorScaleGizmo.cpp 和 EditorRotationGizmo.cpp。GizmoDrawing 只负责当前三个工具共用的投影、无缩放旋转基底、屏幕线段和颜色叠加，不拥有组件、窗口或 GPU 资源。工具生成的屏幕三角形 span 在 AddPass 调用内复制为 Builder arena 参数；参数指针 vector 同样由 arena 构造并登记析构，执行闭包仅捕获其指针及其他稳定值，不借用临时 span 或将堆 vector 复制到 Pass 闭包。Execute 等待本帧录制完成后，arena 可按原约定析构这些 CPU 数据；RHI 参数命令自行复制提交数据。此处避免放大既有 Pass 裸指针泄漏的额外 vector 持有，未修改 RenderGraphBuilder 的释放结构。
+
+工具目标由 EditorScene 的具体三个 setter 互斥设置，空指针只关闭对应工具；UI 通过三个查询/设置回调组装。Scale 输入和同名 Scale 按钮使用不同 ID 栈，保留 260px 窄栏内同排行为。缩放最多 48 个屏幕三角形，旋转最多 452 个，每个仍使用一次既有参数上传/Draw；规模有界但有实际 CPU/驱动开销，当前没有新增批处理缓冲或资源管理器。算法及局部坐标/整圈反馈边界见 [变换算法](../algorithm/03-transforms-frustum-and-depth.md)。
+
 ## 文件拖入材质库的执行顺序
 
 调用链：[Win32Surface::WndProc](../../../src/Framework/SlateCore/Private/Win32Surface.cpp) 的 WM_DROPFILES → [Window::OnFilesDropped](../../../src/Framework/SlateCore/Private/Window.cpp) → [EditorMaterialPanel::OnFilesDropped / ProcessImport](../../../src/Editor/MaterialEditor/Private/EditorMaterialPanel.cpp)。
