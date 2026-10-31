@@ -218,6 +218,7 @@ namespace Renderer {
     public:
         void Build(const std::unordered_map<Engine::PrimitiveComponent*, std::unique_ptr<PrimitiveSceneInfo>>& primitiveInfos);
         void Query(const Engine::SceneView& view, std::vector<Engine::PrimitiveSceneProxy*>& outPrimitives) const;
+        void Query(const Core::Ray& ray, float maxDistance, std::vector<Engine::PrimitiveSceneProxy*>& outPrimitives) const;
         void Clear();
         bool IsValid() const { return !m_Nodes.empty(); }
 
@@ -262,6 +263,8 @@ namespace Renderer {
         void FlushPendingUpdates() override;
         void NotifyComponentChanged(Engine::SceneComponent* component) override;
         bool UpdateGlobalDistanceFieldIfNeeded() override;
+        bool Raycast(const Core::Ray& ray, float maxDistance, Engine::ScenePickResult& outResult,
+            Engine::EScenePickFilter filter = Engine::EScenePickFilter::Meshes) const override;
 
 
         std::vector<Engine::PrimitiveSceneProxy*> GatherVisiblePrimitives(const Engine::SceneView& view) const ;

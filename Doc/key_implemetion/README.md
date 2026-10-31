@@ -24,9 +24,9 @@
 
 | 专题 | 要解决的阅读问题 |
 | --- | --- |
-| [射线求交与三角形距离](algorithm/01-ray-triangle-and-distance.md) | 怎样求 t、重心坐标和最近点，视口投放怎样选择最近网格与材质槽？ |
+| [射线求交与三角形距离](algorithm/01-ray-triangle-and-distance.md) | 屏幕射线、统一场景查询怎样返回最近对象/材质槽，t、重心坐标和最近点怎样求？ |
 | [BVH、八叉树与场景查询](algorithm/02-bvh-octree-and-scene-query.md) | 如何分割、剪枝，候选集和精确命中有什么区别？ |
-| [矩阵、视锥与深度](algorithm/03-transforms-frustum-and-depth.md) | NO/ZO 深度如何区分，方向球/变换工具怎样交互，网格怎样求可见地面 AABB 并细分，光源范围怎样生成？ |
+| [矩阵、视锥与深度](algorithm/03-transforms-frustum-and-depth.md) | NO/ZO 深度如何区分，方向球/变换工具怎样交互，网格怎样求可见地面 AABB、逐区细分并保持不透明 Alpha，光源球/锥/箭头怎样生成和拾取？ |
 | [距离场与 Jump Flood](algorithm/04-distance-fields-and-jump-flood.md) | 有符号距离怎样生成、存储、合并和步进？ |
 | [PBR、IBL 与采样](algorithm/05-pbr-ibl-and-sampling.md) | BRDF 项、采样 PDF、环境预滤波怎样对应？ |
 | [阴影与级联](algorithm/06-shadow-mapping-and-cascades.md) | 光源投影、CSM 分割、Atlas 与 PCF 怎样衔接？ |
@@ -47,7 +47,7 @@
 
 2026-10-30 补充了局部缩放与旋转编辑工具、连续角度/扇形、Euler 转换和组件代理更新；模型独立读回、完整 Editor UI 与 Launcher 验证范围见 [故障记录](../dev/bugfix/故障与修复记录-2026-10-30.md)。
 
-2026-10-31 补充了光源节点/代理更新、HintRender 的光源范围几何、XZ 网格可见区域 AABB 与单位网格细分、SceneSetting 控制提示绘制与编辑器依赖解耦、光源旋转/Direction 同步和单天空光注册约束，以及深度状态缓存字段抵消的复现与修复。工程和算法细节分别见 [UI 生命周期](performance/08-ui-rendering-and-window-lifetime.md)、[状态缓存](performance/06-shader-compilation-and-binding.md)、[提示几何](algorithm/03-transforms-frustum-and-depth.md)；真实 UI、三后端 Shader/缓存及 Launcher 的实际范围见 [故障记录](../dev/bugfix/故障与修复记录-2026-10-31.md)。
+2026-10-31 补充了光源节点/代理更新、HintRender 的光源范围几何、XZ 网格可见区域 AABB 与单位网格细分、SceneSetting 控制提示绘制与编辑器依赖解耦、光源旋转/Direction 同步和单天空光注册约束，以及深度状态缓存字段抵消的复现与修复。随后将地面网格改为 100×100 控制顶点、逐块距离细分和远处透明度衰减，修复上传描述符提前 move 导致的依赖漏记和 BufferSRV 元数据分类，并验证 Immediate 只上传一次。后续又统一了 SceneView 屏幕射线、SceneInterface 最近几何查询与材质投放复用，补充光源图标命中和方向球黄色交互/中心标签。工程和算法细节分别见 [UI 生命周期](performance/08-ui-rendering-and-window-lifetime.md)、[射线拾取](algorithm/01-ray-triangle-and-distance.md)、[状态缓存](performance/06-shader-compilation-and-binding.md)、[提示几何](algorithm/03-transforms-frustum-and-depth.md)；真实 UI、三后端 Shader/缓存及 Launcher 的实际范围见 [故障记录](../dev/bugfix/故障与修复记录-2026-10-31.md)。
 
 ## 阅读时应特别留意的现状
 
@@ -60,3 +60,5 @@
 - [网格导入](algorithm/08-mesh-import-and-geometry.md)：多 primitive、交错属性与切线 handedness 的支持存在边界，单模型显示正常不足以证明任意资产都可用。
 
 维护时同步改专题和本索引：新增工程机制进 performance，新增数学/图形算法进 algorithm；总体职责改变则同时更新 architecture。不要为文档分类创造新的运行时概念或修改代码。
+
+2026-10-31 后续补充光源范围/箭头拾取、查询过滤及平行光位置编辑，修正网格最后合成和不透明 Alpha。解析球/有限锥/有限射线与线段距离见 [矩阵和提示几何](algorithm/03-transforms-frustum-and-depth.md)，查询接口见 [射线拾取](algorithm/01-ray-triangle-and-distance.md)，混合状态与真实三后端读回、完整编辑器验证见 [当日记录](../dev/bugfix/故障与修复记录-2026-10-31.md)。

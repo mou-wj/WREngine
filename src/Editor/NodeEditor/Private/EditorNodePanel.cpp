@@ -84,7 +84,8 @@ namespace Editor
         if (!sky)
         {
             ImGui::SeparatorText("Local transform");
-            if (!directional && propertyTool("Position",location,0.05f,"Move","World axes: X red, Y blue, Z green\nPlanes: XY, XZ, YZ",
+            if (propertyTool("Position",location,0.05f,"Move",directional ?
+                "Move the light arrow; position does not change directional illumination" : "World axes: X red, Y blue, Z green\nPlanes: XY, XZ, YZ",
                 m_IsTranslationGizmoEnabled,m_SetTranslationGizmoEnabled)) { component->SetLocalLocation(location); changed = true; }
             if (rotatableLight && propertyTool("Rotation",rotation,0.5f,"Rotate","Rotate the light around its local axes; +X is the light direction",
                 m_IsRotationGizmoEnabled,m_SetRotationGizmoEnabled)) { component->SetLocalRotation(rotation); changed = true; }

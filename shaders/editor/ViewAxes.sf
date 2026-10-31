@@ -3,6 +3,7 @@ struct AxisVertexOutput
     float4 Position : SV_Position;
     float4 Color : COLOR0;
     float4 Normal : TEXCOORD0;
+    float3 Label : TEXCOORD1;
 };
 
 #if VERTEX_SHADER
@@ -28,6 +29,8 @@ AxisVertexOutput MainVS(uint vertexId : SV_VertexID)
     output.Position = float4(cameraPosition.xy * AXIS_SCALE, 0.5, 1);
     output.Color = AxisColor;
     output.Normal = float4(mul(ViewRotation,float4(normal,0)).xyz, Axis.w > 0 ? 1 : 0);
+    float2 center = mul(ViewRotation,float4(Axis.xyz,0)).xy;
+    output.Label = float3(Axis.w > 0 ? (cameraPosition.xy-center)/Axis.w : float2(0,0),LabelInfo.x);
     return output;
 }
 #else
@@ -36,6 +39,22 @@ float4 MainPS(AxisVertexOutput input) : SV_Target0
     float lighting = 1;
     if (input.Normal.w > 0.5)
     {
+        // Upright 3x5 glyphs: sign, one-column gap, then axis letter. Their
+        // coordinates are relative to the projected ball center, not its surface UV.
+        int2 cell = int2(floor(float2(input.Label.x+0.7,0.5-input.Label.y)*5));
+        if (cell.x>=0 && cell.x<7 && cell.y>=0 && cell.y<5)
+        {
+            const uint plusRows[5] = {0,2,7,2,0};
+            const uint minusRows[5] = {0,0,7,0,0};
+            const uint xRows[5] = {5,5,2,5,5};
+            const uint yRows[5] = {5,5,2,2,2};
+            const uint zRows[5] = {7,4,2,1,7};
+            uint endpoint = uint(input.Label.z+0.5);
+            uint row = cell.x<3 ? ((endpoint&1)==0 ? plusRows[cell.y] : minusRows[cell.y]) :
+                (endpoint/2==0 ? xRows[cell.y] : (endpoint/2==1 ? yRows[cell.y] : zRows[cell.y]));
+            int column = cell.x<3 ? cell.x : cell.x-4;
+            if (column>=0 && ((row>>uint(column))&1)!=0) return float4(0.025,0.025,0.025,1);
+        }
         float3 normal = normalize(input.Normal.xyz);
         lighting = 0.55 + 0.45 * max(dot(normal,normalize(float3(-0.4,0.6,0.8))),0);
     }

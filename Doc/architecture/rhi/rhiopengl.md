@@ -165,7 +165,7 @@ RHIContextBase
 
 图形管线绑定时创建/绑定 VAO、使用 program，并应用顶点布局、拓扑、光栅化、深度及混合状态。RenderPass 使用 `OpenGLFramebuffer` 挂接颜色/深度附件、设置 draw buffers 并按描述清理，结束时解除 framebuffer 和部分动态状态。
 
-当前状态与绘制实现存在简化：深度比较使用固定的 GL_LESS，混合使用固定的 alpha blend；Draw/DrawIndexed 把顶点/索引数量乘以 instanceCount，没有完整的原生实例化语义，部分 base vertex/first instance 参数也未落实。
+当前状态与绘制实现存在简化：深度比较使用固定的 GL_LESS，混合按各附件 bBlendEnable 启停，RGB 使用 SrcAlpha/OneMinusSrcAlpha，Alpha 使用 One/Zero，ColorWriteMask 经 glColorMaski 应用；混合因子仍未作为 RHI 可配置项暴露；Draw/DrawIndexed 把顶点/索引数量乘以 instanceCount，没有完整的原生实例化语义，部分 base vertex/first instance 参数也未落实。
 
 CopyTexture 主要沿二维图像路径执行 `glCopyImageSubData`；BlitTexture 通过临时读写 FBO 执行 `glBlitFramebuffer`。多层、不同纹理维度及子资源语义不能仅凭统一接口签名认定已经覆盖。
 

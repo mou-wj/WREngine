@@ -12,6 +12,8 @@
 // 包含你刚才定义的数学基础头文件
 #include "Math.hpp"
 
+namespace Core { struct Ray; }
+
 namespace Engine {
     // 前置声明
     class SceneInterface;
@@ -76,7 +78,7 @@ namespace Engine {
         // 裁剪面
         float NearClip;
         float FarClip;
-        bool bDepthRangeZeroToOne;
+        bool bDepthRangeZeroToOne = true;
 
         // 视口与画布规格
         ViewRect Viewport;
@@ -100,6 +102,9 @@ namespace Engine {
         void RebuildDerivedMatrices();
         void BuildFrustum();
         bool IsBoxVisible(const Core::AABB& box) const;
+        // Viewport-local pixels, top-left origin. Returns a normalized ray from
+        // near to far clip; callers supply the view used for the displayed image.
+        bool MakeRay(Core::Float2 position, Core::Ray& outRay, float& outMaxDistance) const;
         void PackViewUniforms(ViewUniforms& outUniforms) const;
         std::array<Core::Float3, 8> GetFrustumCornersWS(float nearDepth,float farDepth) const;
         void BuildSplitDepths();

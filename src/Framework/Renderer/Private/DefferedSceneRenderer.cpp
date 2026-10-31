@@ -35,6 +35,7 @@ namespace Renderer {
             RenderTargetBindingSlots background;
             background.NumColorRenderTargets = 1;
             background[0].Texture = SceneTextures.SceneColor;
+            background[0].ClearValue = {0,0,0,1};
             AddClearRenderTargetsPass(builder,background);
             if (sceneEnvMap)
                 for (auto view : Views->GetViews())

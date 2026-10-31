@@ -1316,7 +1316,9 @@ namespace RenderCore {
 		}
         RenderGraphParameterStruct parameterStruct(nullptr, nullptr);
 
-        auto uploadLamba = [uploads = std::move(uploadInfo)]
+        // Keep descriptors available for TransferDest registration below.
+        // Payload bytes already belong to the graph arena; only descriptors copy.
+        auto uploadLamba = [uploads = uploadInfo]
         (RHI::RHICommandListBase& rhiCmdList)
             {
                 for (const auto& upload : uploads)
@@ -1347,6 +1349,8 @@ namespace RenderCore {
         for (auto& upload : uploadInfo) {
             pass->AddBufferIntent({ upload.Buffer, ERHIResourceAccess::TransferDest });
         }
+        // Consume the source so Immediate uploads are not queued again as Deferred.
+        uploadInfo.clear();
         m_Passes.insert(m_Passes.begin(), pass);
     }
 } // namespace RenderCore

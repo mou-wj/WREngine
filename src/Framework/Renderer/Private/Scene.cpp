@@ -9,6 +9,7 @@
 #include "LightSceneProxy.h"
 #include "SceneShaderParameters.h"
 #include "FrustumCullPass.h"
+#include "HintRender.h"
 #include "RenderResource.h"
 #include "RHIPipelineStateCache.h"
 #include "ShaderParameter.h"
@@ -18,6 +19,8 @@
 #include "LocalVertexFactory.h"
 #include "StaticMeshComponent.h"
 #include "DistanceFieldMgr.h"
+#include "Transform.hpp"
+#include "BVH.hpp"
 #include <cstring>
 #include <algorithm>
 #include <cmath>
@@ -184,6 +187,104 @@ namespace Renderer {
         queryNode(queryNode, 0);
     }
 
+
+    void SceneAccelerationStructure::Query(const Core::Ray& ray, float maxDistance,
+        std::vector<Engine::PrimitiveSceneProxy*>& outPrimitives) const
+    {
+        if (m_Nodes.empty()) return;
+        const auto visit = [&](auto&& self, int index) -> void {
+            const auto& node = m_Nodes[index];
+            if (!ray.RayIntersectAABB(node.Bounds.Box,maxDistance)) return;
+            if (node.bLeaf)
+                for (int i=node.Start; i<node.Start+node.Count; ++i) outPrimitives.push_back(m_Primitives[i]);
+            else
+            {
+                if (node.LeftChild>=0) self(self,node.LeftChild);
+                if (node.RightChild>=0) self(self,node.RightChild);
+            }
+        };
+        visit(visit,0);
+    }
+
+    bool Scene::Raycast(const Core::Ray& ray, float maxDistance, Engine::ScenePickResult& outResult, Engine::EScenePickFilter filter) const
+    {
+        outResult = {};
+        const auto finite = [](const Core::Float3& v) { return std::isfinite(v.X)&&std::isfinite(v.Y)&&std::isfinite(v.Z); };
+        const float length = ray.Direction.Length();
+        if (!finite(ray.Origin) || !finite(ray.Direction) || !std::isfinite(length) || length<=1e-8f ||
+            !std::isfinite(maxDistance) || maxDistance<=0) return false;
+        const Core::Ray normalized{ray.Origin,ray.Direction/length};
+        std::vector<Engine::PrimitiveSceneProxy*> candidates;
+        if (filter!=Engine::EScenePickFilter::Lights) m_AccelerationStructure.Query(normalized,maxDistance,candidates);
+        float nearest = maxDistance;
+        for (const auto* candidate : candidates)
+        {
+            const auto* proxy = dynamic_cast<const Engine::StaticMeshProxy*>(candidate);
+            if (!proxy || !proxy->IsVisible()) continue;
+            const auto* component = proxy->GetStaticMeshComponent();
+            auto* mesh = component->GetStaticMesh();
+            if (!mesh || !mesh->GetLODCount()) continue;
+            const auto& lod = mesh->GetLODResource(0);
+            const auto& positions = lod.VertexBuffers.PositionBuffer;
+            const auto& indices = lod.IndexBuffer.Indices;
+            if (!positions.bValid || positions.NumComponents<3) continue;
+            for (size_t sectionIndex=0; sectionIndex<lod.Sections.size(); ++sectionIndex)
+            {
+                const auto& section = lod.Sections[sectionIndex];
+                if (section.MaterialIndex<0 || !component->GetMaterial(section.MaterialIndex) ||
+                    section.FirstIndex>indices.size() || section.NumIndices>indices.size()-section.FirstIndex) continue;
+                for (size_t offset=0; offset+2<section.NumIndices; offset+=3)
+                {
+                    Core::Float3 vertices[3]; bool valid = true;
+                    for (int corner=0; corner<3; ++corner)
+                    {
+                        const int64_t vertex = int64_t(indices[section.FirstIndex+offset+corner])+section.BaseVertexIndex;
+                        if (vertex<0 || uint64_t(vertex)>=positions.GetNumVertices()) { valid=false; break; }
+                        const auto first = size_t(vertex)*positions.NumComponents;
+                        vertices[corner] = Core::TransformPoint(proxy->GetLocalToWorld(),
+                            Core::Float3{positions.Vertices[first],positions.Vertices[first+1],positions.Vertices[first+2]});
+                        if (!finite(vertices[corner])) { valid=false; break; }
+                    }
+                    if (!valid) continue;
+                    const auto edge1=vertices[1]-vertices[0], edge2=vertices[2]-vertices[0];
+                    const auto p=Core::Cross(normalized.Direction,edge2);
+                    const float determinant=Core::Dot(edge1,p);
+                    if (std::abs(determinant)<=1e-7f*edge1.Length()*edge2.Length()) continue;
+                    const auto fromVertex=normalized.Origin-vertices[0];
+                    const float u=Core::Dot(fromVertex,p)/determinant;
+                    if (u<0 || u>1) continue;
+                    const auto q=Core::Cross(fromVertex,edge1);
+                    const float v=Core::Dot(normalized.Direction,q)/determinant;
+                    if (v<0 || u+v>1) continue;
+                    const float distance=Core::Dot(edge2,q)/determinant;
+                    if (!std::isfinite(distance) || distance<0 || distance>nearest ||
+                        (distance==nearest && outResult.Component)) continue;
+                    nearest=distance;
+                    // The registered component remains owned by its scene client.
+                    outResult.Component=const_cast<Engine::StaticMeshComponent*>(component);
+                    outResult.WorldPosition=normalized.Origin+normalized.Direction*distance;
+                    outResult.Distance=distance;
+                    outResult.SectionIndex=static_cast<int32_t>(sectionIndex);
+                    outResult.MaterialIndex=section.MaterialIndex;
+                    outResult.TriangleIndex=static_cast<int32_t>(offset/3);
+                }
+            }
+        }
+        if (filter!=Engine::EScenePickFilter::Meshes)
+            for (const auto& [component,info] : m_LightInfos)
+            {
+                if (!info || !info->bVisible || !info->GetProxy()) continue;
+                float distance;
+                if (!HintRender::RaycastLight(*info->GetProxy(),normalized,nearest,distance) ||
+                    (distance==nearest && outResult.Component)) continue;
+                nearest=distance;
+                outResult={};
+                outResult.Component=component;
+                outResult.WorldPosition=normalized.Origin+normalized.Direction*distance;
+                outResult.Distance=distance;
+            }
+        return outResult.Component!=nullptr;
+    }
 
     //====================================================
     // Scene

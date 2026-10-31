@@ -18,6 +18,8 @@
 
 结构 include/reference/nested 并非同一种内存关系。引用、数组、资源视图和 RenderTargetSlots 必须按元数据类型遍历，不能把整个 C++ struct 直接 memcpy 当作所有平台的 cbuffer。
 
+RDG Buffer SRV 的 BaseType 必须为 RDGBuffer_SRV。2026-10-31 发现 ShaderParameterTypeInfo<RenderGraphBufferSRV> 原先误填 RDGTexture_UAV：SHADER_PARAMETER_RDG_BUFFER_SRV 产生的 HLSL 仍可写成 StructuredBuffer 并编译，但 SetupPassInternal 会把 CPU BufferSRV 当 TextureUAV 解释，无法得到正确的缓冲 SRV 依赖；SetShaderParameters 也会选择 UAV 类型。当前已更正这个枚举，不通过更改网格的只读声明或新包装类迁就错误类型。受影响的自有调用为 HintGridParameters 的两个 uint 缓冲和 SceneLightShadowParameters::SplitBuffer；其他带嵌套元数据的 SHADER_PARAMETER_RDG_STRUCTURED_BUFFER 路径原本就使用 RDGBuffer_SRV。编译成功不证明元数据分类正确，依赖与转换的独立检查见 [RDG 执行](03-rdg-execution-and-state.md)。
+
 ## 三个编译出口
 
 | 目标 | 当前路径 | 运行时产物 |

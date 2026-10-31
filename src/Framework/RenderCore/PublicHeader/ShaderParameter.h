@@ -395,7 +395,7 @@ struct ShaderParameterTypeInfo<RenderCore::RenderGraphTextureUAV>
 template<>
 struct ShaderParameterTypeInfo<RenderCore::RenderGraphBufferSRV>
 {
-    static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::RDGTexture_UAV;
+    static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::RDGBuffer_SRV;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
     static constexpr uint32_t NumElements = 0;

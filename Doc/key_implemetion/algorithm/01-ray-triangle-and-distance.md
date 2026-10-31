@@ -2,7 +2,7 @@
 
 核心源码：[DistanceFieldMgr.cpp](../../../src/Framework/Engine/Private/DistanceFieldMgr.cpp) 中 DistanceFieldTriangleBVHTraits::RayIntersect、ClosestPointOnTriangle、ClosestDistance；[BVH.hpp](../../../src/Framework/Core/PublicHeader/BVH.hpp) 中 Ray::RayIntersectAABB。GPU 距离版本见 [DistanceFieldVoxelizeCS.sf](../../../shaders/tools/DistanceFieldVoxelizeCS.sf)。
 
-这些 CPU 函数用于网格距离场，不是 Vulkan/DXR 驱动内部的求交实现。
+距离场的三角形函数用于网格距离场；场景拾取入口与差异见后文。两者均为 CPU 几何算法，不是 Vulkan/DXR 驱动内部的求交实现。
 
 ## 输入与参数的含义
 
@@ -72,22 +72,51 @@ GPU 版本返回距离平方，避免每个候选都 sqrt；包含法线长度�
 
 每轴在 min/max 两平面之间限制 t：`t0=(min-O)/D、t1=(max-O)/D`，交换保证 t0<=t1；三个轴取区间交集，`tMin=max(0,t0x,t0y,t0z)`，`tMax=min(t1x,t1y,t1z)`，若 tMax<tMin 则不相交。这是 BVH 剪枝，不是最终三角形命中。
 
-当前 RayIntersectAABB 直接计算 1/D，没有显式处理 D=0；平行轴且恰好位于边界可能产生 0×∞/NaN，需要单独核查。边界接触使用 tMax<tMin，保留相等的接触点。
+RayIntersectAABB 接受可选 maxParameter，默认 FLT_MAX，并拒绝空盒、非有限输入和负上界。D=0 时直接判断起点是否位于该轴 slab 内，边界包含在内，避免原先倒数写法的 0×∞/NaN；非零方向用除法计算区间。maxParameter 是射线参数 t 的上界，只有单位方向时才等于世界距离。边界接触使用 tMax<tMin，保留相等的接触点；没有修改 BVH 的全命中 ID 集合语义。
 
 三角形求交/最近点与单个 AABB 检测均为 O(1)。加速查询复杂度见 [BVH 专题](02-bvh-octree-and-scene-query.md)。现有 MathTest 主要打印矩阵变换结果，未构成这些几何边界条件的自动断言集；最初专题整理没有新增或运行几何测试，后续编辑器拾取检查见下节。
 
-## 编辑器材质投放：从视口落点到最近三角形
+## 统一场景拾取：屏幕射线、场景候选与最近三角形
 
-源码：[EditorScene::ApplyMaterialAt](../../../src/Editor/SceneEditor/Private/EditorScene.cpp)、[视口落点转换](../../../src/Editor/SceneEditor/Private/EditorScenePanel.cpp)。这是编辑器一次性 CPU 查询，不调用 Vulkan/DXR，不依赖网格距离场数据，也未把 GI 的未导出 TriangleBVHTraits 作为跨模块接口。
+入口：[SceneView::MakeRay](../../../src/Framework/Engine/Private/SceneView.cpp)、[SceneInterface / ScenePickResult](../../../src/Framework/Engine/PublicHeader/SceneInterface.h)、[Scene::Raycast](../../../src/Framework/Renderer/Private/Scene.cpp)、[EditorScene::SelectAt / ApplyMaterialAt](../../../src/Editor/SceneEditor/Private/EditorScene.cpp)。Editor 通过 Engine 接口完成查询，不链接具体 Renderer；接口查询不更新选择、材质或 GPU 状态。
 
-输入 viewportPosition=(u,v) 为当前显示区域的归一化坐标，左上为 (0,0)、右下接近 (1,1)。Widget 从 ImGui 窗口坐标减去 geometry.X/Y，再除以 Width/Height。无效/非有限 UV 不产生命中；确认的输出为组件下标、section.MaterialIndex，并触发该槽材质覆盖。失败返回 false，不改变选择/材质。
+### 屏幕位置与有限射线
 
-1. 构造裁剪点 C=(2u-1,1-2v,z,1)，使用相机 GetInverseViewProjectionMatrix 得齐次世界点 H，再以 H.xyz/H.w 作透视除法。W 接近零时明确报错。当前相机为右手、ZO 深度，近远 z 为 0/1；代码也按相机深度枚举保留 NO 的 -1/1 选择。
-2. origin=Pnear，ray=Pfar-Pnear，direction=ray/length(ray)，nearest 初始为 length(ray)。因此所有命中的 distance 都是世界长度，并限定在近远裁剪之间；不从相机位置向无限远投射而误选近裁剪前物体。
-3. 遍历场景组件与 LOD0 的 section，和当前 StaticMeshDrawBuild 的 LOD 选择一致。索引区间为 FirstIndex 至 FirstIndex+NumIndices，三角形索引加 BaseVertexIndex 后按 PositionBuffer.NumComponents 读取前三个分量；检查范围、负索引和至少三个位置分量，异常区间跳过。
-4. 对三个局部顶点用组件完整 GetComponentTransform 转到世界，再执行上文的 Möller–Trumbore 公式，源码 determinant/u/v/distance 对应 det/u/v/t。世界空间计算使平移、旋转、层级变换、非均匀/镜像缩放下的 distance 仍可直接比较，无需对逆变换后的方向重新定标。
-5. 此处平行/退化判断为 abs(determinant)<=1e-7×length(edge1)×length(edge2)，区别于距离场函数的固定 epsilon。重心条件使用 0<=u<=1、v>=0、u+v<=1；满足 0<=distance<nearest 才替换结果，因而返回最近命中而非列表首项/当前选择，同距离保留先遇到的三角形。
+MakeRay 的 position 是视口内部像素坐标，左上为 (0,0)，有效范围为 [0,Width)×[0,Height)。Window/Widget 的位置转换在上层完成，Viewport.X/Y 不再次扣除。材质投递的 UV 先乘最后绘制视图的 Width/Height。SceneView 保存当时的 View/Projection/InvVP 和深度约定；使用它完成拾取后才调用 Select，避免属性栏改变视口布局而影响本次射线。
 
-该查询为双面几何拾取，不根据材质 CullMode 模拟背面剔除；没有透明度/裁剪贴图检测。零缩放产生的退化三角形会被拒绝，但算法不是 watertight，共享边、极大坐标和很瘦的三角形仍有浮点边界。遍历成本为总三角形数 O(T)、额外空间 O(1)，只在投递时执行，没有新建 BVH/缓存或每帧悬停扫描；大型场景可有明显点击延迟。
+```text
+clipXY = (2*x/Width-1, 1-2*y/Height)
+Hnear = InvVP * (clipXY, nearZ, 1)   // ZO: 0；NO: -1
+Hfar  = InvVP * (clipXY, 1, 1)
+N = Hnear.xyz / Hnear.w
+F = Hfar.xyz  / Hfar.w
+O = N; D = normalize(F-N); maxDistance = length(F-N)
+```
 
-查询只覆盖当前 Renderer 使用的静态 LOD0 与其 CPU 保留位置/索引，不包括骨骼、GPU 顶点位移或未保留 CPU 几何。既有 glTF 多 primitive 合并限制依旧存在，本次没有为拾取重写导入器。材质只支持已有 Opaque 绘制，其他模式报错。组件覆盖/提交时序见 [UI 生命周期](../performance/08-ui-rendering-and-window-lifetime.md)、[资产所有权](../performance/05-assets-materials-and-instance-data.md)。实际检查与限制见 [2026-10-27 记录](../../dev/bugfix/故障与修复记录-2026-10-27.md)。
+输出从近面开始，到远面结束，透视/正交均使用同一反投影过程。无效视口、越界/非有限位置、齐次 w 绝对值小于 1e-7 或结果无效/长度过小返回 false，输出清空。bDepthRangeZeroToOne 默认 true，调用方仍必须与投影保持一致；未实现无限远投影专用射线。
+
+### 场景空间树与三角形窄相位
+
+Scene::Raycast 拒绝非有限起点/方向/最大距离、零或极小方向以及非正距离，将输入方向归一化。因此公共接口的 maxDistance 和结果 Distance 都使用世界长度，而不随输入方向长度缩放。Meshes 查询读取最后一次 FlushPendingUpdates 更新的 SceneAccelerationStructure；Lights 查询读取已注册 LightSceneProxy，沿用光源通知即时更新参数、注册/删除经 Flush 的既有流程。查询不自动 Flush 或等待 GPU。
+
+树的射线 Query 用有限 slab 区间剪去未相交节点，叶子返回 PrimitiveSceneProxy 候选。随后只检查可见 StaticMeshProxy 的 CPU LOD0；同当前绘制路径使用 LOD0，不调用距离场的 BVH。代理的 LocalToWorld 用于顶点变换，避免组件尚未 Flush 的新位置与旧空间树混用。
+
+每个 Section 检查 MaterialIndex、实际材质、索引区间和位置缓冲有效性；三角形索引为 `IndexBuffer[FirstIndex+offset+corner]+BaseVertexIndex`。按 NumComponents 读取局部位置前三个分量并变换到世界，拒绝非法索引和非有限顶点。继续使用上文 Möller–Trumbore 公式：
+
+- `abs(determinant)<=1e-7*length(edge1)*length(edge2)` 排除平行/退化，区别于距离场函数的固定 epsilon。
+- `0<=u<=1、v>=0、u+v<=1` 限定三角形内部。
+- `0<=distance<=maxDistance` 限定线段，保留世界距离最近命中；同距离保留先遇到者，没有稳定的并列排序保证。
+
+顶点在世界空间求交，父子变换、非均匀及负缩放下各对象的 t 可直接比较。WorldPosition=O+D*Distance；SectionIndex 为 LOD0 的 Section 下标，MaterialIndex 为该 Section 的材质槽，TriangleIndex 为 Section 内从零开始的三角形编号。失败返回 false 且将结果恢复默认值，避免复用上次命中。Component 是场景客户拥有的借用引用，不是持久对象 ID。
+
+查询成本为访问的树节点数加候选三角形数，最坏仍为 O(N+T)；候选 vector 额外 O(K)，递归栈随树高增长。没有新建每网格三角形 BVH、持久查询缓存或异步拾取任务。既有资产 CPU 几何仍通过组件借用，查询、资产变更和 Flush 必须串行，不能把代理变换快照推广为任意几何修改/跨线程均安全。
+
+### Editor 如何消费结果
+
+普通点击先处理方向球和已启用变换工具；其余左键由 Window 捕获，松开时确认移动全程小于 4 像素且仍在视口内，再调用 SelectAt。光源图标是可见屏幕叠加，按相同图标几何优先命中；否则以 All 过滤调用 Raycast 返回最近网格或光源范围/箭头，映射到现有节点列表并 Select。无命中 Select(-1)。方向球/变换工具的拖动、失焦、resize、视角切换和其他鼠标操作不触发对象点击。
+
+ApplyMaterialAt 共用同一个 MakeRay/Raycast，保留默认 Meshes 过滤，使用命中 MaterialIndex，等待原有具体访问完成点后修改组件材质，通知场景更新。无命中保持原选择与材质，不把投递退回当前选中对象；不创建材质实例、不修改共享网格默认材质。输入/生命周期见 [UI 实现](../performance/08-ui-rendering-and-window-lifetime.md)。
+
+当前是双面几何拾取，不按 CullMode 模拟背面剔除，也不处理透明裁剪、骨骼变形或 GPU 顶点位移。零缩放的退化三角形拒绝，算法不是 watertight，共享边、极端尺度仍有浮点边界。All/Lights 额外检查点光球面、聚光有限圆锥及平行光箭头线段；几何索引保持 -1，天空光仍只通过列表选择。范围内起点取前方出口而非零距离，多个对象按最近表面/线段投影距离比较，网格与光源等距时保留先检查的网格；光源之间严格等距不保证稳定排序。解析公式、误差和线段阈值见 [光源提示与拾取](03-transforms-frustum-and-depth.md)。未保留 CPU 几何的资源需另行接入；此方案不是 GPU 像素 ID 拾取。
+
+2026-10-31 的独立诊断覆盖 NO/ZO×透视/正交反投影、轴平行/边界 slab、最近命中、材质槽、非单位方向、有限距离、Flush 前后代理变换、负尺度/父变换和删除；公开 Window 输入链与完整 Editor 验证点击、拖动取消、光源图标和属性栏联动。原材质投递回归保留最近网格、非零槽位隔离、偏心 UV、六向 TRS 和 GPU 实色检查。入口、真实范围和未解决校验见 [当日记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)。

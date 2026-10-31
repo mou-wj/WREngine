@@ -47,13 +47,13 @@ MaterialEditor 不再引用场景模块或资产面板类型。公共 MaterialEd
 
 EditorScene::Object 的 Component 统一为 unique_ptr<SceneComponent>，网格和光源共用同一份节点列表、选择、聚焦和删除流程。GetSelected 返回通用组件；材质赋值、材质实例和网格复制通过 GetSelectedMesh 检查目标类型。新建/打开工程时保留原四类默认光源配置，作为 Directional light、Point light、Spot light、Sky light 节点显示；未打开工程时无节点，关闭工程会移除全部节点及工具借用。场景序列化仍未实现，重开工程会重新创建默认光源。
 
-光源变换按实际语义显示：天空光没有变换区或编辑轴按钮；平行光只有 Rotation/Rotate；点光只有 Position/Move；聚光同时提供 Position/Move 与 Rotation/Rotate。光源不显示 Scale。方向/聚光的 Direction 与组件 +X 前向统一，直接改方向会更新局部 Euler，旋转输入或既有旋转圈拖动都会更新实际照射方向和代理；平行光的默认示意位置为世界原点，不再以 (5,5,5) 作为可编辑位置。衰减范围独立于缩放，点/聚光提供范围，聚光提供以度显示的内外锥角。非天空光可编辑颜色、强度和投影开关。
+光源变换按实际语义显示：天空光没有变换区或编辑轴按钮；平行光提供 Position/Move 和 Rotation/Rotate；点光只有 Position/Move；聚光同时提供 Position/Move 与 Rotation/Rotate。光源不显示 Scale。方向/聚光的 Direction 与组件 +X 前向统一，直接改方向会更新局部 Euler，旋转输入或既有旋转圈拖动都会更新实际照射方向和代理；平行光默认示意位置为世界原点；Position 只移动箭头/图标和拾取位置，照明及照射方向不由位置决定。衰减范围独立于缩放，点/聚光提供范围，聚光提供以度显示的内外锥角。非天空光可编辑颜色、强度和投影开关。
 
 天空光沿用工程默认环境资产，没有新增环境贴图选择器；现有 IBL 只消费纹理，颜色/强度控件明确禁用并提示尚不支持。当前注册即启用，Renderer::Scene 在 AddLight 时约束每场景最多一个天空光，包含待处理队列；再次注册同一对象幂等，第二个对象明确报错。更换时先移除当前天空光，再注册新对象，没有另加启用系统。光源复制暂不提供。
 
-SceneEditor 通过 [SceneInterface::GetSceneSetting](../../../src/Framework/Engine/PublicHeader/SceneInterface.h) 开启 bDrawGrid/bDrawLightHints，并在 Select 时把选中光源写入借用的 LightHintTarget，选中网格或清除选择则置空。Renderer::RenderModule::BeginRender 在构图时快照该设置，在场景主体之后、所有 SceneViewDrawExtension 之前调用内部 HintRender。SceneEditor 的扩展只绘制变换工具及右上方向轴，不包含或链接 Renderer，CMake 和 apps.json 中均无直接依赖边；应用仍装配 Renderer 作为 RenderInterface 的运行时实现。
+SceneEditor 通过 [SceneInterface::GetSceneSetting](../../../src/Framework/Engine/PublicHeader/SceneInterface.h) 开启 bDrawGrid/bDrawLightHints，并在 Select 时把选中光源写入借用的 LightHintTarget，选中网格或清除选择则置空。Renderer::RenderModule::BeginRender 在构图时快照该设置，在场景主体之后加入光源提示，再调用各视图 SceneViewDrawExtension，最后为所有视图加入网格。SceneEditor 的扩展只绘制变换工具及右上方向轴，不包含或链接 Renderer，CMake 和 apps.json 中均无直接依赖边；应用仍装配 Renderer 作为 RenderInterface 的运行时实现。
 
-网格以视锥与地面交面的 XZ AABB 为范围，将固定单位网格映射到该区域，按相机高度确定 0.1～10 米细分间距；真实线段覆盖可见地面并在投影过密处淡出，仍遵循远裁剪。当前由 CPU 确定细分数量、VS 展开，不使用硬件细分。点光为蓝色线框球，聚光为外锥底圆、16 条母线及沿方向的距离射线，平行光箭头含箭杆及八条头部线；天空光没有有限范围。几何、深度依赖及相机高度分级规则见 [算法](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md) 和 [提交与生命周期](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。Renderer 不依赖 Editor，也不管理节点选择或窗口。
+网格以视锥与地面交面的 XZ AABB 为范围，将 100×100 控制顶点映射到该区域；99×99 个区域分别按高度和观察距离选择 0.1～10 米间距，远处减少实际细分数量。同档实例合并绘制，线条在投影过密及距离较远处降低透明度，仍遵循远裁剪。当前由 CPU 选择区域档位、VS 展开，不使用硬件细分。网格在场景及全部视图扩展之后以 Load_Store 混合，RGB=线色×线 Alpha+已有颜色×(1-线 Alpha)，只写 RGB；空场景颜色初始化 Alpha=1，提示和变换工具保持该 Alpha，供 GUI 采样时不再二次淡出。点光为蓝色线框球，聚光为外锥底圆、16 条母线及沿方向的距离射线，平行光箭头含箭杆及八条头部线；天空光没有有限范围。几何、深度依赖及相机高度分级规则见 [算法](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md) 和 [提交与生命周期](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。Renderer 不依赖 Editor，也不管理节点选择或窗口。
 
 Editor 不改变 Asset 的资源所有权：组件引用 StaticMeshAsset/MaterialAsset，MaterialInstance 仅在真正编辑网格参数时按槽位创建，属于该组件。资产文件通过既有 AssetManager 加载；面板只保留当前选中的材质和纹理，不再建立一套资产缓存。
 
@@ -81,8 +81,9 @@ UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行
 
 - Scene：列表选择、复制与移除网格、聚焦所选对象。右侧 Node Properties 只在存在选中组件时显示，编辑其局部平移/旋转/缩放；空工程、未选中组件或移除最后一个节点后不生成属性窗口，也不命中该面板。折叠会将原栏宽和分隔条空间交给视口；重新选中时恢复已保存的右栏比例。复制保留材质资产和稀疏参数覆盖，但创建独立组件实例。
 - Ribbon → View：Top / Bottom / Left / Right / Front / Back 六向切换，按钮第二行注明相机所在轴侧，当前固定方向高亮。Orbit 恢复默认斜向环绕角度，Focus selected 聚焦所选对象。切换保留当前焦点和距离，沿用既有透视投影；这里的六向视图不表示已实现正交编辑管线。
-- 视口：右键拖动环绕、中键平移、滚轮缩放。投影使用实际视口宽高比；场景通过既有 Renderer 绘制。
+- 视口：左键点击模型选中最近几何命中，点击空白清空选择；只有按下/松开期间移动始终小于 4 像素且释放仍在视口内才触发。右键拖动环绕、中键平移、滚轮缩放。投影使用实际视口宽高比；场景通过既有 Renderer 绘制。
 - 右上角方向示意属于 SceneEditor：EditorScene 向本帧 SceneView::DrawExtensions 加入回调，Private/EditorViewAxes 在同一 RDG 中以线列表绘制六条半轴、以缩放球面三角形绘制端点。+X 红、+Y 蓝、+Z 绿，负端点用对应淡色；只加载/保存场景颜色，不访问场景深度。默认最大 144 像素，随相机旋转，极小视口不显示。
+- 各球中心以屏幕正向显示 +X/-X、+Y/-Y、+Z/-Z，悬停或按住的球及轴线变黄，沿用原球面明暗。标签由既有 ViewAxes Shader 的小字形生成，不增加字体纹理。EditorSceneViewportWidget 在 Draw 前用 ImGui 鼠标位置和 GUI 遮挡刷新 hover，移出视口/进入其他 GUI 区域会清除高亮；Window 仍独占事件路由与捕获，没有重复投递鼠标事件。
 - 左键点击球体切换到其轴侧视图：+X/-X 为 Right/Left，+Y/-Y 为 Top/Bottom，+Z/-Z 为 Front/Back。按住任意球体拖动超过 4 像素后，水平位移叠加偏航、垂直位移叠加俯仰，保留按下时的相机基底、焦点和距离；松开不再触发点击。未打开工程时仍允许相机、坐标球和普通界面交互，只有导入、工程资产等操作要求有效工程。输入沿既有 Window → SlateWidget → SceneViewport → EditorScene 传递和捕获，失焦结束拖动。数学与命中规则见 [相机算法](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)，构图及生命周期见 [UI 实现](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 - Node Properties 的 Position 行右侧 Move 按钮为当前节点启停位移工具。SceneEditor 的 [EditorTranslationGizmo](../../../src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h) 借用一个 SceneComponent，不要求目标类型是静态网格；EditorScene 的 SetTranslationTarget 要求目标属于当前场景。X 红、Y 蓝、Z 绿的世界轴约束单轴平移，原点旁的 XY/XZ/YZ 四边形约束双轴平移，悬停与拖动句柄黄色高亮；工具不随组件旋转或缩放。局部 Position 通过既有 SetWorldLocation 的父矩阵逆变换更新，旋转和缩放保持原值。
 - Rotation 行的 Rotate 与 Scale 行的 Scale 分别启停 [旋转工具](../../../src/Editor/SceneEditor/Private/EditorRotationGizmo.cpp) 和 [缩放工具](../../../src/Editor/SceneEditor/Private/EditorScaleGizmo.cpp)，与 Move 互斥。缩放显示局部三轴、端点标记，以及各轴世界长度 50% 处中点之间的连线：LocalScale 绝对值为 1 时采用 55 像素参考尺度，各轴长度乘对应局部缩放分量的绝对值，负值不反转颜色轴方向。绘制和命中共用同一几何；连接线是参照，轴线和端点可选。按下时固定所选轴从原点向端点的屏幕方向，沿该方向向外拖动增大绝对缩放、向内拖动缩小，垂直于该方向的位移不影响倍率，仅写选中 LocalScale 分量。极小值或投影缩短可能低于现有 12 像素可操作下限，极大值可能触发裁剪限制，可通过属性数值恢复。旋转显示局部 X/Y/Z 三圆环，沿圆拖动改变局部旋转，起点、当前径向边与半透明扇形显示拖动角。轴色仍为 X 红、Y 蓝、Z 绿，悬停/按住为黄。
@@ -93,7 +94,15 @@ UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行
 - 从 Assets 材质卡片拖到场景网格表面，会将材质赋给鼠标射线最近命中组件的对应材质槽并选中该组件；拖到背景不赋值，也不回退到当前选择。操作覆盖组件该槽位的材质引用，不改共享网格默认材质、不创建材质实例，重新赋值会按既有 SetMaterial 清除该槽旧实例覆盖。仅支持当前渲染器已有的 Opaque 材质。
 - Properties 保留参数继承/恢复、纹理选择/清除、CullMode、TwoSided、Lit/Unlit 和保存副本。打开库中资产后编辑母材质；Inspect mesh 切换到所选网格，只有实际修改参数时创建其独占实例。Assets 的材质/纹理选择仍经原有宿主回调接入。
 
-保存副本不重命名资产，也不导出实例资产。路径已存在时拒绝覆盖；保存后可在 Assets 中刷新并加载。Opaque 以外的 Surface 绘制仍未实现，不通过界面静默启用。首版没有撤销重做、场景序列化、材质节点图、普通视口单击拾取或完整编辑器快捷键；材质拖放已使用独立的落点几何查询。
+保存副本不重命名资产，也不导出实例资产。路径已存在时拒绝覆盖；保存后可在 Assets 中刷新并加载。Opaque 以外的 Surface 绘制仍未实现，不通过界面静默启用。当前没有撤销重做、场景序列化、材质节点图或完整编辑器快捷键。
+
+### 场景点击与光源图标
+
+EditorScene 的 SelectAt 和 ApplyMaterialAt 共用 SceneView::MakeRay / SceneInterface::Raycast，材质投递取命中 MaterialIndex，不再在 Editor 中复制全场景三角形遍历。查询使用最近一次绘制的视图；网格使用已 Flush 的代理变换，光源沿用已有通知即刷新代理的时序，先得到命中再调用 Select，保证属性栏出现/消失引发的 resize 不改变本次射线。背景点击 Select(-1)，材质拖放未命中则保持选择和材质。选择继续复用节点列表和 NodeEditor 的既有连接，不新增选择管理器。
+
+输入优先级为 GUI → 方向球 → 当前变换工具 → 光源图标 → 网格/光源范围的最近命中。普通左键先由 Window 捕获，在松开确认点击；拖动超过阈值、释放越界、失焦、resize、切换相机或其他鼠标操作取消待点击。变换工具拖动始终只编辑原对象，方向球点击始终只切换视图。查询不新增 GPU 等待，实际材质/变换修改仍沿用既有完成点。
+
+非天空光在世界位置投影为半径 9 像素的实心菱形图标，点光蓝、聚光绿、方向光橙，选中为黄。BuildLightIcons 共用绘制和命中数据，图标按相机深度从远到近绘制，命中反向检查 `abs(dx)+abs(dy)<=9`。图标作为可见叠加不受模型深度遮挡，点击它会优先于后方网格；图标未命中时，SelectAt 以 All 查询点光范围球、聚光有限圆锥和平行光箭头线段，并与网格按最近距离比较。射线在范围内部时取前方出口交点，不把整个范围内的射线起点都判为零距离；范围较大时背景点击可能选中光源，只有没有任何命中才清空。材质投递保持 Meshes 查询，光源不会截获材质拖放。天空光不生成局部图标，仍从列表选择。图标与变换工具使用既有 GizmoDrawing Pass，不直接依赖 Renderer；复杂度及参数借用见 [输入与提交](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
 方向切换属于 EditorScene，不依赖 Editor 或材质/资产面板。世界坐标 Y 向上：Top 从 +Y 看向 -Y，Bottom 相反；Left 从 -X 看向 +X，Right 相反；Front 从 +Z 看向 -Z，Back 相反。顶部/底部使用 -Z/+Z 作为屏幕 Up，避免 LookAtRH 的叉积退化。平移、缩放和 Focus 保留方向；右键环绕转回自由状态并从所选方向继续。详细公式见 [相机与坐标专题](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)。
 
@@ -105,7 +114,7 @@ Editor 宿主将当前工程的 Content 设为 `res://`，未打开工程时面�
 
 文件夹、网格、纹理、JSON 候选材质、普通文件采用不同类型图标；不批量生成真实缩略图。JSON 是否为有效材质由 MaterialAsset 加载验证。目录树与网格共用 CPU 元数据，不增加第二套资产管理器。资源导入不自动生成节点；从 GLB/glTF 卡片拖到视口后，宿主在下一次绘制前加载并通过原 EditorScene::AddMesh 流程创建静态网格，初始位置为世界原点。详细边界见 [资产工程细节](../../key_implemetion/performance/05-assets-materials-and-instance-data.md)。
 
-Assets 网格中的材质卡片支持拖放。单击/双击在松开且没有发生拖动时打开编辑器，避免按下时浮窗抢走拖动。载荷只保存 UTF-8 路径，视口同时接受网格与材质两种路径载荷；材质投递额外记录归一化落点，EditorApplication 下一次 Draw 前加载并调用 EditorScene::ApplyMaterialAt。SceneEditor 用当前显示相机反投影，对实际绘制的 LOD0 三角形求最近交点并取 Section.MaterialIndex。数学与边界见 [射线拾取细节](../../key_implemetion/algorithm/01-ray-triangle-and-distance.md)，提交时序见 [UI 核心实现](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
+Assets 网格中的材质卡片支持拖放。单击/双击在松开且没有发生拖动时打开编辑器，避免按下时浮窗抢走拖动。载荷只保存 UTF-8 路径，视口同时接受网格与材质两种路径载荷；材质投递额外记录归一化落点，EditorApplication 下一次 Draw 前加载并调用 EditorScene::ApplyMaterialAt。SceneEditor 用最后绘制的 SceneView 反投影，经 SceneInterface::Raycast 对 LOD0 三角形求最近交点并取 MaterialIndex。数学与边界见 [射线拾取细节](../../key_implemetion/algorithm/01-ray-triangle-and-distance.md)，提交时序见 [UI 核心实现](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
 ### 材质库与桌面导入
 

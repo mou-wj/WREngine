@@ -131,7 +131,7 @@ namespace Editor
         if (!m_Window->Initialize()) throw std::runtime_error("Failed to initialize editor window");
         m_Window->SetCloseCallback([this] { m_bQuit = true; });
         m_Viewport = std::make_unique<Engine::SceneViewport>(m_Scene.get(), Core::Int2{800, 800});
-        auto viewportWidget = std::make_unique<EditorSceneViewportWidget>();
+        auto viewportWidget = std::make_unique<EditorSceneViewportWidget>(*m_Scene);
         viewportWidget->SetOnResourceDropped([this](const auto& path) { if (!m_ProjectDirectory.empty()) m_DroppedMesh=path; });
         viewportWidget->SetOnMaterialDropped([this](const auto& path, const auto& position) {
             if (!m_ProjectDirectory.empty()) { m_DroppedMaterial=path; m_DroppedMaterialPosition=position; }

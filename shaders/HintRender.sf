@@ -10,20 +10,28 @@ struct HintGridInput
 };
 
 #if VERTEX_SHADER
-HintGridInput MainGridVS(uint vertexId : SV_VertexID)
+HintGridInput MainGridVS(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
 {
-    // Fixed corners of the original 1x1 XZ grid. CPU supplies only its region
-    // transform and subdivision counts; each shared grid edge is emitted once.
-    static const float2 corners[4] = {float2(0,0),float2(1,0),float2(1,1),float2(0,1)};
+    uint baseVertex = PatchIndices[PatchSettings.x+instanceId];
+    uint low = GridVertices[baseVertex], high = GridVertices[baseVertex+PatchSettings.z+1];
+    float2 cellMin = GridBounds.xy+float2(low&65535,low>>16)*GridBounds.zw;
+    float2 cellMax = GridBounds.xy+float2(high&65535,high>>16)*GridBounds.zw;
     uint lineIndex = vertexId/2;
-    bool alongZ = lineIndex<LineCounts.x;
-    uint index = alongZ ? lineIndex : lineIndex-LineCounts.x;
-    uint count = alongZ ? LineCounts.x : LineCounts.y;
-    float fraction = float(index)/float(count-1);
-    float2 uv = alongZ ? lerp(corners[0],corners[1],fraction) : lerp(corners[0],corners[3],fraction);
-    if (alongZ) uv.y = vertexId&1; else uv.x = vertexId&1;
-    float2 gridIndex = round(GridBounds.xy/GridSettings.x)+round(uv*GridBounds.zw/GridSettings.x);
-    float2 worldXZ = gridIndex*GridSettings.x;
+    bool alongZ = lineIndex<PatchSettings.y;
+    uint index = alongZ ? lineIndex : lineIndex-PatchSettings.y;
+    // Include the low boundary and exclude the high boundary in each region.
+    // Its neighbour owns that boundary, even when their LOD levels differ.
+    float2 worldXZ = cellMin;
+    if (alongZ)
+    {
+        worldXZ.x = (round(cellMin.x/GridSettings.x)+index)*GridSettings.x;
+        worldXZ.y = (vertexId&1) ? cellMax.y : cellMin.y;
+    }
+    else
+    {
+        worldXZ.y = (round(cellMin.y/GridSettings.x)+index)*GridSettings.x;
+        worldXZ.x = (vertexId&1) ? cellMax.x : cellMin.x;
+    }
     float coordinate = alongZ ? worldXZ.x : worldXZ.y;
     bool major = abs(coordinate/10-round(coordinate/10))<0.001;
     HintGridInput output;
@@ -49,7 +57,10 @@ float4 MainGridPS(HintGridInput input) : SV_Target0
     float2 d = (along.xy/max(along.w,1e-5)-screen)*pixelScale;
     float pixelSpacing = abs(a.x*d.y-a.y*d.x)/max(length(d),1e-5);
     float visibility = saturate((pixelSpacing-0.65)/1.85);
-    return float4(input.Color.rgb,input.Color.a*visibility);
+    // Fade the blended CONTRIBUTION, not just RGB: darkening opaque line RGB
+    // would still occlude the background and recreate the distant black mass.
+    float distanceFade = exp2(-length(input.WorldPosition-CameraPositionAndFade.xyz)/CameraPositionAndFade.w);
+    return float4(input.Color.rgb,input.Color.a*visibility*distanceFade);
 }
 #endif
 

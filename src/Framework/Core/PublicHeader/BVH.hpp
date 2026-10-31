@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <set>
+#include <cmath>
 #include "Common.h"
 #include "BoxSphereBounds.h"
 
@@ -17,29 +18,33 @@ namespace Core
 			: Origin(inOrigin), Direction(inDirection) {
 		}
         bool RayIntersectAABB(
-            const AABB& box) const
+            const AABB& box, float maxParameter = FLT_MAX) const
         {
-
-            
+            if (box.IsEmpty() || !std::isfinite(maxParameter) || maxParameter < 0) return false;
             float tMin = 0.0f;
-            float tMax = FLT_MAX;
+            float tMax = maxParameter;
 
 
             for (int axis = 0; axis < 3; axis++)
             {
                 float ori = Origin[axis];
                 float dir = Direction[axis];
-
-
-                float invD = 1.0f / dir;
+                if (!std::isfinite(ori) || !std::isfinite(dir) ||
+                    !std::isfinite(box.Min[axis]) || !std::isfinite(box.Max[axis])) return false;
+                // A parallel ray on the slab boundary is valid; avoid 0*inf.
+                if (dir == 0)
+                {
+                    if (ori < box.Min[axis] || ori > box.Max[axis]) return false;
+                    continue;
+                }
 
 
                 float t0 =
-                    (box.Min[axis] - ori) * invD;
+                    (box.Min[axis] - ori) / dir;
 
 
                 float t1 =
-                    (box.Max[axis] - ori) * invD;
+                    (box.Max[axis] - ori) / dir;
 
 
                 if (t0 > t1)

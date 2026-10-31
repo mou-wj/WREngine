@@ -7,5 +7,5 @@ namespace Editor::ViewAxes
     Engine::ViewRect GetRect(int width, int height);
     int HitTest(const Core::Float4x4& view, int width, int height, const Core::Float2& position);
     void AddPass(RenderCore::RenderGraphBuilder& builder, const Engine::SceneView& view,
-                 RenderCore::RenderGraphTextureRef sceneColor);
+                 RenderCore::RenderGraphTextureRef sceneColor, int highlightedEndpoint = -1);
 }

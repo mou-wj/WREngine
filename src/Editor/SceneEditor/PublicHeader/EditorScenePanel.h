@@ -11,10 +11,13 @@ namespace Editor
     {
         DECLARE_TYPE_ID_DERIVED_TYPE(EditorSceneViewportWidget, SlateCore::SlateWidget)
     public:
+        EditorSceneViewportWidget() = default;
+        explicit EditorSceneViewportWidget(EditorScene& scene) : m_Scene(&scene) {}
         void SetOnResourceDropped(std::function<void(const std::filesystem::path&)> callback);
         void SetOnMaterialDropped(std::function<void(const std::filesystem::path&, const Core::Float2&)> callback);
         void Draw() override;
     private:
+        EditorScene* m_Scene = nullptr;
         std::function<void(const std::filesystem::path&)> m_OnResourceDropped;
         std::function<void(const std::filesystem::path&, const Core::Float2&)> m_OnMaterialDropped;
     };

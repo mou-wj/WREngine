@@ -94,6 +94,8 @@ auto pass = new RenderGraphLambdaPass<TParam, TLambda>(...);
 
 这意味着 `RenderCore` 支持非常轻量的 pass 描述方式，方便 `Renderer` 层使用。
 
+缓冲上传通过 AddUploadBuffer 将数据复制进图内 arena，再由 AddUploadPass 登记 TransferDest。上传描述符在 lambda 中复制，原列表在依赖登记后清空，使 Immediate 上传不会重复进入延迟队列。后续读取必须声明 RDGBuffer_SRV，SetupPassInternal 才会将同一图内缓冲的上传和读取连接，并生成必要转换；GPU 完成 Fence 仍由既有提交处记录。具体调用时序、类型分类及限制见 [RDG 核心实现](../../key_implemetion/performance/03-rdg-execution-and-state.md)。
+
 ---
 
 ## 5. 渲染图资源：`RenderGraphResource` 体系

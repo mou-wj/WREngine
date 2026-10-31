@@ -244,14 +244,19 @@ namespace RHIOpenGL
 
     void OpenGLGraphicContext::ApplyColorBlendState(const RHI::RHIGraphicsPipelineStateDesc& desc)
     {
-        if (desc.ColorBlendState && !desc.ColorBlendState->GetDesc().Attachments.empty())
+        const auto* blend=desc.ColorBlendState ? &desc.ColorBlendState->GetDesc() : nullptr;
+        for (uint32_t i=0; i<desc.AttachmentDesc.ColorAttachmentCount; ++i)
         {
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        }
-        else
-        {
-            glDisable(GL_BLEND);
+            const auto* attachment=blend && i<blend->Attachments.size() ? &blend->Attachments[i] : nullptr;
+            if (attachment && attachment->bBlendEnable)
+            {
+                glEnablei(GL_BLEND,i);
+                glBlendEquationSeparatei(i,GL_FUNC_ADD,GL_FUNC_ADD);
+                glBlendFuncSeparatei(i,GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA,GL_ONE,GL_ZERO);
+            }
+            else glDisablei(GL_BLEND,i);
+            const uint32_t mask=attachment ? attachment->ColorWriteMask : 0xF;
+            glColorMaski(i,(mask&1)!=0,(mask&2)!=0,(mask&4)!=0,(mask&8)!=0);
         }
     }
 

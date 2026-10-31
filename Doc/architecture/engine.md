@@ -301,7 +301,15 @@ public:
 
 [SceneInterface.h](../../src/Framework/Engine/PublicHeader/SceneInterface.h) 同时定义 SceneSetting，并由每个 SceneInterface 实例按值保存，通过 GetSceneSetting 的可变/const 引用访问。bDrawGrid 和 bDrawLightHints 默认均为 false，普通应用不会自动出现编辑提示。LightHintTarget 是可空、非拥有的 LightComponent 引用；开启光源提示且目标非空才绘制该目标，没有“空目标表示全部光源”的隐式语义。
 
-上层只设置 Engine 数据；Renderer::BeginRender 同步读取一份快照并添加 HintRender Pass，位于场景主体之后、视图扩展之前。SceneEditor 不再直接调用 Renderer，也不需要链接其 DLL。设置与 BeginRender 必须在原场景控制线程串行，不能把可变引用视为跨线程同步接口。Renderer::Scene::RemoveLight 在移除时清空匹配的目标，调用方仍须按现有约定先 Remove/Flush 再销毁组件。GPU 录制只访问已复制的绘制参数，不持有该设置或光源指针。调用时序和实际验证见 [UI 与场景生命周期](../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
+上层只设置 Engine 数据；Renderer::BeginRender 同步读取一份快照并添加 HintRender Pass，光源提示位于场景主体之后、视图扩展之前，网格在所有视图扩展之后加入，作为最后的场景颜色叠加。SceneEditor 不再直接调用 Renderer，也不需要链接其 DLL。设置与 BeginRender 必须在原场景控制线程串行，不能把可变引用视为跨线程同步接口。Renderer::Scene::RemoveLight 在移除时清空匹配的目标，调用方仍须按现有约定先 Remove/Flush 再销毁组件。GPU 录制只访问已复制的绘制参数，不持有该设置或光源指针。调用时序和实际验证见 [UI 与场景生命周期](../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
+
+### 场景射线查询与屏幕拾取
+
+SceneInterface::Raycast(ray,maxDistance,outResult,filter) 不改变选择或材质，filter 为 EScenePickFilter::Meshes/Lights/All；默认 Meshes 保持原几何及材质查询。输入方向归一化，maxDistance 与结果 Distance 均为从射线近面起点计算的世界长度；失败清空结果。网格查询最后 Flush 的空间树及代理变换，光源查询注册表中可见 LightSceneProxy：现有 NotifyComponentChanged 会直接刷新光源代理参数，注册/移除仍由 Flush 消费，接口不额外强制 Flush 或等待。ScenePickResult 返回借用组件与射线命中位置；网格返回 LOD0 Section/材质槽/三角形，光源三项索引为 -1。点光按衰减球面、聚光按外角和轴向距离形成的有限圆锥、平行光按其箭头线段 0.05 米距离阈值命中；天空光无空间拾取体。网格的透明裁剪、背面剔除和 GPU 变形仍未模拟。具体公式见 [光源提示与拾取](../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)。
+
+[SceneView::MakeRay](../../src/Framework/Engine/Private/SceneView.cpp) 接收视口内部、左上原点的像素位置，使用该视图的逆 VP 和 NO/ZO 约定反投影近远点，返回单位方向和有限长度；无效坐标/矩阵返回失败。它不包含窗口坐标转换或 UI 选择规则。Editor 使用最后一次绘制保存的 SceneView，在选择导致属性栏展开和视口 resize 之前完成查询。
+
+Renderer::Scene 在既有场景空间树上筛选射线候选，再使用代理的 LocalToWorld 求最近三角形。查询必须与场景/资产修改和 Flush 串行，返回的组件引用不跨销毁边界保存；接口不自动刷新、等待 GPU 或提供异步结果。光源图标属于 Editor 的屏幕几何命中，天空光仍通过列表选择。细节见 [射线算法](../key_implemetion/algorithm/01-ray-triangle-and-distance.md)、[空间树](../key_implemetion/algorithm/02-bvh-octree-and-scene-query.md) 与 [输入和生命周期](../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
 ---
 

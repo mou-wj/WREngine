@@ -14,11 +14,16 @@ namespace Editor
     { m_OnMaterialDropped = std::move(callback); }
     void EditorSceneViewportWidget::Draw()
     {
+        const auto& geometry=GetGeometry();
+        const auto mouse=ImGui::GetIO().MousePos;
+        // This only refreshes hover presentation. Mouse events and capture still
+        // follow Window; another GUI window over the viewport suppresses hover.
+        if (m_Scene) m_Scene->UpdateViewportHover(ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) ? Core::Float2{-1,-1} :
+            Core::Float2{mouse.x-geometry.X,mouse.y-geometry.Y});
         SlateWidget::Draw();
         const auto* payload = ImGui::GetDragDropPayload();
         if (!payload || (!payload->IsDataType("EDITOR_ASSET_PATH") && !payload->IsDataType("EDITOR_MATERIAL_PATH"))) return;
         const bool material = payload->IsDataType("EDITOR_MATERIAL_PATH");
-        const auto& geometry = GetGeometry();
         if (geometry.Width <= 0 || geometry.Height <= 0) return;
         ImGui::SetNextWindowPos({geometry.X,geometry.Y}); ImGui::SetNextWindowSize({geometry.Width,geometry.Height});
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0,0});
@@ -122,7 +127,7 @@ namespace Editor
         if (ImGui::Button("Focus selected")) m_Scene.FocusSelected();
         ImGui::EndDisabled();
         ImGui::SeparatorText("Viewport controls");
-        ImGui::TextWrapped("Right drag: orbit\nMiddle drag: pan\nWheel: zoom\nSelect objects in this list.");
+        ImGui::TextWrapped("Left click: select / clear\nLight diamond: select light\nRight drag: orbit\nMiddle drag: pan\nWheel: zoom");
         ImGui::TextDisabled("Scene serialization is not implemented.");
     }
 }

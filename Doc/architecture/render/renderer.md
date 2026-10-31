@@ -131,7 +131,7 @@ SceneRenderer
 
 ### 5.1 按视图追加绘制 Pass
 
-[RenderModule::BeginRender](../../../src/Framework/Renderer/Private/RenderModule.cpp) 开始时复制场景的 SceneSetting，在 `sceneRenderer->Build(builder)` 之后遍历 `views->GetViews()`，先按设置加入网格/目标光源 Hint，再遍历每个视图的 `DrawExtensions`。非空 `Callback` 接收当前 Builder、当前 SceneView、`SceneTextures.SceneColor` 和 `SceneTextures.SceneDepth`。调用顺序为视图顺序、列表顺序；GPU 执行顺序仍由 Pass 声明的资源依赖决定。Hint 在变换工具等上层叠加之前构图，延续原有显示顺序。
+[RenderModule::BeginRender](../../../src/Framework/Renderer/Private/RenderModule.cpp) 开始时复制场景的 SceneSetting，在 `sceneRenderer->Build(builder)` 之后遍历 `views->GetViews()`，先按设置加入目标光源 Hint，再遍历每个视图的 `DrawExtensions`；全部视图扩展构图后，最后为各视图加入网格。非空 `Callback` 接收当前 Builder、当前 SceneView、`SceneTextures.SceneColor` 和 `SceneTextures.SceneDepth`。调用顺序为视图顺序、列表顺序；GPU 执行顺序仍由 Pass 声明的资源依赖决定。光源提示在变换工具等上层叠加之前，网格在这些扩展之后；颜色/深度附件声明建立实际依赖，不能仅凭 lambda 调用顺序假定 GPU 顺序。
 
 这是当前场景主体结束后的固定扩展点，扩展与场景使用同一个 Builder，并在统一的 `builder.Execute()` 前完成构图。扩展可通过公开的 RenderCore 接口声明参数、申请图内资源和添加 Pass。叠加颜色通常使用 Load_Store，深度是否测试、写入须与具体绘制及访问声明一致；回调本身不会自动声明附件访问。不增加额外队列提交、Present 或等待。
 
@@ -226,11 +226,15 @@ Scene Objects
 
 ## 相关核心实现细节
 
+### 场景射线查询
+
+场景 CPU 拾取由 [Scene::Raycast](../../../src/Framework/Renderer/Private/Scene.cpp) 实现 Engine 的 SceneInterface 协议。既有 SceneAccelerationStructure 同时提供视锥和有限射线候选查询；静态网格窄相位使用代理变换和 LOD0 CPU 顶点/索引，返回最近几何命中及 Section/材质槽。查询默认只含网格，All/Lights 还会线性遍历注册光源，调用 HintRender::RaycastLight 对其代理范围求交；光源结果不带网格索引。上层不访问 Renderer 私有场景或空间树。该路径不添加渲染 Pass，不读回 GPU，不操作编辑器选择；算法、时序与限制见 [射线拾取](../../key_implemetion/algorithm/01-ray-triangle-and-distance.md)。
+
 ### HintRender 场景提示
 
 [HintRender.h](../../../src/Framework/Renderer/PublicHeader/HintRender.h) / [HintRender.cpp](../../../src/Framework/Renderer/Private/HintRender.cpp) 提供 AddGridPass、AddLightPass 和 GetGridSpacing。Renderer::BeginRender 根据 Engine [SceneSetting](../../../src/Framework/Engine/PublicHeader/SceneInterface.h) 的 bDrawGrid/bDrawLightHints 和 LightHintTarget 决定调用，在模块内部传入本帧 Builder、SceneView、颜色及深度附件。上层无需包含 HintRender 或链接 Renderer。默认两类提示都关闭；光源目标为空时不绘制范围。实现使用 [HintRender.sf](../../../shaders/HintRender.sf) 的全局 Shader，光源和网格均使用 RHI LineList；参数在构图时复制到 Builder arena，不借用组件的异步存活，也不直接调用原生后端或 GUI。
 
-网格为 Y=0 的 XZ 平面。CPU 用逆 VP 反投影视锥八角，检查十二条边与地面的交点并求 XZ AABB；向外对齐网格后再各扩一格。高度给出 0.1、0.2、0.5、1、2、5、10 米间距和两个方向的细分数量。VS 从固定 1×1 单位网格角点展开线段并映射到该区域，PS 按相邻平行线的投影间距淡出过密线。范围随真实视锥更新，远裁剪之外不绘制；不再用全屏逐像素求交或写 SV_Depth。按 10 米周期移除相机 X/Z 的大坐标，保持世界锚定。一个 Draw 提交 2(nx+nz) 个顶点，无动态顶点缓冲；目前采用 CPU 确定细分数量、VS 展开的路径，未接入 HS/DS 硬件细分，也未作性能基准。
+网格为 Y=0 的 XZ 平面。CPU 用逆 VP 反投影视锥八角，检查十二条边与地面交点并求 XZ AABB；按 10 米周期消除相机 X/Z 的大坐标并保持世界锚定。固定 100×100 控制顶点映射到外扩 AABB，形成 99×99 个方形区域，各区按相机高度与最近距离选择 0.1、0.2、0.5、1、2、5、10 米间距，并保守剔除视锥外区域。同档区域用区域索引 SRV 合并为实例绘制，最多七个 Draw；VS 只展开该档所需线段，共享块边界只绘制一次。PS 在投影过密处及远距离连续衰减透明度，避免远处密线堆叠。网格最后以 RGB 源 Alpha 混合叠加，写掩码为 0x7，保持场景 Alpha；空背景清为 Alpha=1，避免 GUI 再次乘入衰减权重。每视图沿用 RDG transient 顶点/区域索引 SRV 与上传，没有常驻缓存、额外等待或 HS/DS 硬件细分；有限远裁剪、离散密度边界及上传成本仍存在。详见 [几何算法与退化条件](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md) 和 [资源生命周期](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
 光源提示读取既有组件的世界位置、方向、半径/锥角：点光 3 个正交大圆共 192 线段；聚光底圆 64 段、16 条母线和 1 条中心射线；平行光为箭杆及八条头部线，共 9 段。这些图形不替代实际光源数据更新。详细公式和限制见 [变换与提示几何](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)。
 

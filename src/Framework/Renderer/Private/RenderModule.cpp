@@ -129,13 +129,6 @@ namespace Renderer {
         // Append view-local overlays to the same graph after all scene passes.
         // Each extension must declare its texture access in its pass parameters.
         for (const auto& view : views->GetViews()) {
-            // Scene hints belong to Renderer; editor extensions remain above
-            // them and need only Engine/RenderCore interfaces.
-            if (sceneSetting.bDrawGrid) {
-                HintRender::AddGridPass(builder, view,
-                    sceneRenderer->SceneTextures.SceneColor,
-                    sceneRenderer->SceneTextures.SceneDepth);
-            }
             if (sceneSetting.bDrawLightHints && sceneSetting.LightHintTarget) {
                 HintRender::AddLightPass(builder, view,
                     sceneRenderer->SceneTextures.SceneColor,
@@ -149,6 +142,13 @@ namespace Renderer {
                 }
             }
         }
+        // The grid blends over the completed scene, including view extensions.
+        // Attachment declarations keep it after their color/depth accesses in RDG.
+        if (sceneSetting.bDrawGrid)
+            for (const auto& view : views->GetViews())
+                HintRender::AddGridPass(builder,view,
+                    sceneRenderer->SceneTextures.SceneColor,
+                    sceneRenderer->SceneTextures.SceneDepth);
         LocalVertexFactoryInstanceManager::Get().UpdateGPUResources();
         sceneRenderer->Scene->UpdateGlobalDistanceFieldIfNeeded();
         builder.Execute();

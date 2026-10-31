@@ -1,6 +1,7 @@
 #include "SceneView.h"
 #include "SceneInterface.h"
 #include "SceneViewport.h"
+#include "BVH.hpp"
 #include <cassert>
 #include <cstring>
 
@@ -30,6 +31,26 @@ namespace Engine {
     }
 
     SceneView::~SceneView() = default;
+
+    bool SceneView::MakeRay(Core::Float2 position, Core::Ray& outRay, float& outMaxDistance) const
+    {
+        outRay = {}; outMaxDistance = 0;
+        if (Viewport.Width<=0 || Viewport.Height<=0 || !std::isfinite(position.X) || !std::isfinite(position.Y) ||
+            position.X<0 || position.Y<0 || position.X>=Viewport.Width || position.Y>=Viewport.Height) return false;
+        const float x = 2*position.X/Viewport.Width-1, y = 1-2*position.Y/Viewport.Height;
+        const auto nearPoint = InvViewProjectionMatrix*std::array<float,4>{x,y,bDepthRangeZeroToOne ? 0.0f : -1.0f,1};
+        const auto farPoint = InvViewProjectionMatrix*std::array<float,4>{x,y,1,1};
+        for (int i=0; i<4; ++i)
+            if (!std::isfinite(nearPoint[i]) || !std::isfinite(farPoint[i])) return false;
+        if (std::abs(nearPoint[3])<1e-7f || std::abs(farPoint[3])<1e-7f) return false;
+        const Core::Float3 origin{nearPoint[0]/nearPoint[3],nearPoint[1]/nearPoint[3],nearPoint[2]/nearPoint[3]};
+        const Core::Float3 delta{farPoint[0]/farPoint[3]-origin.X,farPoint[1]/farPoint[3]-origin.Y,farPoint[2]/farPoint[3]-origin.Z};
+        const float length = delta.Length();
+        if (!std::isfinite(origin.X) || !std::isfinite(origin.Y) || !std::isfinite(origin.Z) ||
+            !std::isfinite(length) || length<=1e-6f) return false;
+        outRay = {origin,delta/length}; outMaxDistance = length;
+        return true;
+    }
 
     void SceneView::RebuildDerivedMatrices()
     {

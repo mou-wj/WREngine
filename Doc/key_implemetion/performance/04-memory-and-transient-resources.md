@@ -53,3 +53,9 @@ GL 句柄创建/删除转发 context worker；删除按值捕获句柄，不能�
 默认白/平面法线纹理由 InitGlobalRenderResource 创建、上传，在 ReleaseGlobalRenderResource 释放，不是 TextureAsset。距离场 Atlas、阴影 Atlas 及实例缓冲的逻辑分配另见 [资产和实例](05-assets-materials-and-instance-data.md)、[距离场](../algorithm/04-distance-fields-and-jump-flood.md)、[阴影](../algorithm/06-shadow-mapping-and-cascades.md)。
 
 验证入口：MaterialBindingTest 的真实默认纹理读回只能证明该上传/读回路径；RDG 与 RHI 图形测试不能自动证明碎片、并发回收或异常销毁安全。本轮没有运行 allocator 压力测试。
+
+## RDG 上传快照的单页上限
+
+[RenderGraphAllocator::AllocateRaw](../../../src/Framework/RenderCore/PublicHeader/RenderGraphBuilder.h) 默认每页 64KiB。超过当前页时只切换到另一张同样大小的页面，没有为 size>pageSize 创建大页或拒绝请求；随后 memcpy 会越界。因此不能从 AllocateBytes 接口形式推断任意大上传都被支持。分块网格首次使用 10000×Float4（160000 字节）上传时触发 Windows 堆错误 0xC0000374，见 [故障记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)。
+
+当前 HintRender 控制格点只有整数 x/z=0…99，按每轴 16 位打包后为 40000 字节，区域索引最大为 39204 字节，每项上传都在单页内；AddUploadBuffer 会在页剩余不足时单独换页。打包不损失本身的坐标精度，Shader 再解码并乘区域边长。它只说明该调用满足现有分配器边界，不代表通用 arena 的大请求缺陷已经修复；其他大上传及过度对齐请求仍须单独检查。未增加大页管理器、常驻网格缓存或全局保活机制。

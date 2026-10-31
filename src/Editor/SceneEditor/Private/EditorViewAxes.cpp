@@ -40,6 +40,7 @@ namespace Editor::ViewAxes
         SHADER_PARAMETER(Core::Float4x4, ViewRotation)
         SHADER_PARAMETER(Core::Float4, Axis)
         SHADER_PARAMETER(Core::Float4, AxisColor)
+        SHADER_PARAMETER(Core::Float4, LabelInfo)
     END_SHADER_PARAMETER_STRUCT(EditorViewAxesVertexParameters)
 
     BEGIN_SHADER_PARAMETER_STRUCT(EditorViewAxesPassParameters)
@@ -99,7 +100,7 @@ namespace Editor::ViewAxes
         return -1;
     }
 
-    void AddPass(RenderGraphBuilder& builder, const Engine::SceneView& view, RenderGraphTextureRef sceneColor)
+    void AddPass(RenderGraphBuilder& builder, const Engine::SceneView& view, RenderGraphTextureRef sceneColor, int highlightedEndpoint)
     {
         auto rect = GetRect(view.Viewport.Width,view.Viewport.Height);
         if (!rect.Width) return;
@@ -136,11 +137,13 @@ namespace Editor::ViewAxes
         {
             auto color = colors[i/2];
             if (i%2) for (int c=0; c<3; ++c) color[c] = color[c]*0.45f+0.55f;
+            if (i==highlightedEndpoint) color={1,1,0,1};
             const auto& axis = Directions[i];
             lines[i] = builder.AllocateParameter<EditorViewAxesVertexParameters>();
             lines[i]->ViewRotation = view.ViewMatrix;
             lines[i]->Axis = {axis.X,axis.Y,axis.Z,0};
             lines[i]->AxisColor = color;
+            lines[i]->LabelInfo = {static_cast<float>(i),0,0,0};
             balls[i] = builder.AllocateParameter<EditorViewAxesVertexParameters>();
             *balls[i] = *lines[i];
             balls[i]->Axis.W = BallRadius;

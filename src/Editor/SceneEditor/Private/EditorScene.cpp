@@ -10,6 +10,7 @@
 #include "Transform.hpp"
 #include "RHIApi.h"
 #include "RenderResource.h"
+#include "BVH.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -17,6 +18,56 @@
 
 namespace Editor
 {
+    namespace
+    {
+        constexpr float LightIconRadius = 9;
+        struct LightIcon { int ObjectIndex; Core::Float2 Center; float Depth; Engine::ELightType Type; };
+
+        std::vector<LightIcon> BuildLightIcons(const Engine::SceneView& view, const std::vector<EditorScene::Object>& objects)
+        {
+            std::vector<LightIcon> icons;
+            for (size_t i=0; i<objects.size(); ++i)
+            {
+                const auto* light = dynamic_cast<const Engine::LightComponent*>(objects[i].Component.get());
+                if (!light || light->GetLightType()==Engine::ELightType::Sky) continue;
+                const auto origin=light->GetWorldLocation(); Core::Float2 center;
+                if (!GizmoDrawing::Project(view,origin,center)) continue;
+                const auto camera=view.ViewMatrix*std::array<float,4>{origin.X,origin.Y,origin.Z,1};
+                icons.push_back({static_cast<int>(i),center,-camera[2],light->GetLightType()});
+            }
+            // Overlay icons do not depth-test against scene geometry. Nearest
+            // icons paint last; picking uses the reverse order and the same diamond.
+            std::stable_sort(icons.begin(),icons.end(),[](const auto& a,const auto& b){return a.Depth>b.Depth;});
+            return icons;
+        }
+
+        void AddLightIcons(RenderCore::RenderGraphBuilder& builder, const Engine::SceneView& view,
+            RenderCore::RenderGraphTextureRef color, const std::vector<EditorScene::Object>& objects, int selected)
+        {
+            std::vector<GizmoDrawing::Triangle> triangles;
+            for (const auto& icon : BuildLightIcons(view,objects))
+            {
+                auto tint=icon.Type==Engine::ELightType::Point ? Core::Float4{0.15f,0.45f,1,1} :
+                    (icon.Type==Engine::ELightType::Spot ? Core::Float4{0.2f,0.85f,0.35f,1} : Core::Float4{1,0.65f,0.12f,1});
+                if (icon.ObjectIndex==selected) tint={1,1,0,1};
+                const auto c=icon.Center;
+                const Core::Float2 left{c.X-LightIconRadius,c.Y}, right{c.X+LightIconRadius,c.Y};
+                const Core::Float2 top{c.X,c.Y-LightIconRadius}, bottom{c.X,c.Y+LightIconRadius};
+                triangles.push_back({left,top,right,tint});triangles.push_back({left,right,bottom,tint});
+                const Core::Float4 ink{0.03f,0.03f,0.03f,1};
+                GizmoDrawing::Line(triangles,{c.X-3,c.Y},{c.X+3,c.Y},ink,1.5f);
+                if (icon.Type==Engine::ELightType::Point)
+                    GizmoDrawing::Line(triangles,{c.X,c.Y-3},{c.X,c.Y+3},ink,1.5f);
+                else
+                {
+                    GizmoDrawing::Line(triangles,{c.X,c.Y-3},{c.X+3,c.Y},ink,1.5f);
+                    GizmoDrawing::Line(triangles,{c.X,c.Y+3},{c.X+3,c.Y},ink,1.5f);
+                }
+            }
+            GizmoDrawing::AddPass(builder,view,color,triangles,"EditorLightIcons");
+        }
+    }
+
     EditorScene::EditorScene() = default;
     EditorScene::~EditorScene() { Shutdown(); }
 
@@ -124,86 +175,43 @@ namespace Editor
         SetViewDirection(EEditorViewDirection::Orbit);
     }
 
+    int EditorScene::FindObjectIndex(const Engine::SceneComponent* component) const
+    {
+        for (size_t i=0; i<m_Objects.size(); ++i)
+            if (m_Objects[i].Component.get()==component) return static_cast<int>(i);
+        return -1;
+    }
+
+    void EditorScene::SelectAt(Core::Float2 position)
+    {
+        const auto* view=m_ViewFamily.GetView(0);
+        Core::Ray ray;float maximum;
+        if (!m_Scene || !view || !view->MakeRay(position,ray,maximum)) return;
+        const auto icons=BuildLightIcons(*view,m_Objects);
+        for (auto icon=icons.rbegin(); icon!=icons.rend(); ++icon)
+            if (std::abs(position.X-icon->Center.X)+std::abs(position.Y-icon->Center.Y)<=LightIconRadius)
+            { Select(icon->ObjectIndex);return; }
+        Engine::ScenePickResult result;
+        Select(m_Scene->Raycast(ray,maximum,result,Engine::EScenePickFilter::All) ? FindObjectIndex(result.Component) : -1);
+    }
+
     bool EditorScene::ApplyMaterialAt(const std::shared_ptr<Engine::MaterialAsset>& material, const Core::Float2& viewportPosition)
     {
         if (!material || !material->GetMaterial()) throw std::invalid_argument("A valid material asset is required");
-        if (material->GetMaterial()->GetBlendMode() != Engine::EBlendMode::Opaque)
+        if (material->GetMaterial()->GetBlendMode()!=Engine::EBlendMode::Opaque)
             throw std::runtime_error("The scene renderer currently supports Opaque materials only");
-        if (!m_Scene || !m_Viewport || !std::isfinite(viewportPosition.X) || !std::isfinite(viewportPosition.Y) ||
-            viewportPosition.X < 0 || viewportPosition.X >= 1 || viewportPosition.Y < 0 || viewportPosition.Y >= 1) return false;
-
-        // UV is relative to the last displayed viewport (top-left origin). Use
-        // that camera projection before a selection change can resize the view.
-        const auto& inverse = m_Camera.GetInverseViewProjectionMatrix();
-        auto unproject = [&](float depth) {
-            const Core::Float4 clip{2*viewportPosition.X-1, 1-2*viewportPosition.Y, depth, 1};
-            Core::Float4 world;
-            for (int row=0; row<4; ++row)
-                for (int column=0; column<4; ++column) world[row] += inverse(row,column)*clip[column];
-            if (std::abs(world.W) < 1e-6f) throw std::runtime_error("Cannot unproject the material drop position");
-            return Core::Float3{world.X/world.W, world.Y/world.W, world.Z/world.W};
-        };
-        const auto origin = unproject(m_Camera.GetDepthRangeMode() == Engine::Camera::ZeroToOne ? 0.0f : -1.0f);
-        const auto ray = unproject(1.0f)-origin;
-        float nearest = ray.Length();
-        if (!std::isfinite(nearest) || nearest <= 0) return false;
-        const auto direction = ray/nearest;
-        int objectIndex = -1;
-        uint32_t materialSlot = 0;
-        for (size_t index=0; index<m_Objects.size(); ++index)
-        {
-            auto* component = dynamic_cast<Engine::StaticMeshComponent*>(m_Objects[index].Component.get());
-            if (!component) continue;
-            auto* mesh = component->GetStaticMesh();
-            if (!mesh || !mesh->GetLODCount()) continue;
-            const auto& lod = mesh->GetLODResource(0); // Matches StaticMeshDrawBuild's current LOD selection.
-            const auto& positions = lod.VertexBuffers.PositionBuffer;
-            const auto& indices = lod.IndexBuffer.Indices;
-            if (!positions.bValid || positions.NumComponents < 3) continue;
-            const auto& transform = component->GetComponentTransform();
-            for (const auto& section : lod.Sections)
-            {
-                if (section.MaterialIndex < 0 || !component->GetMaterial(section.MaterialIndex) ||
-                    section.FirstIndex > indices.size() || section.NumIndices > indices.size()-section.FirstIndex) continue;
-                for (size_t offset=0; offset+2<section.NumIndices; offset+=3)
-                {
-                    Core::Float3 vertices[3];
-                    bool valid = true;
-                    for (int corner=0; corner<3; ++corner)
-                    {
-                        const int64_t vertex = static_cast<int64_t>(indices[section.FirstIndex+offset+corner])+section.BaseVertexIndex;
-                        if (vertex < 0 || static_cast<uint64_t>(vertex) >= positions.GetNumVertices()) { valid = false; break; }
-                        const auto start = static_cast<size_t>(vertex)*positions.NumComponents;
-                        vertices[corner] = Core::TransformPoint(transform, Core::Float3{positions.Vertices[start],positions.Vertices[start+1],positions.Vertices[start+2]});
-                    }
-                    if (!valid) continue;
-                    // Two-sided Moller-Trumbore intersection in world space:
-                    // distances remain comparable under nonuniform/negative scale.
-                    const auto edge1 = vertices[1]-vertices[0], edge2 = vertices[2]-vertices[0];
-                    const auto p = Core::Cross(direction,edge2);
-                    const float determinant = Core::Dot(edge1,p);
-                    if (std::abs(determinant) <= 1e-7f*edge1.Length()*edge2.Length()) continue;
-                    const auto fromVertex = origin-vertices[0];
-                    const float u = Core::Dot(fromVertex,p)/determinant;
-                    if (u < 0 || u > 1) continue;
-                    const auto q = Core::Cross(fromVertex,edge1);
-                    const float v = Core::Dot(direction,q)/determinant;
-                    if (v < 0 || u+v > 1) continue;
-                    const float distance = Core::Dot(edge2,q)/determinant;
-                    if (distance >= 0 && distance < nearest)
-                    {
-                        nearest = distance; objectIndex = static_cast<int>(index); materialSlot = section.MaterialIndex;
-                    }
-                }
-            }
-        }
-        if (objectIndex < 0) return false;
+        const auto* view=m_ViewFamily.GetView(0);
+        if (!m_Scene || !view) return false;
+        Core::Ray ray;float maximum;
+        if (!view->MakeRay({viewportPosition.X*view->Viewport.Width,viewportPosition.Y*view->Viewport.Height},ray,maximum)) return false;
+        Engine::ScenePickResult result;
+        if (!m_Scene->Raycast(ray,maximum,result)) return false;
+        const int index=FindObjectIndex(result.Component);
+        auto* component=dynamic_cast<Engine::StaticMeshComponent*>(result.Component);
+        if (index<0 || !component || result.MaterialIndex<0) return false;
         WaitForLastDraw();
-        auto* component = static_cast<Engine::StaticMeshComponent*>(m_Objects[objectIndex].Component.get());
-        component->SetMaterial(materialSlot, material->GetMaterial());
-        Select(objectIndex);
-        m_Scene->NotifyComponentChanged(component);
-        m_bSceneDirty = true;
+        component->SetMaterial(result.MaterialIndex,material->GetMaterial());
+        Select(index);m_Scene->NotifyComponentChanged(component);m_bSceneDirty=true;
         return true;
     }
 
@@ -279,6 +287,7 @@ namespace Editor
     }
     void EditorScene::ClearTransformTargets()
     {
+        m_bPickPending = false;
         m_TranslationGizmo.SetTarget(nullptr);
         m_RotationGizmo.SetTarget(nullptr);
         m_ScaleGizmo.SetTarget(nullptr);
@@ -286,7 +295,7 @@ namespace Editor
     void EditorScene::ClearTransformHover()
     { m_TranslationGizmo.ClearHover(); m_RotationGizmo.ClearHover(); m_ScaleGizmo.ClearHover(); }
     void EditorScene::EndTransformDrag()
-    { m_TranslationGizmo.EndDrag(); m_RotationGizmo.EndDrag(); m_ScaleGizmo.EndDrag(); ClearTransformHover(); }
+    { m_bPickPending=false; m_TranslationGizmo.EndDrag(); m_RotationGizmo.EndDrag(); m_ScaleGizmo.EndDrag(); ClearTransformHover(); }
     bool EditorScene::IsTransformDragging() const
     { return m_TranslationGizmo.IsDragging() || m_RotationGizmo.IsDragging() || m_ScaleGizmo.IsDragging(); }
     Engine::SceneComponent* EditorScene::GetSelected() const
@@ -370,12 +379,14 @@ namespace Editor
         view.Viewport.Width = viewport->GetWidth();
         view.Viewport.Height = viewport->GetHeight();
         view.DrawExtensions.push_back({[this](auto& builder, const auto& sceneView, auto color, auto depth) {
+            AddLightIcons(builder,sceneView,color,m_Objects,m_SelectedIndex);
             m_TranslationGizmo.AddPass(builder,sceneView,color);
             m_RotationGizmo.AddPass(builder,sceneView,color);
             m_ScaleGizmo.AddPass(builder,sceneView,color);
         }});
-        view.DrawExtensions.push_back({[](auto& builder, const auto& sceneView, auto color, auto depth) {
-            ViewAxes::AddPass(builder,sceneView,color);
+        view.DrawExtensions.push_back({[this](auto& builder, const auto& sceneView, auto color, auto depth) {
+            const int hovered=ViewAxes::HitTest(sceneView.ViewMatrix,sceneView.Viewport.Width,sceneView.Viewport.Height,m_ViewportPointer);
+            ViewAxes::AddPass(builder,sceneView,color,m_PressedAxis>=0 ? m_PressedAxis : hovered);
         }});
         m_ViewFamily.Scene = m_Scene.get();
         m_ViewFamily.RenderTarget = viewport;
@@ -386,6 +397,7 @@ namespace Editor
     }
     bool EditorScene::OnMouseButton(const SlateCore::MouseButtonEvent& event)
     {
+        UpdateViewportHover({static_cast<float>(event.X),static_cast<float>(event.Y)});
         const bool pressed = event.Event != SlateCore::EInputEvent::Released;
         if (event.Button == SlateCore::EMouseButton::Left)
         {
@@ -408,8 +420,13 @@ namespace Editor
                 {
                     const auto* view = m_ViewFamily.GetView(0);
                     const Core::Float2 position{static_cast<float>(event.X),static_cast<float>(event.Y)};
-                    return view && (m_TranslationGizmo.BeginDrag(*view,position) ||
-                        m_RotationGizmo.BeginDrag(*view,position) || m_ScaleGizmo.BeginDrag(*view,position));
+                    if (!view) return false;
+                    if (m_TranslationGizmo.BeginDrag(*view,position) ||
+                        m_RotationGizmo.BeginDrag(*view,position) || m_ScaleGizmo.BeginDrag(*view,position)) return true;
+                    Core::Ray ray; float maximum;
+                    if (!view->MakeRay(position,ray,maximum)) return false;
+                    m_PickPressPosition=position;m_bPickPending=true;m_bPickMoved=false;
+                    return true;
                 }
                 ClearTransformHover();
                 m_AxisPressPosition = {static_cast<float>(event.X),static_cast<float>(event.Y)};
@@ -432,8 +449,17 @@ namespace Editor
                 }
                 return true;
             }
+            if (!pressed && m_bPickPending)
+            {
+                const Core::Float2 position{static_cast<float>(event.X),static_cast<float>(event.Y)};
+                const bool click=!m_bPickMoved && (position-m_PickPressPosition).LengthSquared()<16;
+                m_bPickPending=false;
+                if (click) SelectAt(position);
+                return true;
+            }
             return false;
         }
+        m_bPickPending=false;
         if (m_PressedAxis >= 0 || IsTransformDragging()) return true;
         ClearTransformHover();
         if (event.Button == SlateCore::EMouseButton::Right) { m_bRotating = pressed; return true; }
@@ -442,6 +468,12 @@ namespace Editor
     }
     bool EditorScene::OnMouseMove(const SlateCore::MouseMoveEvent& event)
     {
+        UpdateViewportHover({static_cast<float>(event.X),static_cast<float>(event.Y)});
+        if (m_bPickPending)
+        {
+            if ((m_ViewportPointer-m_PickPressPosition).LengthSquared()>=16) m_bPickMoved=true;
+            return true;
+        }
         if (IsTransformDragging())
         {
             const auto* view = m_ViewFamily.GetView(0);
@@ -537,6 +569,7 @@ namespace Editor
     }
     bool EditorScene::OnMouseWheel(const SlateCore::MouseWheelEvent& event)
     {
+        m_bPickPending=false;
         if (m_PressedAxis >= 0 || IsTransformDragging()) return true;
         ClearTransformHover();
         m_Distance = std::clamp(m_Distance - event.Delta * 0.25f, 0.2f, 1000.0f);
@@ -545,11 +578,12 @@ namespace Editor
     }
     bool EditorScene::OnFocusLost()
     {
+        m_bPickPending=false;m_ViewportPointer={-1,-1};
         EndTransformDrag();
         m_bRotating = m_bPanning = m_bAxisDragging = false; m_PressedAxis = -1; return true;
     }
     void EditorScene::OnViewportResized(int, int)
-    { EndTransformDrag(); }
+    { m_bPickPending=false; m_ViewportPointer={-1,-1}; EndTransformDrag(); }
     void EditorScene::WaitForLastDraw()
     {
         if (!m_Viewport || !m_Viewport->GetRenderTarget()) return;

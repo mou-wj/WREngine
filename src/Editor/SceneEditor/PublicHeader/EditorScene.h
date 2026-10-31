@@ -59,6 +59,9 @@ namespace Editor
         void SetViewDirection(EEditorViewDirection direction);
         EEditorViewDirection GetViewDirection() const { return m_ViewDirection; }
         void Draw(Engine::Viewport* viewport) override;
+        // The host also refreshes this before Draw, so leaving the viewport or
+        // hovering a GUI overlay clears orientation-axis hover without input capture.
+        void UpdateViewportHover(Core::Float2 position) { m_ViewportPointer = position; }
         bool OnMouseButton(const SlateCore::MouseButtonEvent& event) override;
         bool OnMouseMove(const SlateCore::MouseMoveEvent& event) override;
         bool OnMouseWheel(const SlateCore::MouseWheelEvent& event) override;
@@ -70,6 +73,8 @@ namespace Editor
         void ClearTransformTargets();
         void EndTransformDrag();
         bool IsTransformDragging() const;
+        void SelectAt(Core::Float2 position);
+        int FindObjectIndex(const Engine::SceneComponent* component) const;
         Engine::Viewport* m_Viewport = nullptr;
         std::unique_ptr<Engine::SceneInterface> m_Scene;
         std::vector<Object> m_Objects;
@@ -94,5 +99,9 @@ namespace Editor
         bool m_bRotating = false;
         bool m_bPanning = false;
         bool m_bSceneDirty = false;
+        Core::Float2 m_ViewportPointer{-1,-1};
+        Core::Float2 m_PickPressPosition;
+        bool m_bPickPending = false;
+        bool m_bPickMoved = false;
     };
 }

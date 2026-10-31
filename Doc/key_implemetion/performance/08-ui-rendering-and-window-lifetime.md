@@ -106,11 +106,11 @@ CloseProject 调用 ImMainWindow::WaitForLastDraw，复用 ImSlateRenderer 已�
 
 材质用户单击经 AssetPanel::SelectPath → OpenSelected → MaterialOpened 回调 → ShowMaterial，只打开同一个 ImGuiContext 的浮动 Material Editor，默认 Properties 页。关闭按钮仅隐藏窗口，保留当前编辑选择；工程切换则清空选择和导入队列。HitTest 使用当前浮窗和展开库的可见几何，未显示时不接受桌面文件。没有 HWND/原生渲染环境，界面不再占右侧节点区域。
 
-网格拖动载荷只含 UTF-8 路径。视口在载荷活动时增加透明逻辑窗口和标准 ImGui DragDropTarget，正常相机操作时不生成这层目标。投递接受只通知宿主记录路径；下一 TickFrame 在当前 Content 内重新检查并创建组件，因此不在当前 Draw 过程中加载后立即替换场景缓冲。最终 Access/Fence 仍由原场景与 GUI 实际提交维护。投放位置当前为世界原点，没有视口拾取/吸附。导入只保存文件、不会自动生成模型，详见 [资源实现](05-assets-materials-and-instance-data.md)。
+网格拖动载荷只含 UTF-8 路径。视口在载荷活动时增加透明逻辑窗口和标准 ImGui DragDropTarget，正常相机操作时不生成这层目标。投递接受只通知宿主记录路径；下一 TickFrame 在当前 Content 内重新检查并创建组件，因此不在当前 Draw 过程中加载后立即替换场景缓冲。最终 Access/Fence 仍由原场景与 GUI 实际提交维护。投放位置当前为世界原点，尚未根据落点求表面位置或吸附。导入只保存文件、不会自动生成模型，详见 [资源实现](05-assets-materials-and-instance-data.md)。
 
 材质投递沿用同一个逻辑接收区域，载荷类型为 EDITOR_MATERIAL_PATH，回调只复制路径与视口左上原点的归一化 UV，不传组件或资产裸指针。Assets 材质卡片的普通点击在未发生拖动的释放时才打开浮窗，避免按下即打开导致拖动来源被遮挡。EditorApplication 消费顺序为工程动作、网格、材质、节点栏布局，然后开始当前 UI/场景帧；关闭工程会清掉待执行材质路径。未添加后台任务、全局管理器或资源保活容器。
 
-ApplyMaterialAt 在这次选择引起视口尺寸变化之前，用最近显示帧的投影与当前相机视图反投影落点，最近三角形决定实际目标和槽位；背景不回退为当前选择。CPU 命中成功后，先等待现有视口 Tracker 的实际访问完成点，再调用组件 SetMaterial，之后通知代理更新并置场景 dirty，下一次场景 Draw 按原流程 Flush。这样旧材质/实例资源在已有访问完成后才替换，资源 Access/Fence 仍在实际 RHI 提交位置维护。只有投递命中需要该编辑等待，不在悬停时每帧求交或等待。计算及当前几何限制见 [射线算法](../algorithm/01-ray-triangle-and-distance.md)。
+ApplyMaterialAt 在这次选择引起视口尺寸变化之前，用最后绘制的 SceneView::MakeRay 反投影落点，再调用 SceneInterface::Raycast，最近三角形决定实际目标和槽位；背景不回退为当前选择。CPU 命中成功后，先等待现有视口 Tracker 的实际访问完成点，再调用组件 SetMaterial，之后通知代理更新并置场景 dirty，下一次场景 Draw 按原流程 Flush。这样旧材质/实例资源在已有访问完成后才替换，资源 Access/Fence 仍在实际 RHI 提交位置维护。只有投递命中需要该编辑等待，不在悬停时每帧求交或等待。计算及当前几何限制见 [射线算法](../algorithm/01-ray-triangle-and-distance.md)。
 
 EditorApplication 在 TickFrame 消费工程/网格操作后、Draw/NewFrame 前，根据现有场景选择将 NodePanel 设为 Visible 或 Collapsed，仅状态改变时调用原 UpdateLayout。初始状态为 Collapsed，布局器将右栏和右分隔条宽度归零，视口使用腾出的空间。视口纹理重建沿用上述窗口完成 marker 等待；普通帧不重排、不增加等待，没有为折叠改 RHI 或资源保活策略。选择若在 Scene 面板 Draw 中改变，布局在下一 TickFrame 生效，避免重建本帧已记录引用的纹理。
 
@@ -118,7 +118,7 @@ EditorApplication 在 TickFrame 消费工程/网格操作后、Draw/NewFrame 前
 
 ## 方向示意的 RDG 叠加与视口输入
 
-[EditorScene::Draw](../../../src/Editor/SceneEditor/Private/EditorScene.cpp) 为本帧 SceneView 填入无业务对象捕获的 DrawExtension，复制进入 SceneViewFamily 后，由 Renderer 在主体构图后调用 [ViewAxes::AddPass](../../../src/Editor/SceneEditor/Private/EditorViewAxes.cpp)。具体轴图形留在 SceneEditor；Renderer 不包含端点颜色、输入或相机控制。参数化球面和坐标/偏航公式见 [相机算法](../algorithm/03-transforms-frustum-and-depth.md)。
+[EditorScene::Draw](../../../src/Editor/SceneEditor/Private/EditorScene.cpp) 为本帧 SceneView 填入 DrawExtension，复制进入 SceneViewFamily 后，由 Renderer 在主体构图后调用 [ViewAxes::AddPass](../../../src/Editor/SceneEditor/Private/EditorViewAxes.cpp)。回调借用 EditorScene，仅在本次同步构图时读取鼠标/按下端点；GPU 命令闭包只捕获 arena 参数。具体轴图形、黄色 hover/pressed 状态与中心标签留在 SceneEditor；Renderer 不包含端点颜色、输入或相机控制。参数化球面、标签及坐标/偏航公式见 [相机算法](../algorithm/03-transforms-frustum-and-depth.md)。
 
 EditorViewAxesVS/PS 沿 GlobalShader 注册和现有 GShaderMap 编译/拥有，两个图形管线按 LineList/TriangleList 进入既有 RHIPipelineStateCache。每帧颜色附件声明 Load_Store；不绑定场景深度、不采样场景纹理，叠加图形不受模型遮挡。12 组顶点参数由 Builder::AllocateParameter 分配，执行闭包按值捕获参数指针数组、排序与区域，不引用 UI 的可变状态。SV_VertexID 生成线和缩放单位球，无额外顶点/索引缓冲、资源池、Frame 或跨帧保活容器。
 
@@ -140,7 +140,7 @@ Shader VS 使用生成的 EditorTranslationVertexParameters 虚拟头，PS 保�
 
 鼠标移出视口后，Window 不再向 SceneViewport 投递移动事件。EditorApplication 在当前帧 GUI 绘制结束后，用 ImGui 当前捕获结果及视口区域命中清除普通 hover，下一帧移除黄色；场景正在捕获拖动时保留 active 反馈，不伪造额外鼠标事件或修改通用窗口路由。
 
-缩放和旋转的类声明复用既有 [EditorTranslationGizmo.h](../../../src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h)，各自算法位于新增的 EditorScaleGizmo.cpp 和 EditorRotationGizmo.cpp。GizmoDrawing 只负责当前三个工具共用的投影、无缩放旋转基底、屏幕线段和颜色叠加，不拥有组件、窗口或 GPU 资源。工具生成的屏幕三角形 span 在 AddPass 调用内复制为 Builder arena 参数；参数指针 vector 同样由 arena 构造并登记析构，执行闭包仅捕获其指针及其他稳定值，不借用临时 span 或将堆 vector 复制到 Pass 闭包。Execute 等待本帧录制完成后，arena 可按原约定析构这些 CPU 数据；RHI 参数命令自行复制提交数据。此处避免放大既有 Pass 裸指针泄漏的额外 vector 持有，未修改 RenderGraphBuilder 的释放结构。
+缩放和旋转的类声明复用既有 [EditorTranslationGizmo.h](../../../src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h)，各自算法位于新增的 EditorScaleGizmo.cpp 和 EditorRotationGizmo.cpp。GizmoDrawing 提供当前三个工具及光源图标复用的投影、无缩放旋转基底、屏幕线段和颜色叠加，不拥有组件、窗口或 GPU 资源。工具生成的屏幕三角形 span 在 AddPass 调用内复制为 Builder arena 参数；参数指针 vector 同样由 arena 构造并登记析构，执行闭包仅捕获其指针及其他稳定值，不借用临时 span 或将堆 vector 复制到 Pass 闭包。Execute 等待本帧录制完成后，arena 可按原约定析构这些 CPU 数据；RHI 参数命令自行复制提交数据。此处避免放大既有 Pass 裸指针泄漏的额外 vector 持有，未修改 RenderGraphBuilder 的释放结构。
 
 工具目标由 EditorScene 的具体三个 setter 互斥设置，空指针只关闭对应工具；UI 通过三个查询/设置回调组装。Scale 输入和同名 Scale 按钮使用不同 ID 栈，保留 260px 窄栏内同排行为。缩放最多 48 个屏幕三角形，旋转最多 452 个，每个仍使用一次既有参数上传/Draw；规模有界但有实际 CPU/驱动开销，当前没有新增批处理缓冲或资源管理器。算法及局部坐标/整圈反馈边界见 [变换算法](../algorithm/03-transforms-frustum-and-depth.md)。
 
@@ -150,19 +150,33 @@ Shader VS 使用生成的 EditorTranslationVertexParameters 虚拟头，PS 保�
 
 属性控件在 UI 线程同步调用原 LightComponent setter，EditorScene::NotifySelectedChanged 沿原完成点同步，并在下一 Draw 前 Flush 更新。Renderer::Scene::NotifyComponentChanged 使用 C++ 实际类型区分 LightComponent/PrimitiveComponent，避免它们未独立声明类型 ID 时继承基类 StaticTypeID 的错误匹配。光源代理在通知时 UpdateFromComponent、标记对应 GPU 数据和阴影更新；仅置 GPU dirty 而不刷新代理会继续上传旧参数。RemoveLight 使用实际旧代理确定脏标志、释放既有阴影分配并移除代理键/索引，然后删除代理。空数组跳过光源数据上传，天空光移除时清空两种 IBL 引用；没有改动 RHI 后端的绑定语义。
 
-[HintRender](../../../src/Framework/Renderer/Private/HintRender.cpp) 在构图时读取组件/相机，复制每条光源线的矩阵、端点和颜色到 Builder arena。参数指针 vector 也由 arena 构造和析构，闭包只捕获参数指针、固定视口和管线，不借用光源组件或临时几何 vector。沿用全局 Shader、PipelineStateCache 和每线一次参数上传/Draw：点光最多 192 Draw、聚光 81 Draw、平行光 9 Draw。网格使用 HintGridParameters 快照：CPU 反投影视锥、检查十二条边与地面的交点、计算外扩 AABB 和细分数量，再用一次 Draw 提交 2(nx+nz) 个顶点。VS 从固定单位网格四角展开真实线段，PS 只估计投影间距并淡出；没有全屏逐像素逆投影、SV_Depth 或动态 VBO/IB。CPU 构图为常数成本，GPU 顶点数随范围/间距增加；过细且很大的 AABB 仍有真实变换、裁剪及线条过绘制成本，未作性能基准。未新增通用批处理器、缓冲池或 HS/DS 硬件细分。现有 RDG Pass 裸指针回收缺口仍不在本次重构范围。
+[HintRender](../../../src/Framework/Renderer/Private/HintRender.cpp) 在构图时读取组件/相机，复制每条光源线的矩阵、端点和颜色到 Builder arena。参数指针 vector 也由 arena 构造和析构，闭包只捕获参数指针、固定视口和管线，不借用光源组件或临时几何 vector。沿用全局 Shader、PipelineStateCache 和每线一次参数上传/Draw：点光最多 192 Draw、聚光 81 Draw、平行光 9 Draw。网格用 HintGridParameters 保存相对 VP、区域/相机/档位快照；CPU 在 99×99 个区域中做保守视锥剔除和最近距离分级，七档索引先存在局部 vector，AddUploadBuffer 在返回前复制到 arena，因此异步录制不借用它。静态 100×100 顶点按两项 16 位整数打包，40000 字节；每视图索引最多 39204 字节。两个 GPU 缓冲是图内 transient SRV，名称使用该视图 arena 对象的身份保持 Builder 内唯一，避免多视图参数共用错误索引；该名称不是跨帧缓存键。每视图仍重复上传固定数据，约 40KB 加可见索引及常量，不代表已优化上传带宽。
 
-Hint 开关与目标统一保存在每个 [SceneInterface 的 SceneSetting](../../../src/Framework/Engine/PublicHeader/SceneInterface.h) 值对象中。SceneEditor::Initialize 开启网格和光源提示，Select 只回写借用的 LightHintTarget。Renderer::BeginRender 在控制线程复制一份设置，对各视图先按开关调用 HintRender，再执行上层 DrawExtensions，最后仍只调用原有 builder.Execute。光源参数在 AddLightPass 构图时复制，异步命令闭包不读取设置或组件指针；Scene::RemoveLight 在删除入口清空匹配目标，随后沿用 Remove/Flush 再销毁组件的顺序。关闭、删除和清除选择后不保留目标。没有锁、额外 Fence 等待、自动保活或新增管理器；设置变更与构图必须串行，此接口未承诺跨线程修改安全。SceneEditor 的 CMake 和 apps.json 直接 Renderer 依赖均已移除，应用仍加载其运行时实现，由 Editor→SlateRHIRenderer→Renderer 的现有启动顺序保证生命周期。
+同一图 Pass 的七档参数引用相同的两项 SRV 和颜色/深度附件，首档参数作为 RDG 依赖声明；网格使用 RGB 写掩码和源 Alpha 混合，Load_Store 叠加在全部场景扩展之后，保持颜色附件已有的 Alpha；闭包捕获 arena 中的绘制记录，每档调用 SetShaderParameters/Draw。上传 Pass 登记 TransferDest，再与绘制的 RDGBuffer_SRV 建立依赖和转换；AddUploadPass 在登记前保留描述符、登记后清空原列表，Buffer SRV 元数据分类也已更正，具体根因见下方 RDG 专题。绘制的最后使用 Fence 仍由 Builder 在提交处维护，TransientAllocator 依完成值回收 GPU 包装；不另加 WaitIdle、Fence 等待或保活容器。VS 工作量随每块 c/s 增长，PS 将投影密度与距离衰减相乘；没有全屏逆投影、SV_Depth、通用批处理器、常驻缓冲池或 HS/DS。资源/上传限制另见 [RDG](03-rdg-execution-and-state.md) 与 [内存](04-memory-and-transient-resources.md)，公式及分界退化见 [网格算法](../algorithm/03-transforms-frustum-and-depth.md)。未作性能基准。现有 RDG Pass 裸指针回收缺口仍不在本次重构范围。
+
+Hint 开关与目标统一保存在每个 [SceneInterface 的 SceneSetting](../../../src/Framework/Engine/PublicHeader/SceneInterface.h) 值对象中。SceneEditor::Initialize 开启网格和光源提示，Select 只回写借用的 LightHintTarget。Renderer::BeginRender 在控制线程复制一份设置，对各视图按开关加入目标光源 Hint，再执行上层 DrawExtensions，全部扩展完成后再为各视图加入网格，最后仍只调用原有 builder.Execute。光源参数在 AddLightPass 构图时复制，异步命令闭包不读取设置或组件指针；Scene::RemoveLight 在删除入口清空匹配目标，随后沿用 Remove/Flush 再销毁组件的顺序。关闭、删除和清除选择后不保留目标。没有锁、额外 Fence 等待、自动保活或新增管理器；设置变更与构图必须串行，此接口未承诺跨线程修改安全。SceneEditor 的 CMake 和 apps.json 直接 Renderer 依赖均已移除，应用仍加载其运行时实现，由 Editor→SlateRHIRenderer→Renderer 的现有启动顺序保证生命周期。
 
 Scene::AddLight 对天空光在同一 pending-command mutex 范围内扫描现有灯光及待处理 Add/Remove，推导队列执行后的有效天空光；同一对象重复注册不再排队，第二个对象在改变 owner 或入队前抛出 invalid_argument。先 Remove 当前对象再 Add 新对象可在同一 Flush 中替换。复杂度 O(灯光数+待处理命令数)，只发生在天空光注册；没有新增单例、活动光源缓存或全局锁。mutex 保护队列检查及入队，不把它表述为 Flush 注册表和任意场景操作已支持并发调用，继续沿用原场景线程约定。
 
-光源变换走 SceneComponent::MarkTransformDirty → 派生 OnTransformChanged 更新 +X 前向 → 原 MarkRenderStateDirty 通知场景。UI 数值编辑及既有旋转圈共用这条链路，Direction 直接输入通过 SetLocalRotation 回到同一状态，不另建编辑器朝向副本。天空光面板不显示任何变换，平行光不显示位移，点光不显示旋转/缩放，聚光显示位移和旋转；Engine 的继承关系和资源归属未为界面显隐改变。
+光源变换走 SceneComponent::MarkTransformDirty → 派生 OnTransformChanged 更新 +X 前向 → 原 MarkRenderStateDirty 通知场景。UI 数值编辑及既有旋转圈共用这条链路，Direction 直接输入通过 SetLocalRotation 回到同一状态，不另建编辑器朝向副本。天空光面板不显示任何变换，平行光提供位置/位移与旋转，位置只移动显示和拾取用的箭头/图标，不改变照明方向，点光不显示旋转/缩放，聚光显示位移和旋转；Engine 的继承关系和资源归属未为界面显隐改变。
 
 网格/光源 Pass 将颜色与深度附件都声明 Load_Store。管线深度测试开启、深度值写入关闭；当前 RHI 原生 RenderPass 将深度按 attachment layout 绑定，未表达只读深度附件，因此 RDG 保守声明附件访问，避免状态与实际 RenderPass layout 不符。天空 Pass 结束需 Store 深度，否则后续扩展深度测试会读取未保证保留的内容。阴影上传在没有方向光矩阵时跳过对应零字节复制，并移除无用途的第 0 项调试访问，使真正无光源的场景可以完成绘制。
 
 没有 Primitive 时，DefferedSceneRenderer 只清空颜色/深度、按已有天空贴图绘制背景，再由原扩展入口加入网格/光源提示；没有表面参与着色，不录制材质光照计算。未打开工程时没有光源节点，场景背景为清空色；内置天空资产仍由 EditorScene 持有，打开工程后才由默认 Sky light 使用。关闭工程会移除全部光源，替代此前隐藏预览灯光继续留在场景中的行为。
 
 完整 UI 验证还暴露了深度状态缓存的确定性碰撞：方向轴先创建关闭测试/写入的状态，后续模型复用了它，未写深度而被天空覆盖。修复属于 RHI 的 HashDepthStencilState，具体旧输入、键值与返回状态见 [状态缓存细节](06-shader-compilation-and-binding.md) 和 [当日记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)，没有通过修改 RDG 调度或提示附件依赖绕过此问题。
+
+## 场景点击、光源图标与轴悬停
+
+SceneView::MakeRay 与 SceneInterface::Raycast 提供同步 CPU 查询。EditorScene::SelectAt 在按键释放确认点击时查询，ApplyMaterialAt 在既有延迟投递流程中查询；两者复用最后一次绘制保存的视图。Raycast 读取最后 Flush 的空间树/代理变换，不自行重建 GPU 缓冲或等待；Scene 的容器及资产 CPU 几何仍要求与修改/Flush 串行。结果中的组件引用只在当前操作使用，选择归属仍是 EditorScene 原节点列表，不增加稳定 ID 注册表、异步拾取队列或第二套选择管理。
+
+普通左键按下在方向球和变换工具未消费时记录位置并返回 true，沿原 Window::OnMouseButton 取得捕获。鼠标全程移动达到 4px 后记为拖动，即使回到原点也不选择；释放越界同样不选择。有效释放先查询，再 Select，因此节点属性栏引发的 resize 不会反过来改变本次射线。背景 Select(-1) 通过既有宿主布局收起整个右栏；材质未命中仍保持选择。失焦、resize、切换/聚焦相机、清空/切换工具及其他鼠标操作取消待点击，不添加新的原生鼠标捕获机制。
+
+BuildLightIcons 每帧从会话拥有的非天空光生成小型屏幕菱形，按相机深度排序。绘制与命中调用同一函数，图标优先级低于方向球/变换工具、高于网格；绘制不测试场景深度，故 UI 命中也不会因模型遮挡跳过可见图标。天空光无图标；图标之外通过 All 查询光源范围和箭头，与网格按最近距离比较。GizmoDrawing::AddPass 在本次构图内复制三角形到 arena，异步命令不借用图标 vector 或组件；每灯为常数个三角形/Draw，排序 O(L log L)、临时几何 O(L)，没有批处理性能保证或持久缓存。
+
+Window 没有鼠标离开控件通知，只向当前命中/捕获的控件分发移动，单靠 Scene 的最后一次移动会留下 hover。EditorSceneViewportWidget 借用同一会话，在 Draw 前按 ImGui MousePos 和自身 geometry 刷新 UpdateViewportHover；其他 GUI 窗口遮挡时传无效位置。该刷新只更改显示状态，不向 Window、ImGui 或工具重发输入事件。ViewAxes 的构图回调优先读按下端点，否则按当前视图/鼠标命中，复制颜色和 LabelInfo 后录制；标签由 Shader 生成，无字体纹理所有权。默认构造的视口控件继续可用，Editor 宿主采用接收会话的构造函数以启用帧级 hover 刷新。
+
+上述入口和公开 Window 路由、完整 Editor UI、材质投递、三个后端轴 Shader 及真实 Launcher 的验证范围见 [2026-10-31 记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)。没有新增 WaitIdle、GPU 读回拾取 Pass 或 RHI 后端改动。
 
 ## 文件拖入材质库的执行顺序
 
@@ -178,3 +192,13 @@ Scene::AddLight 对天空光在同一 pending-command mutex 范围内扫描现�
 较大 Material Library 是同一 ImGuiContext 中的模态窗口，不创建 HWND/交换链。面板记录该模态可见矩形作为自身补充命中区域，依赖 Editor 现有最后登记材质面板的顺序。普通 Properties 或模态关闭后清除此扩展区域；没有实现任意第三方模态之间的全局遮挡排序。模态之外的桌面文件不会被广播给材质面板。
 
 ImGridWidget 的颜色球由 UI 图元绘制，不采样材质纹理，所以扫描、分类、过滤不会给所有材质创建 GPU 资源。当前选择的 MaterialAsset / TextureAsset 是面板强引用，其余运行时驻留/弱引用仍由 AssetManager 管理。目录与文件事务细节见 [资产实现](05-assets-materials-and-instance-data.md)。
+
+## 光源范围查询和不透明场景 Alpha
+
+EScenePickFilter 在 Engine 的 SceneInterface 中定义，默认 Meshes，EditorScene::SelectAt 明确请求 All；ApplyMaterialAt 继续使用默认几何查询，因此光源范围不会截获材质投递。光源注册/删除由原 pending-command/Flush 处理，参数 NotifyComponentChanged 则直接调用 LightSceneProxy::UpdateFromComponent，这是现有实现，与网格变换/空间树等到 Flush 的行为不同。查询、UI 修改、构图均须在原控制线程串行；它不是任意跨线程安全或严格 GPU 已显示帧的快照协议。返回的组件仍由 EditorScene::Object 拥有，须在 Remove/Flush 后才销毁。
+
+光源范围查询复用 Renderer 现有注册表，不添加缓存、索引或新管理器。HintRender::RaycastLight 使用代理数据，方向光绘制和拾取共用九条箭头线段；上层只经 Engine 接口选择，Editor 无 Renderer 直接链接。方向光 Position/Move 仍走现有组件位置 setter、Notify 和工具回调，GetDirection 由旋转确定，位置只改提示和拾取基点；未为了编辑效果修改方向光照明计算。
+
+场景纹理由 GUI 再采样合成，线条的混合权重不能成为该纹理的新 Alpha。DefferedSceneRenderer 将空背景清为 (0,0,0,1)，HintRender 和共用 GizmoDrawing 的混合附件写掩码为 RGB（0x7）。固定功能计算 `C=Cs*As+Cd*(1-As)`，附件 A 保持不透明值；现有 Opaque 材质/天空输出继续提供不透明场景。网格位于全部视图扩展之后，其颜色/深度参数声明建立依赖，不新加颜色副本、同步等待或后处理。
+
+Vulkan/DX12 原有 RGB 源 Alpha 混合已符合公式；OpenGLGraphicContext::ApplyColorBlendState 补齐每个颜色附件的 bBlendEnable、RGB/Alpha 分离因子和 ColorWriteMask，实际调用仍在 OpenGL context worker。三个后端的实际像素读回覆盖混合开关及 RGB/RGBA 写入，不能把单独 Shader 编译当作这项状态验证。完整编辑器/场景画面范围仍以 Vulkan 为主，已有其他全局 Shader/Validation 问题未扩大修复。

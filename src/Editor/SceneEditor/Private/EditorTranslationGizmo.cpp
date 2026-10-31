@@ -348,6 +348,7 @@ namespace Editor
         desc.RasterizerState=RHIPipelineStateCache::GetOrCreateRasterizerState(rasterizer);
         desc.DepthStencilState=RHIPipelineStateCache::GetOrCreateDepthStencilState({});
         RHIColorBlendStateDesc blend; blend.Attachments.resize(1); blend.Attachments[0].bBlendEnable=true;
+        blend.Attachments[0].ColorWriteMask=0x7; // Keep scene alpha opaque for GUI composition.
         desc.ColorBlendState=RHIPipelineStateCache::GetOrCreateColorBlendState(blend);
         desc.AttachmentDesc.ColorAttachmentCount=1;
         desc.AttachmentDesc.ColorAttachments[0].Format=sceneColor->GetDesc().Format;

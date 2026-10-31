@@ -46,7 +46,11 @@ flowchart LR
  E --> F[TransientAllocator GarbageCollect]
 ```
 
-AnalyzeUpload 把待上传数据与使用它的 Pass 联系起来；上传数据本身先复制进 Builder arena，避免引用调用者临时数组。立即/延迟上传策略不是 GPU 的同步/异步开关。
+AddUploadBuffer 在构图线程将数据复制进 Builder arena，PendingBufferUpload 只保存图内缓冲、arena 地址、大小和队列；调用者的局部 vector 返回后仍能录制上传。AnalyzeUpload 按队列合并并建立上传 Pass。立即/延迟上传策略不是 GPU 的同步/异步开关。
+
+2026-10-31 分块网格验证发现旧 AddUploadPass 在 lambda 捕获时先 `std::move(uploadInfo)`，下方再遍历原 vector 登记 TransferDest，实际依赖为空。当前捕获改为复制 PendingBufferUpload 描述符：仅复制缓冲指针、arena 地址、大小和队列，不重复复制上传数据。原列表保留到 TransferDest 登记完成后再 clear，维持“消费列表”的语义；否则 Immediate 分支会把已经插入的上传再次加入 m_PendingBufferUploads。描述符复制成本随上传条目数线性增长，不随每项负载大小增长。
+
+只把上传 Pass 插入列表前端不足以保证顺序：拓扑分组取决于资源意向，独立节点顺序不稳定。读取 Pass 还必须声明正确的 RDGBuffer_SRV 类型；原 ShaderParameterTypeInfo<RenderGraphBufferSRV> 误标为 RDGTexture_UAV，现已改回 RDGBuffer_SRV，使 SetupPassInternal 进入缓冲读取分支、生成上传到读取的依赖和 TransferDest→SRV 转换。相同枚举也用于 SetShaderParameters 的 RHI SRV 绑定。完整复现和验证见 [当日故障记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)。
 
 ## 依赖、屏障和生命周期分析
 
