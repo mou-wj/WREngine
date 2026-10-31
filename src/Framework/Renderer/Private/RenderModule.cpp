@@ -19,6 +19,7 @@
 #include "Shape.h"
 #include "GBufferInfo.h"
 #include "Common.h"
+#include "HintRender.h"
 
 #include <algorithm>
 #include <vector>
@@ -78,6 +79,7 @@ namespace Renderer {
         Engine::SceneViewFamily* views)
     {
 
+        const auto sceneSetting = views->Scene->GetSceneSetting();
         RenderCore::RenderGraphBuilder builder;
         auto colorTex = views->RenderTarget->GetRenderTarget();
         auto sceneColorTexture = builder.RegisterExternalTexture("RenderTarget", colorTex);
@@ -127,6 +129,18 @@ namespace Renderer {
         // Append view-local overlays to the same graph after all scene passes.
         // Each extension must declare its texture access in its pass parameters.
         for (const auto& view : views->GetViews()) {
+            // Scene hints belong to Renderer; editor extensions remain above
+            // them and need only Engine/RenderCore interfaces.
+            if (sceneSetting.bDrawGrid) {
+                HintRender::AddGridPass(builder, view,
+                    sceneRenderer->SceneTextures.SceneColor,
+                    sceneRenderer->SceneTextures.SceneDepth);
+            }
+            if (sceneSetting.bDrawLightHints && sceneSetting.LightHintTarget) {
+                HintRender::AddLightPass(builder, view,
+                    sceneRenderer->SceneTextures.SceneColor,
+                    sceneRenderer->SceneTextures.SceneDepth, *sceneSetting.LightHintTarget);
+            }
             for (const auto& extension : view.DrawExtensions) {
                 if (extension.Callback) {
                     extension.Callback(builder, view,

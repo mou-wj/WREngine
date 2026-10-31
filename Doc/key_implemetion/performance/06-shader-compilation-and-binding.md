@@ -90,6 +90,12 @@ manager 由 Device 持有，当前所读分配/绑定/GC 路径未见内部互�
 
 [RHIPipelineStateCache.cpp](../../../src/Framework/RHI/Private/RHIPipelineStateCache.cpp) 对各缓存使用独立 mutex，锁内查询并创建，避免同一缓存并发重复创建，但原生创建可能长时间持锁。缓存只用 size_t hash 作为 key，未见命中后完整描述符碰撞核对；hash 碰撞正确性不能当作已有保证。
 
+### 深度状态的有序组合
+
+2026-10-31 的空场景/网格联调确认了旧 HashDepthStencilState 的确定性碰撞。方向轴请求 `(bDepthTestEnable=false,bDepthWriteEnable=false,DepthCompareOp=Less)`，模型请求 `(true,true,Less)`；Less 的枚举值是 1，其他默认布尔值和 mask 都为 0。旧实现逐字段 XOR，使两个键分别为 `0^0^1=1` 和 `1^1^1=1`。先绘制无光源空场景时，方向轴先占据键 1；之后模型命中该条目，实际 GetDesc 返回关闭测试/写入的状态。模型没有写入深度，后面的天空 Pass 覆盖整个背景，表现为“节点和 draw batch 已存在，但模型不可见”。先创建阴影/模型状态的场景会反向影响方向轴，顺序依赖不能当作正确行为。
+
+当前按声明顺序使用 Core::HashCombine 组合测试、写入、比较操作、depth-bounds、stencil 开关与两个 mask，不新增哈希算法、缓存或同步。每次查找仍为固定 7 个字段的 O(1) 计算，缓存继续拥有各状态对象，上层管线借用它们，ClearAll 和设备关闭路径不变。这修正了已复现的字段抵消，未解决“仅以 hash 判等”的通用限制；其他缓存的完整描述符比较和遗漏字段仍须单独审查。验证覆盖 Vulkan/D3D12/OpenGL 各 32 组测试/写入/比较操作，以及真实编辑器导入模型后的画面，见 [故障记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)。
+
 Compiler 部分诊断输出写相同 test.spv/error.txt，重复编译会覆盖文件；它们不是磁盘 Shader 缓存，也不适合据此审计并行编译的每份产物。
 
 验证入口：MaterialShaderCompilationTest、RHIShaderParameterTest。反射编译通过仍须核查输出图像、资源访问和 Validation；不是所有已注册 GlobalShader 都已具备缺失的生成依赖。

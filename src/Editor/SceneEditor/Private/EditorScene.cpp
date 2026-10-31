@@ -23,15 +23,31 @@ namespace Editor
     void EditorScene::Initialize()
     {
         m_Scene.reset(Engine::GetRenderModuleInstance()->AllocateScene());
+        auto& sceneSetting = m_Scene->GetSceneSetting();
+        sceneSetting.bDrawGrid = true;
+        sceneSetting.bDrawLightHints = true;
         m_SkyAsset = Engine::AssetManager::Get().LoadSync<Engine::SkyLightAsset>(Core::GetProjectDir() + "/resources/pic/DaySkyHDRI046A_1K-TONEMAPPED.jpg");
+        m_Camera.SetTarget({0, 0, 0});
+        m_Camera.SetPosition({2, 2, 2});
+        m_Camera.SetUp({0, 1, 0});
+        m_Scene->FlushPendingUpdates();
+        std::cout << "[Editor] Scene ready: 0 nodes" << std::endl;
+    }
+
+    void EditorScene::CreateDefaultLights()
+    {
+        const auto addLight = [this](const char* name, std::unique_ptr<Engine::LightComponent> light) {
+            auto* component = light.get();
+            m_Objects.push_back({name,std::move(light)});
+            m_Scene->AddLight(component);
+        };
 
         auto directional = std::make_unique<Engine::DirectionalLightComponent>();
-        directional->SetWorldLocation({5, 5, 5});
         directional->SetDirection({-1, -1, -1});
         directional->SetColor({1, 1, 1});
         directional->SetIntensity(1);
         directional->SetCastShadow(true);
-        m_Lights.push_back(std::move(directional));
+        addLight("Directional light",std::move(directional));
 
         auto point = std::make_unique<Engine::PointLightComponent>();
         point->SetWorldLocation({5, 4, 5});
@@ -39,7 +55,7 @@ namespace Editor
         point->SetIntensity(1);
         point->SetAttenuationRadius(10);
         point->SetCastShadow(true);
-        m_Lights.push_back(std::move(point));
+        addLight("Point light",std::move(point));
 
         auto spot = std::make_unique<Engine::SpotLightComponent>();
         spot->SetWorldLocation({3, 2, 0});
@@ -50,19 +66,14 @@ namespace Editor
         spot->SetInnerConeAngle(20);
         spot->SetOuterConeAngle(45);
         spot->SetCastShadow(true);
-        m_Lights.push_back(std::move(spot));
+        addLight("Spot light",std::move(spot));
 
         auto sky = std::make_unique<Engine::SkyLightComponent>();
         sky->SetDiffuseIrradiance(m_SkyAsset->GetDiffuseIrradiance());
         sky->SetSpecularIrradiance(m_SkyAsset->GetSpecularPrefilter());
-        m_Lights.push_back(std::move(sky));
-        for (const auto& light : m_Lights) m_Scene->AddLight(light.get());
+        addLight("Sky light",std::move(sky));
         m_Scene->FlushPendingUpdates();
         m_bSceneDirty = false;
-        m_Camera.SetTarget({0, 0, 0});
-        m_Camera.SetPosition({2, 2, 2});
-        m_Camera.SetUp({0, 1, 0});
-        std::cout << "[Editor] Scene ready: " << m_Objects.size() << " meshes" << std::endl;
     }
 
     void EditorScene::Shutdown()
@@ -70,11 +81,12 @@ namespace Editor
         ClearTransformTargets();
         if (!m_Scene) return;
         m_Viewport = nullptr; // The application has already released its window submissions.
-        for (const auto& object : m_Objects) m_Scene->RemovePrimitive(object.Component.get());
-        for (const auto& light : m_Lights) m_Scene->RemoveLight(light.get());
+        if (m_bSceneDirty) m_Scene->FlushPendingUpdates();
+        for (const auto& object : m_Objects)
+            if (auto* light = dynamic_cast<Engine::LightComponent*>(object.Component.get())) m_Scene->RemoveLight(light);
+            else if (auto* mesh = dynamic_cast<Engine::StaticMeshComponent*>(object.Component.get())) m_Scene->RemovePrimitive(mesh);
         m_Scene->FlushPendingUpdates();
         m_Objects.clear();
-        m_Lights.clear();
         m_SkyAsset.reset();
         m_Scene.reset();
         m_SelectedIndex = -1;
@@ -86,11 +98,13 @@ namespace Editor
         WaitForLastDraw();
         Object object;
         object.Name = asset->GetName() + " #" + std::to_string(m_NextObjectId++);
-        object.Component = std::make_unique<Engine::StaticMeshComponent>();
-        object.Component->SetStaticMesh(asset->GetMesh());
+        auto component = std::make_unique<Engine::StaticMeshComponent>();
+        component->SetStaticMesh(asset->GetMesh());
+        auto* mesh = component.get();
+        object.Component = std::move(component);
         // Publish ownership before registering the borrowed component pointer.
         m_Objects.push_back(std::move(object));
-        m_Scene->AddPrimitive(m_Objects.back().Component.get());
+        m_Scene->AddPrimitive(mesh);
         m_bSceneDirty = true;
         Select(static_cast<int>(m_Objects.size()) - 1);
         std::cout << "[Editor] Added " << m_Objects.back().Name << std::endl;
@@ -100,7 +114,10 @@ namespace Editor
     {
         ClearTransformTargets();
         WaitForLastDraw();
-        for (const auto& object : m_Objects) m_Scene->RemovePrimitive(object.Component.get());
+        if (m_bSceneDirty) m_Scene->FlushPendingUpdates();
+        for (const auto& object : m_Objects)
+            if (auto* light = dynamic_cast<Engine::LightComponent*>(object.Component.get())) m_Scene->RemoveLight(light);
+            else if (auto* mesh = dynamic_cast<Engine::StaticMeshComponent*>(object.Component.get())) m_Scene->RemovePrimitive(mesh);
         m_Scene->FlushPendingUpdates(); // Consume borrowed pointers before their owners go away.
         m_Objects.clear(); m_SelectedIndex = -1; m_NextObjectId = 1; m_bSceneDirty = false;
         m_Camera.SetTarget({0,0,0}); m_Distance = 3.4641f;
@@ -135,7 +152,8 @@ namespace Editor
         uint32_t materialSlot = 0;
         for (size_t index=0; index<m_Objects.size(); ++index)
         {
-            auto* component = m_Objects[index].Component.get();
+            auto* component = dynamic_cast<Engine::StaticMeshComponent*>(m_Objects[index].Component.get());
+            if (!component) continue;
             auto* mesh = component->GetStaticMesh();
             if (!mesh || !mesh->GetLODCount()) continue;
             const auto& lod = mesh->GetLODResource(0); // Matches StaticMeshDrawBuild's current LOD selection.
@@ -181,7 +199,7 @@ namespace Editor
         }
         if (objectIndex < 0) return false;
         WaitForLastDraw();
-        auto* component = m_Objects[objectIndex].Component.get();
+        auto* component = static_cast<Engine::StaticMeshComponent*>(m_Objects[objectIndex].Component.get());
         component->SetMaterial(materialSlot, material->GetMaterial());
         Select(objectIndex);
         m_Scene->NotifyComponentChanged(component);
@@ -191,7 +209,7 @@ namespace Editor
 
     void EditorScene::DuplicateSelected()
     {
-        auto* selected = GetSelected();
+        auto* selected = GetSelectedMesh();
         if (!selected) return;
         auto asset = selected->GetStaticMesh()->GetAsset();
         const auto location = selected->GetLocalLocation() + Core::Float3{1.5f, 0, 0};
@@ -205,11 +223,11 @@ namespace Editor
         {
             auto* source = selected->GetMaterial(slot);
             if (!source) continue;
-            GetSelected()->SetMaterial(slot, source->GetAsset()->GetMaterial());
+            GetSelectedMesh()->SetMaterial(slot, source->GetAsset()->GetMaterial());
             if (const auto* instance = selected->GetMaterialInstance(slot))
                 for (const auto& definition : source->GetParameterDefinitions())
                     if (instance->HasOverride(definition.Name, definition.Type))
-                        GetSelected()->SetMaterialParameter(slot, definition.Name,
+                        GetSelectedMesh()->SetMaterialParameter(slot, definition.Name,
                             instance->GetParameter(definition.Name, definition.Type)->GetValueVariant());
         }
         NotifySelectedChanged();
@@ -221,19 +239,22 @@ namespace Editor
         if (!selected) return;
         ClearTransformTargets();
         WaitForLastDraw();
-        m_Scene->RemovePrimitive(selected);
+        if (m_bSceneDirty) m_Scene->FlushPendingUpdates();
+        if (auto* light = dynamic_cast<Engine::LightComponent*>(selected)) m_Scene->RemoveLight(light);
+        else if (auto* mesh = dynamic_cast<Engine::StaticMeshComponent*>(selected)) m_Scene->RemovePrimitive(mesh);
         // Pending removal borrows the component: consume it before destroying its owner.
         m_Scene->FlushPendingUpdates();
         m_bSceneDirty = false;
         m_Objects.erase(m_Objects.begin() + m_SelectedIndex);
         Select(m_Objects.empty() ? -1 : std::min(m_SelectedIndex, static_cast<int>(m_Objects.size()) - 1));
-        std::cout << "[Editor] Removed mesh; count=" << m_Objects.size() << std::endl;
+        std::cout << "[Editor] Removed node; count=" << m_Objects.size() << std::endl;
     }
     void EditorScene::Select(int index)
     {
         const int selectedIndex = index >= 0 && index < static_cast<int>(m_Objects.size()) ? index : -1;
         if (selectedIndex != m_SelectedIndex) ClearTransformTargets();
         m_SelectedIndex = selectedIndex;
+        if (m_Scene) m_Scene->GetSceneSetting().LightHintTarget = dynamic_cast<Engine::LightComponent*>(GetSelected());
     }
     void EditorScene::SetTranslationTarget(Engine::SceneComponent* component)
     {
@@ -268,10 +289,12 @@ namespace Editor
     { m_TranslationGizmo.EndDrag(); m_RotationGizmo.EndDrag(); m_ScaleGizmo.EndDrag(); ClearTransformHover(); }
     bool EditorScene::IsTransformDragging() const
     { return m_TranslationGizmo.IsDragging() || m_RotationGizmo.IsDragging() || m_ScaleGizmo.IsDragging(); }
-    Engine::StaticMeshComponent* EditorScene::GetSelected() const
+    Engine::SceneComponent* EditorScene::GetSelected() const
     {
         return m_SelectedIndex >= 0 ? m_Objects[m_SelectedIndex].Component.get() : nullptr;
     }
+    Engine::StaticMeshComponent* EditorScene::GetSelectedMesh() const
+    { return dynamic_cast<Engine::StaticMeshComponent*>(GetSelected()); }
     void EditorScene::NotifySelectedChanged()
     {
         if (auto* component = GetSelected())
@@ -284,7 +307,8 @@ namespace Editor
     void EditorScene::NotifyMaterialsChanged()
     {
         WaitForLastDraw();
-        for (const auto& object : m_Objects) m_Scene->NotifyComponentChanged(object.Component.get());
+        for (const auto& object : m_Objects)
+            if (dynamic_cast<Engine::StaticMeshComponent*>(object.Component.get())) m_Scene->NotifyComponentChanged(object.Component.get());
         m_bSceneDirty = true;
     }
     void EditorScene::FocusSelected()

@@ -653,8 +653,10 @@ namespace Renderer {
         uploadDescSplit.Buffer = splitBufferUpload;
         uploadDescSplit.Data = (void*)view.SplitDepths.data();
         uploadDescSplit.Size = view.SplitDepths.size() * sizeof(float);
-		Core::Float4 test = directionalLightShadowViewInfos[0].ViewProj * Core::Float4(3, 3, 3, 1).Data;
-        graphBuilder.AddUploadBuffers({ uploadDesc ,uploadDescSplit }, RenderCore::RenderGraphBuilder::EUploadPolicy::Immediate);
+        if (!directionalLightShadowViewInfos.empty())
+            graphBuilder.AddUploadBuffers({ uploadDesc,uploadDescSplit }, RenderCore::RenderGraphBuilder::EUploadPolicy::Immediate);
+        else
+            graphBuilder.AddUploadBuffers({ uploadDescSplit }, RenderCore::RenderGraphBuilder::EUploadPolicy::Immediate);
         
     }
     void SceneRenderer::AddClearShadowMapPass(RenderCore::RenderGraphBuilder& graphBuilder, std::vector<ShadowRenderView>& shadowRenderViews)

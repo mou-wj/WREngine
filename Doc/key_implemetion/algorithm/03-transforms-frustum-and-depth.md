@@ -191,6 +191,58 @@ candidate[axis] = copysign(magnitude, startScale[axis])
 
 2026-10-30 的 C++ 检查覆盖 24 组相机方向、组件旋转及正负尺度组合，验证向外增大绝对值、向内缩小、垂直方向不变、回到按下位置和重复事件幂等。Vulkan 实际窗口输入及 GPU 读回验证了三轴方向、动态端点/命中和中点连线；完整 Editor UI 与 Launcher 正常关闭范围见 [验证记录](../../dev/bugfix/故障与修复记录-2026-10-30.md)。
 
+## XZ 地面网格与光源提示几何
+
+源码：[HintRender.cpp](../../../src/Framework/Renderer/Private/HintRender.cpp)、[接口](../../../src/Framework/Renderer/PublicHeader/HintRender.h)、[Shader](../../../shaders/HintRender.sf)。输入为本帧 SceneView、颜色/深度 RDG 附件和可选光源组件；输出均为线列表 Pass。一世界单位按一米解释，深度测试开启、深度写入关闭。以下为当前可见区域几何方案；此前全屏求交版本的实现与问题保留在 [历史修复记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)。
+
+### 可见地面交面与 XZ AABB
+
+提示的启用入口是 SceneInterface 保存的 SceneSetting；Renderer::BeginRender 在场景主体之后、视图扩展之前按设置添加网格和目标光源 Pass，Editor 不直接调用 HintRender。设置、借用目标及参数快照的线程和生命周期约束见 [场景提交](../performance/08-ui-rendering-and-window-lifetime.md)。下述几何算法不因调用入口调整而改变。
+
+网格平面是 XZ，即 Y=0。相机到平面的垂直距离 h=abs(CameraWorldPos.Y)，不是到世界原点的距离。GetGridSpacing 先算 desired=clamp(0.1*h,0.1,10)，再从 S={0.1,0.2,0.5,1,2,5,10} 取不小于 desired 的最小值作为间距 s。相机在平面下方使用同样分级；它决定整块基础网格的世界尺度，当前没有沿视线逐区间改变几何细分密度。
+
+为避免远离原点后的矩阵精度损失，CPU 从相机 X/Z 移除 floor(C/10)*10 的整数周期，Y 不变，并用原 ViewMatrix 的旋转行及相对相机位置重建 Vrel[row,3]=-dot(V[row].xyz,Crel)。计算 VP=Proj*Vrel 及其逆矩阵。S 中每个间距都整除 10 米，故此平移不改变网格相位；场景和其他 Pass 的矩阵未改变。后续 bounds 和 Shader 中的 WorldPosition 实际是此相对世界坐标，不是绝对大坐标。
+
+`GetGroundBounds` 将 NDC 八角 `(±1,±1,z,1)` 乘逆 VP 并除 w，其中近 z=0（ZO）或 -1（NO）、远 z=1。拒绝非有限结果及 abs(w)<1e-7。对视锥的近面四边、远面四边和连接近远面的四边逐一检查：端点 a/b 的 Y 异号时，交点为 `p=a+(b-a)*[-a.y/(b.y-a.y)]`；abs(Y)<=1e-5 的角点也加入，并将结果 Y 设零。
+
+视锥是凸体，因此平面截面的极点位于这些边上；对所有交点取 min/max X/Z 就能包住可见地面。截面可能为三角形、四边形或更多顶点，跨地平线或带滚转时不能只取四条角点射线的交点，也不能假定始终恰好存在最近两个点和最远两个点。没有交点或 X/Z 范围退化时不添加网格 Pass。该方法同时适用于有限远面的透视和正交投影；没有实现无限远投影的专用处理。
+
+对每个 X/Z 分量，以 s 向外取整并各加一格边距：
+
+```text
+first = floor(bounds.Min/s)-1
+last  = ceil(bounds.Max/s)+1
+count = last-first+1
+GridBounds = (firstX*s, firstZ*s, (countX-1)*s, (countZ-1)*s)
+LineCounts = (countX, countZ, 0)
+```
+
+它是实际交面 AABB 的扩展，不是固定倍率的相机周围方块。边界始终在当前可见截面之外；平移时按世界网格取整，不让线条随相机漂移。整个区域仍服从场景近远裁剪，远裁剪以外不会生成背景深度假象；所谓延伸效果来自覆盖可见地面及远处密线淡出，不是数学上绘制到无穷远。
+
+### 单位网格展开、投影密度和代价
+
+MainGridVS 保留固定 1×1 单位四角 `(0,0)、(1,0)、(1,1)、(0,1)`，不申请逐帧 VBO/IB。CPU 只提供区域、间距和细分数量，Draw 的 vertexId/2 选择线段，vertexId&1 选择端点。先生成 countX 条沿 Z 的线，单位坐标为 `(i/(countX-1),0/1)`；再生成 countZ 条沿 X 的线，单位坐标为 `(0/1,j/(countZ-1))`。每条共享网格边只提交一次，不展开每个小四边形的重复边。
+
+映射的数学意义是 `worldXZ=GridBounds.xy+uv*GridBounds.zw`。源码先算整数格坐标 `round(GridBounds.xy/s)+round(uv*GridBounds.zw/s)` 再乘 s，避免先加两个较大且相反的浮点位移造成原点附近线条抖动。顶点输出 `VP*(x,0,z,1)`，硬件完成裁剪和深度插值，PS 不写 SV_Depth。每 10 米为较亮主线，其他线使用较暗颜色；都是原生 LineList 的细线，未实现自定义宽线抗锯齿。
+
+MainGridPS 用当前点 p、在 XZ 上垂直该线移动 s 的点 a、沿线移动 s 的点 d，投影并除 w，乘 `(viewportWidth,viewportHeight)/2` 得像素坐标差 A/D。相邻平行线的局部垂直屏幕间隔估计为 `spacing=abs(A.x*D.y-A.y*D.x)/max(length(D),1e-5)`，透明度乘 `saturate((spacing-0.65)/1.85)`；主线用 10 米作为此估计步长。用局部垂直间隔而不是到相机的距离处理掠射角，过密线在地平线附近淡出；它是有限差分估计，跨投影 w=0 的样本使用稳定分母，不等同于精确的屏幕空间距离场。
+
+CPU 反投影、求交、参数分配及 Draw 次数为常数规模，VS 工作量为 `2(countX+countZ)`，PS 工作量取决于线条实际覆盖及过绘制。细分由 CPU 确定数量、VS 展开，没有 HS/DS 硬件细分阶段，没有地面缓冲池或持久化网格。超过 uint32 Draw 顶点数时明确报错；远裁剪非常大且基础间距很小时仍会生成许多不可见/淡出的线，未作性能基准。高度档位离散切换、极远线淡出、零高度侧视平面退化、相机自身大坐标精度限制均保留。
+
+### 光源提示
+
+点光球心为 GetWorldLocation，半径为 GetAttenuationRadius。在 XY、XZ、YZ 三平面各采样 64 段大圆，P(a)=O+r*(u*cos(a)+v*sin(a))，颜色固定蓝色。这是以三个大圆表达球形范围，未做带更多经纬线的球面细分；半径不额外乘节点缩放。
+
+方向/聚光先检查 Direction 有限且非零并归一化为 d，再选与 d 不近平行的参考轴，构造 u=normalize(cross(d,reference))、v=cross(d,u)。聚光沿方向的长度 L 使用衰减范围，底圆中心 C=O+L*d、半径 r=L*tan(outerAngle)；底圆 64 段，均匀采 16 个底圆点与 O 相连构成母线，中心射线连接 O/C。外角存储为弧度，面板读出转度，setter 再转回弧度；内角限制为 [0,外角]，外角为 [1,89] 度。该示意沿用当前范围作为锥的轴向长度，不额外绘制衰减球与圆锥的交线，也不显示内锥。
+
+平行光无有限衰减范围，使用从 O 沿 d 长 1.5 米的箭杆，末端均匀八个方向生成箭头线：end → end-0.3*d+0.15*(u*cos(a)+v*sin(a))，a=2π*i/8。共九段，避免只有平面内两根箭翼时侧看接近不可辨。天空光没有局部范围，不生成范围 Pass。非有限位置、方向、半径或退化外角不生成非法几何。提示大小使用世界单位，不保证极近、极远视角下保持固定像素大小。
+
+### 光源方向与局部 Euler 的对应
+
+[LightComponent.cpp](../../../src/Framework/Engine/Private/LightComponent.cpp) 为方向/聚光复用 SceneComponent 的世界 +X 前向。组件变换变化时 OnTransformChanged 通过 GetForwardVector 刷新原 direction 缓存，因此数值旋转和既有旋转圈输出会同时改变代理与范围图形。构造时将原默认 -Y 方向转为对应 Euler，保留默认照射方向。
+
+SetDirection 的输入是世界方向 d；存在父节点时先用父世界矩阵的逆把向量变换为局部方向，再归一化。Core::MakeRotationMatrix=Rz(z)*Ry(y)*Rx(x)，其 +X 列为 (cos(z)cos(y),sin(z)cos(y),-sin(y))，因此可选择 x=0、y=-asin(clamp(dLocal.z,-1,1))、z=atan2(dLocal.y,dLocal.x)，转为度后调用 SetLocalRotation。单个方向向量无法决定绕前向轴的滚转，直接编辑 Direction 会按此约定将 x 置零；旋转工具本身仍保存完整 Euler。零/非有限输入和奇异父变换产生的无效局部向量明确报错，未改写通用 SceneComponent 的父变换接口。光源没有缩放编辑，常规局部尺度保持 1；通过脚本施加负尺度/剪切父变换仍遵循现有 GetForwardVector 的完整世界矩阵语义。
+
 ## 局部旋转编辑轴：圆环、连续角度与旋转扇形
 
 新增实现：[EditorRotationGizmo.cpp](../../../src/Editor/SceneEditor/Private/EditorRotationGizmo.cpp)。三个颜色圆环的法线分别为上述 B 的 X/Y/Z 列，参考半径使用 `WorldLength(...,75)`；每环 64 段。对轴 i，选择循环基 `u=B[(i+1)%3]`、`v=B[(i+2)%3]`，因 `u×v=B[i]`，正角方向与所选局部轴的右手方向一致：

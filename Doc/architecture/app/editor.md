@@ -14,7 +14,7 @@
 | [AssetEditor / EditorAssetPanel](../../../src/Editor/AssetEditor/PublicHeader/EditorAssetPanel.h) | 文件系统树、当前目录资源网格、导航/筛选、资产加载与材质/纹理选择 |
 | [MaterialEditor / EditorMaterialPanel](../../../src/Editor/MaterialEditor/PublicHeader/EditorMaterialPanel.h) | 按需打开的浮动材质编辑窗口，保留材质库/属性页 |
 | [MaterialEditor / MaterialLibrary](../../../src/Editor/MaterialEditor/PublicHeader/MaterialLibrary.h) | 项目材质文件的元数据扫描、新建、复制与依赖文件导入，不持有运行时资产 |
-| [NodeEditor / EditorNodePanel](../../../src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h) | 右侧节点属性，借用当前选择编辑局部 TRS，显示网格与材质槽信息 |
+| [NodeEditor / EditorNodePanel](../../../src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h) | 借用当前 SceneComponent；网格编辑局部 TRS/材质槽信息，光源编辑位置和实际光照属性 |
 
 ## 依赖和模块协作
 
@@ -43,6 +43,18 @@ MaterialEditor 不再引用场景模块或资产面板类型。公共 MaterialEd
 
 五个模块均通过既有 ModuleManager 注册并提供启动/关闭状态。功能模块不全局持有窗口、场景或面板，EditorApplication 显式拥有其实例；先销毁窗口、面板和场景，再关闭功能模块。模块实例存在，不代表应该为它创建新的全局业务单例。
 
+### 光源节点与场景提示绘制
+
+EditorScene::Object 的 Component 统一为 unique_ptr<SceneComponent>，网格和光源共用同一份节点列表、选择、聚焦和删除流程。GetSelected 返回通用组件；材质赋值、材质实例和网格复制通过 GetSelectedMesh 检查目标类型。新建/打开工程时保留原四类默认光源配置，作为 Directional light、Point light、Spot light、Sky light 节点显示；未打开工程时无节点，关闭工程会移除全部节点及工具借用。场景序列化仍未实现，重开工程会重新创建默认光源。
+
+光源变换按实际语义显示：天空光没有变换区或编辑轴按钮；平行光只有 Rotation/Rotate；点光只有 Position/Move；聚光同时提供 Position/Move 与 Rotation/Rotate。光源不显示 Scale。方向/聚光的 Direction 与组件 +X 前向统一，直接改方向会更新局部 Euler，旋转输入或既有旋转圈拖动都会更新实际照射方向和代理；平行光的默认示意位置为世界原点，不再以 (5,5,5) 作为可编辑位置。衰减范围独立于缩放，点/聚光提供范围，聚光提供以度显示的内外锥角。非天空光可编辑颜色、强度和投影开关。
+
+天空光沿用工程默认环境资产，没有新增环境贴图选择器；现有 IBL 只消费纹理，颜色/强度控件明确禁用并提示尚不支持。当前注册即启用，Renderer::Scene 在 AddLight 时约束每场景最多一个天空光，包含待处理队列；再次注册同一对象幂等，第二个对象明确报错。更换时先移除当前天空光，再注册新对象，没有另加启用系统。光源复制暂不提供。
+
+SceneEditor 通过 [SceneInterface::GetSceneSetting](../../../src/Framework/Engine/PublicHeader/SceneInterface.h) 开启 bDrawGrid/bDrawLightHints，并在 Select 时把选中光源写入借用的 LightHintTarget，选中网格或清除选择则置空。Renderer::RenderModule::BeginRender 在构图时快照该设置，在场景主体之后、所有 SceneViewDrawExtension 之前调用内部 HintRender。SceneEditor 的扩展只绘制变换工具及右上方向轴，不包含或链接 Renderer，CMake 和 apps.json 中均无直接依赖边；应用仍装配 Renderer 作为 RenderInterface 的运行时实现。
+
+网格以视锥与地面交面的 XZ AABB 为范围，将固定单位网格映射到该区域，按相机高度确定 0.1～10 米细分间距；真实线段覆盖可见地面并在投影过密处淡出，仍遵循远裁剪。当前由 CPU 确定细分数量、VS 展开，不使用硬件细分。点光为蓝色线框球，聚光为外锥底圆、16 条母线及沿方向的距离射线，平行光箭头含箭杆及八条头部线；天空光没有有限范围。几何、深度依赖及相机高度分级规则见 [算法](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md) 和 [提交与生命周期](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。Renderer 不依赖 Editor，也不管理节点选择或窗口。
+
 Editor 不改变 Asset 的资源所有权：组件引用 StaticMeshAsset/MaterialAsset，MaterialInstance 仅在真正编辑网格参数时按槽位创建，属于该组件。资产文件通过既有 AssetManager 加载；面板只保留当前选中的材质和纹理，不再建立一套资产缓存。
 
 ## 界面和操作
@@ -57,7 +69,7 @@ Editor 不改变 Asset 的资源所有权：组件引用 StaticMeshAsset/Materia
 
 运行时工程路径由 EditorApplication 保存，Core::GetProjectDir 仍表示引擎源码/内置资源根，不为项目切换改写全局路径或环境变量。关闭工程会清空场景节点/选择、资源树/过滤/历史、材质窗口与导入/投放的待执行操作，并释放资产管理器的驻留引用；仍被内置预览环境持有的资产继续有效。
 
-工程描述目前只保存内容目录信息，不保存场景节点布局；重新打开会恢复资源浏览，场景仍为空，场景保存/恢复尚未实现。源文件保留在原目录，Import 或桌面拖入 Assets 会复制到当前内容目录的新包中，重名用后缀避让。支持嵌入资源的 GLB、带本地依赖的 glTF、原生材质 JSON 和 PNG/JPG/BMP/TGA；glTF 的外部 buffer/image 与材质贴图一起复制并改为包内相对路径。外部依赖 GLB 明确拒绝，需导出为嵌入 GLB 或使用 glTF。
+工程描述目前只保存内容目录信息，不保存场景节点布局；重新打开会恢复资源浏览和四个默认光源，不恢复模型节点，场景保存/恢复尚未实现。源文件保留在原目录，Import 或桌面拖入 Assets 会复制到当前内容目录的新包中，重名用后缀避让。支持嵌入资源的 GLB、带本地依赖的 glTF、原生材质 JSON 和 PNG/JPG/BMP/TGA；glTF 的外部 buffer/image 与材质贴图一起复制并改为包内相对路径。外部依赖 GLB 明确拒绝，需导出为嵌入 GLB 或使用 glTF。
 
 UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行；网格投放同样保存路径并延迟到下一帧创建，避免销毁本帧已经生成的纹理/资源引用。详细等待与所有权见 [UI 生命周期](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
@@ -65,7 +77,7 @@ UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行
 
 两条竖向分隔条控制 Scene/Viewport 和 Viewport/Node Properties 的宽度，横向分隔条控制上方区域与 Assets 的高度。悬停/按住时显示对应的左右或上下系统拉伸光标，左键拖动实时调整相邻区域，松开或失焦结束。菜单和 ribbon 高度固定。常规客户区下最小宽度为 Scene 160、Viewport 240、Node Properties 260；最小高度为上方 220、Assets 140 像素。客户区小于这些总尺寸时按比例缩小下限，避免负尺寸；窗口改变大小仍保留用户选择的比例。目前比例仅在本次运行中保存，不持久化到配置文件。
 
-资产区采用左侧文件系统树、右侧资源网格，二者之间可拖动调整宽度。顶部为 Import、前进/后退、上级、刷新和路径栏，底部保留 Open / Add mesh、Assign material 与状态。初始没有打开的工程、模型节点或材质弹窗；视口保留内置天空和预览灯光作为编辑背景，它们不显示为项目资源或节点。仍共用一个 ImGui/RHI 绘制环境，没有新增原生子窗口。
+资产区采用左侧文件系统树、右侧资源网格，二者之间可拖动调整宽度。顶部为 Import、前进/后退、上级、刷新和路径栏，底部保留 Open / Add mesh、Assign material 与状态。初始没有打开的工程、场景节点或材质弹窗；视口显示清空背景、地面网格和方向轴。打开工程后默认光源作为实际场景节点显示，天空由其中的 Sky light 提供。仍共用一个 ImGui/RHI 绘制环境，没有新增原生子窗口。
 
 - Scene：列表选择、复制与移除网格、聚焦所选对象。右侧 Node Properties 只在存在选中组件时显示，编辑其局部平移/旋转/缩放；空工程、未选中组件或移除最后一个节点后不生成属性窗口，也不命中该面板。折叠会将原栏宽和分隔条空间交给视口；重新选中时恢复已保存的右栏比例。复制保留材质资产和稀疏参数覆盖，但创建独立组件实例。
 - Ribbon → View：Top / Bottom / Left / Right / Front / Back 六向切换，按钮第二行注明相机所在轴侧，当前固定方向高亮。Orbit 恢复默认斜向环绕角度，Focus selected 聚焦所选对象。切换保留当前焦点和距离，沿用既有透视投影；这里的六向视图不表示已实现正交编辑管线。
@@ -121,6 +133,6 @@ MaterialLibrary 只保存路径、名字、分类、ShadingModel、BaseColor 等
 
 [apps.json](../../../src/Lancher/apps.json) 是实际装配源，CMake configure 时 COPYONLY 到 BINARY_DIR。默认两应用均为 Vulkan，图形后端由所选条目的模块/依赖决定，不提供未经接入的 `-rhi` 参数。配置校验、依赖排序和 DLL 链接边界见 [启动实现](../../key_implemetion/performance/09-module-build-and-startup.md)。
 
-Editor 条目显式列出四个功能模块：SceneEditor 在 Engine/Renderer 之后启动，AssetEditor、MaterialEditor、NodeEditor 在 Engine 之后启动，Editor 最后组装。Application 条目不加载这些功能模块。Langcher 仍只通过 add_dependencies 建立应用构建前置，不把具体应用 DLL 静态导入到 EXE。
+Editor 条目显式列出四个功能模块：SceneEditor、AssetEditor、MaterialEditor、NodeEditor 的显式启动依赖均为 Engine，Editor 最后组装。Editor 经 SlateRHIRenderer 的现有启动依赖保证 Renderer 在创建场景前已启动、场景关闭后才关闭；这不是 SceneEditor 对 Renderer 的直接代码依赖。Application 条目不加载这些功能模块。Langcher 仍只通过 add_dependencies 建立应用构建前置，不把具体应用 DLL 静态导入到 EXE。
 
 本轮验证及限制见 [2026-10-26 故障记录](../../dev/bugfix/故障与修复记录-2026-10-26.md)，界面实现存在不等于完成了全部鼠标、文本、DPI 交互验证。

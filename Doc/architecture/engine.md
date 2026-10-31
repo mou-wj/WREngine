@@ -297,6 +297,12 @@ public:
 
 从设计上看，它起到了“场景管理协议”的作用，属于引擎模块的中间枢纽。
 
+### SceneSetting 场景提示设置
+
+[SceneInterface.h](../../src/Framework/Engine/PublicHeader/SceneInterface.h) 同时定义 SceneSetting，并由每个 SceneInterface 实例按值保存，通过 GetSceneSetting 的可变/const 引用访问。bDrawGrid 和 bDrawLightHints 默认均为 false，普通应用不会自动出现编辑提示。LightHintTarget 是可空、非拥有的 LightComponent 引用；开启光源提示且目标非空才绘制该目标，没有“空目标表示全部光源”的隐式语义。
+
+上层只设置 Engine 数据；Renderer::BeginRender 同步读取一份快照并添加 HintRender Pass，位于场景主体之后、视图扩展之前。SceneEditor 不再直接调用 Renderer，也不需要链接其 DLL。设置与 BeginRender 必须在原场景控制线程串行，不能把可变引用视为跨线程同步接口。Renderer::Scene::RemoveLight 在移除时清空匹配的目标，调用方仍须按现有约定先 Remove/Flush 再销毁组件。GPU 录制只访问已复制的绘制参数，不持有该设置或光源指针。调用时序和实际验证见 [UI 与场景生命周期](../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
+
 ---
 
 ## 6. `SceneObject`：场景对象封装层
@@ -458,6 +464,12 @@ DefaultWhite 显式使用金属度 0.8、粗糙度 0.2，保留重构前实际�
 7. 资源管理和场景接口为引擎的各类功能提供统一扩展入口。
 
 因此，当前 `Engine` 模块不是简单的“单一逻辑类”，而是一个以分层对象体系和模块化生命周期为核心的中间层架构。
+
+## 光源方向与组件旋转
+
+[LightComponent](../../src/Framework/Engine/PublicHeader/LightComponent.h) 中的 DirectionalLightComponent 和 SpotLightComponent 使用 SceneComponent 的 +X 前向表示照射方向。SetDirection 接受非零有限世界方向，转换为局部 Euler；OnTransformChanged 则刷新方向缓存，继续由原 MarkRenderStateDirty → SceneInterface::NotifyComponentChanged 更新代理。既有 GetDirection/SetDirection 接口保留，不再维护与组件旋转互不相关的两套朝向。父变换、Euler 推导和滚转约定见 [光源与网格算法](../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)。
+
+SkyLightComponent 继续继承 SceneComponent 以复用场景归属和注册接口，变换对环境光没有作用，编辑器不提供其变换编辑。当前注册即启用，同场景天空光唯一性由 Renderer::Scene 的注册入口约束，不增加 Engine 全局天空光管理器；队列、移除和替换语义见 [场景生命周期](../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
 ## 相关核心实现细节
 

@@ -16,7 +16,7 @@
         "Engine": ["RHIVulkan"],
         "Renderer": ["Engine"],
         "SlateRHIRenderer": ["Renderer"],
-        "SceneEditor": ["Engine", "Renderer"],
+        "SceneEditor": ["Engine"],
         "AssetEditor": ["Engine"],
         "MaterialEditor": ["Engine"],
         "NodeEditor": ["Engine"],

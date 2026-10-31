@@ -100,7 +100,7 @@ UpdateLayout 只在本帧视口绘制前执行：
 
 Project 的 New/Open 复用 Directory 模式的 ImFileDialogWidget。菜单与确认回调只保存 ProjectAction 和目录值；Cancel 不提交动作。实际调用链为 PollEvents → 消费待执行工程动作 → 消费待投放网格路径 → ImMainWindow::Draw / NewFrame。打开前先检查描述及 Content，非法工程不先清空原工作区。工程元数据只记录版本/名字/Content，不保存场景，没有新增全局 ProjectManager。
 
-CloseProject 调用 ImMainWindow::WaitForLastDraw，复用 ImSlateRenderer 已保存的窗口 completion marker，覆盖旧 GUI 采样及 Present。此时上一帧已完成，本帧尚未生成 ImDrawData，才清空材质/资产面板的选择与待处理文件，再 ClearObjects：等待视口 Tracker 的实际访问值、RemovePrimitive、Flush 消费借用组件指针、销毁组件及重置选择/相机；最后 AssetManager::Clear 移除驻留引用。预览灯光/天空仍由 EditorScene 持有。没有新全局等待、额外命令提交、资源保活容器或 RDG 更改。等待仍可能阻塞切换操作；本轮未设计后台工程切换或场景序列化。
+CloseProject 调用 ImMainWindow::WaitForLastDraw，复用 ImSlateRenderer 已保存的窗口 completion marker，覆盖旧 GUI 采样及 Present。此时上一帧已完成，本帧尚未生成 ImDrawData，才清空材质/资产面板的选择与待处理文件，再 ClearObjects：等待视口 Tracker 的实际访问值、按组件类型 RemovePrimitive/RemoveLight、Flush 消费借用组件指针、销毁组件及重置选择/相机；最后 AssetManager::Clear 移除驻留引用。默认光源随场景节点移除，内置天空资产仍由 EditorScene 持有供下次工程打开使用。没有新全局等待、额外命令提交、资源保活容器或 RDG 更改。等待仍可能阻塞切换操作；本轮未设计后台工程切换或场景序列化。
 
 不能在菜单的 Draw 回调内直接清理工程：即使等待上一提交，本帧 CPU DrawList 也可能已经记录了旧纹理指针。路径/动作延后消费解决的是 UI 生命周期问题，不是一套资源自动退休机制。应用公开 CreateProject/OpenProject/CloseProject 供控制层使用，也须在绘制阶段之外调用。
 
@@ -114,7 +114,7 @@ ApplyMaterialAt 在这次选择引起视口尺寸变化之前，用最近显示�
 
 EditorApplication 在 TickFrame 消费工程/网格操作后、Draw/NewFrame 前，根据现有场景选择将 NodePanel 设为 Visible 或 Collapsed，仅状态改变时调用原 UpdateLayout。初始状态为 Collapsed，布局器将右栏和右分隔条宽度归零，视口使用腾出的空间。视口纹理重建沿用上述窗口完成 marker 等待；普通帧不重排、不增加等待，没有为折叠改 RHI 或资源保活策略。选择若在 Scene 面板 Draw 中改变，布局在下一 TickFrame 生效，避免重建本帧已记录引用的纹理。
 
-节点面板本身仍在 Draw 时查询当前选择；无选中组件时在 ImPanelWidget::Draw/ImGui::Begin 前返回，HitTest 同样拒绝命中，避免当帧删除后继续生成旧属性窗口。局部变换通过现有组件接口修改，场景通知负责具体 Fence 与代理更新；该面板没有跨帧持有裸组件指针或另存选择状态。用户可见的节点列表为空不代表没有预览灯光，空工程保持背景而无演示模型。实际创建/导入/投放及读回检查范围见 [2026-10-26 记录](../../dev/bugfix/故障与修复记录-2026-10-26.md)，整栏折叠的后续检查见 [2026-10-27 记录](../../dev/bugfix/故障与修复记录-2026-10-27.md)。
+节点面板本身仍在 Draw 时查询当前选择；无选中组件时在 ImPanelWidget::Draw/ImGui::Begin 前返回，HitTest 同样拒绝命中，避免当帧删除后继续生成旧属性窗口。局部变换通过现有组件接口修改，场景通知负责具体 Fence 与代理更新；该面板没有跨帧持有裸组件指针或另存选择状态。当前没有节点时也没有隐藏预览灯光，视口仍绘制背景、网格与方向轴。早期创建/导入/投放及读回检查范围见 [2026-10-26 记录](../../dev/bugfix/故障与修复记录-2026-10-26.md)，整栏折叠见 [2026-10-27 记录](../../dev/bugfix/故障与修复记录-2026-10-27.md)，当前光源节点行为见下文及 [2026-10-31 记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)。
 
 ## 方向示意的 RDG 叠加与视口输入
 
@@ -143,6 +143,26 @@ Shader VS 使用生成的 EditorTranslationVertexParameters 虚拟头，PS 保�
 缩放和旋转的类声明复用既有 [EditorTranslationGizmo.h](../../../src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h)，各自算法位于新增的 EditorScaleGizmo.cpp 和 EditorRotationGizmo.cpp。GizmoDrawing 只负责当前三个工具共用的投影、无缩放旋转基底、屏幕线段和颜色叠加，不拥有组件、窗口或 GPU 资源。工具生成的屏幕三角形 span 在 AddPass 调用内复制为 Builder arena 参数；参数指针 vector 同样由 arena 构造并登记析构，执行闭包仅捕获其指针及其他稳定值，不借用临时 span 或将堆 vector 复制到 Pass 闭包。Execute 等待本帧录制完成后，arena 可按原约定析构这些 CPU 数据；RHI 参数命令自行复制提交数据。此处避免放大既有 Pass 裸指针泄漏的额外 vector 持有，未修改 RenderGraphBuilder 的释放结构。
 
 工具目标由 EditorScene 的具体三个 setter 互斥设置，空指针只关闭对应工具；UI 通过三个查询/设置回调组装。Scale 输入和同名 Scale 按钮使用不同 ID 栈，保留 260px 窄栏内同排行为。缩放最多 48 个屏幕三角形，旋转最多 452 个，每个仍使用一次既有参数上传/Draw；规模有界但有实际 CPU/驱动开销，当前没有新增批处理缓冲或资源管理器。算法及局部坐标/整圈反馈边界见 [变换算法](../algorithm/03-transforms-frustum-and-depth.md)。
+
+## 光源节点、提示 Pass 与空场景
+
+[EditorScene](../../../src/Editor/SceneEditor/Private/EditorScene.cpp) 的 m_Objects 独占网格/光源的 SceneComponent；Renderer::Scene 只借用组件并拥有对应代理。GetSelected 返回基类供位置、聚焦和属性使用，GetSelectedMesh 在材质/复制入口检查实际网格类型。打开工程时 CreateDefaultLights 创建四个默认节点；关闭或切换工程时先清工具目标，等待既有视口完成值，先 Flush 尚未注册的 Add，再按实际类型 RemovePrimitive/RemoveLight，Flush 完成后销毁组件 owner，避免 Add 后立即删除留下悬空指针。未增加 WaitIdle 或跨帧保活容器。
+
+属性控件在 UI 线程同步调用原 LightComponent setter，EditorScene::NotifySelectedChanged 沿原完成点同步，并在下一 Draw 前 Flush 更新。Renderer::Scene::NotifyComponentChanged 使用 C++ 实际类型区分 LightComponent/PrimitiveComponent，避免它们未独立声明类型 ID 时继承基类 StaticTypeID 的错误匹配。光源代理在通知时 UpdateFromComponent、标记对应 GPU 数据和阴影更新；仅置 GPU dirty 而不刷新代理会继续上传旧参数。RemoveLight 使用实际旧代理确定脏标志、释放既有阴影分配并移除代理键/索引，然后删除代理。空数组跳过光源数据上传，天空光移除时清空两种 IBL 引用；没有改动 RHI 后端的绑定语义。
+
+[HintRender](../../../src/Framework/Renderer/Private/HintRender.cpp) 在构图时读取组件/相机，复制每条光源线的矩阵、端点和颜色到 Builder arena。参数指针 vector 也由 arena 构造和析构，闭包只捕获参数指针、固定视口和管线，不借用光源组件或临时几何 vector。沿用全局 Shader、PipelineStateCache 和每线一次参数上传/Draw：点光最多 192 Draw、聚光 81 Draw、平行光 9 Draw。网格使用 HintGridParameters 快照：CPU 反投影视锥、检查十二条边与地面的交点、计算外扩 AABB 和细分数量，再用一次 Draw 提交 2(nx+nz) 个顶点。VS 从固定单位网格四角展开真实线段，PS 只估计投影间距并淡出；没有全屏逐像素逆投影、SV_Depth 或动态 VBO/IB。CPU 构图为常数成本，GPU 顶点数随范围/间距增加；过细且很大的 AABB 仍有真实变换、裁剪及线条过绘制成本，未作性能基准。未新增通用批处理器、缓冲池或 HS/DS 硬件细分。现有 RDG Pass 裸指针回收缺口仍不在本次重构范围。
+
+Hint 开关与目标统一保存在每个 [SceneInterface 的 SceneSetting](../../../src/Framework/Engine/PublicHeader/SceneInterface.h) 值对象中。SceneEditor::Initialize 开启网格和光源提示，Select 只回写借用的 LightHintTarget。Renderer::BeginRender 在控制线程复制一份设置，对各视图先按开关调用 HintRender，再执行上层 DrawExtensions，最后仍只调用原有 builder.Execute。光源参数在 AddLightPass 构图时复制，异步命令闭包不读取设置或组件指针；Scene::RemoveLight 在删除入口清空匹配目标，随后沿用 Remove/Flush 再销毁组件的顺序。关闭、删除和清除选择后不保留目标。没有锁、额外 Fence 等待、自动保活或新增管理器；设置变更与构图必须串行，此接口未承诺跨线程修改安全。SceneEditor 的 CMake 和 apps.json 直接 Renderer 依赖均已移除，应用仍加载其运行时实现，由 Editor→SlateRHIRenderer→Renderer 的现有启动顺序保证生命周期。
+
+Scene::AddLight 对天空光在同一 pending-command mutex 范围内扫描现有灯光及待处理 Add/Remove，推导队列执行后的有效天空光；同一对象重复注册不再排队，第二个对象在改变 owner 或入队前抛出 invalid_argument。先 Remove 当前对象再 Add 新对象可在同一 Flush 中替换。复杂度 O(灯光数+待处理命令数)，只发生在天空光注册；没有新增单例、活动光源缓存或全局锁。mutex 保护队列检查及入队，不把它表述为 Flush 注册表和任意场景操作已支持并发调用，继续沿用原场景线程约定。
+
+光源变换走 SceneComponent::MarkTransformDirty → 派生 OnTransformChanged 更新 +X 前向 → 原 MarkRenderStateDirty 通知场景。UI 数值编辑及既有旋转圈共用这条链路，Direction 直接输入通过 SetLocalRotation 回到同一状态，不另建编辑器朝向副本。天空光面板不显示任何变换，平行光不显示位移，点光不显示旋转/缩放，聚光显示位移和旋转；Engine 的继承关系和资源归属未为界面显隐改变。
+
+网格/光源 Pass 将颜色与深度附件都声明 Load_Store。管线深度测试开启、深度值写入关闭；当前 RHI 原生 RenderPass 将深度按 attachment layout 绑定，未表达只读深度附件，因此 RDG 保守声明附件访问，避免状态与实际 RenderPass layout 不符。天空 Pass 结束需 Store 深度，否则后续扩展深度测试会读取未保证保留的内容。阴影上传在没有方向光矩阵时跳过对应零字节复制，并移除无用途的第 0 项调试访问，使真正无光源的场景可以完成绘制。
+
+没有 Primitive 时，DefferedSceneRenderer 只清空颜色/深度、按已有天空贴图绘制背景，再由原扩展入口加入网格/光源提示；没有表面参与着色，不录制材质光照计算。未打开工程时没有光源节点，场景背景为清空色；内置天空资产仍由 EditorScene 持有，打开工程后才由默认 Sky light 使用。关闭工程会移除全部光源，替代此前隐藏预览灯光继续留在场景中的行为。
+
+完整 UI 验证还暴露了深度状态缓存的确定性碰撞：方向轴先创建关闭测试/写入的状态，后续模型复用了它，未写深度而被天空覆盖。修复属于 RHI 的 HashDepthStencilState，具体旧输入、键值与返回状态见 [状态缓存细节](06-shader-compilation-and-binding.md) 和 [当日记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)，没有通过修改 RDG 调度或提示附件依赖绕过此问题。
 
 ## 文件拖入材质库的执行顺序
 

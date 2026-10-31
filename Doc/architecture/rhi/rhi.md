@@ -242,3 +242,4 @@ RHI 不仅提供资源创建能力，还提供了资源转换和临时分配机�
 - [内存与 transient 分配复用](../../key_implemetion/performance/04-memory-and-transient-resources.md)
 - [显式 transition 与 Tracker](../../key_implemetion/performance/03-rdg-execution-and-state.md)
 - [原生 AS、scratch 与 SBT](../../key_implemetion/performance/07-ray-tracing-as-and-sbt.md)
+- [管线状态缓存、深度状态组合与碰撞限制](../../key_implemetion/performance/06-shader-compilation-and-binding.md)

@@ -22,6 +22,14 @@ namespace Engine {
         High = 2
     };
 
+    struct SceneSetting {
+        bool bDrawGrid = false;
+        bool bDrawLightHints = false;
+        // Borrowed light to visualize; nullptr draws no light hint. Remove the
+        // light from its scene before destroying it so this reference is cleared.
+        const LightComponent* LightHintTarget = nullptr;
+    };
+
     /*
     ===============================================================================
         SceneInterface
@@ -31,6 +39,11 @@ namespace Engine {
     class ENGINE_API SceneInterface {
     public:
         virtual ~SceneInterface() = default;
+
+        // Configure before BeginRender on the scene's control thread. Renderer
+        // snapshots these values while building the graph, not on GPU execution.
+        SceneSetting& GetSceneSetting() { return m_SceneSetting; }
+        const SceneSetting& GetSceneSetting() const { return m_SceneSetting; }
 
         // -------------------------------------------------------------------------
         // Component registration; implementations queue pending scene updates.
@@ -44,5 +57,7 @@ namespace Engine {
         // Called externally to process pending global distance field block updates.
         virtual bool UpdateGlobalDistanceFieldIfNeeded() = 0;
 
+    private:
+        SceneSetting m_SceneSetting;
     };
 } // namespace Engine

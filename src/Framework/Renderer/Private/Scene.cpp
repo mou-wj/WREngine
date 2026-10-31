@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 
 using namespace Engine;
 
@@ -275,8 +276,26 @@ namespace Renderer {
         {
             return;
         }
+        std::scoped_lock lock(m_PendingCommandMutex);
         if (m_LightInfos.find(component) != m_LightInfos.end()) {
             return;
+        }
+        if (component->GetLightType() == ELightType::Sky)
+        {
+            // Registration enables a light. Include queued removals/additions so
+            // replacing the sky before Flush is deterministic and never overlaps.
+            const Engine::LightComponent* sky = nullptr;
+            for (const auto& [light, info] : m_LightInfos)
+                if (light->GetLightType() == ELightType::Sky) sky = light;
+            for (const auto& pending : m_PendingCommands)
+            {
+                if (pending.Type == ESceneCommandType::RemoveLight && pending.LightComponent == sky)
+                    sky = nullptr;
+                else if (pending.Type == ESceneCommandType::AddLight && pending.LightComponent->GetLightType() == ELightType::Sky)
+                    sky = pending.LightComponent;
+            }
+            if (sky == component) return;
+            if (sky) throw std::invalid_argument("A scene can only have one enabled sky light; remove the current sky light before adding another");
         }
         component->SetSceneOwner(this);
         auto proxy =
@@ -300,9 +319,6 @@ namespace Renderer {
         command.LightProxy =
             std::move(proxy);
 
-        std::scoped_lock lock(
-            m_PendingCommandMutex);
-
         m_PendingCommands.push_back(
             std::move(command));
     }
@@ -311,6 +327,9 @@ namespace Renderer {
         Engine::LightComponent*
         component)
     {
+        if (GetSceneSetting().LightHintTarget == component) {
+            GetSceneSetting().LightHintTarget = nullptr;
+        }
         if (m_LightInfos.find(component) == m_LightInfos.end()) {
             return;
         }
@@ -428,7 +447,19 @@ namespace Renderer {
                 case ESceneCommandType::
                 RemoveLight:
                 {
-                    markLightDiry(command.LightProxy.get());
+                    // Removal commands borrow the component, not a new proxy.
+                    if (auto it = m_LightInfos.find(command.LightComponent); it != m_LightInfos.end())
+                    {
+                        markLightDiry(it->second->GetProxy());
+                        auto* proxy = it->second->GetProxy();
+                        auto& shadows = m_GPUResourceInfo.ShadowResourceInfo.LightShadowInfos;
+                        if (auto shadow = shadows.find(proxy); shadow != shadows.end())
+                        {
+                            m_ShadowMapAllocator.ReleaseShadow(shadow->second.Allocation);
+                            shadows.erase(shadow);
+                        }
+                        m_LightIndexs.erase(proxy);
+                    }
                     m_LightInfos.erase(
                         command
                         .LightComponent);
@@ -455,9 +486,13 @@ namespace Renderer {
     void Scene::NotifyComponentChanged(SceneComponent* component)
     {
         if (!component) return;
-        if (component->IsA<Engine::LightComponent>())
+        if (auto* light = dynamic_cast<Engine::LightComponent*>(component))
         {
-            auto* light = static_cast<Engine::LightComponent*>(component);
+            if (auto it = m_LightInfos.find(light); it != m_LightInfos.end())
+            {
+                it->second->GetProxy()->UpdateFromComponent();
+                it->second->GetProxy()->bUpdateCastShadow = true;
+            }
             switch (light->GetLightType())
             {
             case ELightType::Directional:
@@ -485,11 +520,10 @@ namespace Renderer {
             }
         }
 
-        if (component->IsA<Engine::PrimitiveComponent>())
+        if (auto* primitive = dynamic_cast<Engine::PrimitiveComponent*>(component))
         {
             // Replacing the keyed proxy at FlushPendingUpdates refreshes its cached
             // transform/bounds; setting the GPU dirty bit alone leaves the old proxy.
-            auto* primitive = static_cast<Engine::PrimitiveComponent*>(component);
             SceneCommand command;
             command.Type = ESceneCommandType::AddPrimitive;
             command.PrimitiveComponent = primitive;
@@ -909,7 +943,7 @@ namespace Renderer {
             desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
             lightRes.DirectionalLightBuffer = std::make_shared<RenderCore::RenderBuffer>(desc);
             lightRes.DirectionalLightBuffer->InitRHIResource();
-            lightRes.DirectionalLightBuffer->UploadData(gpuData.data(), desc.Size);
+            if (!gpuData.empty()) lightRes.DirectionalLightBuffer->UploadData(gpuData.data(), desc.Size);
         }
 
         //------------------------------------------------
@@ -969,7 +1003,7 @@ namespace Renderer {
             desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
             lightRes.PointLightBuffer = std::make_shared<RenderCore::RenderBuffer>(desc);
             lightRes.PointLightBuffer->InitRHIResource();
-            lightRes.PointLightBuffer->UploadData(gpuData.data(), desc.Size);
+            if (!gpuData.empty()) lightRes.PointLightBuffer->UploadData(gpuData.data(), desc.Size);
         }
 
         //------------------------------------------------
@@ -1032,7 +1066,7 @@ namespace Renderer {
             desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
             lightRes.SpotLightBuffer = std::make_shared<RenderCore::RenderBuffer>(desc);
             lightRes.SpotLightBuffer->InitRHIResource();
-            lightRes.SpotLightBuffer->UploadData(gpuData.data(), desc.Size);
+            if (!gpuData.empty()) lightRes.SpotLightBuffer->UploadData(gpuData.data(), desc.Size);
         }
 
         if (EnumHasAnyFlags(
@@ -1042,12 +1076,12 @@ namespace Renderer {
         {
             UpdatePrimitiveGPUResource();
         }
-        lightRes.IBLSpecularTexture = nullptr;
-        lightRes.IBLSpecularTexture = nullptr;
         if (EnumHasAnyFlags(
             dirty,
             ESceneGPUResourceDirty
             ::SkyLight)) {
+            lightRes.IBLSpecularTexture = nullptr;
+            lightRes.IBLDiffuseTexture = nullptr;
             for (auto& pair :
                 m_LightInfos)
             {

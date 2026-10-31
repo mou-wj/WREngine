@@ -96,7 +96,7 @@ namespace Renderer {
         pipelineDesc.AttachmentDesc.ColorAttachmentCount = 1;
         pipelineDesc.AttachmentDesc.ColorAttachments[0].Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
         pipelineDesc.AttachmentDesc.ColorAttachments[0].Actions = ERenderTargetActions::Load_Store;
-        pipelineDesc.AttachmentDesc.DepthActions = ERenderTargetActions::Load_DontCare;
+        pipelineDesc.AttachmentDesc.DepthActions = ERenderTargetActions::Load_Store;
         pipelineDesc.AttachmentDesc.bEnableDepth = true;
         pipelineDesc.AttachmentDesc.DepthStencilFormat = RHI::ERHIFormat::D32_Float;
         auto pipeline = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(pipelineDesc);
@@ -123,7 +123,8 @@ namespace Renderer {
         params->psParam.renderTargetSlots.ColorRenderTargets[0].Action = ERenderTargetActions::Load_Store;
         params->psParam.renderTargetSlots[0].Texture = colorAttachment;
         params->psParam.renderTargetSlots.DepthStencil.Texture = depthAttachment;
-        params->psParam.renderTargetSlots.DepthStencil.DepthAction = ERenderTargetActions::Load_DontCare;
+        // Scene-view extensions may depth-test their geometry after the sky.
+        params->psParam.renderTargetSlots.DepthStencil.DepthAction = ERenderTargetActions::Load_Store;
 
         // -------------------------------------
         // 添加 pass

@@ -1,8 +1,28 @@
 #include "LightComponent.h"
 #include "LightSceneProxy.h"
 #include "RenderResource.h"
+#include "Transform.hpp"
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
 namespace Engine
 {
+    namespace
+    {
+        void SetLightDirection(SceneComponent& component, const Core::Float3& direction)
+        {
+            auto local = direction;
+            if (auto* parent = component.GetAttachParent())
+                local = Core::TransformVector(Core::Inverse(parent->GetComponentTransform()),local);
+            if (!std::isfinite(local.X) || !std::isfinite(local.Y) || !std::isfinite(local.Z) || local.LengthSquared()<1e-8f)
+                throw std::invalid_argument("Light direction must be finite and nonzero with an invertible parent transform");
+            local = Core::Normalize(local);
+            // SceneComponent's forward is +X; Rz*Ry*Rx maps it to
+            // (cos(z)*cos(y), sin(z)*cos(y), -sin(y)). Roll is unconstrained.
+            component.SetLocalRotation({0,Core::RadToDeg(-std::asin(std::clamp(local.Z,-1.0f,1.0f))),
+                Core::RadToDeg(std::atan2(local.Y,local.X))});
+        }
+    }
 
     LightComponent::LightComponent()
     {
@@ -51,6 +71,7 @@ namespace Engine
     DirectionalLightComponent::
         DirectionalLightComponent()
     {
+        SetDirection(_direction);
     }
 
     LightSceneProxy* DirectionalLightComponent::CreateSceneProxy()
@@ -69,9 +90,13 @@ namespace Engine
         SetDirection(
             const Core::Float3& direction)
     {
-        _direction = direction;
+        SetLightDirection(*this,direction);
+    }
 
-        MarkRenderStateDirty();
+    void DirectionalLightComponent::OnTransformChanged()
+    {
+        LightComponent::OnTransformChanged();
+        _direction = GetForwardVector();
     }
 
     const Core::Float3&
@@ -117,6 +142,7 @@ namespace Engine
     SpotLightComponent::
         SpotLightComponent()
     {
+        SetDirection(_direction);
     }
 
     LightSceneProxy* SpotLightComponent::CreateSceneProxy()
@@ -165,9 +191,13 @@ namespace Engine
         SetDirection(
             const Core::Float3& direction)
     {
-        _direction = direction;
+        SetLightDirection(*this,direction);
+    }
 
-        MarkRenderStateDirty();
+    void SpotLightComponent::OnTransformChanged()
+    {
+        LightComponent::OnTransformChanged();
+        _direction = GetForwardVector();
     }
 
     const Core::Float3&

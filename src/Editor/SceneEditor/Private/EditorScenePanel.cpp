@@ -113,9 +113,11 @@ namespace Editor
         m_Objects.SetSelectedIndex(m_Scene.GetSelectedIndex());
         if (ImGui::BeginChild("Objects", {0, 150}, ImGuiChildFlags_Borders)) m_Objects.Draw();
         ImGui::EndChild();
-        ImGui::BeginDisabled(!m_Scene.GetSelected());
+        ImGui::BeginDisabled(!m_Scene.GetSelectedMesh());
         if (ImGui::Button("Duplicate")) m_Scene.DuplicateSelected();
+        ImGui::EndDisabled();
         ImGui::SameLine();
+        ImGui::BeginDisabled(!m_Scene.GetSelected());
         if (ImGui::Button("Remove")) m_Scene.RemoveSelected();
         if (ImGui::Button("Focus selected")) m_Scene.FocusSelected();
         ImGui::EndDisabled();

@@ -32,7 +32,7 @@ Loop::Init(argc, argv) 读取 `Core::GetExecutableDir()/apps.json`。源码配�
 
 选中条目含 modules 数组与 dependencies 对象。加载前检查空/重复模块、未选择的依赖端点，并用 visiting/visited DFS 拒绝循环；期望 O(V+E) 工作和 O(V) 访问状态。LoadModule 后 GetModule 核对注册，防止原 void 接口隐藏 DLL 缺失。注册成功后才登记依赖、StartupAll，并要求 ApplicationBase 非空。解析/启动异常由 main 输出并按已启动模块状态关闭；没有修改 Core 的通用模块管理机制。
 
-Langcher 链接 Engine/SlateCore/Core，但对 Application/Editor 只使用 CMake add_dependencies 作为构建前置，不链接两者的 import library。否则进程启动时 DLL 静态导入可能注册两个应用，StartupAll 会同时创建两套 ApplicationBase。公共启动主干为 RHIVulkan → Engine → Renderer → SlateRHIRenderer；Editor 条目另包含 SceneEditor（依赖 Engine/Renderer）、AssetEditor、MaterialEditor、NodeEditor（依赖 Engine），Editor 依赖四个功能模块和 SlateRHIRenderer。Application 条目不包含这些编辑功能模块。关闭逆序，先销毁应用中的面板和场景，再关闭功能模块。配置声明的 DLL（及它们的必要链接依赖）仍需位于运行目录；JSON 并不生成编译目标或下载模块。
+Langcher 链接 Engine/SlateCore/Core，但对 Application/Editor 只使用 CMake add_dependencies 作为构建前置，不链接两者的 import library。否则进程启动时 DLL 静态导入可能注册两个应用，StartupAll 会同时创建两套 ApplicationBase。公共启动主干为 RHIVulkan → Engine → Renderer → SlateRHIRenderer；Editor 条目另包含 SceneEditor、AssetEditor、MaterialEditor、NodeEditor（显式启动依赖均为 Engine），Editor 依赖四个功能模块和 SlateRHIRenderer。SceneEditor 通过 SceneInterface 的 SceneSetting 请求 Hint，不再直接链接 Renderer；Renderer 仍由应用配置加载并实现 RenderInterface，在 Editor 创建场景前经 SlateRHIRenderer 的依赖启动。Application 条目不包含这些编辑功能模块。关闭逆序，先销毁应用中的面板和场景，再关闭功能模块。配置声明的 DLL（及它们的必要链接依赖）仍需位于运行目录；JSON 并不生成编译目标或下载模块。
 
 Run 每次先 Engine Tick，再所选 ApplicationBase::TickFrame。Editor 的窗口/场景/面板边界见 [Editor 架构](../../architecture/app/editor.md)。
 

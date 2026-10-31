@@ -77,6 +77,8 @@ namespace Engine
             GetDirection() const;
 
     protected:
+        void OnTransformChanged() override;
+
         Core::Float3 _direction =
             Core::Float3(
                 0.0f,
@@ -139,6 +141,8 @@ namespace Engine
             GetDirection() const;
 
     protected:
+        void OnTransformChanged() override;
+
         float _innerConeAngle =
             Core::DegToRad(20.0f);
 

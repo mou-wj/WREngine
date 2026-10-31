@@ -200,13 +200,15 @@ size_t RHIPipelineStateCache::HashColorBlendState(const RHIColorBlendStateDesc& 
 
 size_t RHIPipelineStateCache::HashDepthStencilState(const RHIDepthStencilStateDesc& desc) {
     size_t hash = 0;
-    hash ^= std::hash<bool>()(desc.bDepthTestEnable);
-    hash ^= std::hash<bool>()(desc.bDepthWriteEnable);
-    hash ^= std::hash<int>()(static_cast<int>(desc.DepthCompareOp));
-    hash ^= std::hash<bool>()(desc.bDepthBoundsTestEnable);
-    hash ^= std::hash<bool>()(desc.bStencilTestEnable);
-    hash ^= std::hash<uint32_t>()(desc.StencilReadMask);
-    hash ^= std::hash<uint32_t>()(desc.StencilWriteMask);
+    // Field order matters: XOR cancels equal booleans, aliasing (test,write)
+    // = (false,false) and (true,true), so overlays can disable mesh depth writes.
+    HashCombine(hash, desc.bDepthTestEnable);
+    HashCombine(hash, desc.bDepthWriteEnable);
+    HashCombine(hash, desc.DepthCompareOp);
+    HashCombine(hash, desc.bDepthBoundsTestEnable);
+    HashCombine(hash, desc.bStencilTestEnable);
+    HashCombine(hash, desc.StencilReadMask);
+    HashCombine(hash, desc.StencilWriteMask);
     return hash;
 }
 

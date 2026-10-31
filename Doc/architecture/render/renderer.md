@@ -131,7 +131,7 @@ SceneRenderer
 
 ### 5.1 按视图追加绘制 Pass
 
-[RenderModule::BeginRender](../../../src/Framework/Renderer/Private/RenderModule.cpp) 在 `sceneRenderer->Build(builder)` 之后遍历 `views->GetViews()`，再遍历每个视图的 `DrawExtensions`。非空 `Callback` 接收当前 Builder、当前 SceneView、`SceneTextures.SceneColor` 和 `SceneTextures.SceneDepth`。调用顺序为视图顺序、列表顺序；GPU 执行顺序仍由 Pass 声明的资源依赖决定。
+[RenderModule::BeginRender](../../../src/Framework/Renderer/Private/RenderModule.cpp) 开始时复制场景的 SceneSetting，在 `sceneRenderer->Build(builder)` 之后遍历 `views->GetViews()`，先按设置加入网格/目标光源 Hint，再遍历每个视图的 `DrawExtensions`。非空 `Callback` 接收当前 Builder、当前 SceneView、`SceneTextures.SceneColor` 和 `SceneTextures.SceneDepth`。调用顺序为视图顺序、列表顺序；GPU 执行顺序仍由 Pass 声明的资源依赖决定。Hint 在变换工具等上层叠加之前构图，延续原有显示顺序。
 
 这是当前场景主体结束后的固定扩展点，扩展与场景使用同一个 Builder，并在统一的 `builder.Execute()` 前完成构图。扩展可通过公开的 RenderCore 接口声明参数、申请图内资源和添加 Pass。叠加颜色通常使用 Load_Store，深度是否测试、写入须与具体绘制及访问声明一致；回调本身不会自动声明附件访问。不增加额外队列提交、Present 或等待。
 
@@ -225,6 +225,16 @@ Scene Objects
 在整个工程中，它是从 `RenderCore` 走向真实输出画面的关键桥接层。
 
 ## 相关核心实现细节
+
+### HintRender 场景提示
+
+[HintRender.h](../../../src/Framework/Renderer/PublicHeader/HintRender.h) / [HintRender.cpp](../../../src/Framework/Renderer/Private/HintRender.cpp) 提供 AddGridPass、AddLightPass 和 GetGridSpacing。Renderer::BeginRender 根据 Engine [SceneSetting](../../../src/Framework/Engine/PublicHeader/SceneInterface.h) 的 bDrawGrid/bDrawLightHints 和 LightHintTarget 决定调用，在模块内部传入本帧 Builder、SceneView、颜色及深度附件。上层无需包含 HintRender 或链接 Renderer。默认两类提示都关闭；光源目标为空时不绘制范围。实现使用 [HintRender.sf](../../../shaders/HintRender.sf) 的全局 Shader，光源和网格均使用 RHI LineList；参数在构图时复制到 Builder arena，不借用组件的异步存活，也不直接调用原生后端或 GUI。
+
+网格为 Y=0 的 XZ 平面。CPU 用逆 VP 反投影视锥八角，检查十二条边与地面的交点并求 XZ AABB；向外对齐网格后再各扩一格。高度给出 0.1、0.2、0.5、1、2、5、10 米间距和两个方向的细分数量。VS 从固定 1×1 单位网格角点展开线段并映射到该区域，PS 按相邻平行线的投影间距淡出过密线。范围随真实视锥更新，远裁剪之外不绘制；不再用全屏逐像素求交或写 SV_Depth。按 10 米周期移除相机 X/Z 的大坐标，保持世界锚定。一个 Draw 提交 2(nx+nz) 个顶点，无动态顶点缓冲；目前采用 CPU 确定细分数量、VS 展开的路径，未接入 HS/DS 硬件细分，也未作性能基准。
+
+光源提示读取既有组件的世界位置、方向、半径/锥角：点光 3 个正交大圆共 192 线段；聚光底圆 64 段、16 条母线和 1 条中心射线；平行光为箭杆及八条头部线，共 9 段。这些图形不替代实际光源数据更新。详细公式和限制见 [变换与提示几何](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)。
+
+两种提示 Pass 均 Load/Store 颜色和深度，开启深度测试但关闭深度值写入；当前 RHI RenderPass 没有只读深度附件标记，RDG 因而按深度附件访问保守排序。天空绘制也保存深度供扩展使用。工程时序、参数快照和光源代理更新见 [UI 与场景提交](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
 本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
 

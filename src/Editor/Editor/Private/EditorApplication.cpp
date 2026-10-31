@@ -142,14 +142,14 @@ namespace Editor
         m_AssetPanel = std::make_unique<EditorAssetPanel>(std::filesystem::path{});
         m_AssetPanel->SetOnMeshOpened([this](const auto& asset) { if (!m_ProjectDirectory.empty()) m_DroppedMesh=asset->GetPath(); });
         m_AssetPanel->SetOnMaterialAssigned([this](const auto& asset) {
-            auto* component = m_Scene->GetSelected();
+            auto* component = m_Scene->GetSelectedMesh();
             if (!component) return false;
             component->SetMaterial(0, asset->GetMaterial());
             m_Scene->NotifySelectedChanged();
             return true;
         });
         MaterialEditorCallbacks callbacks;
-        callbacks.GetSelectedComponent = [this] { return m_Scene->GetSelected(); };
+        callbacks.GetSelectedComponent = [this] { return m_Scene->GetSelectedMesh(); };
         callbacks.GetSelectedMaterial = [this] { return m_AssetPanel->GetSelectedMaterial(); };
         callbacks.GetSelectedTexture = [this] { return m_AssetPanel->GetSelectedTexture(); };
         callbacks.OnMaterialChanged = [this](bool bSharedAsset) {
@@ -323,6 +323,7 @@ namespace Editor
         const auto relative=content.lexically_relative(root);
         if (relative.empty() || relative.is_absolute() || *relative.begin()=="..") throw std::runtime_error("Project content must stay inside its directory");
         CloseProject(); m_ProjectDirectory=root;
+        m_Scene->CreateDefaultLights();
         m_AssetPanel->SetContentRoot(content); m_MaterialPanel->SetContentRoot(content); m_ProjectError.clear();
     }
     void EditorApplication::CloseProject()

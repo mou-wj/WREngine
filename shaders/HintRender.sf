@@ -1,0 +1,79 @@
+#if GRID_SHADER
+#include "/Generated/ShaderParameters/HintGridParameters.sf"
+
+struct HintGridInput
+{
+    float4 Position : SV_Position;
+    float3 WorldPosition : TEXCOORD0;
+    float4 LineData : TEXCOORD1;
+    float4 Color : COLOR0;
+};
+
+#if VERTEX_SHADER
+HintGridInput MainGridVS(uint vertexId : SV_VertexID)
+{
+    // Fixed corners of the original 1x1 XZ grid. CPU supplies only its region
+    // transform and subdivision counts; each shared grid edge is emitted once.
+    static const float2 corners[4] = {float2(0,0),float2(1,0),float2(1,1),float2(0,1)};
+    uint lineIndex = vertexId/2;
+    bool alongZ = lineIndex<LineCounts.x;
+    uint index = alongZ ? lineIndex : lineIndex-LineCounts.x;
+    uint count = alongZ ? LineCounts.x : LineCounts.y;
+    float fraction = float(index)/float(count-1);
+    float2 uv = alongZ ? lerp(corners[0],corners[1],fraction) : lerp(corners[0],corners[3],fraction);
+    if (alongZ) uv.y = vertexId&1; else uv.x = vertexId&1;
+    float2 gridIndex = round(GridBounds.xy/GridSettings.x)+round(uv*GridBounds.zw/GridSettings.x);
+    float2 worldXZ = gridIndex*GridSettings.x;
+    float coordinate = alongZ ? worldXZ.x : worldXZ.y;
+    bool major = abs(coordinate/10-round(coordinate/10))<0.001;
+    HintGridInput output;
+    output.WorldPosition = float3(worldXZ.x,0,worldXZ.y);
+    output.Position = mul(ViewProjection,float4(output.WorldPosition,1));
+    output.LineData = float4(alongZ ? float2(1,0) : float2(0,1),major ? 10 : GridSettings.x,0);
+    output.Color = major ? float4(0.55,0.55,0.58,0.65) : float4(0.35,0.35,0.38,0.4);
+    return output;
+}
+#else
+float4 MainGridPS(HintGridInput input) : SV_Target0
+{
+    // Estimate the perpendicular screen distance to the next parallel line.
+    // This also handles grazing angles, unlike a distance-to-camera fade.
+    float2 perpendicular = input.LineData.xy*input.LineData.z;
+    float2 tangent = float2(-perpendicular.y,perpendicular.x);
+    float4 p = mul(ViewProjection,float4(input.WorldPosition,1));
+    float4 across = mul(ViewProjection,float4(input.WorldPosition+float3(perpendicular.x,0,perpendicular.y),1));
+    float4 along = mul(ViewProjection,float4(input.WorldPosition+float3(tangent.x,0,tangent.y),1));
+    float2 pixelScale = GridSettings.yz*0.5;
+    float2 screen = p.xy/max(p.w,1e-5);
+    float2 a = (across.xy/max(across.w,1e-5)-screen)*pixelScale;
+    float2 d = (along.xy/max(along.w,1e-5)-screen)*pixelScale;
+    float pixelSpacing = abs(a.x*d.y-a.y*d.x)/max(length(d),1e-5);
+    float visibility = saturate((pixelSpacing-0.65)/1.85);
+    return float4(input.Color.rgb,input.Color.a*visibility);
+}
+#endif
+
+#else
+struct HintLineOutput
+{
+    float4 Position : SV_Position;
+    float4 Color : COLOR0;
+};
+
+#if VERTEX_SHADER
+#include "/Generated/ShaderParameters/HintLineVertexParameters.sf"
+HintLineOutput MainVS(uint vertexId : SV_VertexID)
+{
+    HintLineOutput output;
+    float4 worldPoint = vertexId == 0 ? Point0 : Point1;
+    output.Position = mul(ViewProjection,worldPoint);
+    output.Color = LineColor;
+    return output;
+}
+#else
+float4 MainPS(HintLineOutput input) : SV_Target0
+{
+    return input.Color;
+}
+#endif
+#endif

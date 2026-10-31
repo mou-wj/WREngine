@@ -28,11 +28,12 @@ namespace Editor
         struct Object
         {
             std::string Name;
-            std::unique_ptr<Engine::StaticMeshComponent> Component;
+            std::unique_ptr<Engine::SceneComponent> Component;
         };
         EditorScene();
         ~EditorScene() override;
         void Initialize();
+        void CreateDefaultLights();
         void Shutdown();
         void ClearObjects();
         void AddMesh(const std::shared_ptr<Engine::StaticMeshAsset>& asset);
@@ -41,7 +42,8 @@ namespace Editor
         void RemoveSelected();
         void Select(int index);
         int GetSelectedIndex() const { return m_SelectedIndex; }
-        Engine::StaticMeshComponent* GetSelected() const;
+        Engine::SceneComponent* GetSelected() const;
+        Engine::StaticMeshComponent* GetSelectedMesh() const;
         const std::vector<Object>& GetObjects() const { return m_Objects; }
         void NotifySelectedChanged();
         void NotifyMaterialsChanged();
@@ -71,7 +73,6 @@ namespace Editor
         Engine::Viewport* m_Viewport = nullptr;
         std::unique_ptr<Engine::SceneInterface> m_Scene;
         std::vector<Object> m_Objects;
-        std::vector<std::unique_ptr<Engine::LightComponent>> m_Lights;
         std::shared_ptr<Engine::SkyLightAsset> m_SkyAsset;
         Engine::Camera m_Camera;
         Engine::SceneViewFamily m_ViewFamily;

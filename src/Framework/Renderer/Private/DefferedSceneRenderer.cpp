@@ -28,6 +28,19 @@ namespace Renderer {
 
 
         auto sceneEnvMap = Scene->GetGPUResourceInfo().LightResourceInfo.IBLSpecularTexture;
+        if (Scene->GetGPUResourceInfo().PrimitiveResourceInfo.PrimitiveCount == 0)
+        {
+            // There are no surfaces to shade. Initialize the scene color/depth
+            // for sky and view extensions without dispatching material lighting.
+            RenderTargetBindingSlots background;
+            background.NumColorRenderTargets = 1;
+            background[0].Texture = SceneTextures.SceneColor;
+            AddClearRenderTargetsPass(builder,background);
+            if (sceneEnvMap)
+                for (auto view : Views->GetViews())
+                    AddDrawSkyBoxPass(builder,sceneEnvMap,SceneTextures.SceneColor,SceneTextures.SceneDepth,view);
+            return;
+        }
         // Build deferred rendering passes for each view.
         // Collect the views and static mesh batches.
         const auto& views = Views->GetViews();
