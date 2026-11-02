@@ -3,6 +3,7 @@
 #include <memory>
 #include <filesystem>
 #include <vector>
+#include <optional>
 
 namespace ImGUISlate { class ImMainWindow; class ImSplitterWidget; class ImWidget; class ImFileDialogWidget; }
 namespace SlateCore { class SlateWidget; }
@@ -10,6 +11,7 @@ namespace Engine { class SceneViewport; }
 namespace Editor
 {
     class EditorScene;
+    enum class EEditorSceneObject;
     class EditorScenePanel;
     class EditorViewToolbar;
     class EditorAssetPanel;
@@ -52,6 +54,8 @@ namespace Editor
         ProjectAction m_DialogAction = ProjectAction::None;
         std::filesystem::path m_ProjectDirectory;
         std::filesystem::path m_PendingProjectDirectory;
+        std::optional<EEditorSceneObject> m_PendingObject;
+        int m_PendingDeleteObject = -1;
         std::filesystem::path m_DroppedMesh;
         std::filesystem::path m_DroppedMaterial;
         Core::Float2 m_DroppedMaterialPosition;

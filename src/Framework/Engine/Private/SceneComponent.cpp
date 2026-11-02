@@ -1,12 +1,52 @@
 #include "SceneComponent.h"
 #include "Transform.hpp"
 #include <algorithm>
+#include <cmath>
 #include "SceneInterface.h"
 
 namespace Engine
 {
     SceneComponent::SceneComponent()
     {
+    }
+
+    void SceneComponent::SetVisible(bool visible)
+    {
+        if (_bVisible==visible) return;
+        _bVisible=visible; MarkRenderStateDirty();
+    }
+    void SceneComponent::DescribeProperties(std::vector<ComponentProperty>& properties)
+    {
+        using Type=EComponentPropertyType;
+        properties.push_back(MakeComponentProperty<bool>("Visible","Visible","Node",Type::Boolean,
+            [this] { return IsVisible(); },[this](bool value) { SetVisible(value); return true; }));
+        struct TransformProperty
+        {
+            const char* Label;
+            EComponentPropertySemantic Semantic;
+            const Core::Float3& (SceneComponent::*Read)() const;
+            void (SceneComponent::*Write)(const Core::Float3&);
+            float Speed;
+        };
+        const TransformProperty transforms[] = {
+            {"Position",EComponentPropertySemantic::Position,&SceneComponent::GetLocalLocation,&SceneComponent::SetLocalLocation,0.05f},
+            {"Rotation",EComponentPropertySemantic::Rotation,&SceneComponent::GetLocalRotation,&SceneComponent::SetLocalRotation,0.5f},
+            {"Scale",EComponentPropertySemantic::Scale,&SceneComponent::GetLocalScale,&SceneComponent::SetLocalScale,0.01f}
+        };
+        for (const auto& transform:transforms)
+        {
+            auto property=MakeComponentProperty<Core::Float3>(transform.Label,transform.Label,"Local transform",Type::Vector3,
+                [this,transform] { return (this->*transform.Read)(); },[this,transform](Core::Float3 value) {
+                    for (int axis=0;axis<3;++axis) {
+                        if (!std::isfinite(value[axis])) return false;
+                        if (transform.Semantic==EComponentPropertySemantic::Scale && std::abs(value[axis])<0.01f)
+                            value[axis]=value[axis]<0 ? -0.01f : 0.01f;
+                    }
+                    (this->*transform.Write)(value); return true;
+                });
+            property.Semantic=transform.Semantic; property.Speed=transform.Speed;
+            properties.push_back(std::move(property));
+        }
     }
 
     SceneComponent::~SceneComponent()

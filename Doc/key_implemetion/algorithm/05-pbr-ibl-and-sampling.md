@@ -23,6 +23,14 @@ Lo = (fd+fs)·LightColor·Intensity·NdotL
 
 点光使用 `saturate(1-distance/radius)²` 范围衰减；聚光额外用 inner/outer cone 的 smoothstep。当前不是物理逆平方距离模型，不能将 intensity 直接解释为经过单位校准的流明/坎德拉。
 
+### 聚光锥角的单位与衰减
+
+[SpotLightComponent](../../../src/Framework/Engine/Private/LightComponent.cpp) 的角度 Setter 接受度并存为弧度，代理 Getter 仍返回弧度；阴影投影的 FOV 和范围示意的 tan 使用弧度。[Scene::UpdateGPUResourceIfNeeded](../../../src/Framework/Renderer/Private/Scene.cpp) 填充 SpotLightData 时必须转换为 `InnerConeCos=cos(innerRadians)`、`OuterConeCos=cos(outerRadians)`。不能改变代理角度语义来迁就 Shader，否则阴影投影和范围也会出错。
+
+令 d 为光源向外照射的单位方向，L=normalize(lightPosition-worldPosition)，则 `Cone=dot(-d,L)=cos(theta)`，theta 是接收点偏离锥轴的夹角。有效半角满足 0≤inner≤outer<90°，因此 cos(inner)≥cos(outer)：Cone 小于外锥余弦时贡献为 0，大于内锥余弦时为 1，两者之间以 smoothstep 过渡，再乘距离衰减。每点成本 O(1)。内外角相等且 Cone 恰好等于阈值时仍可能进入零宽度 smoothstep，此退化边界未在本次修改；光源原点的方向退化及底层 Setter 的任意非法角度也不属于当前属性校验之外的保证。
+
+历史实现曾将弧度直接写入上述 Cos 字段。20°/45° 错填为约 0.3491/0.7854，丢失正确的锥间渐变；外角 70° 错填 1.2217 后，单位向量点积永远不超过它，Shader 对所有接收点直接返回 0，Enabled 开关因而没有亮度差异。修正和实际 GPU 比较见 [2026-11-02 记录](../../dev/bugfix/故障与修复记录-2026-11-02.md#聚光灯启停无画面变化)。
+
 ## 采样与 PDF
 
 对积分 I=∫f(ω)dω，Monte Carlo 估计为 `(1/N)Σ f(ωi)/p(ωi)`。因此方向分布和权重必须成对；样本方向看起来均匀，不代表估计无偏。

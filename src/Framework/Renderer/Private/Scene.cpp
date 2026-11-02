@@ -32,6 +32,8 @@ using namespace Engine;
 
 namespace Renderer {
 
+    constexpr auto SceneLightResourceDirtyMask=ESceneGPUResourceDirty::DirectionalLight |
+        ESceneGPUResourceDirty::PointLight | ESceneGPUResourceDirty::SpotLight | ESceneGPUResourceDirty::SkyLight;
 
     //====================================================
     // PrimitiveSceneInfo
@@ -45,6 +47,7 @@ namespace Renderer {
         :
         m_Proxy(std::move(inProxy))
     {
+        bVisible=m_Proxy && m_Proxy->IsVisible();
     }
 
     //====================================================
@@ -273,7 +276,8 @@ namespace Renderer {
         if (filter!=Engine::EScenePickFilter::Meshes)
             for (const auto& [component,info] : m_LightInfos)
             {
-                if (!info || !info->bVisible || !info->GetProxy()) continue;
+                // Light queries hit the visible hint, even when illumination is disabled.
+                if (!component->IsVisible() || !info || !info->GetProxy()) continue;
                 float distance;
                 if (!HintRender::RaycastLight(*info->GetProxy(),normalized,nearest,distance) ||
                     (distance==nearest && outResult.Component)) continue;
@@ -466,27 +470,10 @@ namespace Renderer {
         }
         Engine::LightSceneProxy* lightProxy = nullptr;
         auto markLightDiry = [this](Engine::LightSceneProxy* lightProxy) {
-            if (!lightProxy) return;
-            auto lightType = lightProxy->GetLightType();
-            switch (lightType)
-            {
-                case Engine::ELightType::Directional:
-                    m_GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::DirectionalLight;
-                    break;
-                case Engine::ELightType::Point:
-                    m_GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::PointLight;
-                    break;
-                case Engine::ELightType::Spot:
-                    m_GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::SpotLight;
-                case Engine::ELightType::Sky:
-                    m_GPUResourceInfo.DirtyFlags |= ESceneGPUResourceDirty::SkyLight;
-                    break;
-                default:
-                    break;
-            }
-
-
-         };
+            // Adding/removing a light changes the flattened shadow-table indices
+            // of later light types, so refresh all light arrays together.
+            if (lightProxy) m_GPUResourceInfo.DirtyFlags |= SceneLightResourceDirtyMask;
+        };
         for (auto& command
             : commands)
         {
@@ -541,6 +528,7 @@ namespace Renderer {
                             std::move(
                                 command
                                 .LightProxy));
+                    m_LightInfos[command.LightComponent]->bEnabled=command.LightComponent->IsEnabled();
                     
                     break;
                 }
@@ -575,6 +563,7 @@ namespace Renderer {
         //update scene bounds
         m_SceneBounds.SetEmpty();
         for (auto& primitive : m_PrimitiveInfos) {
+            if (!primitive.second->bVisible) continue;
             m_SceneBounds.Merge(primitive.second->GetProxy()->GetBounds());
         }
         m_AccelerationStructure.Build(m_PrimitiveInfos);
@@ -591,6 +580,10 @@ namespace Renderer {
         {
             if (auto it = m_LightInfos.find(light); it != m_LightInfos.end())
             {
+                if (it->second->bEnabled!=light->IsEnabled())
+                    m_GPUResourceInfo.DirtyFlags |= SceneLightResourceDirtyMask;
+                it->second->bEnabled=light->IsEnabled();
+                if (!light->IsEnabled()) m_LightIndexs.erase(it->second->GetProxy());
                 it->second->GetProxy()->UpdateFromComponent();
                 it->second->GetProxy()->bUpdateCastShadow = true;
             }
@@ -650,6 +643,8 @@ namespace Renderer {
             Core::AABB affectBox;
 
             for (auto& primitive : m_PrimitiveInfos) {
+
+                if (!primitive.second->bVisible) continue;
 				if(primitive.second->GetProxy()->IsA<StaticMeshProxy>()){
                     
                     StaticMeshProxy* staticMeshProxyIns = primitive.second->GetProxy()->Cast<StaticMeshProxy>();
@@ -735,7 +730,7 @@ namespace Renderer {
             auto* info =
                 pair.second.get();
 
-            if (!info->bVisible)
+            if (!info->bEnabled)
             {
                 continue;
             }
@@ -1010,7 +1005,7 @@ namespace Renderer {
                     pair.second
                     ->GetProxy();
 
-                if (!proxy)
+                if (!proxy || !pair.second->bEnabled)
                     continue;
 
                 if (proxy
@@ -1046,6 +1041,7 @@ namespace Renderer {
             lightRes.DirectionalLightBuffer->InitRHIResource();
             if (!gpuData.empty()) lightRes.DirectionalLightBuffer->UploadData(gpuData.data(), desc.Size);
         }
+        else lightIndex += lightRes.DirectionalLightCount;
 
         //------------------------------------------------
         // Point
@@ -1067,7 +1063,7 @@ namespace Renderer {
                     pair.second
                     ->GetProxy();
 
-                if (!proxy)
+                if (!proxy || !pair.second->bEnabled)
                     continue;
 
                 if (proxy
@@ -1106,6 +1102,7 @@ namespace Renderer {
             lightRes.PointLightBuffer->InitRHIResource();
             if (!gpuData.empty()) lightRes.PointLightBuffer->UploadData(gpuData.data(), desc.Size);
         }
+        else lightIndex += lightRes.PointLightCount;
 
         //------------------------------------------------
         // Spot
@@ -1127,7 +1124,7 @@ namespace Renderer {
                     pair.second
                     ->GetProxy();
 
-                if (!proxy)
+                if (!proxy || !pair.second->bEnabled)
                     continue;
 
                 if (proxy
@@ -1149,8 +1146,9 @@ namespace Renderer {
                 auto spotLightProxy = dynamic_cast<SpotLightSceneProxy*>(proxy);
                 data.Radius = spotLightProxy->GetAttenuationRadius();
                 data.Direction = spotLightProxy->GetDirection();
-                data.InnerConeCos = spotLightProxy->GetInnerConeAngle();
-                data.OuterConeCos = spotLightProxy->GetOuterConeAngle();
+                // Components/proxies store radians; the shading cone compares cosines.
+                data.InnerConeCos = std::cos(spotLightProxy->GetInnerConeAngle());
+                data.OuterConeCos = std::cos(spotLightProxy->GetOuterConeAngle());
 
                 gpuData.emplace_back(
                     data);
@@ -1190,7 +1188,7 @@ namespace Renderer {
                     pair.second
                     ->GetProxy();
 
-                if (!proxy)
+                if (!proxy || !pair.second->bEnabled)
                     continue;
 
                 if (proxy

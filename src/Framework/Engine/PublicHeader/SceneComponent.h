@@ -4,6 +4,7 @@
 #include "Math.hpp"
 #include "EngineExport.h"
 #include "TypeIDCast.h"
+#include "ComponentProperty.h"
 
 namespace Engine
 {
@@ -16,6 +17,11 @@ namespace Engine
         virtual ~SceneComponent();
         DECLARE_TYPE_ID_BASE_TYPE(SceneComponent)
     public:
+        bool IsVisible() const { return _bVisible; }
+        void SetVisible(bool visible);
+        // Append typed property descriptions. Derived components extend or filter
+        // these descriptions; UI implementations select controls from metadata.
+        virtual void DescribeProperties(std::vector<ComponentProperty>& properties);
         void AttachTo(
             SceneComponent* parent,
             bool keepWorldTransform = false);
@@ -84,6 +90,7 @@ namespace Engine
         void UpdateWorldTransform() const;
 
     protected:
+        bool _bVisible = true;
         Core::Float3 _localLocation =
             Core::Float3(0.0f, 0.0f, 0.0f);
 

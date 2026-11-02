@@ -18,6 +18,14 @@ Shadow mapping 先从光源视角存最近表面深度；正常着色时将世�
 
 ShadowMapAllocator 的专用纹理持 shared_ptr，lookup arrays 保存裸指针索引。释放后 compact lookup array 会改变后续索引，其他访问记录必须同步重建，不能把 TextureIndex 当永久 ID。
 
+### 阴影访问数据必须随光源更新
+
+Scene::NotifyComponentChanged 在禁用光源时从活动 m_LightIndexs 移除该代理；原阴影分配仍归场景缓存持有，启用后可以复用。SceneRenderer::UploadShadowMapInfo 遍历缓存时用 find 查询当前活动索引，跳过非活动、不投影或无有效分配的项，不能用 operator[] 为禁用光源插入默认索引。UpdateCascadeShadowInfo 沿用相同的活动/投影筛选，保持级联矩阵顺序与访问表一致。
+
+LightShadowInfoBuffer 和 AtlasAccessInfoBuffer 只在容量不足时重新分配，但每次构图都通过原 AddUploadBuffer 上传当前非空数据。分配复用不等于数据仍然有效：聚光灯位置、方向、半角变化后 CPU 阴影矩阵和新阴影图已经更新，如果只有首次分配时上传，着色仍使用旧 VP 采样新图，就可能把所有受光像素判断成阴影。容量足够时跳过上传是旧实现的错误条件，不是 RDG 的资源排序问题。
+
+[EvaluateSceneLighting](../../../shaders/core/SceneParametersHelper.sf) 使用既有 ComputeShadowVisibility 按访问记录的 ShadowType 分派；无投影的记录保持 NONE，返回 visibility=1，照明继续计算。关闭 Cast shadow 不能继续采样旧分配或未初始化的 Atlas 项。关闭 Enabled 则从光源数组退出，Shader 不再遍历该光源；两种开关作用不同，范围 Visible 不参与此判断。工程时序与资源所有权见 [状态链路](../performance/08-ui-rendering-and-window-lifetime.md#visibleenabled-与-renderer)。
+
 ## CSM 分段为什么混合线性和对数
 
 近处分配更多阴影精度，对数划分 `n·(f/n)^p`；线性划分 `n+(f-n)p` 提供更均匀的远处覆盖。混合 `split=(1-λ)linear+λlog`，当前 λ=0.7。
@@ -46,4 +54,4 @@ bias 防止自遮挡 acne，但过大产生 peter-panning；clip bias 与世界�
 
 本源码中有 PCF、固定级联和二次矩写入；不能仅凭旧结果图片名 PCSS 就称当前路径已实现 blocker search、penumbra estimation 或可变滤波核，也没有在此确认完整 VSM/EVSM。
 
-验证应包括单光源平面、自阴影、级联边界、point 六面接缝、Atlas 邻接和越界；本轮没有运行这些专项画面或测量 draw/tap 性能。
+应继续验证单光源平面、自阴影、级联边界、point 六面接缝、Atlas 邻接和越界；未完成全面专项或 draw/tap 性能测量。2026-11-02 已对单聚光灯启停、大锥角、位置/朝向更新及关闭阴影进行实际像素回归，具体范围与结果见 [修复记录](../../dev/bugfix/故障与修复记录-2026-11-02.md#聚光灯启停无画面变化)。

@@ -45,11 +45,11 @@ MaterialEditor 不再引用场景模块或资产面板类型。公共 MaterialEd
 
 ### 光源节点与场景提示绘制
 
-EditorScene::Object 的 Component 统一为 unique_ptr<SceneComponent>，网格和光源共用同一份节点列表、选择、聚焦和删除流程。GetSelected 返回通用组件；材质赋值、材质实例和网格复制通过 GetSelectedMesh 检查目标类型。新建/打开工程时保留原四类默认光源配置，作为 Directional light、Point light、Spot light、Sky light 节点显示；未打开工程时无节点，关闭工程会移除全部节点及工具借用。场景序列化仍未实现，重开工程会重新创建默认光源。
+EditorScene::Object 的 Component 统一为 unique_ptr<SceneComponent>，网格和光源共用同一份节点列表、选择、聚焦和删除流程。GetSelected 返回通用组件；材质赋值、材质实例和网格复制通过 GetSelectedMesh 检查目标类型。新建和打开工程时场景均为空，不自动添加光源；用户从场景树空白处右键菜单添加 Directional light、Point light、Spot light、Sky light 或基础网格。关闭工程会移除全部节点及工具借用。场景序列化仍未实现，重开不恢复先前节点。CreateDefaultLights 仅保留显式调用能力，不在工程打开流程调用。
 
 光源变换按实际语义显示：天空光没有变换区或编辑轴按钮；平行光提供 Position/Move 和 Rotation/Rotate；点光只有 Position/Move；聚光同时提供 Position/Move 与 Rotation/Rotate。光源不显示 Scale。方向/聚光的 Direction 与组件 +X 前向统一，直接改方向会更新局部 Euler，旋转输入或既有旋转圈拖动都会更新实际照射方向和代理；平行光默认示意位置为世界原点；Position 只移动箭头/图标和拾取位置，照明及照射方向不由位置决定。衰减范围独立于缩放，点/聚光提供范围，聚光提供以度显示的内外锥角。非天空光可编辑颜色、强度和投影开关。
 
-天空光沿用工程默认环境资产，没有新增环境贴图选择器；现有 IBL 只消费纹理，颜色/强度控件明确禁用并提示尚不支持。当前注册即启用，Renderer::Scene 在 AddLight 时约束每场景最多一个天空光，包含待处理队列；再次注册同一对象幂等，第二个对象明确报错。更换时先移除当前天空光，再注册新对象，没有另加启用系统。光源复制暂不提供。
+天空光沿用工程默认环境资产，没有新增环境贴图选择器；现有 IBL 只消费纹理，颜色/强度描述为只读并提供提示。天空光只提供 Enabled 开关，不显示无意义的范围 Visible；关闭时清空场景的两项 IBL 引用，重新开启复用资产。Renderer::Scene 仍维持每场景最多注册一个天空光的既有规则，包含待处理队列；禁用不注销对象。光源复制暂不提供。
 
 SceneEditor 通过 [SceneInterface::GetSceneSetting](../../../src/Framework/Engine/PublicHeader/SceneInterface.h) 开启 bDrawGrid/bDrawLightHints，并在 Select 时把选中光源写入借用的 LightHintTarget，选中网格或清除选择则置空。Renderer::RenderModule::BeginRender 在构图时快照该设置，在场景主体之后加入光源提示，再调用各视图 SceneViewDrawExtension，最后为所有视图加入网格。SceneEditor 的扩展只绘制变换工具及右上方向轴，不包含或链接 Renderer，CMake 和 apps.json 中均无直接依赖边；应用仍装配 Renderer 作为 RenderInterface 的运行时实现。
 
@@ -69,7 +69,7 @@ Editor 不改变 Asset 的资源所有权：组件引用 StaticMeshAsset/Materia
 
 运行时工程路径由 EditorApplication 保存，Core::GetProjectDir 仍表示引擎源码/内置资源根，不为项目切换改写全局路径或环境变量。关闭工程会清空场景节点/选择、资源树/过滤/历史、材质窗口与导入/投放的待执行操作，并释放资产管理器的驻留引用；仍被内置预览环境持有的资产继续有效。
 
-工程描述目前只保存内容目录信息，不保存场景节点布局；重新打开会恢复资源浏览和四个默认光源，不恢复模型节点，场景保存/恢复尚未实现。源文件保留在原目录，Import 或桌面拖入 Assets 会复制到当前内容目录的新包中，重名用后缀避让。支持嵌入资源的 GLB、带本地依赖的 glTF、原生材质 JSON 和 PNG/JPG/BMP/TGA；glTF 的外部 buffer/image 与材质贴图一起复制并改为包内相对路径。外部依赖 GLB 明确拒绝，需导出为嵌入 GLB 或使用 glTF。
+工程描述目前只保存内容目录信息，不保存场景节点布局；重新打开只恢复资源浏览，不恢复网格或光源节点，场景保存/恢复尚未实现。源文件保留在原目录，Import 或桌面拖入 Assets 会复制到当前内容目录的新包中，重名用后缀避让。支持嵌入资源的 GLB、带本地依赖的 glTF、原生材质 JSON 和 PNG/JPG/BMP/TGA；glTF 的外部 buffer/image 与材质贴图一起复制并改为包内相对路径。外部依赖 GLB 明确拒绝，需导出为嵌入 GLB 或使用 glTF。
 
 UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行；网格投放同样保存路径并延迟到下一帧创建，避免销毁本帧已经生成的纹理/资源引用。详细等待与所有权见 [UI 生命周期](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
@@ -77,10 +77,10 @@ UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行
 
 两条竖向分隔条控制 Scene/Viewport 和 Viewport/Node Properties 的宽度，横向分隔条控制上方区域与 Assets 的高度。悬停/按住时显示对应的左右或上下系统拉伸光标，左键拖动实时调整相邻区域，松开或失焦结束。菜单和 ribbon 高度固定。常规客户区下最小宽度为 Scene 160、Viewport 240、Node Properties 260；最小高度为上方 220、Assets 140 像素。客户区小于这些总尺寸时按比例缩小下限，避免负尺寸；窗口改变大小仍保留用户选择的比例。目前比例仅在本次运行中保存，不持久化到配置文件。
 
-资产区采用左侧文件系统树、右侧资源网格，二者之间可拖动调整宽度。顶部为 Import、前进/后退、上级、刷新和路径栏，底部保留 Open / Add mesh、Assign material 与状态。初始没有打开的工程、场景节点或材质弹窗；视口显示清空背景、地面网格和方向轴。打开工程后默认光源作为实际场景节点显示，天空由其中的 Sky light 提供。仍共用一个 ImGui/RHI 绘制环境，没有新增原生子窗口。
+资产区采用左侧文件系统树、右侧资源网格，二者之间可拖动调整宽度。顶部为 Import、前进/后退、上级、刷新和路径栏，底部保留 Open / Add mesh、Assign material 与状态。初始没有打开的工程、场景节点或材质弹窗；视口显示清空背景、地面网格和方向轴。新建/打开工程仍为空场景，手动添加 Sky light 后才显示其天空环境。仍共用一个 ImGui/RHI 绘制环境，没有新增原生子窗口。
 
-- Scene：列表选择、复制与移除网格、聚焦所选对象。右侧 Node Properties 只在存在选中组件时显示，编辑其局部平移/旋转/缩放；空工程、未选中组件或移除最后一个节点后不生成属性窗口，也不命中该面板。折叠会将原栏宽和分隔条空间交给视口；重新选中时恢复已保存的右栏比例。复制保留材质资产和稀疏参数覆盖，但创建独立组件实例。
-- Ribbon → View：Top / Bottom / Left / Right / Front / Back 六向切换，按钮第二行注明相机所在轴侧，当前固定方向高亮。Orbit 恢复默认斜向环绕角度，Focus selected 聚焦所选对象。切换保留当前焦点和距离，沿用既有透视投影；这里的六向视图不表示已实现正交编辑管线。
+- Scene：对象列表填满面板的剩余区域，空白处右键创建，对象行右键选中该对象并提供 Delete。原 Duplicate、Remove、Focus selected 按钮和视口操作说明已移除。右侧 Node Properties 只在存在选中组件时显示，根据属性描述生成状态、局部变换及专有参数；空工程、未选中组件或移除最后一个节点后不生成属性窗口，也不命中该面板。折叠会将原栏宽和分隔条空间交给视口；重新选中时恢复已保存的右栏比例。底层复制接口仍保留，面板不提供复制按钮。
+- Ribbon → View：Top / Bottom / Left / Right / Front / Back 六向切换，按钮第二行注明相机所在轴侧，当前固定方向高亮。Orbit 恢复默认斜向环绕角度，Focus selected 聚焦所选对象，无选择时禁用；Viewport controls 在同一页展示选择/清空、光源图标、环绕、平移和缩放的操作说明。切换保留当前焦点和距离，沿用既有透视投影；这里的六向视图不表示已实现正交编辑管线。
 - 视口：左键点击模型选中最近几何命中，点击空白清空选择；只有按下/松开期间移动始终小于 4 像素且释放仍在视口内才触发。右键拖动环绕、中键平移、滚轮缩放。投影使用实际视口宽高比；场景通过既有 Renderer 绘制。
 - 右上角方向示意属于 SceneEditor：EditorScene 向本帧 SceneView::DrawExtensions 加入回调，Private/EditorViewAxes 在同一 RDG 中以线列表绘制六条半轴、以缩放球面三角形绘制端点。+X 红、+Y 蓝、+Z 绿，负端点用对应淡色；只加载/保存场景颜色，不访问场景深度。默认最大 144 像素，随相机旋转，极小视口不显示。
 - 各球中心以屏幕正向显示 +X/-X、+Y/-Y、+Z/-Z，悬停或按住的球及轴线变黄，沿用原球面明暗。标签由既有 ViewAxes Shader 的小字形生成，不增加字体纹理。EditorSceneViewportWidget 在 Draw 前用 ImGui 鼠标位置和 GUI 遮挡刷新 hover，移出视口/进入其他 GUI 区域会清除高亮；Window 仍独占事件路由与捕获，没有重复投递鼠标事件。
@@ -96,13 +96,29 @@ UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行
 
 保存副本不重命名资产，也不导出实例资产。路径已存在时拒绝覆盖；保存后可在 Assets 中刷新并加载。Opaque 以外的 Surface 绘制仍未实现，不通过界面静默启用。当前没有撤销重做、场景序列化、材质节点图或完整编辑器快捷键。
 
+### 场景树右键创建
+
+只有 Objects 子区域中未被列表项占用的空白处才打开创建菜单。Add light 提供 Point light、Spot light、Directional light、Sky light；Add mesh 提供 Engine::Shape 已有的 Cube、Sphere、Plane、Cylinder。未打开工程时禁用创建，已有天空光时禁用第二个 Sky light。新节点位于世界原点并自动选中，光源继续使用既有属性面板、拾取和提示绘制。
+
+EditorScenePanel 只通过 SetOnAddObject 回调提交 EEditorSceneObject 值，EditorApplication 保存一个待执行值，在下一 TickFrame、窗口 Draw 和属性栏布局更新之前调用 EditorScene::AddObject。关闭或切换工程清空该请求，失败写入已有工程错误提示；不在生成 ImDrawData 期间分配模型资源或刷新场景。基础几何由 StaticMeshAsset::CreateShape 复用 Engine 生成器并拥有资源，随后沿 AddMesh 注册组件，不直接将无资产归属的全局 StaticMesh 交给组件。所有权和完成点见 [资产实现](../../key_implemetion/performance/05-assets-materials-and-instance-data.md) 与 [UI 生命周期](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
+
+实际界面、基础几何 VF 组合修复和后端验证限制见 [2026-11-01 记录](../../dev/bugfix/故障与修复记录-2026-11-01.md)。
+
+### 对象删除与参数生成的属性界面
+
+对象行的右键菜单在 ImListWidget 的 SetOnItemActions 回调中构造，保留每项 ID 作用域。右键先选择所指对象，Delete 回调只提交该行索引，EditorApplication 在下一帧绘制前消费请求；不依赖菜单关闭时的“当前选择”来决定删谁。关闭/切换工程会清空请求。实际 RemoveSelected 沿用原工具解除、完成值等待、Remove/Flush 后销毁 owner 的流程，删除最后一个节点会收起整个属性区及分隔条。
+
+NodeEditor 使用同一个 EditorNodePanel 遍历 ComponentProperty，不再对网格/各类光源分支构造 UI。属性类型决定 Checkbox、数值、向量、颜色或只读文本控件，描述提供范围和校验；Position/Rotation/Scale 语义接入原 Move/Rotate/Scale 按钮。新增组件覆写 DescribeProperties 并追加参数即可复用面板。网格只有 Visible，控制绘制及实体拾取；光源 Enabled 控制照明和阴影，Visible 控制范围/箭头绘制及对应拾取，两者独立。关闭光照或隐藏范围后仍保留节点、光源图标、选择和编辑工具，方便重新设置。
+
+属性描述每次 Draw 临时生成，读写回调只借用本次选中组件，不缓存组件指针或创建属性管理器。Engine 负责属性定义及值校验，NodeEditor 负责控件生成，宿主继续负责场景脏标志和原完成点。设计边界与扩展示例见 [核心实现](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md#组件属性参数与通用编辑界面)，验证见 [2026-11-02 记录](../../dev/bugfix/故障与修复记录-2026-11-02.md)。
+
 ### 场景点击与光源图标
 
 EditorScene 的 SelectAt 和 ApplyMaterialAt 共用 SceneView::MakeRay / SceneInterface::Raycast，材质投递取命中 MaterialIndex，不再在 Editor 中复制全场景三角形遍历。查询使用最近一次绘制的视图；网格使用已 Flush 的代理变换，光源沿用已有通知即刷新代理的时序，先得到命中再调用 Select，保证属性栏出现/消失引发的 resize 不改变本次射线。背景点击 Select(-1)，材质拖放未命中则保持选择和材质。选择继续复用节点列表和 NodeEditor 的既有连接，不新增选择管理器。
 
-输入优先级为 GUI → 方向球 → 当前变换工具 → 光源图标 → 网格/光源范围的最近命中。普通左键先由 Window 捕获，在松开确认点击；拖动超过阈值、释放越界、失焦、resize、切换相机或其他鼠标操作取消待点击。变换工具拖动始终只编辑原对象，方向球点击始终只切换视图。查询不新增 GPU 等待，实际材质/变换修改仍沿用既有完成点。
+输入优先级为 GUI → 方向球 → 当前变换工具 → 最近网格实体 → 光源图标 → 最近光源范围/箭头命中。普通左键先由 Window 捕获，在松开确认点击；拖动超过阈值、释放越界、失焦、resize、切换相机或其他鼠标操作取消待点击。变换工具拖动始终只编辑原对象，方向球点击始终只切换视图。查询不新增 GPU 等待，实际材质/变换修改仍沿用既有完成点。
 
-非天空光在世界位置投影为半径 9 像素的实心菱形图标，点光蓝、聚光绿、方向光橙，选中为黄。BuildLightIcons 共用绘制和命中数据，图标按相机深度从远到近绘制，命中反向检查 `abs(dx)+abs(dy)<=9`。图标作为可见叠加不受模型深度遮挡，点击它会优先于后方网格；图标未命中时，SelectAt 以 All 查询点光范围球、聚光有限圆锥和平行光箭头线段，并与网格按最近距离比较。射线在范围内部时取前方出口交点，不把整个范围内的射线起点都判为零距离；范围较大时背景点击可能选中光源，只有没有任何命中才清空。材质投递保持 Meshes 查询，光源不会截获材质拖放。天空光不生成局部图标，仍从列表选择。图标与变换工具使用既有 GizmoDrawing Pass，不直接依赖 Renderer；复杂度及参数借用见 [输入与提交](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
+非天空光在世界位置投影为半径 9 像素的实心菱形图标，点光蓝、聚光绿、方向光橙，选中为黄。BuildLightIcons 共用绘制和命中数据，图标按相机深度从远到近绘制，命中反向检查 `abs(dx)+abs(dy)<=9`。图标作为可见叠加不受模型深度遮挡，但对象选择优先拾取实体：SelectAt 先以 Meshes 查询最近网格，命中即选中，不受重叠光源图标或更近光源范围影响。只有未命中网格时才判断图标；图标也未命中时，以 Lights 查询点光范围球、聚光有限圆锥和平行光箭头线段，在光源间取最近命中。射线在范围内部时取前方出口交点，不把整个范围内的射线起点都判为零距离；范围较大时背景点击可能选中光源，只有没有任何命中才清空。材质投递保持 Meshes 查询，光源不会截获材质拖放。天空光不生成局部图标，仍从列表选择。图标与变换工具使用既有 GizmoDrawing Pass，不直接依赖 Renderer；复杂度及参数借用见 [输入与提交](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
 方向切换属于 EditorScene，不依赖 Editor 或材质/资产面板。世界坐标 Y 向上：Top 从 +Y 看向 -Y，Bottom 相反；Left 从 -X 看向 +X，Right 相反；Front 从 +Z 看向 -Z，Back 相反。顶部/底部使用 -Z/+Z 作为屏幕 Up，避免 LookAtRH 的叉积退化。平移、缩放和 Focus 保留方向；右键环绕转回自由状态并从所选方向继续。详细公式见 [相机与坐标专题](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)。
 

@@ -475,6 +475,7 @@ namespace Renderer::HintRender
     void AddLightPass(RenderGraphBuilder& builder, const Engine::SceneView& view, RenderGraphTextureRef color,
         RenderGraphTextureRef depth, const Engine::LightComponent& light)
     {
+        if (!light.IsVisible()) return;
         const auto origin = light.GetWorldLocation();
         if (!IsFinite(origin)) return;
         std::vector<Line> lines;

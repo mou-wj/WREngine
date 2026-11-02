@@ -97,6 +97,12 @@ namespace Editor
                     ImGui::EndDisabled();
                     ImGui::TextDisabled("Camera | Perspective");
                     ImGui::EndGroup();
+                    ImGui::SameLine(0, 24);
+                    ImGui::BeginGroup();
+                    ImGui::TextDisabled("Viewport controls");
+                    ImGui::TextUnformatted("Left click: select / clear | Light diamond: select light\n"
+                        "Right drag: orbit | Middle drag: pan\nWheel: zoom");
+                    ImGui::EndGroup();
                     ImGui::EndTabItem();
                 }
                 ImGui::EndTabBar();
@@ -108,7 +114,19 @@ namespace Editor
     EditorScenePanel::EditorScenePanel(EditorScene& scene) : ImPanelWidget("Scene"), m_Scene(scene)
     {
         m_Objects.SetOnSelectionChanged([this](int index) { m_Scene.Select(index); });
+        m_Objects.SetOnItemActions([this](int index) {
+            if (ImGui::BeginPopupContextItem("Scene node actions"))
+            {
+                if (ImGui::MenuItem("Delete",nullptr,false,m_bCreationEnabled && static_cast<bool>(m_OnDeleteObject)))
+                    m_OnDeleteObject(index);
+                ImGui::EndPopup();
+            }
+        });
     }
+    void EditorScenePanel::SetOnAddObject(std::function<void(EEditorSceneObject)> callback)
+    { m_OnAddObject = std::move(callback); }
+    void EditorScenePanel::SetOnDeleteObject(std::function<void(int)> callback)
+    { m_OnDeleteObject = std::move(callback); }
     void EditorScenePanel::DrawContent()
     {
         ImGui::TextUnformatted("Scene objects");
@@ -116,18 +134,37 @@ namespace Editor
         for (const auto& object : m_Scene.GetObjects()) names.push_back(object.Name);
         m_Objects.SetItems(std::move(names));
         m_Objects.SetSelectedIndex(m_Scene.GetSelectedIndex());
-        if (ImGui::BeginChild("Objects", {0, 150}, ImGuiChildFlags_Borders)) m_Objects.Draw();
+        if (ImGui::BeginChild("Objects", {0, 0}, ImGuiChildFlags_Borders))
+        {
+            m_Objects.Draw();
+            // Only the unoccupied tree area opens the creation menu; rows keep
+            // their existing selection behavior. Mutations are deferred by the host.
+            if (ImGui::BeginPopupContextWindow("Scene creation", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+            {
+                const bool enabled = m_bCreationEnabled && static_cast<bool>(m_OnAddObject);
+                if (!enabled) ImGui::TextDisabled("Open a project to add objects.");
+                if (ImGui::BeginMenu("Add light", enabled))
+                {
+                    struct Entry { const char* Label; EEditorSceneObject Type; };
+                    constexpr Entry lights[] = {{"Point light",EEditorSceneObject::PointLight},
+                        {"Spot light",EEditorSceneObject::SpotLight},{"Directional light",EEditorSceneObject::DirectionalLight},
+                        {"Sky light",EEditorSceneObject::SkyLight}};
+                    for (const auto& entry : lights)
+                        if (ImGui::MenuItem(entry.Label,nullptr,false,m_Scene.CanAddObject(entry.Type))) m_OnAddObject(entry.Type);
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Add mesh", enabled))
+                {
+                    struct Entry { const char* Label; EEditorSceneObject Type; };
+                    constexpr Entry shapes[] = {{"Cube",EEditorSceneObject::Cube},{"Sphere",EEditorSceneObject::Sphere},
+                        {"Plane",EEditorSceneObject::Plane},{"Cylinder",EEditorSceneObject::Cylinder}};
+                    for (const auto& entry : shapes)
+                        if (ImGui::MenuItem(entry.Label)) m_OnAddObject(entry.Type);
+                    ImGui::EndMenu();
+                }
+                ImGui::EndPopup();
+            }
+        }
         ImGui::EndChild();
-        ImGui::BeginDisabled(!m_Scene.GetSelectedMesh());
-        if (ImGui::Button("Duplicate")) m_Scene.DuplicateSelected();
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-        ImGui::BeginDisabled(!m_Scene.GetSelected());
-        if (ImGui::Button("Remove")) m_Scene.RemoveSelected();
-        if (ImGui::Button("Focus selected")) m_Scene.FocusSelected();
-        ImGui::EndDisabled();
-        ImGui::SeparatorText("Viewport controls");
-        ImGui::TextWrapped("Left click: select / clear\nLight diamond: select light\nRight drag: orbit\nMiddle drag: pan\nWheel: zoom");
-        ImGui::TextDisabled("Scene serialization is not implemented.");
     }
 }

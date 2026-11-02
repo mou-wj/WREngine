@@ -36,7 +36,6 @@ namespace Engine {
 		EMobility _mobility;                 // mobility hint
 
 		// ------------------ Render state (GameThread only) ------------------
-		bool _bVisible;                      // visible / hidden
 
 		// ------------------ Scene linkage (GameThread only bookkeeping) ------------------
 
@@ -72,9 +71,6 @@ namespace Engine {
 		virtual const Core::BoxSphereBounds& GetBounds() const = 0;
 		// Calculate bounds (derived must implement to provide frustum culling bounds).
 		virtual Core::BoxSphereBounds CalcBounds(const Core::Mat4& localToWorld) = 0;
-
-		// Quick GameThread-only visibility query.
-		bool IsVisible() const;
 
 		// Convenience: recompute WorldTransform/Bounds and call OnTransformUpdated().
 		void UpdateWorldTransform();

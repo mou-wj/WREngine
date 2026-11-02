@@ -139,6 +139,12 @@ namespace Editor
         m_ViewportWidget = std::move(viewportWidget);
         m_ViewportWidget->SetViewportChild(m_Viewport.get());
         m_ScenePanel = std::make_unique<EditorScenePanel>(*m_Scene);
+        m_ScenePanel->SetOnAddObject([this](EEditorSceneObject type) {
+            if (!m_ProjectDirectory.empty()) m_PendingObject = type;
+        });
+        m_ScenePanel->SetOnDeleteObject([this](int index) {
+            if (!m_ProjectDirectory.empty()) m_PendingDeleteObject=index;
+        });
         m_AssetPanel = std::make_unique<EditorAssetPanel>(std::filesystem::path{});
         m_AssetPanel->SetOnMeshOpened([this](const auto& asset) { if (!m_ProjectDirectory.empty()) m_DroppedMesh=asset->GetPath(); });
         m_AssetPanel->SetOnMaterialAssigned([this](const auto& asset) {
@@ -243,6 +249,17 @@ namespace Editor
             if (action==ProjectAction::Create) CreateProject(m_PendingProjectDirectory);
             else if (action==ProjectAction::Open) OpenProject(m_PendingProjectDirectory);
             else if (action==ProjectAction::Close) CloseProject();
+            if (m_PendingDeleteObject>=0)
+            {
+                const int index=m_PendingDeleteObject; m_PendingDeleteObject=-1;
+                if (!m_ProjectDirectory.empty() && index<static_cast<int>(m_Scene->GetObjects().size()))
+                { m_Scene->Select(index); m_Scene->RemoveSelected(); m_ProjectError.clear(); }
+            }
+            if (m_PendingObject)
+            {
+                const auto type = *m_PendingObject; m_PendingObject.reset();
+                if (!m_ProjectDirectory.empty()) { m_Scene->AddObject(type); m_ProjectError.clear(); }
+            }
             if (!m_DroppedMesh.empty())
             {
                 const auto path=std::move(m_DroppedMesh); m_DroppedMesh.clear();
@@ -323,12 +340,13 @@ namespace Editor
         const auto relative=content.lexically_relative(root);
         if (relative.empty() || relative.is_absolute() || *relative.begin()=="..") throw std::runtime_error("Project content must stay inside its directory");
         CloseProject(); m_ProjectDirectory=root;
-        m_Scene->CreateDefaultLights();
+        m_ScenePanel->SetCreationEnabled(true);
         m_AssetPanel->SetContentRoot(content); m_MaterialPanel->SetContentRoot(content); m_ProjectError.clear();
     }
     void EditorApplication::CloseProject()
     {
         m_Window->WaitForLastDraw();
+        m_PendingObject.reset(); m_PendingDeleteObject=-1; m_ScenePanel->SetCreationEnabled(false);
         m_ProjectDialog->Close(); m_DroppedMesh.clear(); m_DroppedMaterial.clear(); m_DroppedMaterialPosition={}; m_PendingProjectAction=ProjectAction::None;
         m_PendingProjectDirectory.clear();
         m_MaterialPanel->SetContentRoot({}); m_AssetPanel->SetContentRoot({}); m_Scene->ClearObjects();

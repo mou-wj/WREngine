@@ -230,6 +230,10 @@ Scene Objects
 
 场景 CPU 拾取由 [Scene::Raycast](../../../src/Framework/Renderer/Private/Scene.cpp) 实现 Engine 的 SceneInterface 协议。既有 SceneAccelerationStructure 同时提供视锥和有限射线候选查询；静态网格窄相位使用代理变换和 LOD0 CPU 顶点/索引，返回最近几何命中及 Section/材质槽。查询默认只含网格，All/Lights 还会线性遍历注册光源，调用 HintRender::RaycastLight 对其代理范围求交；光源结果不带网格索引。上层不访问 Renderer 私有场景或空间树。该路径不添加渲染 Pass，不读回 GPU，不操作编辑器选择；算法、时序与限制见 [射线拾取](../../key_implemetion/algorithm/01-ray-triangle-and-distance.md)。
 
+状态通过既有变更通知进入场景：StaticMeshProxy 只快照组件 Visible，PrimitiveSceneInfo 据此生成空间树、绘制/GPU 列表。LightSceneInfo::bEnabled 只快照 LightComponent::IsEnabled，光源 GPU 数组、阴影遍历及 IBL 引用按它筛选；HintRender 和光源范围/箭头拾取只看 Visible，与照明启停无关。增删光源或改变 Enabled 时重建各类型光源数组，保持阴影表的连续 LightId；只更新参数时累加未重建类型的数量作为后续类型的基址。对象不因隐藏/禁用而注销，资源仍由资产持有，生命周期和实验性全局距离场限制见 [属性与状态实现](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md#组件属性参数与通用编辑界面)。
+
+聚光组件/代理的半角保持弧度，上传 SpotLightData 时转换为余弦供点积比较；投影和范围示意继续使用弧度。阴影缓冲容量复用时仍上传本次访问表与 VP，缓存遍历仅使用活动且投影的光源。Shader 通过已有 ComputeShadowVisibility 处理 NONE，关闭投影时照明不被旧阴影吞掉。公式和实际修复范围见 [聚光衰减](../../key_implemetion/algorithm/05-pbr-ibl-and-sampling.md#聚光锥角的单位与衰减)、[阴影访问数据](../../key_implemetion/algorithm/06-shadow-mapping-and-cascades.md#阴影访问数据必须随光源更新)。
+
 ### HintRender 场景提示
 
 [HintRender.h](../../../src/Framework/Renderer/PublicHeader/HintRender.h) / [HintRender.cpp](../../../src/Framework/Renderer/Private/HintRender.cpp) 提供 AddGridPass、AddLightPass 和 GetGridSpacing。Renderer::BeginRender 根据 Engine [SceneSetting](../../../src/Framework/Engine/PublicHeader/SceneInterface.h) 的 bDrawGrid/bDrawLightHints 和 LightHintTarget 决定调用，在模块内部传入本帧 Builder、SceneView、颜色及深度附件。上层无需包含 HintRender 或链接 Renderer。默认两类提示都关闭；光源目标为空时不绘制范围。实现使用 [HintRender.sf](../../../shaders/HintRender.sf) 的全局 Shader，光源和网格均使用 RHI LineList；参数在构图时复制到 Builder arena，不借用组件的异步存活，也不直接调用原生后端或 GUI。

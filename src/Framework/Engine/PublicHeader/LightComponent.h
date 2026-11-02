@@ -20,12 +20,17 @@ namespace Engine
     public:
         LightComponent();
         virtual ~LightComponent() = default;
+        void DescribeProperties(std::vector<ComponentProperty>& properties) override;
 
     public:
         virtual ELightType GetLightType()
             const = 0;
         virtual LightSceneProxy* CreateSceneProxy() = 0;
     public:
+        // Enabled controls illumination; inherited Visible controls range hints.
+        bool IsEnabled() const { return _bEnabled; }
+        void SetEnabled(bool enabled);
+
         void SetColor(
             const Core::Float3& color);
 
@@ -46,6 +51,7 @@ namespace Engine
             const;
 
     protected:
+        bool _bEnabled = true;
         Core::Float3 _color =
             Core::Float3(
                 1.0f,

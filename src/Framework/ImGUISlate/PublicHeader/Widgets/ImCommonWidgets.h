@@ -39,11 +39,15 @@ namespace ImGUISlate
         void SetSelectedIndex(int index);
         int GetSelectedIndex() const { return m_SelectedIndex; }
         void SetOnSelectionChanged(std::function<void(int)> callback);
+        // Draw item-specific actions immediately after the selectable, inside
+        // its ID scope. The callback must defer mutations of the item list.
+        void SetOnItemActions(std::function<void(int)> callback);
         void Draw() override;
     private:
         std::vector<std::string> m_Items;
         int m_SelectedIndex = -1;
         std::function<void(int)> m_OnSelectionChanged;
+        std::function<void(int)> m_OnItemActions;
     };
 
     enum class EImGridIcon { ColorSphere, Folder, Image, Mesh, Document };

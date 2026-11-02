@@ -1,9 +1,15 @@
 #include "Shape.h"
+#include "StaticMeshAsset.h"
+#include "AssetManager.h"
+#include "MaterialAsset.h"
+#include "DistanceFieldMgr.h"
+#include "PathInfo.h"
 #include "StaticMeshResources.h"
 #include "BoxSphereBounds.h"
 #include <memory>
 #include <vector>
 #include <cmath>
+#include <stdexcept>
 
 namespace Engine {
 
@@ -455,6 +461,29 @@ static std::shared_ptr<StaticMesh> CreateCylinderMesh()
 }
 
 } // namespace
+
+std::shared_ptr<StaticMeshAsset> StaticMeshAsset::CreateShape(EBasicMeshShape shape)
+{
+    std::shared_ptr<StaticMesh> mesh;
+    const char* name;
+    switch (shape) {
+    case EBasicMeshShape::Cube: name = "Cube"; mesh = CreateCubeMesh(); break;
+    case EBasicMeshShape::Sphere: name = "Sphere"; mesh = CreateSphereMesh(); break;
+    case EBasicMeshShape::Plane: name = "Plane"; mesh = CreatePlaneMesh(); break;
+    case EBasicMeshShape::Cylinder: name = "Cylinder"; mesh = CreateCylinderMesh(); break;
+    default: throw std::invalid_argument("Unknown basic mesh shape");
+    }
+    auto material = AssetManager::Get().LoadSync<MaterialAsset>(
+        Core::GetProjectDir() + "/resources/material/DefaultWhite/material.json");
+    if (!material) throw std::runtime_error("Cannot load the basic mesh default material");
+    mesh->AddMaterial(std::move(material));
+    GDistanceFieldMgr.BuildMeshDistanceField(*mesh->GetRenderData());
+    auto asset = std::make_shared<StaticMeshAsset>(std::string("builtin://shape/") + name);
+    asset->m_Name = name;
+    asset->m_Mesh = std::move(mesh);
+    asset->m_Mesh->SetAsset(asset);
+    return asset;
+}
 
 StaticMeshSP GStaticMesh_Cube;
 StaticMeshSP GStaticMesh_Sphere;

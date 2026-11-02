@@ -99,7 +99,7 @@ O = N; D = normalize(F-N); maxDistance = length(F-N)
 
 Scene::Raycast 拒绝非有限起点/方向/最大距离、零或极小方向以及非正距离，将输入方向归一化。因此公共接口的 maxDistance 和结果 Distance 都使用世界长度，而不随输入方向长度缩放。Meshes 查询读取最后一次 FlushPendingUpdates 更新的 SceneAccelerationStructure；Lights 查询读取已注册 LightSceneProxy，沿用光源通知即时更新参数、注册/删除经 Flush 的既有流程。查询不自动 Flush 或等待 GPU。
 
-树的射线 Query 用有限 slab 区间剪去未相交节点，叶子返回 PrimitiveSceneProxy 候选。随后只检查可见 StaticMeshProxy 的 CPU LOD0；同当前绘制路径使用 LOD0，不调用距离场的 BVH。代理的 LocalToWorld 用于顶点变换，避免组件尚未 Flush 的新位置与旧空间树混用。
+树的射线 Query 用有限 slab 区间剪去未相交节点，叶子返回 PrimitiveSceneProxy 候选。随后只检查可见 StaticMeshProxy 的 CPU LOD0；代理可见性只来自组件 Visible，隐藏会退出候选集，网格不提供 Enabled。同当前绘制路径使用 LOD0，不调用距离场的 BVH。代理的 LocalToWorld 用于顶点变换，避免组件尚未 Flush 的新位置与旧空间树混用。光源范围/箭头查询同样只看 Visible；Enabled 控制照明，不影响可见示意的几何命中。
 
 每个 Section 检查 MaterialIndex、实际材质、索引区间和位置缓冲有效性；三角形索引为 `IndexBuffer[FirstIndex+offset+corner]+BaseVertexIndex`。按 NumComponents 读取局部位置前三个分量并变换到世界，拒绝非法索引和非有限顶点。继续使用上文 Möller–Trumbore 公式：
 
@@ -113,10 +113,12 @@ Scene::Raycast 拒绝非有限起点/方向/最大距离、零或极小方向以
 
 ### Editor 如何消费结果
 
-普通点击先处理方向球和已启用变换工具；其余左键由 Window 捕获，松开时确认移动全程小于 4 像素且仍在视口内，再调用 SelectAt。光源图标是可见屏幕叠加，按相同图标几何优先命中；否则以 All 过滤调用 Raycast 返回最近网格或光源范围/箭头，映射到现有节点列表并 Select。无命中 Select(-1)。方向球/变换工具的拖动、失焦、resize、视角切换和其他鼠标操作不触发对象点击。
+普通点击先处理方向球和已启用变换工具；其余左键由 Window 捕获，松开时确认移动全程小于 4 像素且仍在视口内，再调用 SelectAt。SelectAt 先以 Meshes 查询最近网格，命中即映射到现有节点列表并 Select；未命中实体时才按光源图标几何判断，最后以 Lights 查询最近光源范围/箭头。实体优先级高于光源，即使光源图标重叠或范围表面更近也不抢占实体。底层 All 查询仍按几何距离取最近命中，编辑器优先级通过已有过滤参数表达。无命中 Select(-1)。方向球/变换工具的拖动、失焦、resize、视角切换和其他鼠标操作不触发对象点击。
 
 ApplyMaterialAt 共用同一个 MakeRay/Raycast，保留默认 Meshes 过滤，使用命中 MaterialIndex，等待原有具体访问完成点后修改组件材质，通知场景更新。无命中保持原选择与材质，不把投递退回当前选中对象；不创建材质实例、不修改共享网格默认材质。输入/生命周期见 [UI 实现](../performance/08-ui-rendering-and-window-lifetime.md)。
 
 当前是双面几何拾取，不按 CullMode 模拟背面剔除，也不处理透明裁剪、骨骼变形或 GPU 顶点位移。零缩放的退化三角形拒绝，算法不是 watertight，共享边、极端尺度仍有浮点边界。All/Lights 额外检查点光球面、聚光有限圆锥及平行光箭头线段；几何索引保持 -1，天空光仍只通过列表选择。范围内起点取前方出口而非零距离，多个对象按最近表面/线段投影距离比较，网格与光源等距时保留先检查的网格；光源之间严格等距不保证稳定排序。解析公式、误差和线段阈值见 [光源提示与拾取](03-transforms-frustum-and-depth.md)。未保留 CPU 几何的资源需另行接入；此方案不是 GPU 像素 ID 拾取。
 
 2026-10-31 的独立诊断覆盖 NO/ZO×透视/正交反投影、轴平行/边界 slab、最近命中、材质槽、非单位方向、有限距离、Flush 前后代理变换、负尺度/父变换和删除；公开 Window 输入链与完整 Editor 验证点击、拖动取消、光源图标和属性栏联动。原材质投递回归保留最近网格、非零槽位隔离、偏心 UV、六向 TRS 和 GPU 实色检查。入口、真实范围和未解决校验见 [当日记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)。
+
+2026-11-01 的实体优先验证使用两个沿射线前后排列的网格，将点光图标分别置于前方、模型内部和后方，通过公开 Window 按下/释放确认均选择最近模型；另验模型未命中时的光源图标/范围回退、拖动取消、背景清空、编辑轴拖动和方向球点击。独立诊断入口为忽略目录 `out/diagnostics/editor-smoke/mesh-priority.cpp`，修改前因光源抢占模型而失败，修改后在独立及主运行目录均正常退出；两处构建目录的 Launcher 首帧和正常关闭均通过。主运行目录更新后已重新启动 Editor 并保留窗口供检查。运行仍有既有 GlobalDiffuseLightMap、HZB、SSR Shader 编译及 Vulkan 校验日志，不表示渲染链路无校验错误。

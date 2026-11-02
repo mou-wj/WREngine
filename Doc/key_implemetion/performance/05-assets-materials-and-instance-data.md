@@ -41,6 +41,12 @@ MaterialResource 保存编译输入、请求过的 Shader 强引用与最后请�
 
 名称、语义、类型构成参数 key；同名 BaseColor 向量和纹理可并存。构建绑定见 MaterialShaderParameter.cpp，默认纹理取 RenderCore globals，不作为 TextureAsset 或序列化依赖。各值和 TextureMask 位定义仍必须与 Shader 一致。
 
+## 基础几何资产的创建入口
+
+[StaticMeshAsset::CreateShape](../../../src/Framework/Engine/Private/Shape.cpp) 使用 EBasicMeshShape 选择既有生成器；每次创建一份 StaticMesh/LOD、顶点和索引资源、默认白色 MaterialAsset 依赖及局部距离场。生成算法不复制到 Editor，组件也不放宽“必须由资产拥有”的检查。返回的资产强引用网格，网格弱引用资产，组件在 SetStaticMesh 时保留资产。没有注册第二套缓存或常驻表；移除组件并释放最后一个资产引用后，网格包装随之销毁，相关 RHI 完成点继续遵循原资源约定。默认材质和距离场 Atlas 的全局生命周期仍属于原模块，不因网格资产析构而整体释放。
+
+`builtin://shape/名称` 是内存资产身份，重复创建同类几何仍是不同资产实例，不通过 AssetManager 的文件路径归一化或加载合并。当前不提供把该标识传给 LoadSync 的恢复能力。EditorApplication 在下一帧绘制前执行创建，再沿 AddMesh/Flush 注册；创建、距离场构建与上传同步执行，可能阻塞该帧。不能在任意后台线程调用，也没有以 CPU shared_ptr 替代 GPU 完成点。右键菜单时序见 [UI 实现](08-ui-rendering-and-window-lifetime.md)，几何格式和限制见 [网格算法](../algorithm/08-mesh-import-and-geometry.md)。
+
 ## 实例数据的两次索引
 
 [InstanceDataMgr.inl](../../../src/Framework/Engine/PublicHeader/InstanceDataMgr.inl) 每个 Block 保存 SubParameters 数组和 InstanceIds 数组。添加返回逻辑元素 offset，而不是 GPU 字节地址；CPU 用 sizeof(T) 换算上传字节。批次的 StartInstance/instance-id 流使 Shader 先取实例 ID，再索引参数结构，不能把 element offset 直接当 buffer offset。

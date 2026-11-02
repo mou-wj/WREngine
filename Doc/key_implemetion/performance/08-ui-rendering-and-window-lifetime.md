@@ -98,9 +98,11 @@ UpdateLayout 只在本帧视口绘制前执行：
 
 源码：[EditorApplication::TickFrame / CloseProject](../../../src/Editor/Editor/Private/EditorApplication.cpp)、[EditorScene::ClearObjects](../../../src/Editor/SceneEditor/Private/EditorScene.cpp)、[视口投放接收](../../../src/Editor/SceneEditor/Private/EditorScenePanel.cpp)、[EditorNodePanel](../../../src/Editor/NodeEditor/Private/EditorNodePanel.cpp)。
 
-Project 的 New/Open 复用 Directory 模式的 ImFileDialogWidget。菜单与确认回调只保存 ProjectAction 和目录值；Cancel 不提交动作。实际调用链为 PollEvents → 消费待执行工程动作 → 消费待投放网格路径 → ImMainWindow::Draw / NewFrame。打开前先检查描述及 Content，非法工程不先清空原工作区。工程元数据只记录版本/名字/Content，不保存场景，没有新增全局 ProjectManager。
+Project 的 New/Open 复用 Directory 模式的 ImFileDialogWidget。菜单与确认回调只保存 ProjectAction 和目录值；Cancel 不提交动作。实际调用链为 PollEvents → 消费待执行工程动作 → 消费右键创建请求 → 消费待投放网格/材质路径 → 更新属性栏布局 → ImMainWindow::Draw / NewFrame。打开前先检查描述及 Content，非法工程不先清空原工作区。工程元数据只记录版本/名字/Content，不保存场景，没有新增全局 ProjectManager。
 
-CloseProject 调用 ImMainWindow::WaitForLastDraw，复用 ImSlateRenderer 已保存的窗口 completion marker，覆盖旧 GUI 采样及 Present。此时上一帧已完成，本帧尚未生成 ImDrawData，才清空材质/资产面板的选择与待处理文件，再 ClearObjects：等待视口 Tracker 的实际访问值、按组件类型 RemovePrimitive/RemoveLight、Flush 消费借用组件指针、销毁组件及重置选择/相机；最后 AssetManager::Clear 移除驻留引用。默认光源随场景节点移除，内置天空资产仍由 EditorScene 持有供下次工程打开使用。没有新全局等待、额外命令提交、资源保活容器或 RDG 更改。等待仍可能阻塞切换操作；本轮未设计后台工程切换或场景序列化。
+CloseProject 调用 ImMainWindow::WaitForLastDraw，复用 ImSlateRenderer 已保存的窗口 completion marker，覆盖旧 GUI 采样及 Present。此时上一帧已完成，本帧尚未生成 ImDrawData，才清空材质/资产面板的选择与待处理文件，再 ClearObjects：等待视口 Tracker 的实际访问值、按组件类型 RemovePrimitive/RemoveLight、Flush 消费借用组件指针、销毁组件及重置选择/相机；最后 AssetManager::Clear 移除驻留引用。用户添加的光源随场景节点移除，内置天空资产仍由 EditorScene 持有供后续手动添加 Sky light 使用。没有新全局等待、额外命令提交、资源保活容器或 RDG 更改。等待仍可能阻塞切换操作；本轮未设计后台工程切换或场景序列化。
+
+场景树的 Objects 子区域填满面板剩余高度，BeginPopupContextWindow 使用 NoOpenOverItems，因此右键列表行不打开空白区创建菜单。面板仅提交 EEditorSceneObject 枚举；宿主保存一个 optional 待执行值，在下一帧 Draw 前调用 AddObject。关闭/切换工程清空请求并禁用创建，成功打开后启用。AddObject 沿已有 WaitForLastDraw、组件注册、dirty/Flush、Select 流程执行；基本几何创建同步占用控制线程，所有权见 [资产实现](05-assets-materials-and-instance-data.md)。天空光在 UI 和 AddObject 两处检查唯一性，底层 Scene 仍保留原检查。Viewport controls 说明与 Focus selected 只出现在 View ribbon，移除旧场景面板按钮没有更改底层复制/删除协议，也没有引入通用操作队列或第二套选择状态。
 
 不能在菜单的 Draw 回调内直接清理工程：即使等待上一提交，本帧 CPU DrawList 也可能已经记录了旧纹理指针。路径/动作延后消费解决的是 UI 生命周期问题，不是一套资源自动退休机制。应用公开 CreateProject/OpenProject/CloseProject 供控制层使用，也须在绘制阶段之外调用。
 
@@ -146,7 +148,7 @@ Shader VS 使用生成的 EditorTranslationVertexParameters 虚拟头，PS 保�
 
 ## 光源节点、提示 Pass 与空场景
 
-[EditorScene](../../../src/Editor/SceneEditor/Private/EditorScene.cpp) 的 m_Objects 独占网格/光源的 SceneComponent；Renderer::Scene 只借用组件并拥有对应代理。GetSelected 返回基类供位置、聚焦和属性使用，GetSelectedMesh 在材质/复制入口检查实际网格类型。打开工程时 CreateDefaultLights 创建四个默认节点；关闭或切换工程时先清工具目标，等待既有视口完成值，先 Flush 尚未注册的 Add，再按实际类型 RemovePrimitive/RemoveLight，Flush 完成后销毁组件 owner，避免 Add 后立即删除留下悬空指针。未增加 WaitIdle 或跨帧保活容器。
+[EditorScene](../../../src/Editor/SceneEditor/Private/EditorScene.cpp) 的 m_Objects 独占网格/光源的 SceneComponent；Renderer::Scene 只借用组件并拥有对应代理。GetSelected 返回基类供位置、聚焦和属性使用，GetSelectedMesh 在材质/复制入口检查实际网格类型。新建和打开工程不调用 CreateDefaultLights，节点由用户手动添加；关闭或切换工程时先清工具目标，等待既有视口完成值，先 Flush 尚未注册的 Add，再按实际类型 RemovePrimitive/RemoveLight，Flush 完成后销毁组件 owner，避免 Add 后立即删除留下悬空指针。未增加 WaitIdle 或跨帧保活容器。
 
 属性控件在 UI 线程同步调用原 LightComponent setter，EditorScene::NotifySelectedChanged 沿原完成点同步，并在下一 Draw 前 Flush 更新。Renderer::Scene::NotifyComponentChanged 使用 C++ 实际类型区分 LightComponent/PrimitiveComponent，避免它们未独立声明类型 ID 时继承基类 StaticTypeID 的错误匹配。光源代理在通知时 UpdateFromComponent、标记对应 GPU 数据和阴影更新；仅置 GPU dirty 而不刷新代理会继续上传旧参数。RemoveLight 使用实际旧代理确定脏标志、释放既有阴影分配并移除代理键/索引，然后删除代理。空数组跳过光源数据上传，天空光移除时清空两种 IBL 引用；没有改动 RHI 后端的绑定语义。
 
@@ -162,7 +164,7 @@ Scene::AddLight 对天空光在同一 pending-command mutex 范围内扫描现�
 
 网格/光源 Pass 将颜色与深度附件都声明 Load_Store。管线深度测试开启、深度值写入关闭；当前 RHI 原生 RenderPass 将深度按 attachment layout 绑定，未表达只读深度附件，因此 RDG 保守声明附件访问，避免状态与实际 RenderPass layout 不符。天空 Pass 结束需 Store 深度，否则后续扩展深度测试会读取未保证保留的内容。阴影上传在没有方向光矩阵时跳过对应零字节复制，并移除无用途的第 0 项调试访问，使真正无光源的场景可以完成绘制。
 
-没有 Primitive 时，DefferedSceneRenderer 只清空颜色/深度、按已有天空贴图绘制背景，再由原扩展入口加入网格/光源提示；没有表面参与着色，不录制材质光照计算。未打开工程时没有光源节点，场景背景为清空色；内置天空资产仍由 EditorScene 持有，打开工程后才由默认 Sky light 使用。关闭工程会移除全部光源，替代此前隐藏预览灯光继续留在场景中的行为。
+没有 Primitive 时，DefferedSceneRenderer 只清空颜色/深度、按已有天空贴图绘制背景，再由原扩展入口加入网格/光源提示；没有表面参与着色，不录制材质光照计算。未打开工程或尚未手动添加光源时没有光源节点，场景背景为清空色；内置天空资产仍由 EditorScene 持有，只在用户添加 Sky light 后用于场景。关闭工程会移除全部光源，替代此前隐藏预览灯光继续留在场景中的行为。
 
 完整 UI 验证还暴露了深度状态缓存的确定性碰撞：方向轴先创建关闭测试/写入的状态，后续模型复用了它，未写深度而被天空覆盖。修复属于 RHI 的 HashDepthStencilState，具体旧输入、键值与返回状态见 [状态缓存细节](06-shader-compilation-and-binding.md) 和 [当日记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)，没有通过修改 RDG 调度或提示附件依赖绕过此问题。
 
@@ -172,7 +174,7 @@ SceneView::MakeRay 与 SceneInterface::Raycast 提供同步 CPU 查询。EditorS
 
 普通左键按下在方向球和变换工具未消费时记录位置并返回 true，沿原 Window::OnMouseButton 取得捕获。鼠标全程移动达到 4px 后记为拖动，即使回到原点也不选择；释放越界同样不选择。有效释放先查询，再 Select，因此节点属性栏引发的 resize 不会反过来改变本次射线。背景 Select(-1) 通过既有宿主布局收起整个右栏；材质未命中仍保持选择。失焦、resize、切换/聚焦相机、清空/切换工具及其他鼠标操作取消待点击，不添加新的原生鼠标捕获机制。
 
-BuildLightIcons 每帧从会话拥有的非天空光生成小型屏幕菱形，按相机深度排序。绘制与命中调用同一函数，图标优先级低于方向球/变换工具、高于网格；绘制不测试场景深度，故 UI 命中也不会因模型遮挡跳过可见图标。天空光无图标；图标之外通过 All 查询光源范围和箭头，与网格按最近距离比较。GizmoDrawing::AddPass 在本次构图内复制三角形到 arena，异步命令不借用图标 vector 或组件；每灯为常数个三角形/Draw，排序 O(L log L)、临时几何 O(L)，没有批处理性能保证或持久缓存。
+BuildLightIcons 每帧从会话拥有的非天空光生成小型屏幕菱形，按相机深度排序。绘制与命中调用同一函数，图标绘制不测试场景深度，但选择优先级低于方向球/变换工具和网格实体。SelectAt 先执行 Meshes 查询，只有实体未命中时才生成和测试图标；图标也未命中时以 Lights 查询最近范围/箭头。天空光无图标；光源叠加的可见性不改变实体优先规则。GizmoDrawing::AddPass 在本次构图内复制三角形到 arena，异步命令不借用图标 vector 或组件；每灯为常数个三角形/Draw，排序 O(L log L)、临时几何 O(L)，没有批处理性能保证或持久缓存。
 
 Window 没有鼠标离开控件通知，只向当前命中/捕获的控件分发移动，单靠 Scene 的最后一次移动会留下 hover。EditorSceneViewportWidget 借用同一会话，在 Draw 前按 ImGui MousePos 和自身 geometry 刷新 UpdateViewportHover；其他 GUI 窗口遮挡时传无效位置。该刷新只更改显示状态，不向 Window、ImGui 或工具重发输入事件。ViewAxes 的构图回调优先读按下端点，否则按当前视图/鼠标命中，复制颜色和 LabelInfo 后录制；标签由 Shader 生成，无字体纹理所有权。默认构造的视口控件继续可用，Editor 宿主采用接收会话的构造函数以启用帧级 hover 刷新。
 
@@ -195,10 +197,68 @@ ImGridWidget 的颜色球由 UI 图元绘制，不采样材质纹理，所以扫
 
 ## 光源范围查询和不透明场景 Alpha
 
-EScenePickFilter 在 Engine 的 SceneInterface 中定义，默认 Meshes，EditorScene::SelectAt 明确请求 All；ApplyMaterialAt 继续使用默认几何查询，因此光源范围不会截获材质投递。光源注册/删除由原 pending-command/Flush 处理，参数 NotifyComponentChanged 则直接调用 LightSceneProxy::UpdateFromComponent，这是现有实现，与网格变换/空间树等到 Flush 的行为不同。查询、UI 修改、构图均须在原控制线程串行；它不是任意跨线程安全或严格 GPU 已显示帧的快照协议。返回的组件仍由 EditorScene::Object 拥有，须在 Remove/Flush 后才销毁。
+EScenePickFilter 在 Engine 的 SceneInterface 中定义，默认 Meshes，EditorScene::SelectAt 依次请求 Meshes、判断光源图标、请求 Lights，前一阶段命中即返回，保持实体优先；ApplyMaterialAt 继续使用默认几何查询，因此光源范围不会截获材质投递。光源注册/删除由原 pending-command/Flush 处理，参数 NotifyComponentChanged 则直接调用 LightSceneProxy::UpdateFromComponent，这是现有实现，与网格变换/空间树等到 Flush 的行为不同。查询、UI 修改、构图均须在原控制线程串行；它不是任意跨线程安全或严格 GPU 已显示帧的快照协议。返回的组件仍由 EditorScene::Object 拥有，须在 Remove/Flush 后才销毁。
+
+
 
 光源范围查询复用 Renderer 现有注册表，不添加缓存、索引或新管理器。HintRender::RaycastLight 使用代理数据，方向光绘制和拾取共用九条箭头线段；上层只经 Engine 接口选择，Editor 无 Renderer 直接链接。方向光 Position/Move 仍走现有组件位置 setter、Notify 和工具回调，GetDirection 由旋转确定，位置只改提示和拾取基点；未为了编辑效果修改方向光照明计算。
 
 场景纹理由 GUI 再采样合成，线条的混合权重不能成为该纹理的新 Alpha。DefferedSceneRenderer 将空背景清为 (0,0,0,1)，HintRender 和共用 GizmoDrawing 的混合附件写掩码为 RGB（0x7）。固定功能计算 `C=Cs*As+Cd*(1-As)`，附件 A 保持不透明值；现有 Opaque 材质/天空输出继续提供不透明场景。网格位于全部视图扩展之后，其颜色/深度参数声明建立依赖，不新加颜色副本、同步等待或后处理。
 
 Vulkan/DX12 原有 RGB 源 Alpha 混合已符合公式；OpenGLGraphicContext::ApplyColorBlendState 补齐每个颜色附件的 bBlendEnable、RGB/Alpha 分离因子和 ColorWriteMask，实际调用仍在 OpenGL context worker。三个后端的实际像素读回覆盖混合开关及 RGB/RGBA 写入，不能把单独 Shader 编译当作这项状态验证。完整编辑器/场景画面范围仍以 Vulkan 为主，已有其他全局 Shader/Validation 问题未扩大修复。
+
+## 组件属性参数与通用编辑界面
+
+源码入口：[ComponentProperty.h](../../../src/Framework/Engine/PublicHeader/ComponentProperty.h)、[SceneComponent.cpp](../../../src/Framework/Engine/Private/SceneComponent.cpp)、[LightComponent.cpp](../../../src/Framework/Engine/Private/LightComponent.cpp)、[EditorNodePanel.cpp](../../../src/Editor/NodeEditor/Private/EditorNodePanel.cpp)。
+
+### 描述、继承和控件映射
+
+ComponentProperty 是本次操作内的属性视图，包含稳定 Id、可变显示标签、Category、Tooltip、Type、Semantic、数值速度/范围、只读标记及 Read/Write 回调。ComponentPropertyValue 使用 bool、float、Core::Float3、string 的 variant；Color3 复用三维值，语义决定颜色控件。MakeComponentProperty<T> 将类型化 Getter/Setter 包装为统一回调；Write 拒绝不匹配的 variant，未提供 Setter 时只读。描述类型必须与 Getter 的值类型匹配，声明错误属于组件实现错误。
+
+SceneComponent::DescribeProperties 追加 Visible 和三种局部变换，没有通用 Enabled。StaticMeshComponent 调用基类后追加只读资源名/材质槽数。LightComponent 调用基类，保留调用者已存在的前缀，只过滤本次追加的无意义属性，再添加独有的 Enabled 和光源参数：天空光无变换也无范围 Visible，点光只有 Position，平行/聚光有 Position/Rotation，光源均无 Scale。天空光颜色/强度为只读且没有 Write 回调。
+
+EditorNodePanel 每次 Draw 重新收集描述，只按 Type 选择现有 Checkbox、Scalar、Vector3、ColorEdit3 或只读文本；按 Category 顺序生成分组。它不依赖 StaticMeshComponent/LightComponent，也不按具体节点类型选择面板。Position/Rotation/Scale 语义复用原三种工具回调和同排按钮；界面生成器只识别变换语义。
+
+新增节点例如只需追加声明：
+
+```cpp
+void MyComponent::DescribeProperties(std::vector<Engine::ComponentProperty>& out)
+{
+    SceneComponent::DescribeProperties(out);
+    out.push_back(Engine::MakeComponentProperty<bool>(
+        "DebugDraw", "Debug draw", "Display",
+        Engine::EComponentPropertyType::Boolean,
+        [this] { return m_bDebugDraw; },
+        [this](bool value) { m_bDebugDraw = value; return true; }));
+}
+```
+
+该节点使用既有 NodeEditor 就能获得可工作的复选框。新增**值类型**才需要同步扩展 variant 和通用控件映射；当前没有数组、资源选择器、嵌套对象、撤销栈、序列化反射或表达式依赖系统。
+
+### 校验与时序
+
+描述每帧临时生成，回调借用组件，Read 返回值副本；不跨帧缓存、不跨线程传递，不获取组件或资产所有权。对象和模块必须在本次读取/写入期间有效，Setter 仅修改属性，不在回调中销毁节点。Category/Id 不承担持久对象身份。
+
+数值及向量 Setter 拒绝非有限值；Scale 保持绝对值至少 0.01，Direction 拒绝近零向量并归一化，Range/Intensity/锥角按声明范围限制，减小外锥角会同步限制内锥角。只读控件保持显示并禁用编辑。上述是属性入口的校验，既有底层业务 Setter 的其他调用约定保持不变。
+
+UI 控制线程执行 Read → 编辑本地副本 → Write，成功后沿原 m_OnChanged 通知宿主。SceneEditor 读取原视口访问完成值、设置场景 dirty，在后续 Draw/Flush 重建活动列表；元数据本身不提交 GPU 命令、不增加锁或 Fence。每次收集和绘制的成本为 O(P)，临时描述及 std::function 可能有 CPU 分配；没有引入缓存来改变组件生命周期，也没有作性能基准。
+
+### Visible、Enabled 与 Renderer
+
+Visible 位于 SceneComponent，Enabled 仅位于 LightComponent，默认均为真。网格只有 Visible，决定实体绘制及几何拾取；光源 Visible 决定范围/箭头示意及其拾取，Enabled 决定照明、阴影和天空 IBL，没有两者相与的公共有效状态。关闭照明仍能显示范围，隐藏范围仍能照亮模型；天空光没有范围，属性面板不声明 Visible。状态只作用于当前组件，不自动传播到子节点，也不代表通用 Tick/脚本启停协议。
+
+PrimitiveComponent 原有 _bVisible 移至基类，未实现的可见性查询由基类提供。原 PrimitiveComponent::MarkRenderStateDirty 是不转发的占位实现，必须改为调用 SceneComponent 的实际通知，否则公共状态 Setter 会被派生覆盖截断，直到编辑器额外通知才生效。StaticMeshProxy 只快照 Visible，PrimitiveSceneInfo 继承该快照，空间树、GPU 实例列表、绘制与阴影遍历复用原 bVisible 筛选。光源在注册/通知时更新 LightSceneInfo::bEnabled，GPU 数组、ForEachLight 阴影遍历和天空 IBL 构建跳过未启用对象，天空关闭时先清空两项 IBL 引用。HintRender 及光源几何拾取只读 Visible；编辑器光源图标保留用于定位和选择，不按这两个开关过滤。变换工具也不依赖开关，删除/取消选择时才沿原流程解除工具借用。
+
+光源增删或 Enabled 变化会改变连续阴影表索引，沿原 dirty flags 重建各类型数组；只改某类参数时，未重建的前序类型数量也必须累加。基址为 Directional=0、Point=DirectionalCount、Spot=DirectionalCount+PointCount，避免先前只更新 Point/Spot 时从 0 重编号。没有新增索引管理器或资源保活容器。隐藏/禁用保留场景注册、资产和天空光唯一注册规则，直到真正删除才注销并释放 owner。
+
+禁用光源同时从活动 m_LightIndexs 删除代理；阴影缓存分配不释放，UploadShadowMapInfo 和级联表构建用 find 跳过非活动/不投影项，避免缓存重新插入禁用索引。控制线程构图时生成的当前访问表和聚光 VP 经原 AddUploadBuffer 复制到 RDG 上传数据；容量足够只复用缓冲，不跳过本次内容上传。现有资源访问完成点和 Remove/Flush 所有权保持不变，没有额外线程、等待或自动保活。代价为按现有构图入口重新整理 O(L) 表并上传非空数据，未引入新 dirty 缓存优化。参数单位、阴影采样与无投影分派见 [聚光算法](../algorithm/05-pbr-ibl-and-sampling.md#聚光锥角的单位与衰减) 和 [阴影实现](../algorithm/06-shadow-mapping-and-cascades.md#阴影访问数据必须随光源更新)。
+
+既有静态全局距离场使用静态 firstInit 和块缓存，动态移除/变换后的旧块失效尚不完整；本次只让实际重建时的源集合过滤失效组件，不能保证隐藏后旧 GDF 贡献立即消失。相关实验性间接光照限制继续见 [距离场专题](../algorithm/04-distance-fields-and-jump-flood.md)，没有为基础属性功能重构全局距离场或 RDG。
+
+### 对象右键删除
+
+ImListWidget::SetOnItemActions 在每项 Selectable 后、项 ID 作用域内构造菜单；右键同步选择所指对象。SceneEditor 通过回调提交该行索引，EditorApplication 保存一个待删除索引，在下一 TickFrame 的工程动作之后、创建和 Draw 之前消费。索引只用于这一次控制线程交接；工程关闭/切换会清空它，属于当前串行操作协议，不是持久对象 ID。不会因为稍后选择变化而误删当时选中的其他节点。
+
+RemoveSelected 先清除工具目标，等待原提交完成，Flush 尚未消费的 Add，再 RemovePrimitive/RemoveLight、Flush 后销毁组件；属性描述没有跨帧保留，ImGui 数据也已转成顶点，删除不会留下回调借用。删除最后一项后沿原布局器隐藏整个属性区与分隔条。没有修改测试主流程、增加 WaitIdle 或改变显式资源访问控制。
+
+2026-11-02 的独立描述/场景检查与真实 Editor 输入、GPU 读回、自定义组件扩展验证见 [当日记录](../../dev/bugfix/故障与修复记录-2026-11-02.md)。

@@ -18,6 +18,15 @@ namespace Engine
 
     StaticMeshComponent::~StaticMeshComponent() = default;
 
+    void StaticMeshComponent::DescribeProperties(std::vector<ComponentProperty>& properties)
+    {
+        SceneComponent::DescribeProperties(properties);
+        properties.push_back(MakeComponentProperty<std::string>("Mesh","Mesh","Mesh",EComponentPropertyType::Text,
+            [this] { auto asset=m_Mesh ? m_Mesh->GetAsset() : nullptr; return asset ? asset->GetName() : std::string("None"); }));
+        properties.push_back(MakeComponentProperty<std::string>("MaterialSlots","Material slots","Mesh",EComponentPropertyType::Text,
+            [this] { return std::to_string(GetNumMaterials()); }));
+    }
+
     void StaticMeshComponent::SetStaticMesh(StaticMesh* inMesh)
     {
         auto asset = inMesh ? inMesh->GetAsset() : nullptr;

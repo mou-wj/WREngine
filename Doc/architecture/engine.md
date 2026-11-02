@@ -117,8 +117,14 @@ SceneComponent
 - 局部/世界变换：位置、旋转、缩放
 - 场景归属：`SetSceneOwner()` / `GetSceneOwner()`
 - 变换更新：`OnTransformChanged()`、`MarkTransformDirty()`
+- 本地 `Visible` 状态；网格用它控制绘制，光源用它控制范围/方向示意
+- `DescribeProperties()`：提供 UI 无关的类型化属性描述，派生组件扩展描述而不定义界面
 
 它是最底层的场景对象基类，用于表达节点树结构。
+
+[ComponentProperty.h](../../src/Framework/Engine/PublicHeader/ComponentProperty.h) 定义属性 ID、标签、分组、类型、范围、只读标记、读写回调和变换语义。布尔、数值、三维向量、颜色和文本共用值类型；SceneComponent 提供状态及局部变换，StaticMeshComponent 添加只读网格信息，LightComponent 继承公共描述并筛选有意义的变换、添加光源参数。NodeEditor 按描述生成控件，Engine 不引用 ImGui 或 Editor。扩展示例、借用和校验边界见 [组件属性实现](../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md#组件属性参数与通用编辑界面)。
+
+网格只有 Visible，没有 Enabled。Enabled 仅由 LightComponent 定义，控制光照、阴影及天空 IBL；光源的 Visible 独立控制范围/箭头示意及其几何拾取，不影响照明，禁用照明也不隐藏范围。天空光没有范围，属性面板只提供 Enabled。对象仍在场景中，树选择、光源图标和变换编辑不受这两个开关限制；状态不自动传播到子节点。静态全局距离场的旧块动态失效另有既有限制，见实现专题。
 
 #### `Camera`
 
@@ -349,7 +355,7 @@ SceneComponent* m_RootComponent = nullptr;
 | `AssetRegistry.h/.cpp` | 路径/名称元数据查询，返回快照；不持有实际资源 |
 | `AssetManager.h/.cpp` | 规范化路径、类型检查、请求合并、驻留和关闭；模板只包装通用实现 |
 | `TextureAsset.h/.cpp` | 拥有纹理，封装纹理加载 |
-| `StaticMeshAsset.h/.cpp` | 拥有网格，封装 glTF 加载和材质依赖构建 |
+| `StaticMeshAsset.h/.cpp`、`Shape.cpp` | 拥有网格，封装 glTF 加载、基础几何资产创建和材质依赖构建 |
 | `MaterialAsset.h/.cpp` | 独占拥有 `Material`，读取材质 JSON，保留纹理资产依赖 |
 | `SkyLightAsset.h/.cpp` | 拥有环境纹理及 IBL 结果，封装现有预计算流程 |
 
@@ -369,6 +375,8 @@ MaterialInstance --父资产引用--> MaterialAsset
 `StaticMesh` 和 `Material` 到所属 Asset 的反向引用为弱引用，避免所有权环。兼容接口仍允许传入资产资源的裸指针，但组件会据此获取并保留所属资产；不接受无资产归属的网格或材质。
 
 glTF 内嵌材质使用 `MaterialAsset::Create` 创建子资产，由网格保存依赖引用，不创建材质实例。子资产路径形如 `模型路径#material/索引`，当前不单独写盘或注册到全局管理器。缺失材质的 primitive 显式加载并引用默认 `MaterialAsset`，调用方不必预加载默认材质。
+
+`StaticMeshAsset::CreateShape(EBasicMeshShape)` 在既有 Shape.cpp 中复用 Cube/Sphere/Plane/Cylinder 生成器，创建独立网格、默认白色材质依赖及距离场，设置资源到资产的弱引用，供 StaticMeshComponent 按原约定保留资产。它不初始化或借用全局 GStaticMesh_*，不增加缓存；`builtin://shape/名称` 只是内存资产标识，不是可由 LoadSync 重新加载的文件路径，也没有写盘或工程序列化能力。分配和释放条件见 [资产实现](../key_implemetion/performance/05-assets-materials-and-instance-data.md)。
 
 ### 7.3 网格材质编辑
 
@@ -477,7 +485,7 @@ DefaultWhite 显式使用金属度 0.8、粗糙度 0.2，保留重构前实际�
 
 [LightComponent](../../src/Framework/Engine/PublicHeader/LightComponent.h) 中的 DirectionalLightComponent 和 SpotLightComponent 使用 SceneComponent 的 +X 前向表示照射方向。SetDirection 接受非零有限世界方向，转换为局部 Euler；OnTransformChanged 则刷新方向缓存，继续由原 MarkRenderStateDirty → SceneInterface::NotifyComponentChanged 更新代理。既有 GetDirection/SetDirection 接口保留，不再维护与组件旋转互不相关的两套朝向。父变换、Euler 推导和滚转约定见 [光源与网格算法](../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)。
 
-SkyLightComponent 继续继承 SceneComponent 以复用场景归属和注册接口，变换对环境光没有作用，编辑器不提供其变换编辑。当前注册即启用，同场景天空光唯一性由 Renderer::Scene 的注册入口约束，不增加 Engine 全局天空光管理器；队列、移除和替换语义见 [场景生命周期](../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
+SkyLightComponent 继续继承 SceneComponent 以复用场景归属和注册接口，变换对环境光没有作用，编辑器不提供其变换编辑。默认 Enabled 为真，关闭时清空场景 IBL 引用、开启时复用原资产。同场景天空光唯一性由 Renderer::Scene 的注册入口约束，禁用不注销，不增加 Engine 全局天空光管理器；队列、移除和替换语义见 [场景生命周期](../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
 ## 相关核心实现细节
 

@@ -16,6 +16,8 @@
 
 Shape.cpp 当前包含 Cube、Plane、Sphere、Cylinder 的构造。统一产物是 position、UV、normal、tangent 和三角索引数组，再构造 LOD/包围体及资源；不是在 Shader 中即时生成网格。
 
+StaticMeshAsset::CreateShape 直接复用这些生成器，将结果放入资产并补齐默认材质和距离场，供编辑器右键创建使用，不改几何采样公式。生成器带 UV、normal、tangent，LocalVertexFactory 的基础 flags 为 7，实例化为 23；原先只允许 3/19 的筛选会在 MaterialResource 请求 Shader 时拒绝这些合法格式。当前筛选允许 3/7/19/23，保留切线流，仍拒绝缺少 UV/normal、vertex color 和未知位。所有权与调用时序见 [资产实现](../performance/05-assets-materials-and-instance-data.md)，编译边界见 [Shader 实现](../performance/06-shader-compilation-and-binding.md)。
+
 球面采样经纬：θ=lat·π/latSegments，φ=lon·2π/lonSegments，位置 `(sinθ cosφ, cosθ, sinθ sinφ)`。单位球法线可直接使用位置，UV=(lon/lonSegments,1-lat/latSegments)。每经纬单元拆成两个三角形，约 O(latSegments×lonSegments) 顶点/索引。
 
 经度 seam 重复首尾点以允许 UV 断开，极点会生成重复位置及退化三角形；这是固定参数网格的边界，后续距离/切线计算必须考虑。segments=0 不能直接代入除法，当前调用依赖有效默认分段值。
@@ -40,4 +42,4 @@ MeshBatch key 包含 VF、材质快照、索引资源、FrontFace 等状态，�
 
 Shader 通过实例 ID 流查结构化参数 buffer，模型矩阵、材质快照和 draw element 必须对应同一实例序列。GPU 数据的更新与完成点另见 [实例数据工程实现](../performance/05-assets-materials-and-instance-data.md)。
 
-验证应覆盖多 primitive、交错属性、不同索引宽度、UV seam、镜像法线、非均匀缩放和 section 材质；现有单模型 Launcher 目视验证不足以证明这些情况。以上未完成项均为源码整理结果，本轮未修改导入或几何生成实现。
+验证应覆盖多 primitive、交错属性、不同索引宽度、UV seam、镜像法线、非均匀缩放和 section 材质；现有单模型 Launcher 目视验证不足以证明这些情况。2026-11-01 的基础几何接入增加资产创建入口并修正 VF 组合筛选，没有修改上述 glTF 解析和几何采样、切线算法；原有 tangent.w 为 0 和非均匀缩放法线问题仍未解决，不宣称法线贴图结果已验证。

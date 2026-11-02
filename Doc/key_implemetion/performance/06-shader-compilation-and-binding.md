@@ -20,6 +20,10 @@
 
 RDG Buffer SRV 的 BaseType 必须为 RDGBuffer_SRV。2026-10-31 发现 ShaderParameterTypeInfo<RenderGraphBufferSRV> 原先误填 RDGTexture_UAV：SHADER_PARAMETER_RDG_BUFFER_SRV 产生的 HLSL 仍可写成 StructuredBuffer 并编译，但 SetupPassInternal 会把 CPU BufferSRV 当 TextureUAV 解释，无法得到正确的缓冲 SRV 依赖；SetShaderParameters 也会选择 UAV 类型。当前已更正这个枚举，不通过更改网格的只读声明或新包装类迁就错误类型。受影响的自有调用为 HintGridParameters 的两个 uint 缓冲和 SceneLightShadowParameters::SplitBuffer；其他带嵌套元数据的 SHADER_PARAMETER_RDG_STRUCTURED_BUFFER 路径原本就使用 RDGBuffer_SRV。编译成功不证明元数据分类正确，依赖与转换的独立检查见 [RDG 执行](03-rdg-execution-and-state.md)。
 
+## LocalVertexFactory 的基础几何组合
+
+LocalVertexFactory::SetData 根据实际顶点流设置 TexCoord、Normal、Tangent 等位，实例批次另加 InstanceData。原 ShouldCompilePermutation 硬编码只接受 3/19（UV+normal、以及其实例化组合），导致 Engine 的 Shape 网格虽然资源完整，仍因带 tangent 的 7/23 被 MaterialCore 判为 `VertexFactory permutation is unsupported`。当前按字段构造支持集合：必须有 UV/normal，tangent 和 instance 可选，不允许 vertex color 或未知位；对应仍是四种明确组合。现有 LocalVertexFactory.sf 已包含切线和实例分支，不删网格切线、不跳过错误、不新增 Shader 或渲染路径。默认材质不使用法线贴图；该修正不等于修复生成器已有的 tangent.w 问题，见 [网格算法](../algorithm/08-mesh-import-and-geometry.md)。
+
 ## 三个编译出口
 
 | 目标 | 当前路径 | 运行时产物 |

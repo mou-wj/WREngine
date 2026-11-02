@@ -6,6 +6,7 @@
 #include "SceneInterface.h"
 #include "StaticMeshComponent.h"
 #include "MaterialAsset.h"
+#include "Shape.h"
 #include "PathInfo.h"
 #include "Transform.hpp"
 #include "RHIApi.h"
@@ -161,6 +162,63 @@ namespace Editor
         std::cout << "[Editor] Added " << m_Objects.back().Name << std::endl;
     }
 
+    bool EditorScene::CanAddObject(EEditorSceneObject type) const
+    {
+        if (!m_Scene) return false;
+        return type != EEditorSceneObject::SkyLight || std::none_of(m_Objects.begin(),m_Objects.end(),[](const auto& object) {
+            const auto* light = dynamic_cast<const Engine::LightComponent*>(object.Component.get());
+            return light && light->GetLightType() == Engine::ELightType::Sky;
+        });
+    }
+
+    void EditorScene::AddObject(EEditorSceneObject type)
+    {
+        if (!CanAddObject(type)) throw std::runtime_error("The scene is unavailable or already has a sky light");
+        using Shape = Engine::EBasicMeshShape;
+        std::unique_ptr<Engine::LightComponent> light;
+        const char* name;
+        switch (type)
+        {
+        case EEditorSceneObject::Cube: AddMesh(Engine::StaticMeshAsset::CreateShape(Shape::Cube)); return;
+        case EEditorSceneObject::Sphere: AddMesh(Engine::StaticMeshAsset::CreateShape(Shape::Sphere)); return;
+        case EEditorSceneObject::Plane: AddMesh(Engine::StaticMeshAsset::CreateShape(Shape::Plane)); return;
+        case EEditorSceneObject::Cylinder: AddMesh(Engine::StaticMeshAsset::CreateShape(Shape::Cylinder)); return;
+        case EEditorSceneObject::PointLight:
+        {
+            auto point = std::make_unique<Engine::PointLightComponent>();
+            point->SetAttenuationRadius(10); light = std::move(point); name = "Point light"; break;
+        }
+        case EEditorSceneObject::SpotLight:
+        {
+            auto spot = std::make_unique<Engine::SpotLightComponent>();
+            spot->SetDirection({0,-1,0}); spot->SetAttenuationRadius(15);
+            spot->SetInnerConeAngle(20); spot->SetOuterConeAngle(45);
+            light = std::move(spot); name = "Spot light"; break;
+        }
+        case EEditorSceneObject::DirectionalLight:
+        {
+            auto directional = std::make_unique<Engine::DirectionalLightComponent>();
+            directional->SetDirection({-1,-1,-1}); light = std::move(directional); name = "Directional light"; break;
+        }
+        case EEditorSceneObject::SkyLight:
+        {
+            auto sky = std::make_unique<Engine::SkyLightComponent>();
+            sky->SetDiffuseIrradiance(m_SkyAsset->GetDiffuseIrradiance());
+            sky->SetSpecularIrradiance(m_SkyAsset->GetSpecularPrefilter());
+            light = std::move(sky); name = "Sky light"; break;
+        }
+        default: throw std::invalid_argument("Unknown scene object type");
+        }
+        light->SetColor({1,1,1}); light->SetIntensity(1); light->SetCastShadow(true);
+        WaitForLastDraw();
+        auto* component = light.get();
+        m_Objects.push_back({std::string(name) + " #" + std::to_string(m_NextObjectId++),std::move(light)});
+        try { m_Scene->AddLight(component); }
+        catch (...) { m_Objects.pop_back(); throw; }
+        m_bSceneDirty = true;
+        Select(static_cast<int>(m_Objects.size()) - 1);
+    }
+
     void EditorScene::ClearObjects()
     {
         ClearTransformTargets();
@@ -187,12 +245,15 @@ namespace Editor
         const auto* view=m_ViewFamily.GetView(0);
         Core::Ray ray;float maximum;
         if (!m_Scene || !view || !view->MakeRay(position,ray,maximum)) return;
+        // Solid geometry takes priority over light icons and range hints.
+        Engine::ScenePickResult result;
+        if (m_Scene->Raycast(ray,maximum,result,Engine::EScenePickFilter::Meshes))
+        { Select(FindObjectIndex(result.Component));return; }
         const auto icons=BuildLightIcons(*view,m_Objects);
         for (auto icon=icons.rbegin(); icon!=icons.rend(); ++icon)
             if (std::abs(position.X-icon->Center.X)+std::abs(position.Y-icon->Center.Y)<=LightIconRadius)
             { Select(icon->ObjectIndex);return; }
-        Engine::ScenePickResult result;
-        Select(m_Scene->Raycast(ray,maximum,result,Engine::EScenePickFilter::All) ? FindObjectIndex(result.Component) : -1);
+        Select(m_Scene->Raycast(ray,maximum,result,Engine::EScenePickFilter::Lights) ? FindObjectIndex(result.Component) : -1);
     }
 
     bool EditorScene::ApplyMaterialAt(const std::shared_ptr<Engine::MaterialAsset>& material, const Core::Float2& viewportPosition)

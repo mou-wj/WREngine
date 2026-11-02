@@ -66,6 +66,8 @@ namespace ImGUISlate
     }
     void ImListWidget::SetOnSelectionChanged(std::function<void(int)> callback)
     { m_OnSelectionChanged = std::move(callback); }
+    void ImListWidget::SetOnItemActions(std::function<void(int)> callback)
+    { m_OnItemActions = std::move(callback); }
     void ImListWidget::Draw()
     {
         if (GetVisibility() != SlateCore::EVisibility::Visible) return;
@@ -73,11 +75,13 @@ namespace ImGUISlate
         for (int index = 0; index < static_cast<int>(m_Items.size()); ++index)
         {
             ImGui::PushID(index);
-            if (ImGui::Selectable(m_Items[index].c_str(), index == m_SelectedIndex))
+            const bool selected=ImGui::Selectable(m_Items[index].c_str(), index == m_SelectedIndex);
+            if (selected || ImGui::IsItemClicked(ImGuiMouseButton_Right))
             {
                 m_SelectedIndex = index;
                 if (m_OnSelectionChanged) m_OnSelectionChanged(index);
             }
+            if (m_OnItemActions) m_OnItemActions(index);
             ImGui::PopID();
         }
         ImGui::PopID();

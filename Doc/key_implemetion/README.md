@@ -2,6 +2,14 @@
 
 本目录回答“具体怎样实现、依赖哪些条件、哪里尚不可靠”。模块职责与接口关系仍以 [architecture](../architecture/README.md) 的既有结构组织。目录名沿用需求首次指定的 `key_implemetion`。
 
+2026-11-02 补充了组件类型化属性描述、通用 NodeEditor、网格可见性与光源照明/范围独立开关、对象右键删除的执行时序，见 [UI 工程实现](performance/08-ui-rendering-and-window-lifetime.md#组件属性参数与通用编辑界面)。
+
+同日修正聚光锥角的弧度/余弦边界及阴影访问数据更新，见 [聚光算法](algorithm/05-pbr-ibl-and-sampling.md#聚光锥角的单位与衰减)、[阴影实现](algorithm/06-shadow-mapping-and-cascades.md#阴影访问数据必须随光源更新) 和 [故障记录](../dev/bugfix/故障与修复记录-2026-11-02.md#聚光灯启停无画面变化)。
+
+2026-11-03 完成聚光修复后的通用节点回归、后端 Shader 复查和主目录 Launcher 重启，实际范围及未通过项见 [续验记录](../dev/bugfix/故障与修复记录-2026-11-03.md)。
+
+2026-11-01 补充实体优先拾取、场景树右键创建、基础几何资产与 VF 切线组合；界面操作、所有权和后端 Shader 编译的实际范围见 [开发记录](../dev/bugfix/故障与修复记录-2026-11-01.md)。
+
 首次整理完成于 2026-10-26，原始基线为 `04f910d`；随后按 `5bb415e` 及本次 Editor 工作区实现同步启动、UI、场景更新和顶点流缓存说明。首轮文档整理没有运行测试；Editor 调整的实际检查另见 [当日记录](../dev/bugfix/故障与修复记录-2026-10-26.md)。下文“已接入”来自实际调用方，“存在实现”不代表所有路径验证通过。
 
 ## 工程实现：performance
@@ -14,7 +22,7 @@
 | [RHI 队列与同步](performance/02-rhi-queues-and-sync.md) | 录制、提交、worker 执行和 GPU 完成有什么区别？ |
 | [RDG 执行与资源状态](performance/03-rdg-execution-and-state.md) | SceneView 扩展怎样添加 Pass，参数怎样变成依赖、屏障、物理资源和提交？ |
 | [内存、资源池与瞬态资源](performance/04-memory-and-transient-resources.md) | 对齐、切分、复用、回收分别由谁负责？ |
-| [资产、材质与实例数据](performance/05-assets-materials-and-instance-data.md) | 如何合并加载请求、维持所有权、导入工程依赖和更新 GPU 数据？ |
+| [资产、材质与实例数据](performance/05-assets-materials-and-instance-data.md) | 如何合并加载请求、维持文件/基础几何资产所有权、导入工程依赖和更新 GPU 数据？ |
 | [Shader 编译与绑定](performance/06-shader-compilation-and-binding.md) | C++ 参数怎样进入 HLSL、反射和各后端绑定，布局缓存怎样保持 CPU 参数信息一致？ |
 | [光追 AS 与 SBT](performance/07-ray-tracing-as-and-sbt.md) | AS 存储、scratch、group handle 和 SBT 怎样衔接？ |
 | [UI 合成与窗口生命周期](performance/08-ui-rendering-and-window-lifetime.md) | 当前鼠标事件怎样分发，ImGui 怎样共用 RHI，纹理与窗口完成点怎样维护？ |
@@ -24,7 +32,7 @@
 
 | 专题 | 要解决的阅读问题 |
 | --- | --- |
-| [射线求交与三角形距离](algorithm/01-ray-triangle-and-distance.md) | 屏幕射线、统一场景查询怎样返回最近对象/材质槽，t、重心坐标和最近点怎样求？ |
+| [射线求交与三角形距离](algorithm/01-ray-triangle-and-distance.md) | 屏幕射线怎样返回最近对象/材质槽，编辑器怎样优先拾取实体，t、重心坐标和最近点怎样求？ |
 | [BVH、八叉树与场景查询](algorithm/02-bvh-octree-and-scene-query.md) | 如何分割、剪枝，候选集和精确命中有什么区别？ |
 | [矩阵、视锥与深度](algorithm/03-transforms-frustum-and-depth.md) | NO/ZO 深度如何区分，方向球/变换工具怎样交互，网格怎样求可见地面 AABB、逐区细分并保持不透明 Alpha，光源球/锥/箭头怎样生成和拾取？ |
 | [距离场与 Jump Flood](algorithm/04-distance-fields-and-jump-flood.md) | 有符号距离怎样生成、存储、合并和步进？ |

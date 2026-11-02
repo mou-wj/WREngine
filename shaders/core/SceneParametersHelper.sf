@@ -116,10 +116,8 @@ float3 EvaluateSceneLighting(
                 Light);
         uint lightId = Raw.LightId;
         float d = distance(Context.WorldPosition,Context.CameraPosition);
-        float visibility = ComputeDirectionalShadow(
-            lightId,
-            Context.WorldPosition,
-            d);
+        float visibility = ComputeShadowVisibility(
+            lightId, Context.WorldPosition, d, float3(0,0,0), 0);
         Result +=LightShading * visibility;
 
     }
@@ -141,11 +139,8 @@ float3 EvaluateSceneLighting(
             MakePointLight(
                 Raw);
         uint lightId = Raw.LightId;
-        float visibility = ComputePointShadow(
-        lightId,
-        Context.WorldPosition,
-        Light.Position,
-        Light.Radius);
+        float visibility = ComputeShadowVisibility(
+            lightId, Context.WorldPosition, 0, Light.Position, Light.Radius);
         float3 LightShading =
             ShadePointLight(
                 Context,
@@ -177,9 +172,9 @@ float3 EvaluateSceneLighting(
                 Material,
                 Light);
         uint lightId = Raw.LightId;
-        float visibility = ComputeSpotShadow(
-        lightId,
-        Context.WorldPosition);
+        // A light without a shadow allocation has full visibility (SHADOW_TYPE_NONE).
+        float visibility = ComputeShadowVisibility(
+            lightId, Context.WorldPosition, 0, Light.Position, Light.Radius);
         Result += LightShading * visibility;
 
     }

@@ -110,32 +110,15 @@ namespace Engine
         LocalVertexFactoryFeatureFlags flags = {};
         flags.PackedFlags = parameters.VertexFactoryFlags;
         
-        return flags.PackedFlags == 3 || flags.PackedFlags == 19;
-        
-        /*
-           ===========================================================================
-               Tangent requires Normal
-           ===========================================================================
-           */
-
-        if (flags.SupportsTangent &&
-            !flags.SupportsNormal)
-        {
-            return false;
-        }
-
-        /*
-        ===========================================================================
-            Instance data currently unsupported
-        ===========================================================================
-        */
-
-        if (flags.SupportsInstanceData)
-        {
-            return false;
-        }
-
-        return true;
+        // Both imported meshes and built-in shapes require UVs and normals.
+        // The existing shader also supports tangents and instancing; preserve
+        // their supplied streams instead of discarding them to fit flags 3/19.
+        LocalVertexFactoryFeatureFlags supported = {};
+        supported.SupportsTexCoord = true;
+        supported.SupportsNormal = true;
+        supported.SupportsTangent = flags.SupportsTangent;
+        supported.SupportsInstanceData = flags.SupportsInstanceData;
+        return flags.PackedFlags == supported.PackedFlags;
     }
 
 

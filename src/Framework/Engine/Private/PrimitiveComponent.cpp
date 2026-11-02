@@ -8,7 +8,7 @@ namespace Engine {
     // PrimitiveComponent implementation
     PrimitiveComponent::PrimitiveComponent()
         : _localTransform(Core::Mat4::Identity()), _worldTransform(Core::Mat4::Identity()), _bounds(), _mobility(EMobility::Static),
-        _bVisible(true), _pendingSceneProxy(nullptr), _debugName(nullptr) {
+        _pendingSceneProxy(nullptr), _debugName(nullptr) {
     }
 
     PrimitiveComponent::~PrimitiveComponent() {
@@ -59,12 +59,7 @@ namespace Engine {
     }
 
     void PrimitiveComponent::MarkRenderStateDirty() {
-        // Example: ask the Scene/RenderThread to recreate or update the proxy.
-        if (!OwnerScene) return;
-        //RenderCommand::Enqueue([this]() {
-        //    // In real engine: OwnerScene->MarkPrimitiveDirty_RenderThread(sceneProxyId);
-        //    (void)this;
-        //});
+        SceneComponent::MarkRenderStateDirty();
     }
 
     void PrimitiveComponent::UpdateTransform(const Core::Mat4& newLocalTransform) {

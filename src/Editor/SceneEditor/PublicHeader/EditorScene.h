@@ -20,6 +20,7 @@ namespace Engine
 namespace Editor
 {
     enum class EEditorViewDirection { Orbit, Top, Bottom, Left, Right, Front, Back };
+    enum class EEditorSceneObject { PointLight, SpotLight, DirectionalLight, SkyLight, Cube, Sphere, Plane, Cylinder };
 
     // Scene-editor session and viewport client; assets still own real resources.
     class SCENEEDITOR_API EditorScene final : public Engine::ViewportClient
@@ -37,6 +38,8 @@ namespace Editor
         void Shutdown();
         void ClearObjects();
         void AddMesh(const std::shared_ptr<Engine::StaticMeshAsset>& asset);
+        bool CanAddObject(EEditorSceneObject type) const;
+        void AddObject(EEditorSceneObject type);
         bool ApplyMaterialAt(const std::shared_ptr<Engine::MaterialAsset>& material, const Core::Float2& viewportPosition);
         void DuplicateSelected();
         void RemoveSelected();

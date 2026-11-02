@@ -88,7 +88,7 @@ namespace Renderer {
 
     public:
 
-        bool bVisible = true;
+        bool bEnabled = true;
 
     private:
 

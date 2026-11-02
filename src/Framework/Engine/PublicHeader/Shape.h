@@ -4,6 +4,8 @@
 
 namespace Engine {
 
+enum class EBasicMeshShape { Cube, Sphere, Plane, Cylinder };
+
 ENGINE_API extern StaticMeshSP GStaticMesh_Cube;
 ENGINE_API extern StaticMeshSP GStaticMesh_Sphere;
 ENGINE_API extern StaticMeshSP GStaticMesh_Plane;

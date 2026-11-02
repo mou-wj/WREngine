@@ -408,8 +408,11 @@ namespace Renderer {
         //
         int atlasIndex = 0, directionalLightShadowViewInfoIndex = 0;
         for (auto& shadowInfo : scene->m_GPUResourceInfo.ShadowResourceInfo.LightShadowInfos) {
-			auto index = scene->m_LightIndexs[shadowInfo.first];
-            LightShadowAccessInfo& lightShadowAccessInfo = lightShadowAccessInfos[index];
+            // Cached allocations may outlive disabled lights. Only publish active shadows.
+            const auto lightIndex = scene->m_LightIndexs.find(shadowInfo.first);
+            if (lightIndex==scene->m_LightIndexs.end() || !shadowInfo.first->IsCastShadow() ||
+                !shadowInfo.second.Allocation.IsValid()) continue;
+            LightShadowAccessInfo& lightShadowAccessInfo = lightShadowAccessInfos[lightIndex->second];
             lightShadowAccessInfo.ShadowType = (uint32_t)shadowInfo.second.Allocation.ShadowType;
             AtlasShadowTextureAccessInfo spotShadowAccessInfo;
             DirectionalLightCascadeShadowViewInfo directionalLightShadowViewInfo;
@@ -446,8 +449,11 @@ namespace Renderer {
             desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
             lightShadowInfoBuffer = std::make_shared<RenderCore::RenderBuffer>(desc);
             lightShadowInfoBuffer->InitRHIResource();
+        }
+        // Reuse capacity, but upload current indices and matrices after every update.
+        if (!lightShadowAccessInfos.empty()) {
             auto bufferUpload = graphBuilder.RegisterExternalBuffer("LightShadowInfoBuffer",lightShadowInfoBuffer.get());
-			graphBuilder.AddUploadBuffer(bufferUpload, lightShadowAccessInfos.data(), lightCount * sizeof(LightShadowAccessInfo));
+            graphBuilder.AddUploadBuffer(bufferUpload, lightShadowAccessInfos.data(), lightCount * sizeof(LightShadowAccessInfo));
         }
         if (atlasAccessInfoBuffer == nullptr || atlasAccessInfoBuffer->GetRHI()->GetDesc().Size < spotShadowAccessInfos.size() * sizeof(AtlasShadowTextureAccessInfo)) {
             RHI::RHIBufferDesc desc;
@@ -458,6 +464,8 @@ namespace Renderer {
             desc.Usage = RHI::ERHIBufferUsageFlag::ShaderResource | RHI::ERHIBufferUsageFlag::TransferDst;
             atlasAccessInfoBuffer = std::make_shared<RenderCore::RenderBuffer>(desc);
             atlasAccessInfoBuffer->InitRHIResource();
+        }
+        if (!spotShadowAccessInfos.empty()) {
             auto bufferUpload = graphBuilder.RegisterExternalBuffer("AtlasAccessInfoBuffer", atlasAccessInfoBuffer.get());
             graphBuilder.AddUploadBuffer(bufferUpload, spotShadowAccessInfos.data(), spotShadowAccessInfos.size() * sizeof(AtlasShadowTextureAccessInfo));
         }
@@ -609,7 +617,8 @@ namespace Renderer {
         int directionalLightShadowViewInfoIndex = 0;
         std::vector<DirectionalLightCascadeShadowViewInfo> directionalLightShadowViewInfos;
         for (auto& shadowInfo : scene->m_GPUResourceInfo.ShadowResourceInfo.LightShadowInfos) {
-            auto index = scene->m_LightIndexs[shadowInfo.first];
+            if (scene->m_LightIndexs.find(shadowInfo.first)==scene->m_LightIndexs.end() ||
+                !shadowInfo.first->IsCastShadow()) continue;
             DirectionalLightCascadeShadowViewInfo directionalLightShadowViewInfo;
             if (shadowInfo.second.Allocation.ShadowType == EShadowType::Directional) {
                 for (uint32_t i = 0; i < shadowInfo.second.ShadowMatrices.size(); i++, directionalLightShadowViewInfoIndex++) {

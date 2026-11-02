@@ -7,6 +7,7 @@
 namespace Editor
 {
     class EditorScene;
+    enum class EEditorSceneObject;
     class SCENEEDITOR_API EditorSceneViewportWidget final : public SlateCore::SlateWidget
     {
         DECLARE_TYPE_ID_DERIVED_TYPE(EditorSceneViewportWidget, SlateCore::SlateWidget)
@@ -35,10 +36,16 @@ namespace Editor
     {
     public:
         explicit EditorScenePanel(EditorScene& scene);
+        void SetCreationEnabled(bool enabled) { m_bCreationEnabled = enabled; }
+        void SetOnAddObject(std::function<void(EEditorSceneObject)> callback);
+        void SetOnDeleteObject(std::function<void(int)> callback);
     protected:
         void DrawContent() override;
     private:
         EditorScene& m_Scene;
         ImGUISlate::ImListWidget m_Objects;
+        std::function<void(EEditorSceneObject)> m_OnAddObject;
+        std::function<void(int)> m_OnDeleteObject;
+        bool m_bCreationEnabled = false;
     };
 }

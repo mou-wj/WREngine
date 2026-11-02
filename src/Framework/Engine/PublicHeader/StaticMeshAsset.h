@@ -3,11 +3,14 @@
 
 namespace Engine {
 class StaticMesh;
+enum class EBasicMeshShape;
 
 class ENGINE_API StaticMeshAsset : public IAsset
 {
 public:
     explicit StaticMeshAsset(const std::string& path);
+    // Creates an in-memory asset using Engine's existing geometry generators.
+    static std::shared_ptr<StaticMeshAsset> CreateShape(EBasicMeshShape shape);
     const std::string& GetName() const override { return m_Name; }
     const std::string& GetPath() const override { return m_Path; }
     bool Load() override;

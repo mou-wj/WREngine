@@ -103,6 +103,8 @@ ImSlateRenderer 将 ImGui::GetMouseCursor 的结果转换为 SlateCore::EMouseCu
 
 ## 相关核心实现细节
 
+ImListWidget 的 SetOnItemActions 在每项 Selectable 之后、该项 ID 作用域内调用，供上层构造项右键菜单；右键项会同步选择对应索引。回调仅生成 UI 或记录请求，不在遍历中修改列表。SceneEditor 用此能力提供节点删除，ImGUISlate 不引用 Engine 节点或执行场景销毁。参数生成的节点编辑界面使用 Engine 的属性描述和现有 ImPropertyControls，业务描述仍属于 Engine/NodeEditor。
+
 本篇保留架构职责说明；执行时序、数学原理及源码限制见以下专题。本轮为源码整理，专题不等于运行验证通过。
 
 - [ImDrawData 转换、纹理访问和上传缓冲复用](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)

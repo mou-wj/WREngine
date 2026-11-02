@@ -22,6 +22,7 @@ namespace Engine
     public:
         StaticMeshComponent();
         ~StaticMeshComponent() override;
+        void DescribeProperties(std::vector<ComponentProperty>& properties) override;
 
         //----------------------------------------
         // Mesh
