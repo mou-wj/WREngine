@@ -8,6 +8,8 @@
 
 2026-11-03 完成聚光修复后的通用节点回归、后端 Shader 复查和主目录 Launcher 重启，实际范围及未通过项见 [续验记录](../dev/bugfix/故障与修复记录-2026-11-03.md)。
 
+同日增加独立 MeshViewer 并补充法线方向箭头：模块边界见 [编辑器架构](../architecture/app/editor.md#meshviewer-单网格检查)，几何/Phong 与箭头计算见 [预览算法](algorithm/05-pbr-ibl-and-sampling.md#meshviewer-的-phong-预览)，纹理合成、切换和资源完成点见 [工程实现](performance/08-ui-rendering-and-window-lifetime.md#meshviewer-预览与检查)。
+
 2026-11-01 补充实体优先拾取、场景树右键创建、基础几何资产与 VF 切线组合；界面操作、所有权和后端 Shader 编译的实际范围见 [开发记录](../dev/bugfix/故障与修复记录-2026-11-01.md)。
 
 首次整理完成于 2026-10-26，原始基线为 `04f910d`；随后按 `5bb415e` 及本次 Editor 工作区实现同步启动、UI、场景更新和顶点流缓存说明。首轮文档整理没有运行测试；Editor 调整的实际检查另见 [当日记录](../dev/bugfix/故障与修复记录-2026-10-26.md)。下文“已接入”来自实际调用方，“存在实现”不代表所有路径验证通过。

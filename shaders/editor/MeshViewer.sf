@@ -1,0 +1,61 @@
+struct MeshViewerOutput
+{
+    float4 Position : SV_Position;
+    float3 LocalPosition : TEXCOORD0;
+    float3 Normal : TEXCOORD1;
+};
+
+#if VERTEX_SHADER
+#include "/Generated/ShaderParameters/MeshViewerVertexParameters.sf"
+MeshViewerOutput MainVS(uint vertexId : SV_VertexID)
+{
+    uint mode = (uint)DrawSettings.x;
+    uint vertex;
+    if (mode == 2) vertex = vertexId / 10;
+    else if (mode == 1)
+    {
+        const uint corners[6] = {0,1,1,2,2,0};
+        vertex = PreviewIndices[(vertexId / 6) * 3 + corners[vertexId % 6]];
+    }
+    else vertex = PreviewIndices[vertexId];
+    float3 position = (PreviewVertices[vertex*2].xyz - CenterAndScale.xyz) * CenterAndScale.w;
+    float3 normal = PreviewVertices[vertex*2+1].xyz;
+    if (mode == 2)
+    {
+        // Five line segments: the shaft and four arrowhead edges around the normal.
+        float3 start = position + normal * 0.002;
+        float3 tip = start + normal * DrawSettings.y;
+        uint segment = (vertexId % 10) / 2;
+        if (segment == 0) position = (vertexId & 1) ? tip : start;
+        else
+        {
+            // Choose a nonparallel reference so +/-Y normals have a valid basis too.
+            float3 u = normalize(cross(normal,abs(normal.y) < 0.9 ? float3(0,1,0) : float3(1,0,0)));
+            float3 v = cross(normal,u);
+            float3 radial = segment <= 2 ? u : v;
+            if ((segment & 1) == 0) radial = -radial;
+            float3 base = tip - normal * (DrawSettings.y * 0.28) + radial * (DrawSettings.y * 0.14);
+            position = (vertexId & 1) ? base : tip;
+        }
+    }
+    MeshViewerOutput output;
+    output.LocalPosition = position;
+    output.Normal = normal;
+    output.Position = mul(ViewProjection,float4(position,1));
+    return output;
+}
+#else
+#include "/Generated/ShaderParameters/MeshViewerPixelParameters.sf"
+float4 MainPS(MeshViewerOutput input) : SV_Target0
+{
+    if (DrawSettings.x > 1.5) return float4(0.15,1,0.35,1);
+    if (DrawSettings.x > 0.5) return float4(0.65,0.8,1,1);
+    float3 n = normalize(input.Normal);
+    float3 l = normalize(-LightDirection.xyz);
+    float3 v = normalize(CameraPosition.xyz-input.LocalPosition);
+    float diffuse = saturate(dot(n,l));
+    float specular = diffuse > 0 ? pow(saturate(dot(reflect(-l,n),v)),32) : 0;
+    float3 color = float3(0.62,0.68,0.78) * (0.12+0.8*diffuse) + 0.25*specular;
+    return float4(pow(saturate(color),1.0/2.2),1);
+}
+#endif

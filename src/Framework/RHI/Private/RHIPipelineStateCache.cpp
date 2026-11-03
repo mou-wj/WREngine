@@ -144,6 +144,7 @@ size_t RHIPipelineStateCache::HashGraphicsPipelineDesc(const RHIGraphicsPipeline
 	hash ^= HashColorBlendState(desc.ColorBlendState->GetDesc());
 	hash ^= HashDepthStencilState(desc.DepthStencilState->GetDesc());
     hash ^= RHIGraphicAttachmentDesc::CalculateHash(desc.AttachmentDesc);
+	HashCombine(hash, static_cast<uint32_t>(desc.PrimitiveTopology));
 	return hash;
 
 }

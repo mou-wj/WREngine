@@ -4,6 +4,7 @@
 #include "EditorAssetPanel.h"
 #include "EditorMaterialPanel.h"
 #include "EditorNodePanel.h"
+#include "EditorMeshViewer.h"
 #include "Widgets/ImFileDialogWidget.h"
 #include "AssetManager.h"
 #include "StaticMeshAsset.h"
@@ -63,7 +64,7 @@ namespace Editor
                 for (auto& element : _elements)
                 {
                     auto* widget = element.WidgetPtr;
-                    if (widget == &m_Menu || widget == &m_MaterialPopup || widget == &m_Toolbar || widget == &m_LeftSplitter || widget == &m_RightSplitter || widget == &m_BottomSplitter) continue;
+                    if (widget == &m_Menu || widget == &m_MaterialPopup || widget == &m_Toolbar || widget == &m_LeftSplitter || widget == &m_RightSplitter || widget == &m_BottomSplitter || dynamic_cast<ImGUISlate::PopupImWidget*>(widget)) continue;
                     if (element.Params.Row == 3)
                         widget->SetGeometry(0, headerHeight + topHeight + horizontalGap, width, m_BottomHeight);
                     else if (element.Params.Column == 0)
@@ -182,6 +183,22 @@ namespace Editor
             if (!paths.empty()) { m_PendingProjectAction=m_DialogAction; m_PendingProjectDirectory=paths.front(); }
         });
         m_ViewToolbar = std::make_unique<EditorViewToolbar>(*m_Scene);
+        m_MeshViewer=std::make_unique<EditorMeshViewer>([this] {
+            std::vector<MeshViewerMesh> result;
+            for (const auto& object:m_Scene->GetObjects())
+                if (const auto* component=dynamic_cast<const Engine::StaticMeshComponent*>(object.Component.get()))
+                {
+                    const auto* mesh=component->GetStaticMesh();
+                    result.push_back({object.Name,mesh ? mesh->GetAsset() : nullptr});
+                }
+            return result;
+        });
+        m_ViewToolbar->SetOnOpenMeshViewer([this] {
+            std::string selected;
+            for (const auto& object:m_Scene->GetObjects())
+                if (object.Component.get()==m_Scene->GetSelectedMesh()) { selected=object.Name; break; }
+            m_MeshViewer->Open(selected);
+        });
         m_LeftSplitter = std::make_unique<ImGUISlate::ImSplitterWidget>("EditorSplitLeft", true);
         m_RightSplitter = std::make_unique<ImGUISlate::ImSplitterWidget>("EditorSplitRight", true);
         m_BottomSplitter = std::make_unique<ImGUISlate::ImSplitterWidget>("EditorSplitBottom", false);
@@ -215,6 +232,7 @@ namespace Editor
         layout.ColumnSpan = 2;
         m_Window->AddWidget(m_NodePanel.get(),layout);
         m_Window->AddWidget(m_MaterialPanel.get(),{});
+        m_Window->AddWidget(m_MeshViewer.get(),{});
         m_Window->Show();
         std::cout << "[Editor] Initialized Scene / Assets / Material panels" << std::endl;
         return true;
@@ -225,6 +243,7 @@ namespace Editor
         // Existing window release covers its submitted sampling/present work.
         // Keep widgets, viewport and assets alive until that release has completed.
         m_Window.reset();
+        m_MeshViewer.reset();
         m_ProjectDialog.reset(); m_MenuWidget.reset(); m_NodePanel.reset();
         m_LeftSplitter.reset();
         m_RightSplitter.reset();
@@ -295,6 +314,7 @@ namespace Editor
             // Resize before this frame records viewport texture references.
             m_Window->UpdateLayout();
         }
+        m_MeshViewer->Tick();
         m_Window->Draw();
         const auto& io = ImGui::GetIO();
         if (!m_Window->HasMouseCapture() &&
@@ -346,6 +366,7 @@ namespace Editor
     void EditorApplication::CloseProject()
     {
         m_Window->WaitForLastDraw();
+        m_MeshViewer->Reset();
         m_PendingObject.reset(); m_PendingDeleteObject=-1; m_ScenePanel->SetCreationEnabled(false);
         m_ProjectDialog->Close(); m_DroppedMesh.clear(); m_DroppedMaterial.clear(); m_DroppedMaterialPosition={}; m_PendingProjectAction=ProjectAction::None;
         m_PendingProjectDirectory.clear();

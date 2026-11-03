@@ -262,3 +262,17 @@ ImListWidget::SetOnItemActions 在每项 Selectable 后、项 ID 作用域内构
 RemoveSelected 先清除工具目标，等待原提交完成，Flush 尚未消费的 Add，再 RemovePrimitive/RemoveLight、Flush 后销毁组件；属性描述没有跨帧保留，ImGui 数据也已转成顶点，删除不会留下回调借用。删除最后一项后沿原布局器隐藏整个属性区与分隔条。没有修改测试主流程、增加 WaitIdle 或改变显式资源访问控制。
 
 2026-11-02 的独立描述/场景检查与真实 Editor 输入、GPU 读回、自定义组件扩展验证见 [当日记录](../../dev/bugfix/故障与修复记录-2026-11-02.md)。
+
+## MeshViewer 预览与检查
+
+源码：[EditorMeshViewer](../../../src/Editor/MeshViewer/Private/EditorMeshViewer.cpp)、[MeshViewerPreview](../../../src/Editor/MeshViewer/Private/MeshViewerPreview.cpp)、[EditorApplication](../../../src/Editor/Editor/Private/EditorApplication.cpp)。模块与入口见 [编辑器架构](../../architecture/app/editor.md#meshviewer-单网格检查)。
+
+Editor 在控制/UI 线程提供当前场景网格的名字和 StaticMeshAsset 引用。Tick 读取列表并验证选择，名字沿用当前场景唯一显示名，不定义持久 ID；没有保存场景组件裸指针。选中资产和预览生成的 SRV 由面板持有，原始 CPU/GPU 网格及材质继续归资产。预览缓冲是显示用途的派生数据，不能反向修改源资源，也没有全局预览缓存或资源管理器。
+
+Tick 位于工程/节点操作及布局更新之后、Window::Draw/NewFrame 之前。切换资产/LOD 时准备 GPU 缓冲；正常帧只重绘，关闭或折叠时停止预览提交。Draw 收集模式、相机及显示尺寸供下次 Tick 使用，只把本次稳定 RenderTexture 指针写入 ImGui Image。这样不会在 CPU DrawList 已保存旧纹理后因 resize/切换释放旧对象。图像最多 1024 像素宽；显示与渲染保持相同比例。
+
+MeshViewerPreview 以 RenderGraphBuilder 注册自身颜色纹理及顶点/索引 SRV，深度为图内 transient 纹理。主体 pass Clear/Store 颜色和深度，法线 pass Load/Store 复用附件；两个 pass 的完整元数据声明颜色、深度、SRV 依赖，执行 lambda 只读参数快照。当前 RHI RenderPass 没有只读深度附件布局接口，因此法线 pass 的 RDG 声明保持深度附件访问，实际 pipeline 关闭深度写入，避免将纹理转为只读布局后用可写布局启动 render pass。
+
+Builder 在实际提交位置更新原有 Tracker。窗口 GUI 采样前，imgui_impl_rhi 继续通过既有状态转换和访问 Fence 连接预览图与窗口提交；模块不增加 Present、原生图形环境、ImageLayoutManager 或 WaitIdle。MeshViewer 的 SetMesh、resize、Reset/destructor 只等待将被替换资源记录的具体 QueueType/Value，包括颜色和两项缓冲：颜色的最后 GUI 采样覆盖旧显示帧；缓冲的 Fence 还覆盖尚未产生首个颜色帧的上传。没有增加每帧 CPU/GPU 全局等待，但切换/resize 仍可能阻塞控制线程。
+
+关闭工程先沿既有窗口完成点等待，再 Reset MeshViewer、清空场景和 AssetManager。应用关闭先 ReleaseWindow，随后销毁面板及预览资源，模块依赖保证 RHI/RenderCore 尚可使用。顶点表每帧只构建裁剪后的可见行及开启的属性列，读取 CPU 原数据，不每行查询 GPU；网格列表刷新 O(场景网格数)，首次打包 O(V+I)，正常渲染最多两次 Draw，成本及退化条件见 [预览算法](../algorithm/05-pbr-ibl-and-sampling.md#meshviewer-的-phong-预览)。

@@ -2,19 +2,20 @@
 
 ## 模块和边界
 
-`src/Editor/CMakeLists.txt` 纳入 SceneEditor、AssetEditor、MaterialEditor、NodeEditor、Editor 五个独立 DLL。Editor 与原 Application 都提供 ApplicationBase 实现，由 Launcher 选择其一；Editor 负责工程生命周期、菜单与应用组装，功能面板由各自模块实现。
+`src/Editor/CMakeLists.txt` 纳入 SceneEditor、AssetEditor、MaterialEditor、NodeEditor、MeshViewer、Editor 六个独立 DLL。Editor 与原 Application 都提供 ApplicationBase 实现，由 Launcher 选择其一；Editor 负责工程生命周期、菜单与应用组装，功能面板由各自模块实现。
 
 | 实现 | 职责 |
 | --- | --- |
 | [EditorModule.cpp](../../../src/Editor/Editor/Private/EditorModule.cpp) | 独占应用对象，初始化成功后发布 ApplicationBase，关闭时清空 |
 | [EditorApplication](../../../src/Editor/Editor/Private/EditorApplication.cpp) | 唯一原生窗口、顶部 ribbon 与内容区域的组装布局、轮询绘制与按依赖释放 |
 | [SceneEditor / EditorScene](../../../src/Editor/SceneEditor/Private/EditorScene.cpp) | 场景和组件所有者、ViewportClient、选择、复制、删除、相机与视图 |
-| [SceneEditor / EditorScenePanel](../../../src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h) | 场景节点列表、选择、复制、移除；视口拖放接收 |
+| [SceneEditor / EditorScenePanel](../../../src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h) | 场景节点列表、选择、创建/删除菜单；视口拖放接收 |
 | [SceneEditor / EditorViewToolbar](../../../src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h) | ribbon 的 View 页、六向相机按钮、恢复自由视角与聚焦 |
 | [AssetEditor / EditorAssetPanel](../../../src/Editor/AssetEditor/PublicHeader/EditorAssetPanel.h) | 文件系统树、当前目录资源网格、导航/筛选、资产加载与材质/纹理选择 |
 | [MaterialEditor / EditorMaterialPanel](../../../src/Editor/MaterialEditor/PublicHeader/EditorMaterialPanel.h) | 按需打开的浮动材质编辑窗口，保留材质库/属性页 |
 | [MaterialEditor / MaterialLibrary](../../../src/Editor/MaterialEditor/PublicHeader/MaterialLibrary.h) | 项目材质文件的元数据扫描、新建、复制与依赖文件导入，不持有运行时资产 |
 | [NodeEditor / EditorNodePanel](../../../src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h) | 借用当前 SceneComponent；网格编辑局部 TRS/材质槽信息，光源编辑位置和实际光照属性 |
+| [MeshViewer / EditorMeshViewer](../../../src/Editor/MeshViewer/PublicHeader/EditorMeshViewer.h) | 从场景网格列表选择节点，单网格 Phong/线框预览、法线叠加与 LOD/顶点属性/区域检查 |
 
 ## 依赖和模块协作
 
@@ -32,10 +33,14 @@ flowchart LR
     Engine --> NodeEditor
     ImGuiSlate --> NodeEditor
     NodeEditor --> Editor
+    Engine --> MeshViewer
+    ImGuiSlate --> MeshViewer
+    RenderCore --> MeshViewer
+    MeshViewer --> Editor
     SlateRHIRenderer --> Editor
 ```
 
-箭头从被依赖模块指向使用者。四个功能模块的公共接口导出到各自 PublicHeader，按目标名导出跨 DLL 接口。它们不依赖 Editor，也不相互依赖。Engine/ImGUISlate 不反向依赖任何编辑功能模块。NodeEditor 仅依赖 Engine/ImGuiSlate，通过同步查询/变更回调连接场景。
+箭头从被依赖模块指向使用者。五个功能模块的公共接口导出到各自 PublicHeader，按目标名导出跨 DLL 接口。它们不依赖 Editor，也不相互依赖。Engine/ImGUISlate 不反向依赖任何编辑功能模块。NodeEditor 仅依赖 Engine/ImGuiSlate，通过同步查询/变更回调连接场景。MeshViewer 同样通过宿主回调获取网格列表，使用 Engine 已有的 RenderCore 依赖录制独立预览，不直接依赖 Renderer。
 
 AssetEditor 不再保存 EditorScene 引用：打开网格时调用 SetOnMeshOpened 设置的回调；赋材质时调用 SetOnMaterialAssigned 设置的回调，由宿主决定目标和是否成功。无网格处理回调时明确报错，无赋材质处理回调时禁用该操作。
 
@@ -144,6 +149,18 @@ MaterialLibrary 只保存路径、名字、分类、ShadingModel、BaseColor 等
 
 ## 场景更新和同步
 
+### MeshViewer 单网格检查
+
+View ribbon 的 Mesh viewer 按钮通过回调打开 EditorMeshViewer，默认优先当前选中的网格节点；窗口内 Scene mesh 下拉列出当前场景的网格，可以选择其他节点。无工程或无网格时仍可打开，显示空状态。浮窗属于当前 ImGuiContext，没有 HWND、交换链或第二套 GUI 图形环境，预览结果通过现有 imgui_impl_rhi 合成。EditorLayout 跳过 PopupImWidget 的区域布局，由浮窗自行管理大小与命中。
+
+EditorApplication 在 Window::Draw 前调用 Tick：刷新节点列表、处理网格/LOD 切换、准备预览资源并提交预览图。Draw 只提交本帧稳定纹理并记录下一次 Tick 的模式、大小及相机输入。关闭工程重置浮窗，删除当前节点后下一 Tick 重新选择有效节点或清空，不跨帧保存组件裸指针。模块持有被检查资产的共享引用，源网格仍归 StaticMeshAsset 所有。
+
+[MeshViewerPreview](../../../src/Editor/MeshViewer/Private/MeshViewerPreview.cpp) 读取所选 LOD 的 CPU 流，按 Section 的 FirstIndex、NumIndices、BaseVertexIndex 生成预览索引，检查越界及不完整三角形；位置和法线打包成派生 SRV，不改变原材质、VertexFactory 或源 GPU 缓冲。独立全局 Shader [MeshViewer.sf](../../../shaders/editor/MeshViewer.sf) 执行简单 Phong 与固定定向光，线框用 LineList 展开三角形边线，不要求原生非实心光栅能力。法线开关追加带末端小箭头的线段 pass，箭头随法线长度缩放，沿用深度测试，关闭管线深度写入；RDG 对当前 RHI 深度附件作保守声明。
+
+Vertices 页按原始分量数展示位置、法线、UV、切线和颜色，各列可单独显隐，ImGuiListClipper 只构建可见行；缺失元素显示 --。Regions 页显示区域、材质槽、索引起点/数量、三角形数和基顶点；统计还包括 LOD、顶点数、材质数和资产局部边界。预览采用资产局部坐标并归一化取景，不应用场景节点变换，也不预览 PBR 材质或纹理。源法线缺失/无效时仅对预览生成法线，并明确提示，属性表继续显示原始数据。
+
+资源访问、切换及关闭时序见 [MeshViewer 工程实现](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md#meshviewer-预览与检查)，Phong、索引和法线算法见 [单网格预览算法](../../key_implemetion/algorithm/05-pbr-ibl-and-sampling.md#meshviewer-的-phong-预览)。
+
 `EditorScene` 仅在增删、变换或材质编辑后刷新 pending updates，正常帧不重复重建实例块。由于现有场景刷新会替换 GPU 缓冲，编辑前读取视口输出纹理 Tracker 的具体 `(QueueType, Value)` 并 WaitValue；GUI 对它的最终采样记录覆盖此前场景提交。没有新增 WaitIdle 或全局 retained 列表。窗口 resize 沿用已有窗口完成点等待。
 
 `Scene::NotifyComponentChanged` 对 Primitive 创建新代理并进入现有 keyed AddPrimitive 命令，在 Flush 时替换旧代理；只设 dirty 标志不能更新代理缓存。StaticMeshProxy 读取完整组件世界矩阵，SceneComponent 的矩阵读取接口因此为 const。未替换 RDG 的资源状态或 Pass 生命周期设计。
@@ -158,6 +175,6 @@ MaterialLibrary 只保存路径、名字、分类、ShadingModel、BaseColor 等
 
 [apps.json](../../../src/Lancher/apps.json) 是实际装配源，CMake configure 时 COPYONLY 到 BINARY_DIR。默认两应用均为 Vulkan，图形后端由所选条目的模块/依赖决定，不提供未经接入的 `-rhi` 参数。配置校验、依赖排序和 DLL 链接边界见 [启动实现](../../key_implemetion/performance/09-module-build-and-startup.md)。
 
-Editor 条目显式列出四个功能模块：SceneEditor、AssetEditor、MaterialEditor、NodeEditor 的显式启动依赖均为 Engine，Editor 最后组装。Editor 经 SlateRHIRenderer 的现有启动依赖保证 Renderer 在创建场景前已启动、场景关闭后才关闭；这不是 SceneEditor 对 Renderer 的直接代码依赖。Application 条目不加载这些功能模块。Langcher 仍只通过 add_dependencies 建立应用构建前置，不把具体应用 DLL 静态导入到 EXE。
+Editor 条目显式列出五个功能模块：SceneEditor、AssetEditor、MaterialEditor、NodeEditor、MeshViewer 的显式启动依赖均为 Engine，Editor 最后组装。Editor 经 SlateRHIRenderer 的现有启动依赖保证 Renderer 在创建场景前已启动、场景关闭后才关闭；这不是功能模块对 Renderer 的直接代码依赖。Application 条目不加载这些功能模块。Langcher 仍只通过 add_dependencies 建立应用构建前置，不把具体应用 DLL 静态导入到 EXE。
 
 本轮验证及限制见 [2026-10-26 故障记录](../../dev/bugfix/故障与修复记录-2026-10-26.md)，界面实现存在不等于完成了全部鼠标、文本、DPI 交互验证。

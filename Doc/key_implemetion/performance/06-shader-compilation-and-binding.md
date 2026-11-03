@@ -102,6 +102,12 @@ manager 由 Device 持有，当前所读分配/绑定/GC 路径未见内部互�
 
 当前按声明顺序使用 Core::HashCombine 组合测试、写入、比较操作、depth-bounds、stencil 开关与两个 mask，不新增哈希算法、缓存或同步。每次查找仍为固定 7 个字段的 O(1) 计算，缓存继续拥有各状态对象，上层管线借用它们，ClearAll 和设备关闭路径不变。这修正了已复现的字段抵消，未解决“仅以 hash 判等”的通用限制；其他缓存的完整描述符比较和遗漏字段仍须单独审查。验证覆盖 Vulkan/D3D12/OpenGL 各 32 组测试/写入/比较操作，以及真实编辑器导入模型后的画面，见 [故障记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)。
 
+### 图形管线的 PrimitiveTopology 身份
+
+MeshViewer 的面和线框使用相同 VS/PS、顶点描述、光栅/混合/深度状态及附件，区别为 PrimitiveTopology。旧 HashGraphicsPipelineDesc 完全遗漏该字段，先创建 TriangleList（枚举 3）后请求 LineList（枚举 1），GetDesc 实际仍返回 3。线框展开的 `{0,1,1,2,2,0}` 六端点被当作两个退化三角形，画面因而为空；不能用面/线框像素不同证明线框有正确绘制。
+
+修复在既有键末尾调用公共 HashCombine 组合 topology 的 uint32 值，保持缓存所有权、锁和原生创建入口不变，每次查找只增加 O(1) 计算。它是共用 RHI 缓存缺陷，不应在 MeshViewer 改深度写入、伪造不同 Shader 或绕过缓存以制造不同键。Vulkan/D3D12/OpenGL 实际创建 TriangleList、LineList、LineStrip、TriangleStrip、PointList，检查 GetDesc 匹配且相同请求复用；完整编辑器还检查线框确有可见像素。完整描述符判等及其他遗漏字段仍属上述既有限制。量化记录见 [2026-11-03 MeshViewer](../../dev/bugfix/故障与修复记录-2026-11-03.md#meshviewer-单网格检查模块)。
+
 Compiler 部分诊断输出写相同 test.spv/error.txt，重复编译会覆盖文件；它们不是磁盘 Shader 缓存，也不适合据此审计并行编译的每份产物。
 
 验证入口：MaterialShaderCompilationTest、RHIShaderParameterTest。反射编译通过仍须核查输出图像、资源访问和 Validation；不是所有已注册 GlobalShader 都已具备缺失的生成依赖。

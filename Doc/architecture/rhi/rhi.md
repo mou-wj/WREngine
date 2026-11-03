@@ -1,5 +1,7 @@
 # RHI 模块架构说明
 
+公共图形管线缓存的键包含 PrimitiveTopology，使仅拓扑不同的面、线、点管线能够分别创建；命中后仍未实现完整描述符碰撞判等。状态与线程边界、MeshViewer 暴露的漏项及验证见 [管线缓存实现](../../key_implemetion/performance/06-shader-compilation-and-binding.md#图形管线的-primitivetopology-身份)。
+
 ## 1. 模块定位
 
 `RHI` 模块是整个渲染栈中的底层抽象层，负责统一封装各种图形 API 的公共能力。它不直接绑定某个具体平台（如 Vulkan、D3D12），而是定义一组统一的资源、命令、管线和同步接口，为上层的 `Renderer`、`Engine` 以及具体渲染实现提供稳定的访问协议。

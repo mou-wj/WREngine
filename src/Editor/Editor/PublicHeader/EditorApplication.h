@@ -17,6 +17,7 @@ namespace Editor
     class EditorAssetPanel;
     class EditorMaterialPanel;
     class EditorNodePanel;
+    class EditorMeshViewer;
 
     class EDITOR_API EditorApplication final : public SlateCore::ApplicationBase
     {
@@ -46,6 +47,7 @@ namespace Editor
         std::unique_ptr<EditorAssetPanel> m_AssetPanel;
         std::unique_ptr<EditorMaterialPanel> m_MaterialPanel;
         std::unique_ptr<EditorNodePanel> m_NodePanel;
+        std::unique_ptr<EditorMeshViewer> m_MeshViewer;
         std::unique_ptr<ImGUISlate::ImWidget> m_MenuWidget;
         std::unique_ptr<ImGUISlate::ImFileDialogWidget> m_ProjectDialog;
         std::shared_ptr<ImGUISlate::ImMainWindow> m_Window;

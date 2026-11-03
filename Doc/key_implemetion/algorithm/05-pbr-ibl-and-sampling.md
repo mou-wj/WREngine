@@ -74,3 +74,19 @@ roughness×(MipCount-1) 选 specular mip；法线方向查 diffuse cube，反射
 计算预算约为输出 texel 数乘采样数；cube 六面和所有 mip 都要计入。GPU Dispatch 按线程组向上取整后必须边界检查，源码入口已有对应尺寸判断。CPU 上传的 SampleCount 不等于 Shader 实际使用数：这些分支当前有固定 256/128 常量。
 
 建议核查：恒定环境的能量、roughness 两端、cube 接缝、黑色/金属端点与 NdotV≈0。这里列的是复查方法，本轮没有做数值积分或像素验证；已有材质 Shader 编译测试仅验证可编译与创建 RHI Shader。
+
+## MeshViewer 的 Phong 预览
+
+源码：[MeshViewerPreview.cpp](../../../src/Editor/MeshViewer/Private/MeshViewerPreview.cpp)、[MeshViewer.sf](../../../shaders/editor/MeshViewer.sf)。该工具用传统 Phong 显示几何及法线，与场景 PBR 材质无关；不改变前文的场景光照实现。
+
+每个 LOD 按区域遍历索引：`vertex=Indices[FirstIndex+i]+BaseVertexIndex`，使用有符号 64 位中间结果验证 0≤vertex<位置数量。无区域时使用全索引区间，区间长度必须是 3 的倍数。位置流至少三个分量且有限；属性表保留所有原始分量，预览只读取前三个作为位置/法线。遍历 O(V+I)，派生 GPU 数据为每顶点两个 float4（位置、法线，共 32 字节）和每绘制索引一个 uint32；原始流不被覆盖。
+
+所选 LOD 的位置 AABB 给出 `center=(min+max)/2`、`radius=max(length(max-min)/2,1e-5)`，Shader 使用 `(position-center)/radius`。这是均匀归一化，方向只需归一化而无需额外逆转置，原网格局部空间和属性表坐标不变。相机围绕原点：`eye=distance*(cos(pitch)*sin(yaw),sin(pitch),cos(pitch)*cos(yaw))`，RH LookAt 向原点，+Y 为 up，pitch 限于 ±1.5 弧度以避开极点，距离限 1.3～15 个归一化半径；右键拖动更新 yaw/pitch，滚轮指数缩放距离。投影为 45°、RH ZO、near=0.05、far=50，不受主场景相机影响。
+
+面模式令 N 为插值单位法线，L=normalize(-LightDirection)，V=normalize(eye-position)，R=reflect(-L,N)。代码计算 `diffuse=max(dot(N,L),0)`，仅在受光面计算 `specular=max(dot(R,V),0)^32`，颜色为 `base*(0.12+0.8*diffuse)+0.25*specular`，再钳制并作 1/2.2 次幂显示，Alpha=1。固定基色为 (0.62,0.68,0.78)，定向光方向 (-0.4,-0.8,-0.5)。这不是能量守恒 BRDF，也没有阴影、IBL、材质贴图或多光源；其目的为检查形状和法线。
+
+线框模式每个三角形按 `{0,1,1,2,2,0}` 展开六个端点，用 LineList 绘制，成本为 2I 个顶点，不依赖 PolygonMode::Line。它没有面填充，不作额外隐藏线消除，共享边可以重复绘制。法线起点 S 偏移 `0.002*N` 避免与表面重合，末端 `T=S+NormalLength*N`；长度是归一化半径的比例，默认 0.08。每条法线包含原线段及末端四根短边组成的小箭头，共五条 LineList 线段、10 个顶点，仍只追加一次 Draw。面模式下通过深度测试遮掉后方线段，关闭深度写入。
+
+箭头先取不平行于 N 的参考轴：abs(N.y)<0.9 时使用 +Y，否则使用 +X；构造 `u=normalize(cross(N,reference))`、`v=cross(N,u)`，避免 ±Y 法线退化。四个后沿点为 `T-0.28*NormalLength*N+0.14*NormalLength*radial`，radial 分别取 ±u、±v，每点与 T 连线。箭头与法线长度同步缩放，轴向尖端始终为 T。Shader 用 vertexId/10 定位源顶点，vertexId%10 定位原线段及四根箭头边；CPU Draw 数量同步改为 10V，不新增几何缓冲、Pass 或资源访问。箭头是局部三维几何，缩远后可小于一个像素，不是固定屏幕大小的图标。
+
+缺失、非有限或近零的源法线使用预览生成值：各三角形 `cross(b-a,c-a)` 累加到顶点后归一化，因此面积较大的面权重较大；未被有效三角形覆盖的零向量用 +Y。与源法线顶点拆分相同，不能恢复未记录的硬边/平滑组；界面明确区分生成值，顶点表仍读源数据。异常索引、无三角形、超出 uint32 上传大小的网格显示错误，不返回伪成功。渲染资源时序见 [工程实现](../performance/08-ui-rendering-and-window-lifetime.md#meshviewer-预览与检查)。
