@@ -39,6 +39,7 @@ namespace Engine
         MaterialInterface* GetMaterial(uint32_t slotIndex) const;
 
         uint32_t GetNumMaterials() const;
+        const std::vector<std::shared_ptr<MaterialAsset>>& GetMaterialOverrides() const { return m_OverrideMaterials; }
         MaterialInstance* GetMaterialInstance(uint32_t slotIndex) const;
         MaterialInstance* GetOrCreateMaterialInstance(uint32_t slotIndex);
         void ResetMaterialInstance(uint32_t slotIndex);

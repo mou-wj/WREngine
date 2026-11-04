@@ -5,6 +5,8 @@
 
 namespace Engine
 {
+	class EnvironmentLightResource;
+	class EnvironmentLightResourceManager;
 	class LightSceneProxy;
     enum class ELightType
     {
@@ -166,6 +168,7 @@ namespace Engine
         : public LightComponent
     {
     public:
+        const std::shared_ptr<const EnvironmentLightResource>& GetEnvironmentResource() const { return _environmentResource; }
         SkyLightComponent();
         LightSceneProxy* CreateSceneProxy() override;
     public:
@@ -173,20 +176,17 @@ namespace Engine
             const override;
     
     public:
-        void SetDiffuseIrradiance(RenderCore::RenderTexture* diffuseIrradianceMap) {
-            _diffuseIrradianceMap = diffuseIrradianceMap ;
-        }
-        void SetSpecularIrradiance(RenderCore::RenderTexture* specularIrradianceMap) {
-            _specularPrefilterMap = specularIrradianceMap;
-        }
-        RenderCore::RenderTexture* GetDiffuseIrradiance() const { return _diffuseIrradianceMap; }
-        RenderCore::RenderTexture* GetSpecularPrefilter() const { return _specularPrefilterMap; }
+        RenderCore::RenderTexture* GetDiffuseIrradiance() const;
+        RenderCore::RenderTexture* GetSpecularPrefilter() const;
 
     protected:
-        RenderCore::RenderTexture* _diffuseIrradianceMap;
-        RenderCore::RenderTexture* _specularPrefilterMap;
+        std::shared_ptr<const EnvironmentLightResource> _environmentResource;
 
         bool _bPrecomputeDirty = true;
+
+    private:
+        friend class EnvironmentLightResourceManager;
+        void SetEnvironmentResource(std::shared_ptr<const EnvironmentLightResource> environment);
     };
 
 }

@@ -16,7 +16,7 @@ std::shared_ptr<MaterialAsset> MaterialAsset::Create(
     const std::string& path, const std::string& name, std::unique_ptr<Material> material)
 {
     if (!material) throw std::invalid_argument("MaterialAsset cannot own a null material");
-    auto asset = std::make_shared<MaterialAsset>(AssetManager::NormalizePath(path));
+    auto asset = std::make_shared<MaterialAsset>(path.empty() ? std::string{} : AssetManager::NormalizePath(path));
     asset->m_Name = name.empty() ? Core::GetFileName(path) : name;
     material->m_OwnerAsset = asset;
     asset->m_MaterialPtr = std::move(material);

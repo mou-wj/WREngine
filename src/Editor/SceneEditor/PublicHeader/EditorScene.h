@@ -3,6 +3,7 @@
 #include "Camera.h"
 #include "SceneView.h"
 #include "EditorTranslationGizmo.h"
+#include "ProjectArchive.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -14,7 +15,6 @@ namespace Engine
     class MaterialAsset;
     class StaticMeshComponent;
     class LightComponent;
-    class SkyLightAsset;
 }
 
 namespace Editor
@@ -26,17 +26,18 @@ namespace Editor
     class SCENEEDITOR_API EditorScene final : public Engine::ViewportClient
     {
     public:
-        struct Object
-        {
-            std::string Name;
-            std::unique_ptr<Engine::SceneComponent> Component;
-        };
+        using Object = Engine::ProjectNode;
         EditorScene();
         ~EditorScene() override;
         void Initialize();
         void CreateDefaultLights();
         void Shutdown();
         void ClearObjects();
+        void ReplaceObjects(Engine::ProjectSnapshot snapshot);
+        const std::vector<Engine::AssetSP>& GetProjectAssets() const { return m_ProjectAssets; }
+        void SetProjectAssets(std::vector<Engine::AssetSP> assets) { m_ProjectAssets = std::move(assets); }
+        bool HasUnsavedChanges() const { return m_bModified; }
+        void MarkSaved() { m_bModified = false; }
         void AddMesh(const std::shared_ptr<Engine::StaticMeshAsset>& asset);
         bool CanAddObject(EEditorSceneObject type) const;
         void AddObject(EEditorSceneObject type);
@@ -81,14 +82,14 @@ namespace Editor
         Engine::Viewport* m_Viewport = nullptr;
         std::unique_ptr<Engine::SceneInterface> m_Scene;
         std::vector<Object> m_Objects;
-        std::shared_ptr<Engine::SkyLightAsset> m_SkyAsset;
+        std::vector<Engine::AssetSP> m_ProjectAssets;
         Engine::Camera m_Camera;
         Engine::SceneViewFamily m_ViewFamily;
         EditorTranslationGizmo m_TranslationGizmo;
         EditorRotationGizmo m_RotationGizmo;
         EditorScaleGizmo m_ScaleGizmo;
         int m_SelectedIndex = -1;
-        uint32_t m_NextObjectId = 1;
+        uint64_t m_NextObjectId = 1;
         float m_Distance = 3.4641f;
         float m_Yaw = -2.3561945f;
         float m_Pitch = -0.6154797f;
@@ -102,6 +103,7 @@ namespace Editor
         bool m_bRotating = false;
         bool m_bPanning = false;
         bool m_bSceneDirty = false;
+        bool m_bModified = false;
         Core::Float2 m_ViewportPointer{-1,-1};
         Core::Float2 m_PickPressPosition;
         bool m_bPickPending = false;

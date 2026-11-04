@@ -50,11 +50,11 @@ MaterialEditor 不再引用场景模块或资产面板类型。公共 MaterialEd
 
 ### 光源节点与场景提示绘制
 
-EditorScene::Object 的 Component 统一为 unique_ptr<SceneComponent>，网格和光源共用同一份节点列表、选择、聚焦和删除流程。GetSelected 返回通用组件；材质赋值、材质实例和网格复制通过 GetSelectedMesh 检查目标类型。新建和打开工程时场景均为空，不自动添加光源；用户从场景树空白处右键菜单添加 Directional light、Point light、Spot light、Sky light 或基础网格。关闭工程会移除全部节点及工具借用。场景序列化仍未实现，重开不恢复先前节点。CreateDefaultLights 仅保留显式调用能力，不在工程打开流程调用。
+EditorScene::Object 使用 Engine::ProjectNode，Component 为 unique_ptr<SceneComponent>，并记录稳定节点 Id。网格和光源共用同一份节点列表、选择、聚焦和删除流程。GetSelected 返回通用组件；材质赋值、材质实例和网格复制通过 GetSelectedMesh 检查目标类型。新建工程和旧 version=1 工程为空，不自动添加光源；version=2 工程恢复已保存节点及层级。用户仍从场景树空白处右键添加光源或基础网格。关闭工程移除节点及工具借用；CreateDefaultLights 仅保留显式调用能力。
 
 光源变换按实际语义显示：天空光没有变换区或编辑轴按钮；平行光提供 Position/Move 和 Rotation/Rotate；点光只有 Position/Move；聚光同时提供 Position/Move 与 Rotation/Rotate。光源不显示 Scale。方向/聚光的 Direction 与组件 +X 前向统一，直接改方向会更新局部 Euler，旋转输入或既有旋转圈拖动都会更新实际照射方向和代理；平行光默认示意位置为世界原点；Position 只移动箭头/图标和拾取位置，照明及照射方向不由位置决定。衰减范围独立于缩放，点/聚光提供范围，聚光提供以度显示的内外锥角。非天空光可编辑颜色、强度和投影开关。
 
-天空光沿用工程默认环境资产，没有新增环境贴图选择器；现有 IBL 只消费纹理，颜色/强度描述为只读并提供提示。天空光只提供 Enabled 开关，不显示无意义的范围 Visible；关闭时清空场景的两项 IBL 引用，重新开启复用资产。Renderer::Scene 仍维持每场景最多注册一个天空光的既有规则，包含待处理队列；禁用不注销对象。光源复制暂不提供。
+天空光创建时使用 Engine 环境光管理器生成的中性灰默认环境，不自动读取示例图片。Environment input 属性显示当前 TextureAsset 或 Default：在 Assets 单击图片或选择 Project data 中的纹理后，Use selected texture 构建并应用 IBL，Reset 恢复默认。输入资产加入工程内容和资源面板，生成结果不作为 Asset；加载工程仍只恢复输入基础层并重新预计算。现有 IBL 的颜色/强度描述继续只读；天空光提供 Enabled 开关，不显示无意义的范围 Visible，关闭时清空场景两项 IBL 引用，重新开启复用同一结果。Renderer::Scene 仍维持每场景最多注册一个天空光的既有规则，包含待处理队列；禁用不注销对象。光源复制暂不提供。
 
 SceneEditor 通过 [SceneInterface::GetSceneSetting](../../../src/Framework/Engine/PublicHeader/SceneInterface.h) 开启 bDrawGrid/bDrawLightHints，并在 Select 时把选中光源写入借用的 LightHintTarget，选中网格或清除选择则置空。Renderer::RenderModule::BeginRender 在构图时快照该设置，在场景主体之后加入光源提示，再调用各视图 SceneViewDrawExtension，最后为所有视图加入网格。SceneEditor 的扩展只绘制变换工具及右上方向轴，不包含或链接 Renderer，CMake 和 apps.json 中均无直接依赖边；应用仍装配 Renderer 作为 RenderInterface 的运行时实现。
 
@@ -66,15 +66,17 @@ Editor 不改变 Asset 的资源所有权：组件引用 StaticMeshAsset/Materia
 
 ### 工程生命周期
 
-菜单栏的 Project → New / Open 打开既有 ImFileDialogWidget 的目录选择界面，Cancel 不改变当前工程；Close 关闭当前工程而不退出应用。New 在选定目录创建 Content 及 RenderingLearn.project.json，不覆盖已有工程或非空 Content。Open 先验证描述和内容目录，再关闭旧工程，非法路径不会先清空当前工作区。描述格式为：
+菜单栏的 Project → New / Open 打开既有 ImFileDialogWidget 的目录选择界面，Cancel 不改变当前工程；Close 关闭当前工程而不退出应用。New 在选定目录创建 Content 及 RenderingLearn.project.json，不覆盖已有工程或非空 Content。Open 先验证描述和内容目录、准备恢复对象及注册，成功后才替换旧场景。新建工程初始描述格式为：
 
 ```json
 {"version": 1, "name": "MyProject", "contentDirectory": "Content"}
 ```
 
-运行时工程路径由 EditorApplication 保存，Core::GetProjectDir 仍表示引擎源码/内置资源根，不为项目切换改写全局路径或环境变量。关闭工程会清空场景节点/选择、资源树/过滤/历史、材质窗口与导入/投放的待执行操作，并释放资产管理器的驻留引用；仍被内置预览环境持有的资产继续有效。
+运行时工程路径由 EditorApplication 保存，Core::GetProjectDir 仍表示引擎源码/内置资源根，不为项目切换改写全局路径或环境变量。关闭工程会清空场景节点/选择、资源树/过滤/历史、材质窗口与导入/投放的待执行操作，并释放资产管理器的驻留引用；环境光计算结果在组件清理后由 EnvironmentLightResourceManager 显式释放，仍被其他使用方引用的输入资产继续有效。
 
-工程描述目前只保存内容目录信息，不保存场景节点布局；重新打开只恢复资源浏览，不恢复网格或光源节点，场景保存/恢复尚未实现。源文件保留在原目录，Import 或桌面拖入 Assets 会复制到当前内容目录的新包中，重名用后缀避让。支持嵌入资源的 GLB、带本地依赖的 glTF、原生材质 JSON 和 PNG/JPG/BMP/TGA；glTF 的外部 buffer/image 与材质贴图一起复制并改为包内相对路径。外部依赖 GLB 明确拒绝，需导出为嵌入 GLB 或使用 glTF。
+Project → Save / Ctrl+S 保存当前运行时对象，首次保存将工程入口升级为 version=2；入口的 snapshot 指向 Data 下某一代 Scene.json，另有 Geometry.geoms 和 Texture.texs。场景记录完整节点集合、父关系、属性、材质及内部资源编号；二进制文件包含实际几何与纹理基础层像素，打开时重建普通 Mip，不引用原 GLB、图片或材质 JSON。天空光只存环境输入基础层，加载后重新预计算 IBL。共享资产仍共享，独占材质实例只恢复实际覆盖。Save As 将当前数据保存到空目录并切换工程位置，无需复制旧 Content。逐代发布、加载失败保留旧场景和 GPU 完成点见 [工程快照实现](../../key_implemetion/performance/10-project-snapshots.md)。
+
+修改状态独立于渲染脏标志，标题显示星号；关闭、切换工程或退出时提供 Save/Discard/Cancel，保存失败不继续操作。资产面板 Project data 显示工程内恢复的网格、材质和纹理；Import files 继续浏览导入候选文件。源文件 Import 或桌面拖入 Assets 时复制到 Content 新包，重名用后缀避让。支持嵌入资源的 GLB、带本地依赖的 glTF、材质 JSON 和 PNG/JPG/BMP/TGA；依赖文件复制规则保持原实现。未加载的候选文件不会为保存而全部解析。
 
 UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行；网格投放同样保存路径并延迟到下一帧创建，避免销毁本帧已经生成的纹理/资源引用。详细等待与所有权见 [UI 生命周期](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
@@ -82,7 +84,7 @@ UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行
 
 两条竖向分隔条控制 Scene/Viewport 和 Viewport/Node Properties 的宽度，横向分隔条控制上方区域与 Assets 的高度。悬停/按住时显示对应的左右或上下系统拉伸光标，左键拖动实时调整相邻区域，松开或失焦结束。菜单和 ribbon 高度固定。常规客户区下最小宽度为 Scene 160、Viewport 240、Node Properties 260；最小高度为上方 220、Assets 140 像素。客户区小于这些总尺寸时按比例缩小下限，避免负尺寸；窗口改变大小仍保留用户选择的比例。目前比例仅在本次运行中保存，不持久化到配置文件。
 
-资产区采用左侧文件系统树、右侧资源网格，二者之间可拖动调整宽度。顶部为 Import、前进/后退、上级、刷新和路径栏，底部保留 Open / Add mesh、Assign material 与状态。初始没有打开的工程、场景节点或材质弹窗；视口显示清空背景、地面网格和方向轴。新建/打开工程仍为空场景，手动添加 Sky light 后才显示其天空环境。仍共用一个 ImGui/RHI 绘制环境，没有新增原生子窗口。
+资产区采用左侧文件系统树、右侧资源显示区，二者之间可拖动调整宽度。顶部为 Import、前进/后退、上级、刷新和路径栏，底部保留 Open / Add mesh、Assign material 与状态。初始没有打开的工程、场景节点或材质弹窗；视口显示背景、地面网格和方向轴。新建工程为空，已保存工程恢复其节点及天空光数据。仍共用一个 ImGui/RHI 绘制环境，没有新增原生子窗口。
 
 - Scene：对象列表填满面板的剩余区域，空白处右键创建，对象行右键选中该对象并提供 Delete。原 Duplicate、Remove、Focus selected 按钮和视口操作说明已移除。右侧 Node Properties 只在存在选中组件时显示，根据属性描述生成状态、局部变换及专有参数；空工程、未选中组件或移除最后一个节点后不生成属性窗口，也不命中该面板。折叠会将原栏宽和分隔条空间交给视口；重新选中时恢复已保存的右栏比例。底层复制接口仍保留，面板不提供复制按钮。
 - Ribbon → View：Top / Bottom / Left / Right / Front / Back 六向切换，按钮第二行注明相机所在轴侧，当前固定方向高亮。Orbit 恢复默认斜向环绕角度，Focus selected 聚焦所选对象，无选择时禁用；Viewport controls 在同一页展示选择/清空、光源图标、环绕、平移和缩放的操作说明。切换保留当前焦点和距离，沿用既有透视投影；这里的六向视图不表示已实现正交编辑管线。
@@ -99,7 +101,7 @@ UI 确认只保存工程操作及路径，在下一 TickFrame 的绘制前执行
 - 从 Assets 材质卡片拖到场景网格表面，会将材质赋给鼠标射线最近命中组件的对应材质槽并选中该组件；拖到背景不赋值，也不回退到当前选择。操作覆盖组件该槽位的材质引用，不改共享网格默认材质、不创建材质实例，重新赋值会按既有 SetMaterial 清除该槽旧实例覆盖。仅支持当前渲染器已有的 Opaque 材质。
 - Properties 保留参数继承/恢复、纹理选择/清除、CullMode、TwoSided、Lit/Unlit 和保存副本。打开库中资产后编辑母材质；Inspect mesh 切换到所选网格，只有实际修改参数时创建其独占实例。Assets 的材质/纹理选择仍经原有宿主回调接入。
 
-保存副本不重命名资产，也不导出实例资产。路径已存在时拒绝覆盖；保存后可在 Assets 中刷新并加载。Opaque 以外的 Surface 绘制仍未实现，不通过界面静默启用。当前没有撤销重做、场景序列化、材质节点图或完整编辑器快捷键。
+材质保存副本不重命名资产，也不导出实例资产；路径已存在时拒绝覆盖。工程快照则直接保存当前材质及实例状态，不依赖另存材质文件。Opaque 以外的 Surface 绘制仍未实现，不通过界面静默启用。当前没有撤销重做、材质节点图或完整编辑器快捷键。
 
 ### 场景树右键创建
 
@@ -113,7 +115,7 @@ EditorScenePanel 只通过 SetOnAddObject 回调提交 EEditorSceneObject 值，
 
 对象行的右键菜单在 ImListWidget 的 SetOnItemActions 回调中构造，保留每项 ID 作用域。右键先选择所指对象，Delete 回调只提交该行索引，EditorApplication 在下一帧绘制前消费请求；不依赖菜单关闭时的“当前选择”来决定删谁。关闭/切换工程会清空请求。实际 RemoveSelected 沿用原工具解除、完成值等待、Remove/Flush 后销毁 owner 的流程，删除最后一个节点会收起整个属性区及分隔条。
 
-NodeEditor 使用同一个 EditorNodePanel 遍历 ComponentProperty，不再对网格/各类光源分支构造 UI。属性类型决定 Checkbox、数值、向量、颜色或只读文本控件，描述提供范围和校验；Position/Rotation/Scale 语义接入原 Move/Rotate/Scale 按钮。新增组件覆写 DescribeProperties 并追加参数即可复用面板。网格只有 Visible，控制绘制及实体拾取；光源 Enabled 控制照明和阴影，Visible 控制范围/箭头绘制及对应拾取，两者独立。关闭光照或隐藏范围后仍保留节点、光源图标、选择和编辑工具，方便重新设置。
+NodeEditor 使用同一个 EditorNodePanel 遍历 ComponentProperty，不再对网格/各类光源分支构造 UI。属性类型决定 Checkbox、数值、向量、颜色、只读文本或 TextureAsset 引用控件，描述提供范围和校验；纹理选择由宿主回调提供，赋值失败显示属性错误。Position/Rotation/Scale 语义接入原 Move/Rotate/Scale 按钮。新增组件覆写 DescribeProperties 并追加参数即可复用面板。网格只有 Visible，控制绘制及实体拾取；光源 Enabled 控制照明和阴影，Visible 控制范围/箭头绘制及对应拾取，两者独立。关闭光照或隐藏范围后仍保留节点、光源图标、选择和编辑工具，方便重新设置。
 
 属性描述每次 Draw 临时生成，读写回调只借用本次选中组件，不缓存组件指针或创建属性管理器。Engine 负责属性定义及值校验，NodeEditor 负责控件生成，宿主继续负责场景脏标志和原完成点。设计边界与扩展示例见 [核心实现](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md#组件属性参数与通用编辑界面)，验证见 [2026-11-02 记录](../../dev/bugfix/故障与修复记录-2026-11-02.md)。
 

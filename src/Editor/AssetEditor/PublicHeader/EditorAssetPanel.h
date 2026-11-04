@@ -1,6 +1,7 @@
 #pragma once
 #include "Widgets/ImCommonWidgets.h"
 #include "Widgets/ImFileDialogWidget.h"
+#include "Asset.h"
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -21,6 +22,7 @@ namespace Editor
         void SetOnMaterialAssigned(MaterialAssignedCallback callback);
         void SetOnMaterialOpened(std::function<void(const std::shared_ptr<Engine::MaterialAsset>&)> callback);
         void SetContentRoot(const std::filesystem::path& root);
+        void SetProjectAssets(std::vector<Engine::AssetSP> assets);
         void QueueImport(const std::vector<std::filesystem::path>& files);
         bool OnFilesDropped(const SlateCore::FileDropEvent& event) override;
         std::shared_ptr<Engine::MaterialAsset> GetSelectedMaterial() const { return m_Material; }
@@ -63,6 +65,8 @@ namespace Editor
         bool m_bRevealDirectory = true;
         std::shared_ptr<Engine::MaterialAsset> m_Material;
         std::shared_ptr<Engine::TextureAsset> m_Texture;
+        std::vector<Engine::AssetSP> m_ProjectAssets;
+        bool m_bProjectData = false;
         MeshOpenedCallback m_OnMeshOpened;
         MaterialAssignedCallback m_OnMaterialAssigned;
         std::function<void(const std::shared_ptr<Engine::MaterialAsset>&)> m_OnMaterialOpened;

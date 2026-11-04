@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <assert.h>
+#include <algorithm>
 
 namespace RHI
 {
@@ -42,7 +43,9 @@ public:
     RHITexture(const RHITextureDesc& desc) : RHIViewableResource(ERHIResourceType::Texture), _desc(desc) {
         _mipSizes.resize(_desc.MipLevels);
         for (uint32_t i = 0; i < _desc.MipLevels; ++i) {
-            _mipSizes[i] = Core::Int3(_desc.Width >> i, _desc.Height >> i, _desc.Depth >> i);
+            // Every mip dimension is at least one, including the depth of 2D textures.
+            const auto extent = [i](uint32_t size) { return i < 32 ? std::max(1u, size >> i) : 1u; };
+            _mipSizes[i] = Core::Int3(extent(_desc.Width), extent(_desc.Height), extent(_desc.Depth));
         }
     }
     virtual ~RHITexture() = default;

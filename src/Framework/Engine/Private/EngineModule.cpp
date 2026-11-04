@@ -2,6 +2,7 @@
 #include "IEngine.h"
 #include "DistanceFieldMgr.h"
 #include "AssetManager.h"
+#include "EnvironmentLightResourceManager.h"
 namespace Engine {
 
     std::unique_ptr<Engine> EngineObj;
@@ -24,6 +25,7 @@ namespace Engine {
     void EngineModule::ShutdownModule()
     {
         AssetManager::Get().Shutdown();
+        EnvironmentLightResourceManager::Get().Clear();
         if (EngineObj)
         {
             EngineObj->Shutdown();

@@ -75,6 +75,22 @@ roughness×(MipCount-1) 选 specular mip；法线方向查 diffuse cube，反射
 
 建议核查：恒定环境的能量、roughness 两端、cube 接缝、黑色/金属端点与 NdotV≈0。这里列的是复查方法，本轮没有做数值积分或像素验证；已有材质 Shader 编译测试仅验证可编译与创建 RHI Shader。
 
+## 工程纹理的普通 Mip 重建
+
+入口：[ProjectArchive.cpp](../../../src/Framework/Engine/Private/ProjectArchive.cpp) 的 DownsampleTexture、ReadChannel、WriteChannel。工程只保存每个切片第 0 层像素；Load 按描述中的 MipLevels 逐级调用此函数并上传。持久化、队列状态和所有者见 [工程快照](../performance/10-project-snapshots.md)。这不是 IBL 粗糙度卷积，后者仍由前述 PreComputeIBL 重新执行。
+
+输入为当前层宽 W、高 H、紧密排列的原格式数据；输出尺寸 W'=max(1,floor(W/2))、H'=max(1,floor(H/2))。坐标是图像 texel 边界，无物理长度。输出像素 (x,y) 覆盖输入矩形 `[xW/W',(x+1)W/W'] × [yH/H',(y+1)H/H']`，对应源码 x0/x1/y0/y1。将它与每个相交输入 texel 的单位正方形求重叠面积 weight，通道结果为 `sum(value*weight)/((x1-x0)*(y1-y0))`。
+
+因此 3×1 → 1×1 会平均全部三个 texel，不会漏掉最右边；1×N 不会产生零宽，最后可到 1×1。每一级通常访问 2×2、奇数尺寸最多 3×3 的输入邻域，整条链为 O(W·H·通道数)，数组/立方体乘以切片数。加载只保留当前层和下一层两个 CPU 缓冲，上传沿用同步完成点；没有保留整条派生 Mip 链。
+
+UNorm8 解码为 byte/255，结果钳制到 [0,1] 并按最近偶数舍入量化。sRGB 的前三通道先按 `c<=0.04045 ? c/12.92 : ((c+0.055)/1.055)^2.4` 解码；平均后按 `l<=0.0031308 ? 12.92*l : 1.055*l^(1/2.4)-0.055` 编码。Alpha 保持线性。黑白各半得到约 188，而非在编码空间直接平均得到的 128。
+
+Float32 通过 memcpy 读写避免未对齐别名访问；累加使用 double。Float16 按 IEEE binary16 的符号、5 位指数和 10 位尾数解码，次正规数为 `fraction*2^-24`，规格化数为 `(1024+fraction)*2^(exponent-25)`，编码采用最近偶数舍入并处理次正规到规格化的进位。有限输入的凸平均不超出其范围；遇到 NaN/Inf 明确拒绝。基础层不经历解码重编码，像素字节原样恢复。深度、模板和不在当前格式表中的整数/压缩格式不在工程快照支持范围内。
+
+当前滤波是普通颜色/数据缩图：不跨立方体面滤波、不对法线重新归一化，不执行预乘 Alpha 或透明裁剪覆盖率保持，也不保留人为编辑的高层内容。后续若引入特殊采样语义，需单独定义生成策略，不能把所有派生纹理都当成普通 Mip。现有 RenderTexture::GenerateMipMaps 仍是占位；加载实际使用本段 CPU 实现，不依赖三个后端不一致的 BlitTexture 支持。
+
+2026-11-03 诊断覆盖独立切片、3×1 边界、sRGB 黑白、Float32 正负平均及 Float16 次正规数；数值结果和后端范围见 [故障记录](../../dev/bugfix/故障与修复记录-2026-11-03.md)。这不等于完成所有图像频率、格式和透明语义的质量评估。
+
 ## MeshViewer 的 Phong 预览
 
 源码：[MeshViewerPreview.cpp](../../../src/Editor/MeshViewer/Private/MeshViewerPreview.cpp)、[MeshViewer.sf](../../../shaders/editor/MeshViewer.sf)。该工具用传统 Phong 显示几何及法线，与场景 PBR 材质无关；不改变前文的场景光照实现。

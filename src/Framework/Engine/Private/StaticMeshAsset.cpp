@@ -11,6 +11,22 @@
 using namespace RenderCore;
 namespace Engine {
 StaticMeshAsset::StaticMeshAsset(const std::string& path) : m_Name(Core::GetFileName(path)), m_Path(path) {}
+StaticMeshAsset::~StaticMeshAsset()
+{
+    // Scene removal and its explicit completion point precede destruction of the asset owner.
+    if (m_Mesh) if (auto data=m_Mesh->GetRenderData()) GDistanceFieldMgr.ReleaseMeshDistanceField(*data);
+}
+std::shared_ptr<StaticMeshAsset> StaticMeshAsset::Create(const std::string& name, std::shared_ptr<StaticMesh> mesh)
+{
+    if (!mesh) throw std::invalid_argument("Cannot adopt a null project mesh");
+    if (mesh->GetAsset()) throw std::invalid_argument("Mesh already has an asset owner");
+    auto asset = std::make_shared<StaticMeshAsset>(name);
+    asset->m_Name = name;
+    asset->m_Path.clear(); // Project objects have no source-file identity.
+    asset->m_Mesh = std::move(mesh);
+    asset->m_Mesh->SetAsset(asset);
+    return asset;
+}
     namespace
     {
         template<typename T>

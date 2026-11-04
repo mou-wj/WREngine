@@ -4,6 +4,7 @@
 #include "DistanceFieldProcess.h"
 #include <limits>
 #include <cmath>
+#include <stdexcept>
 using namespace Core;
 namespace Engine
 {
@@ -293,21 +294,29 @@ namespace Engine
         bool buildInCpu = true;
         if (buildInCpu) {
             BuildCPUData(mesh);
-            for (auto& lod : mesh.LODResources) {
-                
-                if (lod.DistanceFieldData.CPUData.Distance.empty()) {
-                    continue;
+            try {
+                for (auto& lod : mesh.LODResources) {
+                    if (lod.DistanceFieldData.CPUData.Distance.empty()) continue;
+                    if (!m_Atlas.Allocate(lod.DistanceFieldData.Allocation))
+                        throw std::runtime_error("Distance-field atlas has no free mesh slots");
+                    m_Atlas.UploadData(lod.DistanceFieldData.Allocation, lod.DistanceFieldData.CPUData.Distance.data());
                 }
-				auto allocationSuccess = m_Atlas.Allocate(lod.DistanceFieldData.Allocation);
-                m_Atlas.UploadData(lod.DistanceFieldData.Allocation, lod.DistanceFieldData.CPUData.Distance.data());
-                
             }
+            catch (...) { ReleaseMeshDistanceField(mesh); throw; }
         }
         else {
 			for (auto& lod : mesh.LODResources) {
 				auto surfaceMask = BuildSurfaceMaskTexture(mesh.Bounds, lod);
                 
 			}
+        }
+    }
+
+    void DistanceFieldManager::ReleaseMeshDistanceField(StaticMeshRenderData& mesh)
+    {
+        for (auto& lod : mesh.LODResources) {
+            if (m_bInitialized) m_Atlas.Free(lod.DistanceFieldData.Allocation);
+            lod.DistanceFieldData.Allocation = {};
         }
     }
 

@@ -58,6 +58,7 @@ namespace Engine
 
         void BuildMeshDistanceField(
             StaticMeshRenderData& mesh);
+        void ReleaseMeshDistanceField(StaticMeshRenderData& mesh);
 
 		const DistanceFieldAtlas& GetAtlas() { return m_Atlas; }
 

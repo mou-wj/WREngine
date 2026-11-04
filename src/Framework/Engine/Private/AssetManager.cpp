@@ -133,6 +133,15 @@ void AssetManager::Unload(const std::string& path)
     }
 }
 
+std::vector<AssetSP> AssetManager::GetResidentAssets() const
+{
+    std::lock_guard lock(m_Mutex);
+    std::vector<AssetSP> result;
+    result.reserve(m_ResidentAssets.size());
+    for (const auto& [path,asset] : m_ResidentAssets) result.push_back(asset);
+    return result;
+}
+
 void AssetManager::Clear()
 {
     std::unordered_map<std::string, AssetSP> removed;

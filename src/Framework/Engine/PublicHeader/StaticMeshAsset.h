@@ -9,8 +9,11 @@ class ENGINE_API StaticMeshAsset : public IAsset
 {
 public:
     explicit StaticMeshAsset(const std::string& path);
+    ~StaticMeshAsset() override;
     // Creates an in-memory asset using Engine's existing geometry generators.
     static std::shared_ptr<StaticMeshAsset> CreateShape(EBasicMeshShape shape);
+    // Adopt a mesh reconstructed from project data, without loading a source file.
+    static std::shared_ptr<StaticMeshAsset> Create(const std::string& name, std::shared_ptr<StaticMesh> mesh);
     const std::string& GetName() const override { return m_Name; }
     const std::string& GetPath() const override { return m_Path; }
     bool Load() override;

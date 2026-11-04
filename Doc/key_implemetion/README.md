@@ -1,5 +1,9 @@
 # 核心实现阅读指南
 
+2026-11-04 完成工程基础层快照和 IBL 初始化完成点续验：存储与所有权见 [工程快照](performance/10-project-snapshots.md)，缩图和色彩空间见 [Mip 重建算法](algorithm/05-pbr-ibl-and-sampling.md#工程纹理的普通-mip-重建)，实际通过范围与已知限制见 [续验记录](../dev/bugfix/故障与修复记录-2026-11-04.md)。
+
+同日移除 SkyLightAsset，将环境光生成结果交给 Engine 的 [EnvironmentLightResourceManager](performance/05-assets-materials-and-instance-data.md#环境光计算产物管理)；默认环境无文件依赖，通用 TextureAsset 属性支持应用资源面板输入，工程保存输入基础层并在加载时重新生成。界面、所有权和实际验证见 [编辑器架构](../architecture/app/editor.md)、[开发记录](../dev/bugfix/故障与修复记录-2026-11-04.md#环境光计算产物改由-engine-管理)。
+
 本目录回答“具体怎样实现、依赖哪些条件、哪里尚不可靠”。模块职责与接口关系仍以 [architecture](../architecture/README.md) 的既有结构组织。目录名沿用需求首次指定的 `key_implemetion`。
 
 2026-11-02 补充了组件类型化属性描述、通用 NodeEditor、网格可见性与光源照明/范围独立开关、对象右键删除的执行时序，见 [UI 工程实现](performance/08-ui-rendering-and-window-lifetime.md#组件属性参数与通用编辑界面)。
@@ -29,6 +33,7 @@
 | [光追 AS 与 SBT](performance/07-ray-tracing-as-and-sbt.md) | AS 存储、scratch、group handle 和 SBT 怎样衔接？ |
 | [UI 合成与窗口生命周期](performance/08-ui-rendering-and-window-lifetime.md) | 当前鼠标事件怎样分发，ImGui 怎样共用 RHI，纹理与窗口完成点怎样维护？ |
 | [构建与模块启动](performance/09-module-build-and-startup.md) | 依赖准备、DLL 注册、拓扑启动和逆序关闭怎样串起来？ |
+| [工程快照与二进制数据](performance/10-project-snapshots.md) | 如何保存运行时节点、层级及资源，脱离源文件恢复，并保持多文件一致和 GPU 状态？ |
 
 ## 原理与算法：algorithm
 
@@ -64,7 +69,7 @@
 以下是源码核对中需要开发者掌握的限制，本轮只记录，没有修改实现或新增运行验证：
 
 - [队列同步](performance/02-rhi-queues-and-sync.md)：OpenGL 的逻辑完成值是 worker 执行完成，不能直接等同 GPU 完成；D3D12 对仅有 QueueType/Value 的等待有未兑现分支。
-- [RDG 与资源回收](performance/03-rdg-execution-and-state.md)：Pass 裸指针释放、混合队列 Fence 更新和重叠子资源范围存在限制；[内存专题](performance/04-memory-and-transient-resources.md) 另外区分实际等待、延后删除与精确完成点回收。
+- [RDG 与资源回收](performance/03-rdg-execution-and-state.md)：Pass 析构已补齐，混合队列 Fence 更新和重叠子资源范围仍存在限制；[内存专题](performance/04-memory-and-transient-resources.md) 另外区分实际等待、延后删除与精确完成点回收。
 - [几何与距离场](algorithm/04-distance-fields-and-jump-flood.md)：现有符号判断不严格等于奇偶规则，GPU mask/JFA 的数据契约也不能直接拼成已验证流程。
 - [投影与屏幕算法](algorithm/03-transforms-frustum-and-depth.md)：NO/ZO 近面公式、深度金字塔 min/max 与实际深度约定需要联合核查；[屏幕效果](algorithm/07-screen-space-and-antialiasing.md) 中还标出了缺失 Shader 和未完整接入的路径。
 - [网格导入](algorithm/08-mesh-import-and-geometry.md)：多 primitive、交错属性与切线 handedness 的支持存在边界，单模型显示正常不足以证明任意资产都可用。

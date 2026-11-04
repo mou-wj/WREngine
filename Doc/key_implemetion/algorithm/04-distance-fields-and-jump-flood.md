@@ -26,6 +26,8 @@ BuildTriangles 假设索引数是 3 的倍数、索引有效且 positions 为连
 
 ## 局部 Atlas 的工程布局
 
+2026-11-03 补充网格资产析构时归还局部 Atlas 槽位，分配失败回滚并明确报错，以覆盖工程反复恢复的生命周期；没有改变下述距离算法和固定容量。完成点、所有权和容量限制见 [工程快照](../performance/10-project-snapshots.md#代价和验证)。
+
 Engine 初始化 Atlas 为 128×128×128、blockResolution=64，R32_FLOAT，等于 2×2×2=8 个 block，整图约 8 MiB。Allocate 线性扫描 allocation map，返回像素坐标 offset、固定块尺寸与 ID；Free 把对应 block 标为空，UploadData 上传该空间区域。
 
 这是逻辑 3D 纹理块管理，不是 GPU 物理内存分页。容量不足、重复释放、初始化前使用等条件必须由调用链检查。已有静态网格测试未初始化 manager 就上传造成空纹理异常的记录，不能把 LoadMesh 成功读取 glTF 等同于完成全部资源前置初始化。

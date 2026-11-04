@@ -18,9 +18,13 @@
 #include "SlateRHIModule.h"
 #include "StaticMeshComponent.h"
 #include "MaterialAsset.h"
+#include "LightComponent.h"
+#include "EnvironmentLightResourceManager.h"
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
+#include <utility>
+#include <unordered_set>
 
 namespace Editor
 {
@@ -130,7 +134,7 @@ namespace Editor
         m_Scene->Initialize();
         m_Window = std::make_shared<ImGUISlate::ImMainWindow>(1600, 900, "RenderingLearn Editor", _renderer);
         if (!m_Window->Initialize()) throw std::runtime_error("Failed to initialize editor window");
-        m_Window->SetCloseCallback([this] { m_bQuit = true; });
+        m_Window->SetCloseCallback([this] { m_PendingProjectAction = ProjectAction::Exit; });
         m_Viewport = std::make_unique<Engine::SceneViewport>(m_Scene.get(), Core::Int2{800, 800});
         auto viewportWidget = std::make_unique<EditorSceneViewportWidget>(*m_Scene);
         viewportWidget->SetOnResourceDropped([this](const auto& path) { if (!m_ProjectDirectory.empty()) m_DroppedMesh=path; });
@@ -147,7 +151,7 @@ namespace Editor
             if (!m_ProjectDirectory.empty()) m_PendingDeleteObject=index;
         });
         m_AssetPanel = std::make_unique<EditorAssetPanel>(std::filesystem::path{});
-        m_AssetPanel->SetOnMeshOpened([this](const auto& asset) { if (!m_ProjectDirectory.empty()) m_DroppedMesh=asset->GetPath(); });
+        m_AssetPanel->SetOnMeshOpened([this](const auto& asset) { if (!m_ProjectDirectory.empty()) m_PendingMeshAsset=asset; });
         m_AssetPanel->SetOnMaterialAssigned([this](const auto& asset) {
             auto* component = m_Scene->GetSelectedMesh();
             if (!component) return false;
@@ -165,7 +169,15 @@ namespace Editor
         };
         m_MaterialPanel = std::make_unique<EditorMaterialPanel>(std::move(callbacks),std::filesystem::path{});
         m_AssetPanel->SetOnMaterialOpened([this](const auto& asset) { m_MaterialPanel->ShowMaterial(asset); });
-        m_NodePanel=std::make_unique<EditorNodePanel>([this] { return m_Scene->GetSelected(); },[this] { m_Scene->NotifySelectedChanged(); });
+        m_NodePanel=std::make_unique<EditorNodePanel>([this] { return m_Scene->GetSelected(); },[this] {
+            m_Scene->NotifySelectedChanged();
+            Engine::EnvironmentLightResourceManager::Get().ReleaseUnused();
+            if (dynamic_cast<Engine::SkyLightComponent*>(m_Scene->GetSelected())) {
+                auto assets=CollectProjectAssets();
+                m_Scene->SetProjectAssets(assets); m_AssetPanel->SetProjectAssets(std::move(assets));
+            }
+        });
+        m_NodePanel->SetSelectedTextureProvider([this] { return m_AssetPanel->GetSelectedTexture(); });
         m_NodePanel->SetTranslationGizmoCallbacks(
             [this] { auto* selected = m_Scene->GetSelected(); return selected && m_Scene->GetTranslationTarget() == selected; },
             [this](bool enabled) { m_Scene->SetTranslationTarget(enabled ? m_Scene->GetSelected() : nullptr); });
@@ -264,10 +276,20 @@ namespace Editor
         if (m_bQuit) return;
         try
         {
-            const auto action=m_PendingProjectAction; m_PendingProjectAction=ProjectAction::None;
+            auto action=m_PendingProjectAction; m_PendingProjectAction=ProjectAction::None;
+            if ((action==ProjectAction::Create || action==ProjectAction::Open || action==ProjectAction::Close || action==ProjectAction::Exit) &&
+                m_Scene->HasUnsavedChanges() && !m_bActionConfirmed)
+            {
+                m_ConfirmAction=action; m_ConfirmDirectory=m_PendingProjectDirectory; m_bShowUnsaved=true; action=ProjectAction::None;
+            }
+            m_bActionConfirmed=false;
+            if (std::exchange(m_bSaveBeforeAction,false)) SaveProject();
             if (action==ProjectAction::Create) CreateProject(m_PendingProjectDirectory);
             else if (action==ProjectAction::Open) OpenProject(m_PendingProjectDirectory);
             else if (action==ProjectAction::Close) CloseProject();
+            else if (action==ProjectAction::Save) SaveProject();
+            else if (action==ProjectAction::SaveAs) SaveProjectAs(m_PendingProjectDirectory);
+            else if (action==ProjectAction::Exit) { m_bQuit=true; return; }
             if (m_PendingDeleteObject>=0)
             {
                 const int index=m_PendingDeleteObject; m_PendingDeleteObject=-1;
@@ -278,6 +300,10 @@ namespace Editor
             {
                 const auto type = *m_PendingObject; m_PendingObject.reset();
                 if (!m_ProjectDirectory.empty()) { m_Scene->AddObject(type); m_ProjectError.clear(); }
+            }
+            if (m_PendingMeshAsset) {
+                auto asset=std::move(m_PendingMeshAsset);
+                if (!m_ProjectDirectory.empty()) m_Scene->AddMesh(asset);
             }
             if (!m_DroppedMesh.empty())
             {
@@ -354,25 +380,87 @@ namespace Editor
         namespace fs=std::filesystem;
         const auto root=fs::weakly_canonical(fs::absolute(directory));
         nlohmann::json data; std::ifstream input(root/"RenderingLearn.project.json");
-        if (!input || !(input>>data) || !data.is_object() || data.value("version",0)!=1 || data.value("contentDirectory",std::string{})!="Content" || !fs::is_directory(root/"Content"))
+        if (!input || !(input>>data) || !data.is_object() || (data.value("version",0)!=1 && data.value("version",0)!=2) || data.value("contentDirectory",std::string{})!="Content" ||
+            (data.value("version",0)==1 && !fs::is_directory(root/"Content")))
             throw std::runtime_error("Select a valid RenderingLearn project directory");
         const auto content=fs::weakly_canonical(root/"Content");
         const auto relative=content.lexically_relative(root);
         if (relative.empty() || relative.is_absolute() || *relative.begin()=="..") throw std::runtime_error("Project content must stay inside its directory");
-        CloseProject(); m_ProjectDirectory=root;
+        auto objects=Engine::ProjectArchive::Load(root);
+        fs::create_directories(content); // Saved snapshots do not depend on the import folder.
+        m_Window->WaitForLastDraw();
+        m_Scene->ReplaceObjects(std::move(objects));
+        ResetProjectPanels(); Engine::AssetManager::Get().Clear(); m_ProjectDirectory=root;
         m_ScenePanel->SetCreationEnabled(true);
         m_AssetPanel->SetContentRoot(content); m_MaterialPanel->SetContentRoot(content); m_ProjectError.clear();
+        m_AssetPanel->SetProjectAssets(m_Scene->GetProjectAssets());
     }
     void EditorApplication::CloseProject()
     {
         m_Window->WaitForLastDraw();
+        ResetProjectPanels();
+        m_Scene->ClearObjects(); Engine::AssetManager::Get().Clear();
+        m_ProjectDirectory.clear(); m_ProjectError.clear();
+    }
+    void EditorApplication::ResetProjectPanels()
+    {
         m_MeshViewer->Reset();
+        m_PendingMeshAsset.reset(); m_AssetPanel->SetProjectAssets({});
         m_PendingObject.reset(); m_PendingDeleteObject=-1; m_ScenePanel->SetCreationEnabled(false);
         m_ProjectDialog->Close(); m_DroppedMesh.clear(); m_DroppedMaterial.clear(); m_DroppedMaterialPosition={}; m_PendingProjectAction=ProjectAction::None;
         m_PendingProjectDirectory.clear();
-        m_MaterialPanel->SetContentRoot({}); m_AssetPanel->SetContentRoot({}); m_Scene->ClearObjects();
-        Engine::AssetManager::Get().Clear();
-        m_ProjectDirectory.clear(); m_ProjectError.clear();
+        m_MaterialPanel->SetContentRoot({}); m_AssetPanel->SetContentRoot({});
+    }
+    void EditorApplication::SaveProject()
+    {
+        if (m_ProjectDirectory.empty()) throw std::runtime_error("Open a project before saving");
+        auto assets=CollectProjectAssets();
+        Engine::ProjectArchive::Save(m_ProjectDirectory,m_Scene->GetObjects(),assets);
+        m_Scene->SetProjectAssets(assets); m_AssetPanel->SetProjectAssets(std::move(assets));
+        m_Scene->MarkSaved(); m_ProjectError.clear();
+        std::cout << "[Editor] Saved project snapshot: " << m_Scene->GetObjects().size() << " nodes" << std::endl;
+    }
+    void EditorApplication::SaveProjectAs(const std::filesystem::path& directory)
+    {
+        namespace fs=std::filesystem;
+        if (m_ProjectDirectory.empty()) throw std::runtime_error("Open a project before saving a copy");
+        const auto root=fs::weakly_canonical(fs::absolute(directory));
+        if (root==m_ProjectDirectory) { SaveProject(); return; }
+        if (fs::exists(root) && !fs::is_empty(root)) throw std::runtime_error("Save As requires an empty directory");
+        fs::create_directories(root/"Content");
+        const auto marker=root/"RenderingLearn.project.json";
+        { std::ofstream output(marker); output<<nlohmann::json{{"version",1},{"name",MaterialLibrary::PathText(root.filename())},{"contentDirectory","Content"}}.dump(2);
+          output.close(); if (!output) throw std::runtime_error("Cannot write project copy description"); }
+        auto assets=CollectProjectAssets();
+        Engine::ProjectArchive::Save(root,m_Scene->GetObjects(),assets);
+        m_ProjectDirectory=root; m_AssetPanel->SetContentRoot(root/"Content"); m_MaterialPanel->SetContentRoot(root/"Content");
+        m_Scene->SetProjectAssets(assets); m_AssetPanel->SetProjectAssets(std::move(assets));
+        m_Scene->MarkSaved(); m_ProjectError.clear();
+    }
+    std::vector<std::shared_ptr<Engine::IAsset>> EditorApplication::CollectProjectAssets() const
+    {
+        auto result=m_Scene->GetProjectAssets();
+        for (const auto& node:m_Scene->GetObjects())
+            if (const auto* sky=dynamic_cast<const Engine::SkyLightComponent*>(node.Component.get()))
+                if (const auto& environment=sky->GetEnvironmentResource(); environment && environment->GetInputTexture())
+                    result.push_back(environment->GetInputTexture());
+        for (const auto& node:m_Scene->GetObjects())
+            if (const auto* component=dynamic_cast<const Engine::StaticMeshComponent*>(node.Component.get()))
+                if (const auto* mesh=component->GetStaticMesh()) {
+                    result.push_back(mesh->GetAsset());
+                    for (uint32_t slot=0;slot<component->GetNumMaterials();++slot)
+                        if (const auto* material=component->GetMaterial(slot)) result.push_back(material->GetAsset());
+                }
+        const auto content=std::filesystem::weakly_canonical(m_ProjectDirectory/"Content");
+        for (const auto& asset:Engine::AssetManager::Get().GetResidentAssets()) {
+            if (asset->GetPath().empty()) continue;
+            const auto relative=std::filesystem::weakly_canonical(std::filesystem::path(asset->GetPath())).lexically_relative(content);
+            if (!relative.empty() && !relative.is_absolute() && *relative.begin()!="..") result.push_back(asset);
+        }
+        if (auto asset=m_MaterialPanel->GetSelectedMaterial()) result.push_back(asset);
+        std::unordered_set<const Engine::IAsset*> seen;
+        result.erase(std::remove_if(result.begin(),result.end(),[&](const auto& asset) { return !asset || !seen.insert(asset.get()).second; }),result.end());
+        return result;
     }
     void EditorApplication::DrawProjectMenu()
     {
@@ -380,6 +468,12 @@ namespace Editor
         {
             if (ImGui::BeginMenu("Project"))
             {
+                if (ImGui::MenuItem("Save","Ctrl+S",false,!m_ProjectDirectory.empty())) m_PendingProjectAction=ProjectAction::Save;
+                if (ImGui::MenuItem("Save As...",nullptr,false,!m_ProjectDirectory.empty())) {
+                    m_DialogAction=ProjectAction::SaveAs; m_ProjectDialog->SetTitle("Save project to an empty directory");
+                    m_ProjectDialog->SetInitialDirectory(m_ProjectDirectory.parent_path()); m_ProjectDialog->Open();
+                }
+                ImGui::Separator();
                 if (ImGui::MenuItem("New"))
                 {
                     m_DialogAction=ProjectAction::Create; m_ProjectDialog->SetTitle("New project directory");
@@ -393,10 +487,23 @@ namespace Editor
                 if (ImGui::MenuItem("Close",nullptr,false,!m_ProjectDirectory.empty())) m_PendingProjectAction=ProjectAction::Close;
                 ImGui::EndMenu();
             }
-            ImGui::Separator(); ImGui::Text("%s | %zu nodes",m_ProjectDirectory.empty()?"No project":MaterialLibrary::PathText(m_ProjectDirectory.filename()).c_str(),GetSceneObjectCount());
+            ImGui::Separator(); ImGui::Text("%s%s | %zu nodes",m_ProjectDirectory.empty()?"No project":MaterialLibrary::PathText(m_ProjectDirectory.filename()).c_str(),m_Scene->HasUnsavedChanges()?" *":"",GetSceneObjectCount());
             if (!m_ProjectError.empty()) { ImGui::TextColored({1,0.4f,0.3f,1},"%s",m_ProjectError.c_str()); }
             ImGui::EndMainMenuBar();
         }
         m_ProjectDialog->Draw();
+        if (!m_ProjectDirectory.empty() && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S,false)) m_PendingProjectAction=ProjectAction::Save;
+        if (m_bShowUnsaved && !ImGui::IsPopupOpen("Unsaved project")) ImGui::OpenPopup("Unsaved project");
+        if (ImGui::BeginPopupModal("Unsaved project",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("Save changes before continuing?");
+            const auto continueAction=[this](bool save) {
+                m_PendingProjectAction=m_ConfirmAction; m_PendingProjectDirectory=m_ConfirmDirectory;
+                m_bSaveBeforeAction=save; m_bActionConfirmed=true; m_bShowUnsaved=false; ImGui::CloseCurrentPopup();
+            };
+            if (ImGui::Button("Save")) continueAction(true);
+            ImGui::SameLine(); if (ImGui::Button("Discard")) continueAction(false);
+            ImGui::SameLine(); if (ImGui::Button("Cancel")) { m_bShowUnsaved=false; m_ConfirmAction=ProjectAction::None; ImGui::CloseCurrentPopup(); }
+            ImGui::EndPopup();
+        }
     }
 }

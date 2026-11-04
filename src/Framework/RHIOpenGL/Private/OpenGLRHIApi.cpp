@@ -1,3 +1,5 @@
+#include <limits>
+#include <stdexcept>
 #include "OpenGLUtils.h"
 #include "OpenGLRHIApi.h"
 #include "OpenGLPlatformSurport.h"
@@ -74,32 +76,26 @@ namespace RHIOpenGL
         }
 
         const auto& desc = glTexture->GetDesc();
-        if (region.MipLevel >= desc.MipLevels ||
-            region.XOffset + region.Width > desc.Width ||
-            region.YOffset + region.Height > desc.Height ||
-            region.ZOffset != 0 || region.Depth != 1)
+        if (region.MipLevel >= desc.MipLevels) throw std::invalid_argument("Texture upload mip is out of range");
+        const uint32_t width=std::max(1u,desc.Width>>region.MipLevel), height=std::max(1u,desc.Height>>region.MipLevel);
+        const bool layered=desc.Type==RHI::ERHITextureType::Texture2DArray || desc.Type==RHI::ERHITextureType::TextureCube || desc.Type==RHI::ERHITextureType::TextureCubeArray;
+        const uint32_t depth=layered ? desc.ArraySize : std::max(1u,desc.Depth>>region.MipLevel);
+        const uint32_t z=layered ? region.ArraySlice : region.ZOffset;
+        if (uint64_t(region.XOffset)+region.Width>width || uint64_t(region.YOffset)+region.Height>height || uint64_t(z)+region.Depth>depth)
+            throw std::invalid_argument("Texture upload region is out of range");
+        const GLuint handle=glTexture->GetHandle();
+        const GLenum format=GetOpenGLTextureFormat(desc.Format), type=GetOpenGLTextureType(desc.Format);
+        // All GL operations stay on the worker; consume the caller's pixels before returning.
+        EnqueueTaskAndWait([handle,&region,z,format,type,data,textureType=desc.Type]()
         {
-            return;
-        }
-
-        // 转发到渲染线程并等待完成：data 指针属于调用方栈帧，异步版无法保证
-        // worker 消费时仍然存活。
-        const GLuint textureHandle = glTexture->GetHandle();
-        const GLenum glFormat = GetOpenGLTextureFormat(desc.Format);
-        const GLenum glType = GetOpenGLTextureType(desc.Format);
-        EnqueueTaskAndWait([textureHandle, &region, glFormat, glType, data]()
-        {
-            glBindTexture(GL_TEXTURE_2D, textureHandle);
-            glTexSubImage2D(GL_TEXTURE_2D,
-                static_cast<GLint>(region.MipLevel),
-                static_cast<GLint>(region.XOffset),
-                static_cast<GLint>(region.YOffset),
-                static_cast<GLsizei>(region.Width),
-                static_cast<GLsizei>(region.Height),
-                glFormat,
-                glType,
-                data);
-            glBindTexture(GL_TEXTURE_2D, 0);
+            GLint alignment=4; glGetIntegerv(GL_UNPACK_ALIGNMENT,&alignment); glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+            if (textureType==RHI::ERHITextureType::Texture1D)
+                glTextureSubImage1D(handle,region.MipLevel,region.XOffset,region.Width,format,type,data);
+            else if (textureType==RHI::ERHITextureType::Texture2D)
+                glTextureSubImage2D(handle,region.MipLevel,region.XOffset,region.YOffset,region.Width,region.Height,format,type,data);
+            else
+                glTextureSubImage3D(handle,region.MipLevel,region.XOffset,region.YOffset,z,region.Width,region.Height,region.Depth,format,type,data);
+            glPixelStorei(GL_UNPACK_ALIGNMENT,alignment);
         });
     }
 
@@ -149,23 +145,19 @@ namespace RHIOpenGL
 
         const uint32_t mipWidth = std::max(1u, desc.Width >> info.MipLevel);
         const uint32_t mipHeight = std::max(1u, desc.Height >> info.MipLevel);
-        const size_t byteCount = static_cast<size_t>(mipWidth) * mipHeight * formatInfo->second.BytesPerPixel;
-        void* mappedData = std::malloc(byteCount == 0 ? 1 : byteCount);
-        if (!mappedData)
+        const uint32_t mipDepth=desc.Type==RHI::ERHITextureType::Texture3D ? std::max(1u,desc.Depth>>info.MipLevel) : 1;
+        const size_t byteCount=static_cast<size_t>(mipWidth)*mipHeight*mipDepth*formatInfo->second.BytesPerPixel;
+        if (byteCount>static_cast<size_t>(std::numeric_limits<GLsizei>::max())) throw std::invalid_argument("Texture readback exceeds GL size limit");
+        void* mappedData=std::malloc(byteCount);
+        if (!mappedData) throw std::bad_alloc();
+        const GLuint handle=glTexture->GetHandle();
+        const GLenum format=GetOpenGLTextureFormat(desc.Format), type=GetOpenGLTextureType(desc.Format);
+        const uint32_t z=desc.Type==RHI::ERHITextureType::Texture3D ? 0 : info.ArraySlice;
+        EnqueueTaskAndWait([=]()
         {
-            return nullptr;
-        }
-
-        // 读回必须在渲染线程执行并等待完成——返回的指针内容要在返回前填充好。
-        const GLuint textureHandle = glTexture->GetHandle();
-        const GLenum glFormat = GetOpenGLTextureFormat(desc.Format);
-        const GLenum glType = GetOpenGLTextureType(desc.Format);
-        EnqueueTaskAndWait([textureHandle, &info, glFormat, glType, mappedData]()
-        {
-            glBindTexture(GL_TEXTURE_2D, textureHandle);
-            glGetTexImage(GL_TEXTURE_2D, static_cast<GLint>(info.MipLevel),
-                glFormat, glType, mappedData);
-            glBindTexture(GL_TEXTURE_2D, 0);
+            GLint alignment=4; glGetIntegerv(GL_PACK_ALIGNMENT,&alignment); glPixelStorei(GL_PACK_ALIGNMENT,1);
+            glGetTextureSubImage(handle,info.MipLevel,0,0,z,mipWidth,mipHeight,mipDepth,format,type,static_cast<GLsizei>(byteCount),mappedData);
+            glPixelStorei(GL_PACK_ALIGNMENT,alignment);
         });
         return mappedData;
     }

@@ -41,11 +41,40 @@ MaterialResource 保存编译输入、请求过的 Shader 强引用与最后请�
 
 名称、语义、类型构成参数 key；同名 BaseColor 向量和纹理可并存。构建绑定见 MaterialShaderParameter.cpp，默认纹理取 RenderCore globals，不作为 TextureAsset 或序列化依赖。各值和 TextureMask 位定义仍必须与 Shader 一致。
 
+## 环境光计算产物管理
+
+[EnvironmentLightResourceManager.h](../../../src/Framework/Engine/PublicHeader/EnvironmentLightResourceManager.h) / [EnvironmentLightResourceManager.cpp](../../../src/Framework/Engine/Private/EnvironmentLightResourceManager.cpp) 位于 Engine。环境输入是 TextureAsset；diffuse irradiance 和 specular prefilter 是运行时生成结果，由管理器持有，不继承 IAsset、不注册到文件资产系统。旧 SkyLightAsset 已移除。
+
+```cpp
+auto& environments = Engine::EnvironmentLightResourceManager::Get();
+auto environment = textureAsset ? environments.Build(textureAsset) : environments.GetDefaultEnvironment();
+environments.ApplyEnvironment(skyLight, environment);
+// 解除应用：environments.ApplyEnvironment(skyLight, nullptr);
+```
+
+EnvironmentLightResource 是该头内的结果对象，私有成员保存输入 TextureAsset 及两张 RenderTexture，公开只读访问。管理器 m_Resources 按 TextureAsset 对象地址保存强引用，同一实际输入对象复用一套计算结果；同路径但独立导入的不同对象不会混同。结果强引用输入，所以表内键在该项存活期间不会悬空。SkyLightComponent 只持有结果使用引用；两个 IBL Getter 从该引用查询，直接写入裸纹理的旧 Setter 已移除。ApplyEnvironment 修改引用后沿 MarkRenderStateDirty 更新既有代理，不新建场景光照通道。
+
+GetDefaultEnvironment 惰性生成中性灰默认环境。输入为管理器自己创建并上传的 1×1 RGBA8 像素 (128,128,128,255)，使用当前线性 UNorm 语义，随后复用同一 IBL 构建路径。默认输入不是 TextureAsset、没有文件路径，不显示为用户资源；结果的 GetInputTexture 返回空引用，属性显示 Default。Editor 新建天空光和原 Application 都应用这个默认值，不读取 DaySky 示例图片。m_DefaultInput/m_DefaultEnvironment 由管理器持有，在没有使用引用且调用 ReleaseUnused 时一并清理，Engine Clear 也清理它们。
+
+Build 校验输入已加载、有 RHI、为单采样且可作为 SRV 的 Texture2D。它复用现有 Renderer::PreComputeIBL：创建 512×512、六面 cube，diffuse 单 Mip，specular 六 Mip，格式保持 BGRA8 UNorm、用途 SRV/UAV。这些配置是当前预计算接口的既有约束，没有本轮新增的可变质量设置。输入必须是现有着色器所期望的经纬环境图；类型校验不能判断图片本身是否具备这种语义。
+
+预计算完成提交后，输入和两个输出的 Tracker 应记录同一个非零 Compute Fence；Build 核对并等待该实际值，再将结果加入表。未提交全部输出则报错，失败结果不入表。这个完成点允许刚恢复的独立对象因后续校验失败而立即清理，不用初始化后的全局保活列表或 WaitIdle。后续场景采样的状态和 Fence 仍由实际 Renderer/RDG 提交位置维护。
+
+ReleaseUnused 只移除 use_count==1（仅管理器持有）的项，不等待 GPU。调用方必须先按原框架完成 GPU 使用；引用计数只表示 CPU 使用关系。EditorScene 在删除、ClearObjects 和 Shutdown 中沿既有 WaitForLastDraw/窗口完成点、Remove/Flush、销毁组件后调用它；替换新场景时，尚未搬入的新节点也持有引用，因此不会误清理。ProjectArchive::Load 使用函数异常处理，在局部恢复对象全部析构后清理本次未被使用的结果，初始化已由 Build 完成，原活动场景的引用继续有效。
+
+Clear 由 EngineModule::ShutdownModule 在 AssetManager::Shutdown 之后、RHI 关闭之前调用，移除管理器拥有引用。宿主应已释放场景及工具使用引用；Clear 不强制销毁仍有外部 shared_ptr 的结果，也不把其释放推迟到 RHI 关闭以后。原 Application 的 ReleaseResources 同时补齐 SkyLightComponent 的 delete，并显式清理未使用结果，避免组件泄漏使结果跨越模块关闭。
+
+这些方法与场景修改在控制线程串行，不为管理器增加 mutex、工作线程或异步请求合并。不能从 AssetManager 的加载 worker 任意调用 Build。当前不检测输入 GPU 内容的原地修改，也没有热重载失效机制；输入修改后的主动重建属于后续明确接口需求。缓存命中为平均 O(1)，ReleaseUnused 为 O(结果数)，首次 Build 同步阻塞于 GPU 预计算。工程只保存输入基础层，生成结果不写盘；格式与恢复见 [工程快照](10-project-snapshots.md)，IBL 数学见 [采样算法](../algorithm/05-pbr-ibl-and-sampling.md)。本轮实际验证与未通过项见 [开发记录](../../dev/bugfix/故障与修复记录-2026-11-04.md#环境光计算产物改由-engine-管理)。
+
+天空光的 EnvironmentTexture 属性使用 ComponentProperty 的 TextureAsset 类型，值是 shared_ptr<TextureAsset>；空值表示恢复默认。属性提供者调用 Build/GetDefaultEnvironment 和 ApplyEnvironment。NodeEditor 根据类型统一绘制当前名称、Use selected texture 和 Reset，不按天空光类型定义专用面板；宿主用回调提供资源面板的选中纹理，两个功能模块不互相依赖。输入不支持或构建失败时显示属性错误，并保留原绑定。Editor 在原 NotifySelectedChanged 完成点之后 ReleaseUnused，保留仍在使用的结果。保存集合显式收集天空光的输入资产，使其立即进入 Project data；恢复的源纹理也在该列表中。资源面板单击图片会经 LoadSync 选中实际 TextureAsset，生成结果和默认输入均不作为文件卡片伪装出来。
+
 ## 基础几何资产的创建入口
 
 [StaticMeshAsset::CreateShape](../../../src/Framework/Engine/Private/Shape.cpp) 使用 EBasicMeshShape 选择既有生成器；每次创建一份 StaticMesh/LOD、顶点和索引资源、默认白色 MaterialAsset 依赖及局部距离场。生成算法不复制到 Editor，组件也不放宽“必须由资产拥有”的检查。返回的资产强引用网格，网格弱引用资产，组件在 SetStaticMesh 时保留资产。没有注册第二套缓存或常驻表；移除组件并释放最后一个资产引用后，网格包装随之销毁，相关 RHI 完成点继续遵循原资源约定。默认材质和距离场 Atlas 的全局生命周期仍属于原模块，不因网格资产析构而整体释放。
 
-`builtin://shape/名称` 是内存资产身份，重复创建同类几何仍是不同资产实例，不通过 AssetManager 的文件路径归一化或加载合并。当前不提供把该标识传给 LoadSync 的恢复能力。EditorApplication 在下一帧绘制前执行创建，再沿 AddMesh/Flush 注册；创建、距离场构建与上传同步执行，可能阻塞该帧。不能在任意后台线程调用，也没有以 CPU shared_ptr 替代 GPU 完成点。右键菜单时序见 [UI 实现](08-ui-rendering-and-window-lifetime.md)，几何格式和限制见 [网格算法](../algorithm/08-mesh-import-and-geometry.md)。
+`builtin://shape/名称` 是内存资产身份，重复创建同类几何仍是不同资产实例，不通过 AssetManager 的文件路径归一化或加载合并。该标识不传给 LoadSync；工程快照保存实际几何并通过 StaticMeshAsset::Create 恢复。EditorApplication 在下一帧绘制前执行创建，再沿 AddMesh/Flush 注册；创建、距离场构建与上传同步执行，可能阻塞该帧。不能在任意后台线程调用，也没有以 CPU shared_ptr 替代 GPU 完成点。工程内容、共享关系和独占实例保存见 [快照实现](10-project-snapshots.md)，右键菜单时序见 [UI 实现](08-ui-rendering-and-window-lifetime.md)。
+
+StaticMeshAsset 析构沿实际所有权释放各 LOD 的距离场 Atlas 槽位；原 Atlas 全局纹理仍由模块拥有，不随单个网格释放。DistanceFieldManager 的分配失败会回滚并报错，避免反复打开工程后继续上传零尺寸分配。调用方须先完成场景移除和原 GPU 完成点；固定 8 槽以及新旧场景同时准备的限制见 [工程快照](10-project-snapshots.md#代价和验证)。
 
 ## 实例数据的两次索引
 
@@ -89,7 +118,7 @@ ImportFile 的执行顺序为：
 
 网格卡片只为普通 GLB/glTF 文件发布 EDITOR_ASSET_PATH，载荷为含结束符的 UTF-8 路径副本，不是 StaticMeshAsset/组件裸指针。SceneEditor 的 EditorSceneViewportWidget 仅在该载荷活动时显示透明逻辑投放区域；接受后调用宿主保存路径，下一 TickFrame 在当前工程 Content 内重新校验路径，通过 LoadSync<StaticMeshAsset> 和 EditorScene::AddMesh 创建世界原点的静态网格并选中。资源导入与场景实例化是两次显式操作，不把鼠标屏幕位置当成已实现的射线落点。
 
-Project Close 先等待该窗口既有提交完成值，在下一帧绘制开始前清空面板引用/场景组件，消费场景移除命令后释放组件，最后 AssetManager::Clear 移除驻留引用；仍被预览天空资产/灯光持有的内置资源继续有效。没有更改 Engine 的强/弱资产表或资源拥有关系。工程描述与清理调用链见 [Editor 架构](../../architecture/app/editor.md)，CPU/GPU 时序见 [UI 生命周期](08-ui-rendering-and-window-lifetime.md)。
+Project Close 先等待该窗口既有提交完成值，在下一帧绘制开始前清空面板引用/场景组件，消费场景移除命令后释放组件，最后 AssetManager::Clear 移除驻留引用；仍被其他使用方引用的输入资产继续有效；环境光计算结果由管理器在组件清理后显式释放。没有更改 Engine 的强/弱资产表或资源拥有关系。工程描述与清理调用链见 [Editor 架构](../../architecture/app/editor.md)，CPU/GPU 时序见 [UI 生命周期](08-ui-rendering-and-window-lifetime.md)。
 
 材质卡片使用 EDITOR_MATERIAL_PATH；路径与归一化落点由宿主保存，下一 TickFrame 在当前 Content 内重新核查并经 LoadSync<MaterialAsset> 加载。SceneEditor::ApplyMaterialAt 的最近几何命中决定组件及 Section.MaterialIndex，沿用 StaticMeshComponent::SetMaterial。组件强引用 MaterialAsset，旧槽位实例由原接口清理；网格默认材质、其他槽位和其他组件不变，不新建材质实例或另一套资产缓存。失败/背景投递不修改组件，错误显示于宿主菜单状态；工程关闭也清理尚未执行的材质路径。数学见 [视口拾取](../algorithm/01-ray-triangle-and-distance.md)。
 

@@ -1,7 +1,9 @@
 #pragma once
 #include "Widgets/ImCommonWidgets.h"
 #include <functional>
-namespace Engine { class SceneComponent; }
+#include <memory>
+#include <string>
+namespace Engine { class SceneComponent; class TextureAsset; }
 namespace Editor
 {
     // Borrow the current node only for this UI call; the scene owns it.
@@ -12,6 +14,7 @@ namespace Editor
         void SetTranslationGizmoCallbacks(std::function<bool()> isEnabled, std::function<void(bool)> setEnabled);
         void SetRotationGizmoCallbacks(std::function<bool()> isEnabled, std::function<void(bool)> setEnabled);
         void SetScaleGizmoCallbacks(std::function<bool()> isEnabled, std::function<void(bool)> setEnabled);
+        void SetSelectedTextureProvider(std::function<std::shared_ptr<Engine::TextureAsset>()> getTexture);
         void Draw() override;
         bool HitTest(float x, float y) const override;
     protected:
@@ -25,5 +28,7 @@ namespace Editor
         std::function<void(bool)> m_SetRotationGizmoEnabled;
         std::function<bool()> m_IsScaleGizmoEnabled;
         std::function<void(bool)> m_SetScaleGizmoEnabled;
+        std::function<std::shared_ptr<Engine::TextureAsset>()> m_GetSelectedTexture;
+        std::string m_PropertyError;
     };
 }

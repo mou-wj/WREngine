@@ -208,9 +208,9 @@ FBO/VAO 等对象还需要按实际使用的 GL context 检查归属；不能仅
 
 ### 9.1 上传与读回
 
-UpdateTexture/UpdateBuffer 直接通过同步任务调用 `glTexSubImage2D` / `glBufferSubData`，当前忽略传入的 cmdList，不会作为命令加入该列表。MapReadTexture/MapReadBuffer 分配 CPU 内存，通过同步任务调用 `glGetTexImage` / `glGetBufferSubData`，由 API 的 Unmap 释放。
+UpdateTexture 按维度通过同步任务调用 glTextureSubImage1D/2D/3D，立方体面和数组切片作为层偏移；UpdateBuffer 仍用 glBufferSubData。两者当前忽略 cmdList，不会作为命令加入该列表。MapReadTexture 使用 glGetTextureSubImage 读取指定 mip/slice，MapReadBuffer 使用 glGetBufferSubData，CPU 内存由 Unmap 释放。像素传输临时设置 Pack/Unpack alignment=1 并恢复原值，避免紧密数据被默认行对齐改变；数组存储深度使用 ArraySize，3D 存储深度使用 Depth。
 
-这些接口等待的是自身任务完成，任务与 ExecuteQueue 又不共享统一 FIFO。因此在读取已提交 Draw/Dispatch 的结果之前，必须核对命令与任务的先后关系，不能只依据 cmdList 参数推导顺序。纹理读回也以二维、单个 mip 的实现为主，尚不能声称完整覆盖数组/三维区域及行对齐。
+这些接口等待的是自身任务完成，任务与 ExecuteQueue 又不共享统一 FIFO。因此在读取已提交 Draw/Dispatch 的结果之前，必须核对命令与任务的先后关系，不能只依据 cmdList 参数推导顺序。工程快照逐 mip/slice 上传读回，使用现有 worker/context，不在主线程取得 GL context；格式、状态和验证范围见 [工程快照](../../key_implemetion/performance/10-project-snapshots.md)。这不代表任意区域、多切片合并读回或所有像素格式已经完成验证。
 
 ### 9.2 通用管理下沉，OpenGL 负责创建和回收条件
 

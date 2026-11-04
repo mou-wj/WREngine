@@ -14,6 +14,7 @@ std::shared_ptr<TextureAsset> TextureAsset::Create(const std::string& name, std:
 {
     if (!texture) throw std::invalid_argument("TextureAsset cannot own a null texture");
     auto asset = std::make_shared<TextureAsset>(name);
+    asset->m_Path.clear();
     asset->m_Texture = std::move(texture);
     return asset;
 }

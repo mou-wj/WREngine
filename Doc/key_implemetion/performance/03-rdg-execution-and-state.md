@@ -90,6 +90,8 @@ Vulkan 中即使还存在 ImageLayoutManager 相关代码，也不能将其当�
 
 RenderGraphAllocator 复用页面，按对齐分配；Allocate<T> 记录非平凡对象析构，Reset 逆序析构后重置页游标，析构再 free 页面。对齐在页内处理，并不等价于为任意过大/过度对齐请求提供专门页面。
 
-当前 AddPass 使用 new；Builder 析构只清空裸指针 Pass 列表，不销毁 Pass。**这是现有泄漏，不是生命周期设计或 GPU 安全保证。** 先前新增 m_PassOwners/retained 管理已撤回，本专题不把它描述为现行实现，也不在整理文档时修复 RDG。
+AddPass 使用 new 创建 Pass，Builder 的 m_Passes 是这些对象的拥有者，其他分组列表只借用指针。2026-11-03 工程恢复验证确认原析构仅 clear 列表，导致 Pass 与按值捕获的 MeshBatch/MaterialRenderProxy 无法释放，继而持有旧工程纹理至设备关闭。现在析构逐项 delete Pass，再清空列表；RenderGraphPass 的虚析构会析构 lambda 及其捕获。独立 weak_ptr 反例在修复前失败，修复后用于检查 CPU 所有权释放。
+
+ExecutaPasses 在 WaitAll 后完成闭包录制并提交，Execute 返回后没有仍在访问 Pass 的 CPU 录制任务，因此在 Builder 析构释放这些 CPU 对象。此时 GPU 不一定完成，外部 GPU 资源仍由调用方及原显式 Fence 约定负责；此次没有把 CPU 捕获当成 GPU 生命周期机制，也没有新增 m_PassOwners/retained 容器或等待。工程纹理的实际故障、复查和范围见 [快照实现](10-project-snapshots.md) 与 [开发记录](../../dev/bugfix/故障与修复记录-2026-11-03.md)。
 
 验证入口：RenderGraphBuildTest 覆盖纹理 compute copy 与呈现；既往运行完成 1000 帧但有 Shader 生成/校验错误。Launcher 经过更多场景 Pass，但仍不是资源别名、循环依赖、混合队列和销毁压力的完备验证。

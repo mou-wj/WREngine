@@ -4,12 +4,14 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <memory>
 
 namespace Engine
 {
-    enum class EComponentPropertyType { Boolean, Scalar, Vector3, Color3, Text };
+    class TextureAsset;
+    enum class EComponentPropertyType { Boolean, Scalar, Vector3, Color3, Text, TextureAsset };
     enum class EComponentPropertySemantic { None, Position, Rotation, Scale };
-    using ComponentPropertyValue = std::variant<bool,float,Core::Float3,std::string>;
+    using ComponentPropertyValue = std::variant<bool,float,Core::Float3,std::string,std::shared_ptr<TextureAsset>>;
 
     // A control-thread view of a live component. Callbacks borrow that component;
     // collect, read and write within the current operation, without retaining it.

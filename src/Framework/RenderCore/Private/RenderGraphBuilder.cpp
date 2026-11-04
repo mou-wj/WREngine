@@ -21,7 +21,9 @@ namespace RenderCore {
 
     RenderGraphBuilder::~RenderGraphBuilder()
     {
-        // Clean up passes
+        // Passes are created with new and own their lambda captures. Recording
+        // tasks have completed when Execute returns; release those CPU owners.
+        for (auto* pass : m_Passes) delete pass;
         m_Passes.clear();
     }
 

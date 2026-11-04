@@ -201,7 +201,7 @@ namespace Editor
                 if (!m_History.empty()) m_History.resize(m_HistoryIndex + 1);
                 m_History.push_back(path); m_HistoryIndex = m_History.size() - 1;
             }
-            m_Directory = std::move(path); m_SelectedPath.clear(); m_Grid.SetSelectedId({});
+            m_Directory = std::move(path); m_SelectedPath.clear(); m_Grid.SetSelectedId({}); m_bProjectData=false;
             const auto relative = m_Directory.lexically_relative(m_Root);
             m_PathInput = "res://" + (relative == "." ? std::string{} : PathText(relative));
             m_bRevealDirectory = true; m_LastError.clear(); return true;
@@ -223,7 +223,7 @@ namespace Editor
             if (canonical.parent_path() != m_Directory && !NavigateTo(canonical.parent_path())) return;
             m_SelectedPath = canonical; m_Grid.SetSelectedId(PathText(canonical));
             m_bRevealDirectory = true; m_LastError.clear();
-            if (bOpenMaterial && !std::filesystem::is_directory(canonical) && FileType(canonical)==2) OpenSelected();
+            if (!std::filesystem::is_directory(canonical) && (FileType(canonical)==3 || (bOpenMaterial && FileType(canonical)==2))) OpenSelected();
         }
         catch (const std::exception& error)
         {
@@ -354,7 +354,7 @@ namespace Editor
         {
             const auto selected = m_SelectedPath.empty() ? std::string("No selection") : PathText(m_SelectedPath.filename());
             ImGui::TextUnformatted(selected.c_str());
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", m_Texture ? "Texture selection is available in Material Properties." : "Double-click a folder or resource to open it.");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", m_Texture ? "Texture selection is available in Node and Material Properties." : "Double-click a folder or resource to open it.");
         }
     }
     void EditorAssetPanel::DrawContent()
@@ -395,7 +395,11 @@ namespace Editor
             ImGui::SetNextItemWidth(-1); Controls::Text("##FileSystemFilter", m_TreeFilter, "Filter files");
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("Filter the file tree; matching parent folders stay visible");
             if (ImGui::BeginChild("AssetFileTree", {0,0}, 0, ImGuiWindowFlags_HorizontalScrollbar))
-                try { DrawTree(m_Root); } catch (const std::exception& error) { m_LastError = error.what(); }
+                try {
+                    if (ImGui::Selectable("Project data",m_bProjectData)) m_bProjectData=true;
+                    if (ImGui::Selectable("Import files",!m_bProjectData)) m_bProjectData=false;
+                    DrawTree(m_Root);
+                } catch (const std::exception& error) { m_LastError = error.what(); }
             ImGui::EndChild(); m_bRevealDirectory = false;
         }
         ImGui::EndChild(); ImGui::SameLine(0,0);
@@ -414,12 +418,34 @@ namespace Editor
         }
         ImGui::EndChild(); ImGui::SameLine(0,0);
         if (ImGui::BeginChild("AssetResourcePane", {0,bodyHeight}, ImGuiChildFlags_Borders))
-            try { DrawResources(); } catch (const std::exception& error) { m_LastError = error.what(); }
+            try {
+                if (!m_bProjectData) DrawResources();
+                else {
+                    ImGui::TextUnformatted("Saved project objects");
+                    for (size_t index=0;index<m_ProjectAssets.size();++index) {
+                        const auto& asset=m_ProjectAssets[index]; ImGui::PushID(static_cast<int>(index));
+                        const auto material=std::dynamic_pointer_cast<Engine::MaterialAsset>(asset);
+                        const auto mesh=std::dynamic_pointer_cast<Engine::StaticMeshAsset>(asset);
+                        const auto texture=std::dynamic_pointer_cast<Engine::TextureAsset>(asset);
+                        const std::string label=std::string(mesh?"[Mesh] ":material?"[Material] ":"[Texture] ")+asset->GetName();
+                        if (ImGui::Selectable(label.c_str(),m_Material==material && material!=nullptr,ImGuiSelectableFlags_AllowDoubleClick)) {
+                            m_SelectedPath.clear(); m_LastError.clear();
+                            if (material) { m_Material=material; if (m_OnMaterialOpened) m_OnMaterialOpened(material); }
+                            if (texture) m_Texture=texture;
+                            if (mesh && ImGui::IsMouseDoubleClicked(0) && m_OnMeshOpened) m_OnMeshOpened(mesh);
+                        }
+                        ImGui::PopID();
+                    }
+                    if (m_ProjectAssets.empty()) ImGui::TextDisabled("No saved project objects.");
+                }
+            } catch (const std::exception& error) { m_LastError = error.what(); }
         ImGui::EndChild();
         if (ImGui::BeginChild("AssetActions", {0,0}, 0, ImGuiWindowFlags_NoScrollbar)) DrawStatus();
         ImGui::EndChild();
         m_ImportDialog.Draw();
     }
     void EditorAssetPanel::SetOnMeshOpened(MeshOpenedCallback callback) { m_OnMeshOpened = std::move(callback); }
+    void EditorAssetPanel::SetProjectAssets(std::vector<Engine::AssetSP> assets)
+    { m_ProjectAssets=std::move(assets); m_bProjectData=!m_ProjectAssets.empty(); }
     void EditorAssetPanel::SetOnMaterialAssigned(MaterialAssignedCallback callback) { m_OnMaterialAssigned = std::move(callback); }
 }

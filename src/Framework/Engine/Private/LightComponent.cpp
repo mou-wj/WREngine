@@ -1,5 +1,6 @@
 #include "LightComponent.h"
 #include "LightSceneProxy.h"
+#include "EnvironmentLightResourceManager.h"
 #include "RenderResource.h"
 #include "Transform.hpp"
 #include <algorithm>
@@ -54,6 +55,16 @@ namespace Engine
         const std::string name=names[static_cast<int>(type)];
         using Type=EComponentPropertyType;
         properties.push_back(MakeComponentProperty<std::string>("LightType","Type","Light properties",Type::Text,[name] { return name; }));
+        if (auto* sky=dynamic_cast<SkyLightComponent*>(this)) {
+            properties.push_back(MakeComponentProperty<std::shared_ptr<TextureAsset>>("EnvironmentTexture","Environment input","Light properties",Type::TextureAsset,
+                [sky] { const auto& environment=sky->GetEnvironmentResource(); return environment ? environment->GetInputTexture() : nullptr; },
+                [sky](const std::shared_ptr<TextureAsset>& input) {
+                    auto& environments=EnvironmentLightResourceManager::Get();
+                    environments.ApplyEnvironment(*sky,input ? environments.Build(input) : environments.GetDefaultEnvironment());
+                    return true;
+                }));
+            properties.back().Tooltip="Select a 2D environment TextureAsset in Assets, then apply it here. Default uses the manager's neutral environment.";
+        }
         auto color=MakeComponentProperty<Core::Float3>("Color","Color","Light properties",Type::Color3,
             [this] { return GetColor(); },[this](const Core::Float3& value) {
                 if (!std::isfinite(value.X)||!std::isfinite(value.Y)||!std::isfinite(value.Z)) return false;
@@ -287,6 +298,21 @@ namespace Engine
     {
     }
 
+    void SkyLightComponent::SetEnvironmentResource(std::shared_ptr<const EnvironmentLightResource> environment)
+    {
+        _environmentResource = std::move(environment);
+        MarkRenderStateDirty();
+    }
+
+    RenderCore::RenderTexture* SkyLightComponent::GetDiffuseIrradiance() const
+    {
+        return _environmentResource ? _environmentResource->GetDiffuseIrradiance() : nullptr;
+    }
+
+    RenderCore::RenderTexture* SkyLightComponent::GetSpecularPrefilter() const
+    {
+        return _environmentResource ? _environmentResource->GetSpecularPrefilter() : nullptr;
+    }
 
     LightSceneProxy* SkyLightComponent::CreateSceneProxy()
     {

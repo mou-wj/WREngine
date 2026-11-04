@@ -1,5 +1,6 @@
 #include "EditorNodePanel.h"
 #include "SceneComponent.h"
+#include "TextureAsset.h"
 #include <stdexcept>
 #include "imgui.h"
 #include <algorithm>
@@ -28,6 +29,10 @@ namespace Editor
         // Skip Begin/End as well as the contents when there is no selected node.
         if (!m_GetSelected || !m_GetSelected()) return;
         ImPanelWidget::Draw();
+    }
+    void EditorNodePanel::SetSelectedTextureProvider(std::function<std::shared_ptr<Engine::TextureAsset>()> getTexture)
+    {
+        m_GetSelectedTexture=std::move(getTexture);
     }
     bool EditorNodePanel::HitTest(float x, float y) const
     {
@@ -94,9 +99,26 @@ namespace Editor
             case Type::Scalar: edited=Controls::Scalar(property.Label.c_str(),std::get<float>(value),property.Speed,property.Minimum,property.Maximum);break;
             case Type::Vector3: edited=Controls::Vector3(property.Label.c_str(),std::get<Core::Float3>(value).Data.data(),property.Speed);break;
             case Type::Color3: edited=ImGui::ColorEdit3(property.Label.c_str(),std::get<Core::Float3>(value).Data.data());break;
+            case Type::TextureAsset:
+            {
+                const auto& texture=std::get<std::shared_ptr<Engine::TextureAsset>>(value);
+                ImGui::TextWrapped("%s: %s",property.Label.c_str(),texture ? texture->GetName().c_str() : "Default");
+                const auto selected=m_GetSelectedTexture ? m_GetSelectedTexture() : nullptr;
+                ImGui::BeginDisabled(!selected);
+                if (ImGui::Button("Use selected texture")) { value=selected; edited=true; }
+                ImGui::EndDisabled(); ImGui::SameLine();
+                if (ImGui::Button("Reset")) { value=std::shared_ptr<Engine::TextureAsset>{}; edited=true; }
+                break;
+            }
             default:break;
             }
-            if (edited && writable && property.Write(value)) changed=true;
+            if (edited && writable) {
+                try {
+                    if (property.Write(value)) { changed=true; m_PropertyError.clear(); }
+                    else m_PropertyError="Cannot apply " + property.Label;
+                }
+                catch (const std::exception& error) { m_PropertyError=error.what(); }
+            }
             ImGui::EndDisabled();
             if (!property.Tooltip.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                 ImGui::SetTooltip("%s",property.Tooltip.c_str());
@@ -116,6 +138,7 @@ namespace Editor
             }
             ImGui::PopID();
         }
+        if (!m_PropertyError.empty()) ImGui::TextWrapped("Property error: %s",m_PropertyError.c_str());
         if (changed && m_OnChanged) m_OnChanged();
     }
 }

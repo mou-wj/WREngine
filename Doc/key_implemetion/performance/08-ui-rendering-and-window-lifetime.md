@@ -98,9 +98,9 @@ UpdateLayout 只在本帧视口绘制前执行：
 
 源码：[EditorApplication::TickFrame / CloseProject](../../../src/Editor/Editor/Private/EditorApplication.cpp)、[EditorScene::ClearObjects](../../../src/Editor/SceneEditor/Private/EditorScene.cpp)、[视口投放接收](../../../src/Editor/SceneEditor/Private/EditorScenePanel.cpp)、[EditorNodePanel](../../../src/Editor/NodeEditor/Private/EditorNodePanel.cpp)。
 
-Project 的 New/Open 复用 Directory 模式的 ImFileDialogWidget。菜单与确认回调只保存 ProjectAction 和目录值；Cancel 不提交动作。实际调用链为 PollEvents → 消费待执行工程动作 → 消费右键创建请求 → 消费待投放网格/材质路径 → 更新属性栏布局 → ImMainWindow::Draw / NewFrame。打开前先检查描述及 Content，非法工程不先清空原工作区。工程元数据只记录版本/名字/Content，不保存场景，没有新增全局 ProjectManager。
+Project 的 New/Open/Save As 复用 Directory 模式的 ImFileDialogWidget。菜单与确认回调只保存 ProjectAction 和目录值；Cancel 不提交动作。实际调用链为 PollEvents → 消费工程动作 → 消费创建/删除及待投放资源 → 更新属性栏布局 → ImMainWindow::Draw / NewFrame。Save/Ctrl+S 同样在 Draw 前执行。Open 先准备完整对象和注册，再替换旧场景，非法工程不先清空工作区。运行时对象及几何/纹理的多文件保存见 [工程快照](10-project-snapshots.md)，没有新增全局 ProjectManager。
 
-CloseProject 调用 ImMainWindow::WaitForLastDraw，复用 ImSlateRenderer 已保存的窗口 completion marker，覆盖旧 GUI 采样及 Present。此时上一帧已完成，本帧尚未生成 ImDrawData，才清空材质/资产面板的选择与待处理文件，再 ClearObjects：等待视口 Tracker 的实际访问值、按组件类型 RemovePrimitive/RemoveLight、Flush 消费借用组件指针、销毁组件及重置选择/相机；最后 AssetManager::Clear 移除驻留引用。用户添加的光源随场景节点移除，内置天空资产仍由 EditorScene 持有供后续手动添加 Sky light 使用。没有新全局等待、额外命令提交、资源保活容器或 RDG 更改。等待仍可能阻塞切换操作；本轮未设计后台工程切换或场景序列化。
+CloseProject 调用 ImMainWindow::WaitForLastDraw，覆盖旧 GUI 采样及 Present；本帧尚未生成 ImDrawData，才清空面板、待处理操作和工程对象列表，再 ClearObjects：等待视口 Tracker 的实际访问值、Remove/Flush 消费借用指针、销毁组件及重置选择/相机；最后 AssetManager::Clear 移除驻留引用。默认环境由 EnvironmentLightResourceManager 生成，用户纹理和恢复的输入同样交由该管理器构建并应用；组件移除后显式 ReleaseUnused。工程快照读回提交显式屏障并记录实际 Fence，细节见 [快照实现](10-project-snapshots.md)。没有全设备等待或 RDG 生命周期改造；读写及工程切换目前同步执行，会阻塞 UI。
 
 场景树的 Objects 子区域填满面板剩余高度，BeginPopupContextWindow 使用 NoOpenOverItems，因此右键列表行不打开空白区创建菜单。面板仅提交 EEditorSceneObject 枚举；宿主保存一个 optional 待执行值，在下一帧 Draw 前调用 AddObject。关闭/切换工程清空请求并禁用创建，成功打开后启用。AddObject 沿已有 WaitForLastDraw、组件注册、dirty/Flush、Select 流程执行；基本几何创建同步占用控制线程，所有权见 [资产实现](05-assets-materials-and-instance-data.md)。天空光在 UI 和 AddObject 两处检查唯一性，底层 Scene 仍保留原检查。Viewport controls 说明与 Focus selected 只出现在 View ribbon，移除旧场景面板按钮没有更改底层复制/删除协议，也没有引入通用操作队列或第二套选择状态。
 
@@ -164,7 +164,7 @@ Scene::AddLight 对天空光在同一 pending-command mutex 范围内扫描现�
 
 网格/光源 Pass 将颜色与深度附件都声明 Load_Store。管线深度测试开启、深度值写入关闭；当前 RHI 原生 RenderPass 将深度按 attachment layout 绑定，未表达只读深度附件，因此 RDG 保守声明附件访问，避免状态与实际 RenderPass layout 不符。天空 Pass 结束需 Store 深度，否则后续扩展深度测试会读取未保证保留的内容。阴影上传在没有方向光矩阵时跳过对应零字节复制，并移除无用途的第 0 项调试访问，使真正无光源的场景可以完成绘制。
 
-没有 Primitive 时，DefferedSceneRenderer 只清空颜色/深度、按已有天空贴图绘制背景，再由原扩展入口加入网格/光源提示；没有表面参与着色，不录制材质光照计算。未打开工程或尚未手动添加光源时没有光源节点，场景背景为清空色；内置天空资产仍由 EditorScene 持有，只在用户添加 Sky light 后用于场景。关闭工程会移除全部光源，替代此前隐藏预览灯光继续留在场景中的行为。
+没有 Primitive 时，DefferedSceneRenderer 只清空颜色/深度、按已有天空贴图绘制背景，再由原扩展入口加入网格/光源提示；没有表面参与着色，不录制材质光照计算。未打开工程或尚未手动添加光源时没有光源节点，场景背景为清空色；用户添加 Sky light 时由 EnvironmentLightResourceManager 生成、应用默认环境，后续可在属性中选用 TextureAsset，EditorScene 不额外持有天空资产。关闭工程会移除全部光源，替代此前隐藏预览灯光继续留在场景中的行为。
 
 完整 UI 验证还暴露了深度状态缓存的确定性碰撞：方向轴先创建关闭测试/写入的状态，后续模型复用了它，未写深度而被天空覆盖。修复属于 RHI 的 HashDepthStencilState，具体旧输入、键值与返回状态见 [状态缓存细节](06-shader-compilation-and-binding.md) 和 [当日记录](../../dev/bugfix/故障与修复记录-2026-10-31.md)，没有通过修改 RDG 调度或提示附件依赖绕过此问题。
 

@@ -154,7 +154,7 @@ RenderResource
 - 初始化/释放 RHI 纹理：`InitRHIResource()` / `ReleaseRHIResource()`
 - 资源上传：`UploadData(...)`
 - 资源读取：`ReadData(...)`
-- mipmap 生成：`GenerateMipMaps()`
+- mipmap 生成接口：`GenerateMipMaps()` 当前为空实现；工程加载在 Engine 的 ProjectArchive 中重建普通 Mip，不能调用此占位接口后假定生成完成，见 [工程快照](../../key_implemetion/performance/10-project-snapshots.md)
 - 提供视图缓存：`GetViewCache()`
 
 它内部持有：
@@ -268,6 +268,8 @@ Shader
 RenderResource 提供 GlobalWhiteTexture 和 GlobalFlatNormalTexture，分别上传白色与平面法线像素，由 InitGlobalRenderResource / ReleaseGlobalRenderResource 统一管理。Engine 的材质绑定只引用这些 RenderTexture，不创建默认 TextureAsset。
 
 材质调整不改变 RenderGraphBuilder 的 Pass 管理、提交及资源 Tracker 更新流程。RenderResource 没有新增通用 retained 对象容器；同步和释放继续遵守既有约定，调用方仍须在实际访问提交处更新资源跟踪。
+
+2026-11-03 工程快照验证修复了 Builder 原有的 Pass 析构遗漏：new 创建的 Pass 在析构时逐项 delete，以释放闭包捕获的材质快照；录制任务已在 Execute 内等待完成，不增加 GPU 等待或新的资源管理机制。原因、CPU/GPU 寿命区别见 [RDG 实现](../../key_implemetion/performance/03-rdg-execution-and-state.md)；纹理多子资源上传读回及状态恢复见 [工程快照](../../key_implemetion/performance/10-project-snapshots.md)。
 
 ## 11. 架构总结
 

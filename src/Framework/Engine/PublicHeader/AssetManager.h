@@ -6,7 +6,6 @@
 #include "TextureAsset.h"
 #include "MaterialAsset.h"
 #include "StaticMeshAsset.h"
-#include "SkyLightAsset.h"
 #include <functional>
 #include <future>
 #include <mutex>
@@ -71,6 +70,7 @@ public:
     // Release residency only; components and asset dependencies can keep assets alive.
     void Unload(const std::string& path);
     void Clear();
+    std::vector<AssetSP> GetResidentAssets() const;
     void WaitForLoads();
     void Shutdown();
 

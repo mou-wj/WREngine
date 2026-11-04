@@ -345,7 +345,7 @@ SceneComponent* m_RootComponent = nullptr;
 
 ## 7. 资源管理：`AssetManager` / `AssetRegistry`
 
-资产管理保留在 Engine 内部，不新增独立编译模块。资产是实际资源的拥有者，管理器负责资产的定位、加载请求与驻留；组件拥有仅供自身使用的运行时材质实例。
+资产管理保留在 Engine 内部，不新增独立编译模块。资产拥有其加载的资源，管理器负责资产的定位、加载请求与驻留；组件拥有仅供自身使用的运行时材质实例。环境光的 IBL 计算产物由 EnvironmentLightResourceManager 管理，输入使用 TextureAsset，生成结果不定义为文件资产。
 
 ### 7.1 文件与职责
 
@@ -357,9 +357,9 @@ SceneComponent* m_RootComponent = nullptr;
 | `TextureAsset.h/.cpp` | 拥有纹理，封装纹理加载 |
 | `StaticMeshAsset.h/.cpp`、`Shape.cpp` | 拥有网格，封装 glTF 加载、基础几何资产创建和材质依赖构建 |
 | `MaterialAsset.h/.cpp` | 独占拥有 `Material`，读取材质 JSON，保留纹理资产依赖 |
-| `SkyLightAsset.h/.cpp` | 拥有环境纹理及 IBL 结果，封装现有预计算流程 |
+| `EnvironmentLightResourceManager.h/.cpp` | 接收 TextureAsset，构建/复用非资产的环境光结果，应用到天空光并显式释放 |
 
-为兼容原调用方，`AssetManager.h` 暂时包含上述资产头；这些头主要使用前置声明，文件解析及图形资源相关依赖位于具体实现中。没有新增 `MaterialInstanceAsset`，也没有引入尚无实际用途的加载器注册框架。
+为兼容原调用方，`AssetManager.h` 暂时包含上述文件资产头；这些头主要使用前置声明，文件解析及图形资源相关依赖位于具体实现中。环境光管理器由使用方直接包含，不进入 AssetManager 或 AssetRegistry。没有新增 `MaterialInstanceAsset`，也没有引入尚无实际用途的加载器注册框架。
 
 ### 7.2 资源所有权
 
@@ -370,13 +370,22 @@ StaticMesh --材质依赖引用--> MaterialAsset --独占拥有--> Material
 MaterialAsset --纹理依赖引用--> TextureAsset --拥有--> RenderTexture
 StaticMeshComponent --独占拥有--> MaterialInstance（按槽位、按需创建）
 MaterialInstance --父资产引用--> MaterialAsset
+EnvironmentLightResourceManager --拥有--> EnvironmentLightResource --输入引用--> TextureAsset
+EnvironmentLightResource --拥有--> diffuse/specular IBL RenderTexture
+SkyLightComponent --使用引用--> EnvironmentLightResource
 ```
+
+环境光入口为 [EnvironmentLightResourceManager](../../src/Framework/Engine/PublicHeader/EnvironmentLightResourceManager.h)：Build(input) 按输入 TextureAsset 对象身份复用结果，GetDefaultEnvironment 生成无文件依赖的中性灰环境，ApplyEnvironment(sky,result) 绑定或用空引用解除绑定。EnvironmentLightResource 只保存输入和生成纹理，没有 IAsset、Path、Load 或文件注册语义。新建天空光使用默认环境；通用 TextureAsset 属性允许选用资源面板的输入并生成、关联，Reset 恢复默认。控制线程在场景 Remove/Flush 和原 GPU 完成点之后调用 ReleaseUnused；Engine 关闭时 Clear。初始化、引用关系、失败清理及限制见 [环境光工程实现](../key_implemetion/performance/05-assets-materials-and-instance-data.md#环境光计算产物管理)。
 
 `StaticMesh` 和 `Material` 到所属 Asset 的反向引用为弱引用，避免所有权环。兼容接口仍允许传入资产资源的裸指针，但组件会据此获取并保留所属资产；不接受无资产归属的网格或材质。
 
 glTF 内嵌材质使用 `MaterialAsset::Create` 创建子资产，由网格保存依赖引用，不创建材质实例。子资产路径形如 `模型路径#material/索引`，当前不单独写盘或注册到全局管理器。缺失材质的 primitive 显式加载并引用默认 `MaterialAsset`，调用方不必预加载默认材质。
 
-`StaticMeshAsset::CreateShape(EBasicMeshShape)` 在既有 Shape.cpp 中复用 Cube/Sphere/Plane/Cylinder 生成器，创建独立网格、默认白色材质依赖及距离场，设置资源到资产的弱引用，供 StaticMeshComponent 按原约定保留资产。它不初始化或借用全局 GStaticMesh_*，不增加缓存；`builtin://shape/名称` 只是内存资产标识，不是可由 LoadSync 重新加载的文件路径，也没有写盘或工程序列化能力。分配和释放条件见 [资产实现](../key_implemetion/performance/05-assets-materials-and-instance-data.md)。
+`StaticMeshAsset::CreateShape(EBasicMeshShape)` 在既有 Shape.cpp 中复用几何生成器，创建独立网格、默认材质依赖及距离场，设置资源到资产的弱引用，供组件保留资产。它不借用全局 GStaticMesh_*，不增加缓存；builtin 标识不交给 LoadSync。工程保存实际顶点/索引数据，加载由 StaticMeshAsset::Create 接收恢复的网格，不重新调用生成器或读取源模型。分配和释放条件见 [资产实现](../key_implemetion/performance/05-assets-materials-and-instance-data.md)。
+
+### 工程对象持久化
+
+[ProjectArchive](../../src/Framework/Engine/PublicHeader/ProjectArchive.h) 位于现有 Engine 模块，提供 Save/Load；ProjectNode 保存组件所有者、名称及节点 ID，ProjectSnapshot 保存节点集合与工程资产内容。SceneComponent 的父关系和局部属性按值保存，资产引用转换为工程内部编号。几何写入 .geoms，纹理基础层像素写入 .texs，加载重建普通 Mip；材质参数写入场景 JSON，恢复不依赖导入源文件。天空光只持久化环境输入 TextureAsset 的基础层，加载后由 EnvironmentLightResourceManager 构建并应用运行时结果；IBL 不进入工程资产表。Editor 负责交互及工程路径，SceneEditor 负责组件注册与旧场景替换，Engine 不依赖这些界面模块。文件格式、逐代发布、GPU 读回状态和异常路径见 [工程快照实现](../key_implemetion/performance/10-project-snapshots.md)。
 
 ### 7.3 网格材质编辑
 

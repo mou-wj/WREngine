@@ -77,17 +77,13 @@ void RenderTexture::UploadData(const void* data, const RHI::RHIUpdateTextureRegi
 	range.ArraySlice = updateRegion.ArraySlice;
 	range.MipIndex = updateRegion.MipLevel;
 	range.PlaneSlice = 0;
-	if (range.MipIndex == 0 && m_Desc.MipLevels == 1) {
-        range.MipIndex = RHISubresourceRange::KAllSubresources;
-	}
-    if (range.ArraySlice == 0 && m_Desc.ArraySize == 1) {
-		range.ArraySlice = RHISubresourceRange::KAllSubresources;
-    }
-	range.PlaneSlice = RHISubresourceRange::KAllSubresources;
+    // Transfers touch a concrete subresource. Mixed wildcard keys cannot be
+    // queried as concrete mip/layer/plane keys by the explicit state tracker.
 	auto lastAccess = GetTracker().GetSubresourceAccess(range);
 	if (lastAccess != ERHIResourceAccess::TransferDest) {
 		std::vector<RHI::RHITransitionInfo> infos;
-		infos.emplace_back(m_Texture.get(), lastAccess, ERHIResourceAccess::TransferDest, lastQueueType, lastQueueType);
+		infos.emplace_back(m_Texture.get(), lastAccess, ERHIResourceAccess::TransferDest, lastQueueType, lastQueueType,
+            RHI::EResourceTransitionFlags::None, range.MipIndex, range.ArraySlice, range.PlaneSlice);
 		char* transitionMem = new char[RHI::G_RHITransition_TotalSize];
 		auto* transition = new(transitionMem) RHI::RHITransition();
 		GRHIApi->RHICreateTransition(transition, RHI::RHITransitionCreateInfo(RHI::ERHITransitionCreateFlags::None, std::move(infos)));
@@ -162,7 +158,8 @@ void RenderTexture::ReadData(void* data, uint32_t mipIndex, uint32_t arraySlice,
 			m_Texture.get(),
 			lastAccess,
 			ERHIResourceAccess::
-			TransferSrc, lastQueueType, lastQueueType);
+				TransferSrc, lastQueueType, lastQueueType, RHI::EResourceTransitionFlags::None,
+            range.MipIndex, range.ArraySlice, range.PlaneSlice);
 
 		char* transitionMem =
 			new char[

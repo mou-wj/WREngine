@@ -3,6 +3,7 @@
 #include "RenderModule.h"
 #include "Math.hpp"
 #include "EngineGlobal.h"
+#include "EnvironmentLightResourceManager.h"
 namespace App {
     using namespace Engine;
     using namespace Core;
@@ -14,7 +15,6 @@ namespace App {
     void AppViewportClient::InitResources()
     {
         AssetManager::Get().LoadSync<MaterialAsset>(Core::GetProjectDir() + "/resources/material/DefaultWhite/material.json");
-        auto skyAsset = AssetManager::Get().LoadSync<SkyLightAsset>(Core::GetProjectDir() + "/resources/pic/DaySkyHDRI046A_1K-TONEMAPPED.jpg");
         m_StaticMeshAsset = AssetManager::Get().LoadSync<StaticMeshAsset>(Core::GetProjectDir() + "/resources/glb/sphere.glb");
         m_StaticMeshComponent = new StaticMeshComponent();
         m_StaticMeshComponent->SetStaticMesh(m_StaticMeshAsset->GetMesh());
@@ -57,8 +57,8 @@ namespace App {
 
         // Create Sky Light
         m_SkyLight = new SkyLightComponent();
-        m_SkyLight->SetDiffuseIrradiance(skyAsset->GetDiffuseIrradiance());
-        m_SkyLight->SetSpecularIrradiance(skyAsset->GetSpecularPrefilter());
+        auto& environments = EnvironmentLightResourceManager::Get();
+        environments.ApplyEnvironment(*m_SkyLight,environments.GetDefaultEnvironment());
         m_Scene->AddLight(m_SkyLight);
 
         m_Scene->FlushPendingUpdates();
@@ -102,6 +102,9 @@ namespace App {
         m_PointLight = nullptr;
         delete m_SpotLight;
         m_SpotLight = nullptr;
+        delete m_SkyLight;
+        m_SkyLight = nullptr;
+        EnvironmentLightResourceManager::Get().ReleaseUnused();
 
 		m_StaticMeshAsset.reset();
         delete m_Scene;

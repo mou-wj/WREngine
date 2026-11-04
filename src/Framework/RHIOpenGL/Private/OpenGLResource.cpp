@@ -118,7 +118,7 @@ namespace RHIOpenGL
                     internalFormat,
                     desc.Width,
                     desc.Height,
-                    desc.Depth);
+                    desc.Type == RHI::ERHITextureType::Texture3D ? desc.Depth : desc.ArraySize);
                 break;
 
             default:
