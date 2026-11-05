@@ -361,6 +361,8 @@ SceneComponent* m_RootComponent = nullptr;
 
 为兼容原调用方，`AssetManager.h` 暂时包含上述文件资产头；这些头主要使用前置声明，文件解析及图形资源相关依赖位于具体实现中。环境光管理器由使用方直接包含，不进入 AssetManager 或 AssetRegistry。没有新增 `MaterialInstanceAsset`，也没有引入尚无实际用途的加载器注册框架。
 
+文件组织操作由 AssetEditor 执行，Engine::AssetManager::UpdateSourcePaths 只协调资产元数据和路径表：移动后沿用原资源对象，删除源文件则解除源路径及缓存关联。IAsset 的受保护 SetSourcePath 只允许管理器协调调用，三个文件资产覆写；未支持该能力的其他派生类型明确报错。编辑前由控制线程 WaitForLoads，文件操作成功后才更新表；不是任意并发文件热重载机制。名称与运行时内容不因目录移动重建，仍被组件/材质/工具拥有的资源不会因删除磁盘源而强制销毁。锁和生命周期见 [文件操作实现](../key_implemetion/performance/05-assets-materials-and-instance-data.md#资源文件移动重命名与删除)。
+
 ### 7.2 资源所有权
 
 ```text

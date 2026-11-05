@@ -240,6 +240,8 @@ Scene Objects
 
 网格为 Y=0 的 XZ 平面。CPU 用逆 VP 反投影视锥八角，检查十二条边与地面交点并求 XZ AABB；按 10 米周期消除相机 X/Z 的大坐标并保持世界锚定。固定 100×100 控制顶点映射到外扩 AABB，形成 99×99 个方形区域，各区按相机高度与最近距离选择 0.1、0.2、0.5、1、2、5、10 米间距，并保守剔除视锥外区域。同档区域用区域索引 SRV 合并为实例绘制，最多七个 Draw；VS 只展开该档所需线段，共享块边界只绘制一次。PS 在投影过密处及远距离连续衰减透明度，避免远处密线堆叠。网格最后以 RGB 源 Alpha 混合叠加，写掩码为 0x7，保持场景 Alpha；空背景清为 Alpha=1，避免 GUI 再次乘入衰减权重。每视图沿用 RDG transient 顶点/区域索引 SRV 与上传，没有常驻缓存、额外等待或 HS/DS 硬件细分；有限远裁剪、离散密度边界及上传成本仍存在。详见 [几何算法与退化条件](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md) 和 [资源生命周期](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
+地面主轴在原网格 Draw 中特殊着色：世界 X 轴为红色，Z 轴为绿色，Alpha 高于普通灰线。CPU 传入原点在重定位坐标中的位置，避免每次相机跨 10 米周期后错误出现一组局部彩色轴；两根轴保留深度和距离淡出，只跳过重复格线的密度淡出。未增加 Pass、资源依赖或后端线宽设置。
+
 光源提示读取既有组件的世界位置、方向、半径/锥角：点光 3 个正交大圆共 192 线段；聚光底圆 64 段、16 条母线和 1 条中心射线；平行光为箭杆及八条头部线，共 9 段。这些图形不替代实际光源数据更新。详细公式和限制见 [变换与提示几何](../../key_implemetion/algorithm/03-transforms-frustum-and-depth.md)。
 
 两种提示 Pass 均 Load/Store 颜色和深度，开启深度测试但关闭深度值写入；当前 RHI RenderPass 没有只读深度附件标记，RDG 因而按深度附件访问保守排序。天空绘制也保存深度供扩展使用。工程时序、参数快照和光源代理更新见 [UI 与场景提交](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。

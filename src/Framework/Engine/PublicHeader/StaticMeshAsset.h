@@ -20,6 +20,7 @@ public:
     StaticMesh* GetMesh() const { return m_Mesh.get(); }
 
 private:
+    void SetSourcePath(const std::string& path) override { m_Path=path; }
     std::string m_Name;
     std::string m_Path;
     std::shared_ptr<StaticMesh> m_Mesh;

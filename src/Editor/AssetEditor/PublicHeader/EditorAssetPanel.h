@@ -39,6 +39,13 @@ namespace Editor
         void DrawTree(const std::filesystem::path& path);
         void DrawResources();
         void DrawStatus();
+        void DrawFileItemActions(const std::filesystem::path& path, bool bDirectory);
+        void DrawDirectoryDropTarget(const std::filesystem::path& directory);
+        void DrawDirectoryMenu(const std::filesystem::path& directory);
+        void DrawFileOperationDialog();
+        void ProcessFileOperation();
+        void MoveFilePath(const std::filesystem::path& source, const std::filesystem::path& destination);
+        void DeleteFilePath(const std::filesystem::path& source);
         std::filesystem::path ImportFile(const std::filesystem::path& source, const std::filesystem::path& directory);
         struct FileEntry
         {
@@ -73,5 +80,16 @@ namespace Editor
         ImGUISlate::ImFileDialogWidget m_ImportDialog;
         struct PendingImport { std::filesystem::path Source, Directory; };
         std::vector<PendingImport> m_PendingImports;
+        enum class EFileOperation { None, CreateDirectory, Move, Delete };
+        struct FileOperation
+        {
+            EFileOperation Type=EFileOperation::None;
+            std::filesystem::path Source, Destination;
+        };
+        FileOperation m_PendingFileOperation;
+        EFileOperation m_FileDialogOperation=EFileOperation::None;
+        std::filesystem::path m_FileDialogPath;
+        std::string m_FileName;
+        bool m_bRequestFileDialog=false;
     };
 }

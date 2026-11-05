@@ -2,7 +2,7 @@
 
 ## 模块和边界
 
-`src/Editor/CMakeLists.txt` 纳入 SceneEditor、AssetEditor、MaterialEditor、NodeEditor、MeshViewer、Editor 六个独立 DLL。Editor 与原 Application 都提供 ApplicationBase 实现，由 Launcher 选择其一；Editor 负责工程生命周期、菜单与应用组装，功能面板由各自模块实现。
+`src/Editor/CMakeLists.txt` 纳入 SceneEditor、AssetEditor、MaterialEditor、NodeEditor、MeshViewer、TextureViewer、Editor 七个独立 DLL。Editor 与原 Application 都提供 ApplicationBase 实现，由 Launcher 选择其一；Editor 负责工程生命周期、菜单与应用组装，功能面板由各自模块实现。
 
 | 实现 | 职责 |
 | --- | --- |
@@ -16,6 +16,7 @@
 | [MaterialEditor / MaterialLibrary](../../../src/Editor/MaterialEditor/PublicHeader/MaterialLibrary.h) | 项目材质文件的元数据扫描、新建、复制与依赖文件导入，不持有运行时资产 |
 | [NodeEditor / EditorNodePanel](../../../src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h) | 借用当前 SceneComponent；网格编辑局部 TRS/材质槽信息，光源编辑位置和实际光照属性 |
 | [MeshViewer / EditorMeshViewer](../../../src/Editor/MeshViewer/PublicHeader/EditorMeshViewer.h) | 从场景网格列表选择节点，单网格 Phong/线框预览、法线叠加与 LOD/顶点属性/区域检查 |
+| [TextureViewer / EditorTextureViewer](../../../src/Editor/TextureViewer/PublicHeader/EditorTextureViewer.h) | 多来源纹理列表、二维画布、Mip/立方体面/数组层检查，来源由宿主回调提供 |
 
 ## 依赖和模块协作
 
@@ -37,16 +38,20 @@ flowchart LR
     ImGuiSlate --> MeshViewer
     RenderCore --> MeshViewer
     MeshViewer --> Editor
+    Engine --> TextureViewer
+    ImGuiSlate --> TextureViewer
+    RenderCore --> TextureViewer
+    TextureViewer --> Editor
     SlateRHIRenderer --> Editor
 ```
 
-箭头从被依赖模块指向使用者。五个功能模块的公共接口导出到各自 PublicHeader，按目标名导出跨 DLL 接口。它们不依赖 Editor，也不相互依赖。Engine/ImGUISlate 不反向依赖任何编辑功能模块。NodeEditor 仅依赖 Engine/ImGuiSlate，通过同步查询/变更回调连接场景。MeshViewer 同样通过宿主回调获取网格列表，使用 Engine 已有的 RenderCore 依赖录制独立预览，不直接依赖 Renderer。
+箭头从被依赖模块指向使用者。六个功能模块的公共接口导出到各自 PublicHeader，按目标名导出跨 DLL 接口。它们不依赖 Editor，也不相互依赖。Engine/ImGUISlate 不反向依赖任何编辑功能模块。NodeEditor 仅依赖 Engine/ImGuiSlate，通过同步查询/变更回调连接场景。MeshViewer 和 TextureViewer 通过宿主回调获取候选资源，使用 Engine 已有的 RenderCore 依赖录制独立预览，不直接依赖 Renderer。
 
 AssetEditor 不再保存 EditorScene 引用：打开网格时调用 SetOnMeshOpened 设置的回调；赋材质时调用 SetOnMaterialAssigned 设置的回调，由宿主决定目标和是否成功。无网格处理回调时明确报错，无赋材质处理回调时禁用该操作。
 
 MaterialEditor 不再引用场景模块或资产面板类型。公共 MaterialEditorCallbacks 只包含查询当前组件、材质、纹理及通知变更的函数；EditorApplication 用 lambda 将这些接口连接到 SceneEditor/AssetEditor。Draw 时查询当前选择，避免额外缓存或固定一帧前的选择状态。函数在 UI 线程同步执行，组件指针只在当前调用中借用；没有异步回调或新资源管理器。
 
-五个模块均通过既有 ModuleManager 注册并提供启动/关闭状态。功能模块不全局持有窗口、场景或面板，EditorApplication 显式拥有其实例；先销毁窗口、面板和场景，再关闭功能模块。模块实例存在，不代表应该为它创建新的全局业务单例。
+六个功能模块均通过既有 ModuleManager 注册并提供启动/关闭状态。功能模块不全局持有窗口、场景或面板，EditorApplication 显式拥有其实例；先销毁窗口、面板和场景，再关闭功能模块。模块实例存在，不代表应该为它创建新的全局业务单例。
 
 ### 光源节点与场景提示绘制
 
@@ -133,7 +138,9 @@ EditorScene 的 SelectAt 和 ApplyMaterialAt 共用 SceneView::MakeRay / SceneIn
 
 Editor 宿主将当前工程的 Content 设为 `res://`，未打开工程时面板只显示提示、不浏览引擎资源。树中目录优先排列，文件按名称排序；点击文件同步选中卡片，材质单击即加载并通知弹窗，其他资源在双击/Open 时加载。左侧 Filter files 递归筛选并保留匹配文件的父目录，右侧 Search resources 只筛选当前目录；右侧还有类型过滤和尺寸设置。导航记录只保存当前会话。
 
-路径栏接受 res://、当前目录下的相对路径以及内容根内的绝对路径；不能通过上级/路径栏越出内容根。Refresh 重新读取目录元数据，不执行资产原地热重载。右键卡片可打开或复制 res:// 路径。不可读、已删除、未支持的文件显示错误，界面继续运行。
+路径栏接受 res://、当前目录下的相对路径以及内容根内的绝对路径；不能通过上级/路径栏越出内容根。Refresh 重新读取目录元数据，不执行资产原地热重载。目录树和卡片均支持拖放移动到文件夹、右键重命名/删除；文件夹及空白区域可右键 New folder。删除须确认，不能删除内容根，不能把目录移动到自身子树或覆盖重名目标。不可读、已删除、未支持的文件显示错误，界面继续运行。
+
+图片及自包含 GLB/JSON 直接作为当前目录中的文件导入，重名加后缀；只有确有外部依赖的 glTF/材质才保留包目录。移动/重命名同步维护已支持的材质纹理、glTF buffer/image 本地引用及 Engine 的资产路径缓存，保留实际资源对象和所有者；仍被其他文件引用的目标拒绝删除。已加载资源的源文件被删除后，外部使用引用仍可持有其运行时数据，工程保存仍是对象快照，不改回源文件引用。实现、范围和失败边界见 [资源文件操作](../../key_implemetion/performance/05-assets-materials-and-instance-data.md#资源文件移动重命名与删除)。
 
 文件夹、网格、纹理、JSON 候选材质、普通文件采用不同类型图标；不批量生成真实缩略图。JSON 是否为有效材质由 MaterialAsset 加载验证。目录树与网格共用 CPU 元数据，不增加第二套资产管理器。资源导入不自动生成节点；从 GLB/glTF 卡片拖到视口后，宿主在下一次绘制前加载并通过原 EditorScene::AddMesh 流程创建静态网格，初始位置为世界原点。详细边界见 [资产工程细节](../../key_implemetion/performance/05-assets-materials-and-instance-data.md)。
 
@@ -171,12 +178,26 @@ Vertices 页按原始分量数展示位置、法线、UV、切线和颜色，各
 
 分隔条是 ImGUISlate 的 ImSplitterWidget，只负责当前 ImGuiContext 的命中、光标请求和拖动增量。布局比例仍属于 EditorLayout；回调只在数值实际改变时调用 ImMainWindow::UpdateLayout。三个分隔条在任何视口/面板绘制前登记，重新布局前等待上一窗口完成标记，再经既有 SetGeometry/SceneViewport::Resize 更新纹理。内部拖动不销毁窗口交换链，不添加 WaitIdle 或资源保活容器；边界达到下限时也不重复等待。
 
+## TextureViewer 多纹理检查
+
+View ribbon 的 Texture viewer 打开同一 ImGuiContext 中的浮窗，没有新的原生窗口、交换链或图形环境。左侧上方是已查看图片列表；空白处右键 Add textures 打开来源页，支持来源类别、名称筛选、多选和确认。列表条目右键 Remove 仅移除这一次显示，不删除源资源。同一纹理可重复加入，以便同时比较不同 Mip、立方体面或数组层。
+
+EditorApplication 提供来源回调：当前工程 Content 下的纹理资产，以及 EnvironmentLightResourceManager 已生成的 diffuse 和 specular 贴图。文件候选优先复用已加载的 TextureAsset，否则在用户确认后才加载；来源页不预加载整个资源库。没有工程时仍可打开，现存环境光输出也可查看。材质来源适配在 CollectTextureViewerSources 中保留 TODO，当前不实现材质纹理枚举。
+
+来源页不再遍历场景引用、选中对象和环境光输入中的运行时副本，也不额外列出无路径的工程快照纹理。文件按规范路径去重，显示 Content 相对路径；环境光输出按真实生成结果分别列出，以输入名称和 Diffuse IBL / Specular IBL 标识，不附加 Runtime 前缀。这个来源范围不改变资产缓存、工程保存数据或同一来源可多次加入画布的功能；细节见 [来源与所有者](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md#来源与所有者)。
+
+右侧是带自适应细分网格的二维画布。图片以当前画布可见中心加入，点击后显示黄色边框并同步左侧选择；左键拖图移动图片，空白左键或任意位置中键拖动平移画布，滚轮围绕鼠标缩放。X 红/Y 蓝主轴以加粗线条和 +X/+Y/0 标签区别于灰色网格，跟随真实画布原点，不固定在屏幕中心。单张图片保持所选 Mip 的像素尺寸，画布缩放不重新生成预览。下方信息区显示纹理描述，并提供 Mip、Cube Face、Array Layer、刷新和居中操作。
+
+模块借用源 RenderTexture 并显式保有其 TextureAsset 或 EnvironmentLightResource 所有者，使用现有 RenderGraphBuilder 生成 RGBA8 预览，再由既有 ImGui RHI 后端合成。仅在加入、切换子资源或主动刷新时提交预览图；关闭浮窗/工程时等待实际资源访问 Fence 后释放引用。当前支持可采样的单采样彩色 2D、Cube 和 2DArray，不支持深度、多重采样、3D、HDR 曝光分析或数值通道检查；浮点超出显示范围会在 RGBA8 中截断。
+
+坐标、网格和纹理采样公式见 [画布与预览算法](../../key_implemetion/algorithm/09-texture-viewer-canvas.md)，所有权与执行顺序见 [资源生命周期](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md#textureviewer-来源与资源生命周期)，实际验证见 [2026-11-04 记录](../../dev/bugfix/故障与修复记录-2026-11-04.md#textureviewer-多纹理画布与来源选择)。
+
 ## 启动
 
 `Langcher.exe` 默认 Editor；`Langcher.exe -app=Application` 保留旧应用，`-app=Editor` 显式选择编辑器，`-help` 显示可选项。参数只来自 argv，无环境变量回退。
 
 [apps.json](../../../src/Lancher/apps.json) 是实际装配源，CMake configure 时 COPYONLY 到 BINARY_DIR。默认两应用均为 Vulkan，图形后端由所选条目的模块/依赖决定，不提供未经接入的 `-rhi` 参数。配置校验、依赖排序和 DLL 链接边界见 [启动实现](../../key_implemetion/performance/09-module-build-and-startup.md)。
 
-Editor 条目显式列出五个功能模块：SceneEditor、AssetEditor、MaterialEditor、NodeEditor、MeshViewer 的显式启动依赖均为 Engine，Editor 最后组装。Editor 经 SlateRHIRenderer 的现有启动依赖保证 Renderer 在创建场景前已启动、场景关闭后才关闭；这不是功能模块对 Renderer 的直接代码依赖。Application 条目不加载这些功能模块。Langcher 仍只通过 add_dependencies 建立应用构建前置，不把具体应用 DLL 静态导入到 EXE。
+Editor 条目显式列出六个功能模块：SceneEditor、AssetEditor、MaterialEditor、NodeEditor、MeshViewer、TextureViewer 的显式启动依赖均为 Engine，Editor 最后组装。Editor 经 SlateRHIRenderer 的现有启动依赖保证 Renderer 在创建场景前已启动、场景关闭后才关闭；这不是功能模块对 Renderer 的直接代码依赖。Application 条目不加载这些功能模块。Langcher 仍只通过 add_dependencies 建立应用构建前置，不把具体应用 DLL 静态导入到 EXE。
 
 本轮验证及限制见 [2026-10-26 故障记录](../../dev/bugfix/故障与修复记录-2026-10-26.md)，界面实现存在不等于完成了全部鼠标、文本、DPI 交互验证。

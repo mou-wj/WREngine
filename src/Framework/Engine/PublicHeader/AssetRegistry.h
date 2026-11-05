@@ -14,6 +14,7 @@ class ENGINE_API AssetRegistry
 public:
     static AssetRegistry& Get();
     void Register(const AssetInfo& info);
+    void Unregister(const std::string& path);
     std::optional<AssetInfo> GetByPath(const std::string& path) const;
     std::vector<AssetInfo> GetByName(const std::string& name) const;
 

@@ -22,6 +22,7 @@ public:
         const std::string& path, const std::string& name, std::unique_ptr<Material> material);
 
 private:
+    void SetSourcePath(const std::string& path) override { m_Path=path; }
     std::string m_Name;
     std::string m_Path;
     std::unique_ptr<Material> m_MaterialPtr;

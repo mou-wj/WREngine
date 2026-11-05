@@ -93,6 +93,14 @@ namespace Engine
             else ++it;
     }
 
+    std::vector<std::shared_ptr<const EnvironmentLightResource>> EnvironmentLightResourceManager::GetResources() const
+    {
+        std::vector<std::shared_ptr<const EnvironmentLightResource>> result;
+        if (m_DefaultEnvironment) result.push_back(m_DefaultEnvironment);
+        for (const auto& [input,resource]:m_Resources) result.push_back(resource);
+        return result;
+    }
+
     void EnvironmentLightResourceManager::Clear()
     {
         m_DefaultEnvironment.reset(); m_DefaultInput.reset();

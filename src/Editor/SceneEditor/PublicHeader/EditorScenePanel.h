@@ -28,10 +28,12 @@ namespace Editor
     public:
         explicit EditorViewToolbar(EditorScene& scene);
         void SetOnOpenMeshViewer(std::function<void()> callback);
+        void SetOnOpenTextureViewer(std::function<void()> callback);
         void Draw() override;
     private:
         EditorScene& m_Scene;
         std::function<void()> m_OnOpenMeshViewer;
+        std::function<void()> m_OnOpenTextureViewer;
     };
 
     class SCENEEDITOR_API EditorScenePanel final : public ImGUISlate::ImPanelWidget

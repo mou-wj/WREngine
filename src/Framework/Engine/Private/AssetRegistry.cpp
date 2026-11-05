@@ -27,6 +27,13 @@ std::optional<AssetInfo> AssetRegistry::GetByPath(const std::string& path) const
     return it == m_PathToInfo.end() ? std::nullopt : std::optional<AssetInfo>(it->second);
 }
 
+void AssetRegistry::Unregister(const std::string& path)
+{
+    const auto key=AssetManager::NormalizePath(path);
+    std::lock_guard lock(m_Mutex);
+    m_PathToInfo.erase(key);
+}
+
 std::vector<AssetInfo> AssetRegistry::GetByName(const std::string& name) const
 {
     std::vector<AssetInfo> result;

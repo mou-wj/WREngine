@@ -1,0 +1,36 @@
+struct TextureViewerOutput { float4 Position : SV_Position; float2 UV : TEXCOORD0; };
+#if VERTEX_SHADER
+TextureViewerOutput MainVS(uint id : SV_VertexID)
+{
+    TextureViewerOutput output;
+    output.UV=float2((id<<1)&2,id&2);
+    float2 position=output.UV*2-1;
+#if VIEWER_FLIP_Y
+    position.y=-position.y;
+#endif
+    output.Position=float4(position,0,1);
+    return output;
+}
+#else
+#include "/Generated/ShaderParameters/TextureViewerPixelParameters.sf"
+float3 CubeDirection(float2 uv,uint face)
+{
+    float2 p=uv*2-1; p.y=-p.y;
+    if (face==0) return float3(1,p.y,-p.x);
+    if (face==1) return float3(-1,p.y,p.x);
+    if (face==2) return float3(p.x,1,-p.y);
+    if (face==3) return float3(p.x,-1,p.y);
+    if (face==4) return float3(p.x,p.y,1);
+    return float3(-p.x,p.y,-1);
+}
+float4 MainPS(TextureViewerOutput input) : SV_Target0
+{
+#if TEXTURE_KIND == 0
+    return Input2D.SampleLevel(InputSampler,input.UV,Settings.x);
+#elif TEXTURE_KIND == 1
+    return InputCube.SampleLevel(InputSampler,CubeDirection(input.UV,(uint)Settings.y),Settings.x);
+#else
+    return InputArray.SampleLevel(InputSampler,float3(input.UV,Settings.y),Settings.x);
+#endif
+}
+#endif

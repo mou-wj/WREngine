@@ -5,6 +5,7 @@
 #include "EditorMaterialPanel.h"
 #include "EditorNodePanel.h"
 #include "EditorMeshViewer.h"
+#include "EditorTextureViewer.h"
 #include "Widgets/ImFileDialogWidget.h"
 #include "AssetManager.h"
 #include "StaticMeshAsset.h"
@@ -25,6 +26,8 @@
 #include <algorithm>
 #include <utility>
 #include <unordered_set>
+#include <unordered_map>
+#include <cctype>
 
 namespace Editor
 {
@@ -205,6 +208,8 @@ namespace Editor
                 }
             return result;
         });
+        m_TextureViewer=std::make_unique<EditorTextureViewer>([this] { return CollectTextureViewerSources(); });
+        m_ViewToolbar->SetOnOpenTextureViewer([this] { m_TextureViewer->Open(); });
         m_ViewToolbar->SetOnOpenMeshViewer([this] {
             std::string selected;
             for (const auto& object:m_Scene->GetObjects())
@@ -245,6 +250,7 @@ namespace Editor
         m_Window->AddWidget(m_NodePanel.get(),layout);
         m_Window->AddWidget(m_MaterialPanel.get(),{});
         m_Window->AddWidget(m_MeshViewer.get(),{});
+        m_Window->AddWidget(m_TextureViewer.get(),{});
         m_Window->Show();
         std::cout << "[Editor] Initialized Scene / Assets / Material panels" << std::endl;
         return true;
@@ -256,6 +262,7 @@ namespace Editor
         // Keep widgets, viewport and assets alive until that release has completed.
         m_Window.reset();
         m_MeshViewer.reset();
+        m_TextureViewer.reset();
         m_ProjectDialog.reset(); m_MenuWidget.reset(); m_NodePanel.reset();
         m_LeftSplitter.reset();
         m_RightSplitter.reset();
@@ -341,6 +348,7 @@ namespace Editor
             m_Window->UpdateLayout();
         }
         m_MeshViewer->Tick();
+        m_TextureViewer->Tick();
         m_Window->Draw();
         const auto& io = ImGui::GetIO();
         if (!m_Window->HasMouseCapture() &&
@@ -405,6 +413,7 @@ namespace Editor
     void EditorApplication::ResetProjectPanels()
     {
         m_MeshViewer->Reset();
+        m_TextureViewer->Reset();
         m_PendingMeshAsset.reset(); m_AssetPanel->SetProjectAssets({});
         m_PendingObject.reset(); m_PendingDeleteObject=-1; m_ScenePanel->SetCreationEnabled(false);
         m_ProjectDialog->Close(); m_DroppedMesh.clear(); m_DroppedMaterial.clear(); m_DroppedMaterialPosition={}; m_PendingProjectAction=ProjectAction::None;
@@ -460,6 +469,61 @@ namespace Editor
         if (auto asset=m_MaterialPanel->GetSelectedMaterial()) result.push_back(asset);
         std::unordered_set<const Engine::IAsset*> seen;
         result.erase(std::remove_if(result.begin(),result.end(),[&](const auto& asset) { return !asset || !seen.insert(asset.get()).second; }),result.end());
+        return result;
+    }
+    std::vector<TextureViewerSource> EditorApplication::CollectTextureViewerSources() const
+    {
+        namespace fs=std::filesystem;
+        std::vector<TextureViewerSource> result;
+        const auto content=m_ProjectDirectory.empty() ? fs::path{} : fs::weakly_canonical(m_ProjectDirectory/"Content");
+        const auto environments=Engine::EnvironmentLightResourceManager::Get().GetResources();
+        std::unordered_set<std::string> files;
+        const auto fileKey=[](const fs::path& path) {
+            auto key=fs::weakly_canonical(fs::absolute(path)).generic_string();
+#ifdef _WIN32
+            std::transform(key.begin(),key.end(),key.begin(),[](unsigned char c){return static_cast<char>(std::tolower(c));});
+#endif
+            return key;
+        };
+        // Browse the asset catalog, not every runtime copy referenced by the
+        // scene or by environment inputs. Those owners are not new sources.
+        if (!content.empty() && fs::is_directory(content)) {
+            for (const auto& entry:fs::recursive_directory_iterator(content)) if (entry.is_regular_file()) {
+                auto extension=entry.path().extension().string();
+                std::transform(extension.begin(),extension.end(),extension.begin(),[](unsigned char c){return static_cast<char>(std::tolower(c));});
+                if (extension!=".png" && extension!=".jpg" && extension!=".jpeg" && extension!=".bmp" && extension!=".tga") continue;
+                const auto key=fileKey(entry.path());
+                if (!files.insert(key).second) continue;
+                TextureViewerSource source; source.Id="file:"+key; source.Path=entry.path();
+                source.Asset=Engine::AssetManager::Get().GetAssetShared<Engine::TextureAsset>(entry.path().generic_string());
+                source.Name=MaterialLibrary::PathText(entry.path().lexically_relative(content));
+                result.push_back(std::move(source));
+            }
+        }
+        const auto distinguishNames=[&](size_t begin) {
+            std::unordered_map<std::string,size_t> counts,indices;
+            std::unordered_set<std::string> labels;
+            for (size_t i=begin;i<result.size();++i) { ++counts[result[i].Name]; labels.insert(result[i].Name); }
+            for (size_t i=begin;i<result.size();++i) if (counts[result[i].Name]>1) {
+                const auto name=result[i].Name;
+                do { result[i].Name=name+" ["+std::to_string(++indices[name])+"]"; }
+                while (!labels.insert(result[i].Name).second);
+            }
+        };
+        const auto environmentBegin=result.size();
+        for (const auto& environment:environments) {
+            const auto& input=environment->GetInputTexture();
+            const auto name=input ? input->GetName() : "Default environment";
+            for (int kind=0;kind<2;++kind) {
+                TextureViewerSource source; source.Environment=environment;
+                source.Kind=kind==0 ? ETextureViewerSource::EnvironmentDiffuse : ETextureViewerSource::EnvironmentSpecular;
+                source.Id="environment:"+std::to_string(reinterpret_cast<uintptr_t>(environment.get()))+":"+std::to_string(kind);
+                source.Name=name+(kind==0 ? " / Diffuse IBL" : " / Specular IBL"); result.push_back(std::move(source));
+            }
+        }
+        distinguishNames(environmentBegin);
+        // TODO: Add a material-texture source provider when that inspection API is available.
+        std::stable_sort(result.begin(),result.end(),[](const auto& a,const auto& b) { return a.Kind==b.Kind ? a.Name<b.Name : a.Kind<b.Kind; });
         return result;
     }
     void EditorApplication::DrawProjectMenu()

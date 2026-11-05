@@ -183,4 +183,46 @@ void AssetManager::Shutdown()
     Clear();
 }
 
+void AssetManager::UpdateSourcePaths(const std::string& source, const std::string& destination)
+{
+    const auto oldRoot=NormalizePath(source);
+    const auto newRoot=destination.empty() ? std::string{} : NormalizePath(destination);
+    const auto matches=[&](const std::string& path) {
+        return path==oldRoot || (path.starts_with(oldRoot) && path.size()>oldRoot.size() &&
+            (path[oldRoot.size()]=='/' || path[oldRoot.size()]=='#'));
+    };
+    // Keep removed residency alive until after unlocking; destructors may use RHI.
+    std::vector<AssetSP> removed;
+    {
+        std::lock_guard lock(m_Mutex);
+        if (!m_Loading.empty() || !m_Tasks.empty()) throw std::logic_error("WaitForLoads is required before changing source files");
+        std::vector<std::pair<std::string,std::weak_ptr<IAsset>>> relocated;
+        std::vector<std::pair<std::string,AssetSP>> residents;
+        for (auto it=m_LoadedAssets.begin();it!=m_LoadedAssets.end();) {
+            if (!matches(it->first)) { ++it; continue; }
+            const auto oldKey=it->first;
+            const auto newKey=newRoot.empty() ? std::string{} : newRoot+oldKey.substr(oldRoot.size());
+            auto info=AssetRegistry::Get().GetByPath(oldKey);
+            if (auto asset=it->second.lock()) asset->SetSourcePath(newKey);
+            AssetRegistry::Get().Unregister(oldKey);
+            if (!newKey.empty()) {
+                relocated.emplace_back(newKey,it->second);
+                if (info) { info->Path=newKey; AssetRegistry::Get().Register(*info); }
+            }
+            it=m_LoadedAssets.erase(it);
+        }
+        for (auto it=m_ResidentAssets.begin();it!=m_ResidentAssets.end();) {
+            if (!matches(it->first)) { ++it; continue; }
+            if (newRoot.empty()) removed.push_back(std::move(it->second));
+            else residents.emplace_back(newRoot+it->first.substr(oldRoot.size()),std::move(it->second));
+            it=m_ResidentAssets.erase(it);
+        }
+        for (auto& [path,asset]:relocated) m_LoadedAssets.insert_or_assign(path,std::move(asset));
+        for (auto& [path,asset]:residents) {
+            if (auto found=m_ResidentAssets.find(path);found!=m_ResidentAssets.end()) removed.push_back(std::move(found->second));
+            m_ResidentAssets.insert_or_assign(path,std::move(asset));
+        }
+    }
+}
+
 }

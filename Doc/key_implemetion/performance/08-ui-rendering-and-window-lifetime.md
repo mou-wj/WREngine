@@ -276,3 +276,31 @@ MeshViewerPreview 以 RenderGraphBuilder 注册自身颜色纹理及顶点/索�
 Builder 在实际提交位置更新原有 Tracker。窗口 GUI 采样前，imgui_impl_rhi 继续通过既有状态转换和访问 Fence 连接预览图与窗口提交；模块不增加 Present、原生图形环境、ImageLayoutManager 或 WaitIdle。MeshViewer 的 SetMesh、resize、Reset/destructor 只等待将被替换资源记录的具体 QueueType/Value，包括颜色和两项缓冲：颜色的最后 GUI 采样覆盖旧显示帧；缓冲的 Fence 还覆盖尚未产生首个颜色帧的上传。没有增加每帧 CPU/GPU 全局等待，但切换/resize 仍可能阻塞控制线程。
 
 关闭工程先沿既有窗口完成点等待，再 Reset MeshViewer、清空场景和 AssetManager。应用关闭先 ReleaseWindow，随后销毁面板及预览资源，模块依赖保证 RHI/RenderCore 尚可使用。顶点表每帧只构建裁剪后的可见行及开启的属性列，读取 CPU 原数据，不每行查询 GPU；网格列表刷新 O(场景网格数)，首次打包 O(V+I)，正常渲染最多两次 Draw，成本及退化条件见 [预览算法](../algorithm/05-pbr-ibl-and-sampling.md#meshviewer-的-phong-预览)。
+
+## TextureViewer 来源与资源生命周期
+
+源码：[EditorTextureViewer](../../../src/Editor/TextureViewer/Private/EditorTextureViewer.cpp)、[TextureViewerPreview](../../../src/Editor/TextureViewer/Private/TextureViewerPreview.cpp)、[EditorApplication::CollectTextureViewerSources](../../../src/Editor/Editor/Private/EditorApplication.cpp)。模块入口见 [Editor 架构](../../architecture/app/editor.md#textureviewer-多纹理检查)，数学见 [二维画布](../algorithm/09-texture-viewer-canvas.md)。
+
+### 来源与所有者
+
+宿主回调返回 TextureViewerSource 值快照；每项明确携带 TextureAsset 或 shared_ptr<const EnvironmentLightResource>，GetTexture 只借用其真实 RenderTexture。文件候选可只有 Path，在用户确认后通过既有 AssetManager::LoadSync 加载；来源页只扫描元数据，不为整个工程预加载 GPU 资源。单个来源仍可重复添加为不同显示项。Id 只用于当前会话 UI，不是持久资源标识。
+
+CollectTextureViewerSources 只枚举两类来源：当前工程 Content 中的图片资产，以及环境光管理器已经生成的 diffuse/specular 输出。它不调用 CollectProjectAssets，不遍历当前选择或环境光输入，不把同一数据在场景、快照和管理器中的运行时副本追加为候选。无路径工程快照仍由工程/组件持有并正常保存，只是不在这个查看入口中列出；仅有快照、没有 Content 源文件的纹理不会回退成 Runtime 行。材质来源仍为 TODO。
+
+文件枚举使用单个局部路径集合去重：键为 weakly_canonical(absolute(path))，Windows 下按字符做大小写归一化，覆盖常见 ASCII 大小写别名，不承诺完整 Unicode 折叠、硬链接或内容去重。file:规范路径是候选和加载后同一文件的 UI Id，显示名为 Content 相对路径，区分不同子目录下的同名文件。每个路径仅查询已有 AssetManager 缓存，未加载时保留 Path；不为补足尺寸信息而解码整库，也没有额外 Asset/RenderTexture 指针索引或全局缓存。
+
+环境光输出按环境结果与 diffuse/specular 类别形成独立 Id，显示输入资产名加 Diffuse IBL / Specular IBL；管理器默认结果显示 Default environment。输入名只是输出标签，不会因此添加输入行。多个真实不同但同名的输出用不与已有名称冲突的 [序号] 区分；序号不作为资源身份，也不保证跨次枚举顺序。即使输入源文件已不存在，生成输出仍由原 EnvironmentLightResource 所有者保证可查看。当前来源规则及验证见 [修正记录](../../dev/bugfix/故障与修复记录-2026-11-05.md#来源列表仅保留资产与环境光输出)。
+
+EnvironmentLightResourceManager::GetResources 仅复制已构建结果的强引用，包括已存在的默认结果，不触发构建、预计算或 GPU 等待。枚举、Build、ReleaseUnused 与场景修改均在现有控制线程串行，未增加锁或异步访问承诺。来源页打开/Refresh 时才刷新快照；页关闭后下一 Tick 清空候选引用，未添加的环境结果可在后续显式清理时回收。材质枚举只保留 TODO，不访问材质内部私有缓存。
+
+每个 Image 独有自己的 RGBA8 预览输出、中心位置、Mip/Slice 和源引用；源实际纹理不复制到新的资产。预览包装另持同一源的类型化引用，以保证异步图提交期间有效，没有全局保活列表、Frame 管理或独立窗口渲染环境。
+
+### 输入、构图与实际完成点
+
+Draw 收集增加/删除请求及子资源修改，下一 Tick 在 Window::Draw/NewFrame 之前消费。这样上帧 ImGui DrawList 指向的旧预览不会在其 CPU 录制过程中被替换。增加后、Mip/Face/Layer 改变或 Refresh image 才标记 dirty 并重新构图；画布平移、缩放和选择只影响 ImGui 顶点。中键在任意图片/空白上平移，不修改选择；InvisibleButton 接受 Middle，沿原窗口输入和捕获处理，没有新增原生捕获或场景输入转发。红 X/蓝 Y 主轴及标签同样只生成 ImGui 图元，位于图片背后。折叠时暂不提交预览，保留请求到可见后处理。删除预览和同步文件解码可能阻塞本帧，未加入后台加载或任意大小图片的显存预算。
+
+TextureViewerPreview::Render 先等待原预览/源纹理各自 Tracker 的具体 QueueType/Value，再替换输出或源引用。RenderGraphBuilder 注册两者为 external texture，以普通 RDG 纹理参数声明完整源的 SRV 读取，以颜色附件声明输出写入，实际提交处继续由 Builder 更新访问 Fence。GUI 采样预览时，imgui_impl_rhi 在原提交位置转换状态并记录预览的最新 Fence，因此下次替换能覆盖最后 GUI 采样。输出来源的访问控制没有迁移到宿主，也没有 WaitIdle、ImageLayoutManager 或 RHI/RenderCore 接口修改。
+
+Reset/析构等待预览和源各自最后访问 Fence 后才释放，再解除类型化所有者。源若还被场景使用，等待值也覆盖其已记录访问；此协议仍要求修改/构图/销毁在既有控制线程串行，不意味着任意并发销毁安全。源引用移除后显式 ReleaseUnused 清理管理器无使用引用的结果，该方法本身不等待 GPU。
+
+浮窗关闭后下一 Tick 清空列表；工程切换/关闭在原窗口完成点之后 Reset，随后才清空场景和 AssetManager。应用 Shutdown 先销毁窗口完成 GUI，再销毁 Viewer，Engine/RHI 仍由模块依赖保证存活。来源刷新/文件加载/Shader 缺失的标准异常显示在窗口状态中；失败不伪装成成功图像，已有源引用和合法预览保持正常所有权。主目录完整 Loop 的正常关闭及实际 Launcher 首帧范围见 [2026-11-04 验证](../../dev/bugfix/故障与修复记录-2026-11-04.md#textureviewer-多纹理画布与来源选择)。

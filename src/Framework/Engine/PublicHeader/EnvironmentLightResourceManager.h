@@ -3,6 +3,7 @@
 #include "EngineExport.h"
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 namespace RenderCore { class RenderTexture; }
 namespace Engine
@@ -34,6 +35,8 @@ namespace Engine
         std::shared_ptr<const EnvironmentLightResource> GetDefaultEnvironment();
         std::shared_ptr<const EnvironmentLightResource> Build(const std::shared_ptr<TextureAsset>& input);
         void ApplyEnvironment(SkyLightComponent& sky, std::shared_ptr<const EnvironmentLightResource> environment);
+        // Existing results only; querying the viewer does not trigger generation.
+        std::vector<std::shared_ptr<const EnvironmentLightResource>> GetResources() const;
 
         // Call after scene removal and its GPU completion point. Referenced
         // results survive; shared_ptr counts alone are not GPU synchronization.

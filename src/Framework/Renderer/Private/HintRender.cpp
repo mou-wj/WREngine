@@ -33,6 +33,7 @@ namespace Renderer::HintRender
         SHADER_PARAMETER(Core::Float4x4, ViewProjection)
         SHADER_PARAMETER(Core::Float4, GridBounds)
         SHADER_PARAMETER(Core::Float4, GridSettings)
+        SHADER_PARAMETER(Core::Float4, GridAxes)
         SHADER_PARAMETER(Core::Float4, CameraPositionAndFade)
         SHADER_PARAMETER(Core::UInt3, PatchSettings)
         SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<uint>, GridVertices)
@@ -386,6 +387,8 @@ namespace Renderer::HintRender
             data->ViewProjection = viewProjection;
             data->GridBounds = {minX,minZ,cellSize,cellSize};
             data->GridSettings = {GridSpacings[level],static_cast<float>(view.Viewport.Width),static_cast<float>(view.Viewport.Height),0};
+            // Global X=0/Z=0 in the rebased grid coordinates, not local zero.
+            data->GridAxes = {relativeEye.X-view.CameraWorldPos.X,relativeEye.Z-view.CameraWorldPos.Z,0,0};
             data->CameraPositionAndFade = {relativeEye.X,relativeEye.Y,relativeEye.Z,std::max(40.0f,height*10)};
             data->PatchSettings = {offset,static_cast<uint32_t>(lineCount),GridVertexCount};
             data->GridVertices = verticesSRV; data->PatchIndices = patchesSRV;

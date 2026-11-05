@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <typeindex>
+#include <stdexcept>
 
 namespace Engine {
 
@@ -14,6 +15,10 @@ public:
     virtual const std::string& GetName() const = 0;
     virtual const std::string& GetPath() const = 0;
     virtual bool Load() = 0;
+protected:
+    // File metadata changes must be coordinated with the manager's path tables.
+    friend class AssetManager;
+    virtual void SetSourcePath(const std::string&) { throw std::logic_error("This asset does not support source-file relocation"); }
 };
 
 using AssetSP = std::shared_ptr<IAsset>;

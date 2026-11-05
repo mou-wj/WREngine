@@ -68,6 +68,8 @@ Clear 由 EngineModule::ShutdownModule 在 AssetManager::Shutdown 之后、RHI �
 
 天空光的 EnvironmentTexture 属性使用 ComponentProperty 的 TextureAsset 类型，值是 shared_ptr<TextureAsset>；空值表示恢复默认。属性提供者调用 Build/GetDefaultEnvironment 和 ApplyEnvironment。NodeEditor 根据类型统一绘制当前名称、Use selected texture 和 Reset，不按天空光类型定义专用面板；宿主用回调提供资源面板的选中纹理，两个功能模块不互相依赖。输入不支持或构建失败时显示属性错误，并保留原绑定。Editor 在原 NotifySelectedChanged 完成点之后 ReleaseUnused，保留仍在使用的结果。保存集合显式收集天空光的输入资产，使其立即进入 Project data；恢复的源纹理也在该列表中。资源面板单击图片会经 LoadSync 选中实际 TextureAsset，生成结果和默认输入均不作为文件卡片伪装出来。
 
+GetResources 为检查工具提供控制线程上的已构建结果快照，返回强引用而非管理器容器引用，包含已存在的默认结果和输入缓存项，不自动创建默认值。TextureViewer 通过宿主回调枚举输入资产及 diffuse/specular 输出；其打开的来源页/显示项保有结果引用，按既有 Fence 完成点解除引用后才调用 ReleaseUnused。该接口不新增资产类型、全局预览缓存或并发读取保证，完整顺序见 [TextureViewer 生命周期](08-ui-rendering-and-window-lifetime.md#textureviewer-来源与资源生命周期)。
+
 ## 基础几何资产的创建入口
 
 [StaticMeshAsset::CreateShape](../../../src/Framework/Engine/Private/Shape.cpp) 使用 EBasicMeshShape 选择既有生成器；每次创建一份 StaticMesh/LOD、顶点和索引资源、默认白色 MaterialAsset 依赖及局部距离场。生成算法不复制到 Editor，组件也不放宽“必须由资产拥有”的检查。返回的资产强引用网格，网格弱引用资产，组件在 SetStaticMesh 时保留资产。没有注册第二套缓存或常驻表；移除组件并释放最后一个资产引用后，网格包装随之销毁，相关 RHI 完成点继续遵循原资源约定。默认材质和距离场 Atlas 的全局生命周期仍属于原模块，不因网格资产析构而整体释放。
@@ -110,17 +112,45 @@ BeginUpdateGPUResources 清空本次可见实例 ID 并置 dirty；参数数组�
 
 ImportFile 的执行顺序为：
 
-1. 检查源为普通文件且扩展名受支持，规范化目的目录并确认位于当前内容根内。名字转换为最多 64 字符的 ASCII 文件名；用 create_directory 独占创建包目录，已有文件或目录用数字后缀避让，不覆盖源文件或已有包。
+1. 检查源为普通文件且扩展名受支持，规范化目的目录并确认位于当前内容根内。名字转换为最多 64 字符的 ASCII 文件名。图片直接 copy_file 到当前目录，使用 none 禁止覆盖；重名文件/目录用数字后缀避让，不再给每张图片额外建目录。其他格式仍用 create_directory 独占创建暂存目录。
 2. GLB 检查 2.0 文件头及 JSON chunk，buffers/images 的 URI 只接受 data URI 或无 URI 的内嵌数据；有外部依赖时明确报错，不复制一个依赖已丢失的 GLB。此检查不等价于完整 GLB 内容验证。
 3. glTF JSON 的 buffers/images 本地 URI 经百分号解码后复制成 dependency_N.ext，data URI 保持原样，带远程协议的 URI 拒绝。材质 JSON 的 textureParameters 文件引用同样复制，依赖路径基于源文件目录解析，输出 JSON 改为包内相对路径。该通用资源入口不承担 MaterialLibrary 的完整材质参数校验，JSON 是否为可用材质仍由 MaterialAsset 加载确认。
-4. 依赖复制完才写主 JSON，GLB/图片直接复制主文件；输出关闭并检查写入状态。失败只清理本次独占创建且仍位于内容根内的目标目录，源文件不变；这不是断电安全事务。单文件复制没有中途取消或内容去重。
-5. 成功后清空文件元数据缓存并导航到新包，选中主文件；不自动加载资产、不生成场景节点、不自动打开材质编辑器。图片解码、网格/材质语义验证在用户实际打开时执行，失败的已发布文件保留供修复。
+4. 依赖复制完才写主 JSON，GLB 直接复制主文件；输出关闭并检查写入状态。有外部依赖时该目录作为最终包；dependencyIndex 为零时把自包含 GLB/JSON 发布为当前目录的独立文件，并删除空暂存目录，重名同样加后缀。失败清理只针对本次独占创建且仍位于内容根内的目录，源文件不变；这不是断电安全事务。单文件复制没有中途取消或内容去重。
+5. 成功后清空文件元数据缓存并导航到结果的父目录，选中主文件；不生成场景节点、不自动打开材质编辑器。图片沿 SelectPath 的既有逻辑立即加载为当前选中纹理，网格/材质在显式打开时加载。失败的已发布文件保留供修复。
 
 网格卡片只为普通 GLB/glTF 文件发布 EDITOR_ASSET_PATH，载荷为含结束符的 UTF-8 路径副本，不是 StaticMeshAsset/组件裸指针。SceneEditor 的 EditorSceneViewportWidget 仅在该载荷活动时显示透明逻辑投放区域；接受后调用宿主保存路径，下一 TickFrame 在当前工程 Content 内重新校验路径，通过 LoadSync<StaticMeshAsset> 和 EditorScene::AddMesh 创建世界原点的静态网格并选中。资源导入与场景实例化是两次显式操作，不把鼠标屏幕位置当成已实现的射线落点。
 
 Project Close 先等待该窗口既有提交完成值，在下一帧绘制开始前清空面板引用/场景组件，消费场景移除命令后释放组件，最后 AssetManager::Clear 移除驻留引用；仍被其他使用方引用的输入资产继续有效；环境光计算结果由管理器在组件清理后显式释放。没有更改 Engine 的强/弱资产表或资源拥有关系。工程描述与清理调用链见 [Editor 架构](../../architecture/app/editor.md)，CPU/GPU 时序见 [UI 生命周期](08-ui-rendering-and-window-lifetime.md)。
 
 材质卡片使用 EDITOR_MATERIAL_PATH；路径与归一化落点由宿主保存，下一 TickFrame 在当前 Content 内重新核查并经 LoadSync<MaterialAsset> 加载。SceneEditor::ApplyMaterialAt 的最近几何命中决定组件及 Section.MaterialIndex，沿用 StaticMeshComponent::SetMaterial。组件强引用 MaterialAsset，旧槽位实例由原接口清理；网格默认材质、其他槽位和其他组件不变，不新建材质实例或另一套资产缓存。失败/背景投递不修改组件，错误显示于宿主菜单状态；工程关闭也清理尚未执行的材质路径。数学见 [视口拾取](../algorithm/01-ray-triangle-and-distance.md)。
+
+## 资源文件移动、重命名与删除
+
+入口：[EditorAssetFileOperations.cpp](../../../src/Editor/AssetEditor/Private/EditorAssetFileOperations.cpp)、[EditorAssetPanel.cpp](../../../src/Editor/AssetEditor/Private/EditorAssetPanel.cpp)、[AssetManager::UpdateSourcePaths](../../../src/Framework/Engine/Private/AssetManager.cpp)、[AssetRegistry::Unregister](../../../src/Framework/Engine/Private/AssetRegistry.cpp)。总体边界见 [Editor 架构](../../architecture/app/editor.md#资源文件系统与卡片视图)。文件操作作为面板成员的独立实现文件组织，没有新增资源管理器或公共 UI 框架。
+
+### 操作与路径检查
+
+目录树和网格条目共用 DrawFileItemActions。文件夹/图片/普通文件发布 EDITOR_CONTENT_PATH；网格、材质仍发布原 EDITOR_ASSET_PATH / EDITOR_MATERIAL_PATH，使原场景投放继续可用。文件夹条目和右侧当前目录区域接收三种路径载荷，按释放时目标目录与源文件名形成移动请求；载荷是 UTF-8 路径副本，不借用节点或资产。根只作为目标，不能拖出或删除。目录树的材质打开改为松开且未拖动时执行，避免拖放途中被材质弹窗抢走输入。
+
+右键菜单保存重命名/创建目标，模态输入校验单个名字，拒绝分隔符、控制字符、Windows 保留设备名及尾部点/空格；删除模态明确提示会删除磁盘文件和目录内容。Draw 只记录 FileOperation，下一次 DrawContent 在遍历缓存前执行，避免遍历目录 vector 或 ImGridItem 时修改其来源。切换工程清除操作、模态和输入。创建/移动后刷新缓存、导航和选择；移动还重映射历史及未执行导入的路径，删除清理失效历史并退回有效父目录。
+
+执行时重新 weakly_canonical 并检查所有目标仍位于 res://，禁止移动/删除根、直接符号链接、目录自嵌套及已有重名目标。错误保留文件并显示在原状态条中；没有实现覆盖、合并目录或大小写独有的重命名。文件 IO 在 UI/控制线程同步执行，大目录扫描/复制/删除会阻塞界面；没有 watcher、多选批量移动或跨工程迁移事务。
+
+### 依赖维护与失败边界
+
+MoveFilePath 在文件变动前 WaitForLoads，再 CollectEdits 扫描当前 Content 的有效材质 JSON textureParameters，以及 glTF 的 buffers/images URI。本地引用基于原文档目录解析为路径 T；源子树 S 移到 D 时，T 属于 S 则换为 D/(T 相对 S 的路径)，文档自身位置同样映射。新引用相对于新文档父目录计算，因此同时支持移被引用图片、移引用者和整体包；glTF 本地 URI 先百分号解码，再按 UTF-8 字节重新编码，data/远程 URI 不改写。移动单独 JSON 时，对子树外的依赖也会更新相对路径。
+
+收集完所有改写后才 rename 文件/目录，再写回变化的文档。局部保存原文，普通写入异常会尝试恢复全部 JSON 和源目录，恢复也失败时把两项错误一起报告；不保证断电、磁盘损坏或外部程序并发修改时的原子性。解析失败或未知 JSON 不猜测其引用，外部手放且含外部 URI 的 GLB 不重写；通用导入入口仍拒绝这种 GLB。扫描成本 O(项目目录项数+支持文档字节数)，改写备份内存 O(变动文档大小)，没有新增持久依赖图或引用缓存。
+
+DeleteFilePath 同样先等待加载，再检查支持的引用。源子树之外的文档仍引用源内文件时拒绝删除并显示引用者；一起删除的文档不阻止删除整个包。确认后直接 remove_all，不进入回收站，不提供撤销。实际删除失败可能已经移除部分目录项，不宣称递归删除是可回滚事务。
+
+### 路径缓存与资源对象
+
+文件成功移动后调用 UpdateSourcePaths(source,destination)，删除使用空 destination。接口要求控制线程串行、先完成 WaitForLoads，检测到尚未收尾的请求/任务则拒绝，不能从加载回调中调用；等待须在改文件前完成，避免异步 loader 正在读旧路径。管理器持有自身 mutex 时只更新已有强/弱路径表、资产源路径和 Registry 元数据；Registry 使用独立短锁，当前没有同时持有 Registry 锁再取 Manager 锁的反向调用链。被移除/替换的驻留引用收集在局部 vector，离开 Manager 锁后才析构，不在锁内执行资源析构或 RHI 操作。
+
+移动覆盖 source 本身及目录后代的键，保留 shared_ptr、实际纹理/网格/Material 和用户显示名，后续从新路径 LoadSync 返回原对象。IAsset::SetSourcePath 为受保护虚接口，由管理器协调调用，三个文件资产只改 m_Path；新增文件资产需实现此能力。删除移除源路径查询/驻留/Registry，将仍存活对象的源路径置空；已有组件、材质、检查窗口或工程对象的强引用继续拥有内容。重新导入旧文件名会新建资产，不能通过旧弱缓存返回已删除文件的对象。文件来源名与运行时资源身份不混同，不为文件移动重新加载所有 GPU 资源，也不强制删除场景节点。
+
+这些操作不改变工程快照保存格式，也不引入 GPU WaitIdle、Frame、全局保活表或 Renderer 依赖。已有资源的实际 GPU 使用仍须由原所有者和访问完成点控制；磁盘删除不是任意线程安全的 GPU 卸载 API。普通材质 Save copy 能使用移动后的 TextureAsset 路径；源已删除的纹理属于运行时对象，仍通过工程二进制快照保存，不能伪装成存在的独立纹理文件引用。验证与已知限制见 [2026-11-04 记录](../../dev/bugfix/故障与修复记录-2026-11-04.md#资源目录操作与单文件导入)。
 
 ## 材质文件库与显式导入
 

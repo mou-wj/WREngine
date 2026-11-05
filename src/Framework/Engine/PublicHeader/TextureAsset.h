@@ -15,6 +15,7 @@ public:
     static std::shared_ptr<TextureAsset> Create(const std::string& name, std::shared_ptr<RenderCore::RenderTexture> texture);
 
 private:
+    void SetSourcePath(const std::string& path) override { m_Path=path; }
     std::string m_Name;
     std::string m_Path;
     std::shared_ptr<RenderCore::RenderTexture> m_Texture;

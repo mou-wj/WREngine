@@ -18,6 +18,8 @@ namespace Editor
     class EditorMaterialPanel;
     class EditorNodePanel;
     class EditorMeshViewer;
+    class EditorTextureViewer;
+    struct TextureViewerSource;
 
     class EDITOR_API EditorApplication final : public SlateCore::ApplicationBase
     {
@@ -40,6 +42,7 @@ namespace Editor
         void DrawProjectMenu();
         void ResetProjectPanels();
         std::vector<std::shared_ptr<Engine::IAsset>> CollectProjectAssets() const;
+        std::vector<TextureViewerSource> CollectTextureViewerSources() const;
         std::unique_ptr<EditorScene> m_Scene;
         std::unique_ptr<Engine::SceneViewport> m_Viewport;
         std::unique_ptr<SlateCore::SlateWidget> m_ViewportWidget;
@@ -52,6 +55,7 @@ namespace Editor
         std::unique_ptr<EditorMaterialPanel> m_MaterialPanel;
         std::unique_ptr<EditorNodePanel> m_NodePanel;
         std::unique_ptr<EditorMeshViewer> m_MeshViewer;
+        std::unique_ptr<EditorTextureViewer> m_TextureViewer;
         std::unique_ptr<ImGUISlate::ImWidget> m_MenuWidget;
         std::unique_ptr<ImGUISlate::ImFileDialogWidget> m_ProjectDialog;
         std::shared_ptr<ImGUISlate::ImMainWindow> m_Window;

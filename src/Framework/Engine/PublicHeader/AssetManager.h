@@ -72,6 +72,10 @@ public:
     void Clear();
     std::vector<AssetSP> GetResidentAssets() const;
     void WaitForLoads();
+    // Control thread: WaitForLoads before editing files, then update these tables.
+    // Empty destination means deletion.
+    // Retargets metadata/cache keys, preserving live resource objects and owners.
+    void UpdateSourcePaths(const std::string& source, const std::string& destination);
     void Shutdown();
 
 private:

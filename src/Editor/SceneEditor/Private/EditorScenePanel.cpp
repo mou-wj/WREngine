@@ -54,6 +54,8 @@ namespace Editor
     EditorViewToolbar::EditorViewToolbar(EditorScene& scene) : m_Scene(scene) {}
     void EditorViewToolbar::SetOnOpenMeshViewer(std::function<void()> callback)
     { m_OnOpenMeshViewer=std::move(callback); }
+    void EditorViewToolbar::SetOnOpenTextureViewer(std::function<void()> callback)
+    { m_OnOpenTextureViewer=std::move(callback); }
     void EditorViewToolbar::Draw()
     {
         const auto& geometry = GetGeometry();
@@ -103,6 +105,10 @@ namespace Editor
                     ImGui::BeginGroup();
                     ImGui::BeginDisabled(!m_OnOpenMeshViewer);
                     if (ImGui::Button("Mesh\nviewer",{80,44})) m_OnOpenMeshViewer();
+                    ImGui::EndDisabled();
+                    ImGui::SameLine();
+                    ImGui::BeginDisabled(!m_OnOpenTextureViewer);
+                    if (ImGui::Button("Texture\nviewer",{80,44})) m_OnOpenTextureViewer();
                     ImGui::EndDisabled();
                     ImGui::TextDisabled("Inspect mesh");
                     ImGui::EndGroup();

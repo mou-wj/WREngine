@@ -69,23 +69,11 @@ namespace Editor
             std::error_code error;
             const auto path=std::filesystem::u8path(id);
             const auto type = FileType(path);
-            if ((type == 1 || type == 2) && std::filesystem::is_regular_file(path,error) && ImGui::BeginDragDropSource())
-            {
-                ImGui::SetDragDropPayload(type == 1 ? "EDITOR_ASSET_PATH" : "EDITOR_MATERIAL_PATH",id.c_str(),id.size()+1);
-                ImGui::TextUnformatted(type == 1 ? "Drop mesh into the scene viewport" : "Drop material onto a mesh surface");
-                ImGui::EndDragDropSource(); return;
-            }
             const auto& io = ImGui::GetIO();
             if (type == 2 && ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
                 io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Left] < io.MouseDragThreshold*io.MouseDragThreshold && !ImGui::GetDragDropPayload())
                 SelectPath(path,true);
-            if (ImGui::BeginPopupContextItem("Asset actions"))
-            {
-                if (ImGui::MenuItem("Open / Add mesh")) { SelectPath(std::filesystem::u8path(id)); OpenSelected(); }
-                if (ImGui::MenuItem("Copy resource path"))
-                    ImGui::SetClipboardText(("res://" + PathText(std::filesystem::u8path(id).lexically_relative(m_Root))).c_str());
-                ImGui::EndPopup();
-            }
+            DrawFileItemActions(path,std::filesystem::is_directory(path,error));
         });
         if (!m_Root.empty()) NavigateTo(m_Root);
     }
@@ -97,6 +85,8 @@ namespace Editor
         m_TreeEntries.clear(); m_History.clear(); m_HistoryIndex = 0; m_SelectedPath.clear(); m_Grid.SetItems({});
         m_Grid.SetSelectedId({}); m_Filter.clear(); m_TreeFilter.clear(); m_PathInput.clear(); m_LastError.clear();
         m_Directory.clear(); m_Root.clear(); m_TypeFilter = 0;
+        m_PendingFileOperation={}; m_FileDialogOperation=EFileOperation::None; m_FileDialogPath.clear();
+        m_FileName.clear(); m_bRequestFileDialog=false;
         if (!root.empty()) { m_Root = std::filesystem::weakly_canonical(root); NavigateTo(m_Root); }
     }
     void EditorAssetPanel::QueueImport(const std::vector<std::filesystem::path>& files)
@@ -113,6 +103,18 @@ namespace Editor
         for (auto& letter : stem) if (!(static_cast<unsigned char>(letter)<128 && (std::isalnum(static_cast<unsigned char>(letter)) || letter=='-' || letter=='_'))) letter = '_';
         if (stem.empty()) stem = "Resource";
         stem = stem.substr(0,64);
+        if (FileType(source)==3)
+        {
+            // A plain image is already one complete resource; do not package it.
+            const auto extension=Lower(PathText(source.extension()));
+            for (uint32_t index=0;;++index) {
+                const auto result=directory/(stem+(index ? "_"+std::to_string(index) : "")+extension);
+                if (fs::exists(result)) continue;
+                std::error_code error;
+                if (fs::copy_file(source,result,fs::copy_options::none,error)) return result;
+                if (error!=std::errc::file_exists) throw fs::filesystem_error("Cannot import image",source,result,error);
+            }
+        }
         fs::path destination;
         for (uint32_t index=0;;++index)
         {
@@ -168,6 +170,16 @@ namespace Editor
             const auto result = destination/(stem+extension);
             if (data.is_null()) fs::copy_file(source,result,fs::copy_options::none);
             else { std::ofstream output(result); if (!(output << data.dump(2))) throw std::runtime_error("Cannot write imported asset"); output.close(); if (!output) throw std::runtime_error("Cannot flush imported asset"); }
+            if (!dependencyIndex)
+            {
+                // Embedded GLB / self-contained JSON is also a single file.
+                // The exclusive staging directory is removed after publication.
+                for (uint32_t index=0;;++index) {
+                    const auto file=directory/(stem+(index ? "_"+std::to_string(index) : "")+extension);
+                    if (fs::exists(file)) continue;
+                    fs::rename(result,file); fs::remove(destination); return file;
+                }
+            }
             return result;
         }
         catch (...) { if (IsWithin(fs::weakly_canonical(destination),m_Root)) fs::remove_all(destination); throw; }
@@ -272,6 +284,7 @@ namespace Editor
         const float iconX = minimum.x + ImGui::GetFontSize() + 4;
         ImGui::GetWindowDrawList()->AddRectFilled({iconX,minimum.y+5}, {iconX+13,minimum.y+15}, IM_COL32(95,165,225,255), 2);
         if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) NavigateTo(path);
+        DrawFileItemActions(path,true);
         if (open)
         {
             try
@@ -289,8 +302,13 @@ namespace Editor
                     const auto color = TypeColor(FileType(entry.Path));
                     ImGui::GetWindowDrawList()->AddRectFilled({fileMinimum.x+ImGui::GetFontSize()+5,fileMinimum.y+5},
                         {fileMinimum.x+ImGui::GetFontSize()+14,fileMinimum.y+16}, ImGui::ColorConvertFloat4ToU32({color[0],color[1],color[2],1}), 1);
-                    if (ImGui::IsItemClicked()) { SelectPath(entry.Path,true); if (ImGui::IsMouseDoubleClicked(0)) OpenSelected(); }
+                    const auto& io=ImGui::GetIO();
+                    if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(0) &&
+                        io.MouseDragMaxDistanceSqr[0]<io.MouseDragThreshold*io.MouseDragThreshold && !ImGui::GetDragDropPayload()) {
+                        SelectPath(entry.Path,true); if (io.MouseClickedCount[0]==2) OpenSelected();
+                    }
                     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", fileId.c_str());
+                    DrawFileItemActions(entry.Path,false);
                 }
             }
             catch (const std::exception& error) { m_LastError = error.what(); ImGui::TextDisabled("Cannot read this directory."); }
@@ -328,8 +346,10 @@ namespace Editor
         {
             if (cards.empty()) ImGui::TextDisabled("No matching resources.");
             m_Grid.SetItems(std::move(cards)); m_Grid.SetTileWidth(m_TileWidth); m_Grid.Draw();
+            DrawDirectoryMenu(m_Directory);
         }
         ImGui::EndChild();
+        DrawDirectoryDropTarget(m_Directory);
     }
     void EditorAssetPanel::DrawStatus()
     {
@@ -360,6 +380,7 @@ namespace Editor
     void EditorAssetPanel::DrawContent()
     {
         if (m_Root.empty()) { ImGui::TextDisabled("Create or open a project."); return; }
+        ProcessFileOperation();
         if (!m_PendingImports.empty())
         {
             const auto pending = m_PendingImports.front(); m_PendingImports.erase(m_PendingImports.begin());
@@ -399,6 +420,7 @@ namespace Editor
                     if (ImGui::Selectable("Project data",m_bProjectData)) m_bProjectData=true;
                     if (ImGui::Selectable("Import files",!m_bProjectData)) m_bProjectData=false;
                     DrawTree(m_Root);
+                    DrawDirectoryMenu(m_Directory);
                 } catch (const std::exception& error) { m_LastError = error.what(); }
             ImGui::EndChild(); m_bRevealDirectory = false;
         }
@@ -443,6 +465,7 @@ namespace Editor
         if (ImGui::BeginChild("AssetActions", {0,0}, 0, ImGuiWindowFlags_NoScrollbar)) DrawStatus();
         ImGui::EndChild();
         m_ImportDialog.Draw();
+        DrawFileOperationDialog();
     }
     void EditorAssetPanel::SetOnMeshOpened(MeshOpenedCallback callback) { m_OnMeshOpened = std::move(callback); }
     void EditorAssetPanel::SetProjectAssets(std::vector<Engine::AssetSP> assets)

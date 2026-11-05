@@ -1,8 +1,14 @@
 # 核心实现阅读指南
 
+2026-11-05 收窄 TextureViewer 来源：仅列出 Content 纹理资产和已生成的环境光输出，不再列举场景/快照及环境输入的运行时副本。路径身份、所有权和边界见 [来源与所有者](performance/08-ui-rendering-and-window-lifetime.md#来源与所有者)，实际复现与验证见 [修正记录](../dev/bugfix/故障与修复记录-2026-11-05.md#来源列表仅保留资产与环境光输出)。
+
 2026-11-04 完成工程基础层快照和 IBL 初始化完成点续验：存储与所有权见 [工程快照](performance/10-project-snapshots.md)，缩图和色彩空间见 [Mip 重建算法](algorithm/05-pbr-ibl-and-sampling.md#工程纹理的普通-mip-重建)，实际通过范围与已知限制见 [续验记录](../dev/bugfix/故障与修复记录-2026-11-04.md)。
 
 同日移除 SkyLightAsset，将环境光生成结果交给 Engine 的 [EnvironmentLightResourceManager](performance/05-assets-materials-and-instance-data.md#环境光计算产物管理)；默认环境无文件依赖，通用 TextureAsset 属性支持应用资源面板输入，工程保存输入基础层并在加载时重新生成。界面、所有权和实际验证见 [编辑器架构](../architecture/app/editor.md)、[开发记录](../dev/bugfix/故障与修复记录-2026-11-04.md#环境光计算产物改由-engine-管理)。
+
+同日增加独立 TextureViewer：多来源二维画布、中心/拖动/滚轮锚点、红蓝主轴、中键平移和网格分级见 [画布算法](algorithm/09-texture-viewer-canvas.md)，来源引用、预览图与实际访问完成点见 [生命周期](performance/08-ui-rendering-and-window-lifetime.md#textureviewer-来源与资源生命周期)。来源覆盖 TextureAsset 及已生成环境光贴图，材质来源仅保留 TODO；实际验证范围见 [开发记录](../dev/bugfix/故障与修复记录-2026-11-04.md#textureviewer-多纹理画布与来源选择)。场景网格世界原点的红 X/绿 Z 轴和坐标重定位补偿见 [提示几何](algorithm/03-transforms-frustum-and-depth.md#xz-地面网格与光源提示几何)，中键/主轴续验见 [同日记录](../dev/bugfix/故障与修复记录-2026-11-04.md#纹理画布主轴中键平移与场景坐标主轴)。
+
+同日补充资源目录创建/删除、文件与目录拖放、重命名、材质/glTF 本地依赖重写及路径缓存迁移；图片和自包含文件不再保留额外包目录。执行时序、所有权和失败边界见 [资源文件操作](performance/05-assets-materials-and-instance-data.md#资源文件移动重命名与删除)，实际 UI、资产复用和源删除后的 GPU 像素验证见 [开发记录](../dev/bugfix/故障与修复记录-2026-11-04.md#资源目录操作与单文件导入)。
 
 本目录回答“具体怎样实现、依赖哪些条件、哪里尚不可靠”。模块职责与接口关系仍以 [architecture](../architecture/README.md) 的既有结构组织。目录名沿用需求首次指定的 `key_implemetion`。
 
@@ -47,6 +53,7 @@
 | [阴影与级联](algorithm/06-shadow-mapping-and-cascades.md) | 光源投影、CSM 分割、Atlas 与 PCF 怎样衔接？ |
 | [屏幕空间与抗锯齿](algorithm/07-screen-space-and-antialiasing.md) | HZB、SSR、SSGI、FXAA、TAA 当前做到哪一步？ |
 | [网格导入与几何生成](algorithm/08-mesh-import-and-geometry.md) | 顶点访问、法线切线、实例索引和程序化网格怎样组织？ |
+| [TextureViewer 画布与预览](algorithm/09-texture-viewer-canvas.md) | 多图片如何居中、选中、拖动和围绕鼠标缩放，网格如何分级，Cube/Mip/数组层如何显示？ |
 
 ## 如何阅读和核查
 
