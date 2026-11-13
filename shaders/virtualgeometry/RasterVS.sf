@@ -1,0 +1,5 @@
+#include "/Generated/VertexFactory.sf"
+VirtualGeometryVaryings MainVS(VirtualGeometryInput input)
+{
+    return GetVirtualGeometryVertex(input);
+}

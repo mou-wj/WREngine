@@ -186,6 +186,8 @@ void VulkanDevice::CreateLogicalDevice(VkPhysicalDevice physicalDevice,
     createInfo.ppEnabledLayerNames = layers.data();
     VkPhysicalDeviceFeatures featuresToEnable = {};
     featuresToEnable.shaderStorageImageWriteWithoutFormat = VK_TRUE;
+    // Fragment SV_PrimitiveID declares the SPIR-V Geometry capability.
+    featuresToEnable.geometryShader = m_SupportedFeatures2.features.geometryShader;
     createInfo.pEnabledFeatures = &featuresToEnable;
 
 

@@ -85,7 +85,9 @@ namespace Engine {
         ShaderCompilerEnvironment env;
         env.IncludePaths.push_back(Core::GetShaderFilesRootDir());
         if (vfType) {
-            VertexFactoryShaderPermutationParameters vfPermParams;
+            VertexFactoryShaderPermutationParameters vfPermParams{};
+            vfPermParams.VFType = vfType;
+            vfPermParams.ShaderType = st;
             vfPermParams.VertexFactoryFlags = key.VertexFactoryFlags;
             vfPermParams.Platform = platform;
             if (!vfType->ShouldCompile(vfPermParams))

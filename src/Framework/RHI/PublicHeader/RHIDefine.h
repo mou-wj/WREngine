@@ -36,6 +36,7 @@ enum class ERHIFormat
     R32G32B32A32_Float,
     D24_UNorm_S8_UInt,
     D32_Float,
+    R32G32_UInt,
     // ...可根据需要扩展
 };
 

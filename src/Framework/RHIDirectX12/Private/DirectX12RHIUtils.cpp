@@ -206,6 +206,8 @@ namespace RHIDirectX12
             return DXGI_FORMAT_R16G16B16A16_FLOAT;
         case RHI::ERHIFormat::R32_Float:
             return DXGI_FORMAT_R32_FLOAT;
+        case RHI::ERHIFormat::R32G32_UInt:
+            return DXGI_FORMAT_R32G32_UINT;
         case RHI::ERHIFormat::R32G32_Float:
             return DXGI_FORMAT_R32G32_FLOAT;
         case RHI::ERHIFormat::R32G32B32_Float:
@@ -315,8 +317,17 @@ namespace RHIDirectX12
 
     DXGI_FORMAT ToDxgiSrvFormat(RHI::ERHIFormat format, DXGI_FORMAT fallback)
     {
-        const DXGI_FORMAT translated = ToDxgiFormat(format);
-        return translated == DXGI_FORMAT_UNKNOWN ? fallback : translated;
+        const auto translated = ToDxgiFormat(format);
+        const auto resolved = translated == DXGI_FORMAT_UNKNOWN ? fallback : translated;
+        if (resolved == DXGI_FORMAT_D32_FLOAT || resolved == DXGI_FORMAT_R32_TYPELESS)
+        {
+            return DXGI_FORMAT_R32_FLOAT;
+        }
+        if (resolved == DXGI_FORMAT_D24_UNORM_S8_UINT || resolved == DXGI_FORMAT_R24G8_TYPELESS)
+        {
+            return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+        }
+        return resolved;
     }
 
     D3D12_SRV_DIMENSION ToSrvDimension(RHI::ERHITextureType textureType, RHI::ERHITextureViewType viewType)

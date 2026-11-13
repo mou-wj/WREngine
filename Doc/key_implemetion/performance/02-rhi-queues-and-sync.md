@@ -18,6 +18,8 @@
 | [DirectX12Queue.cpp](../../../src/Framework/RHIDirectX12/Private/DirectX12Queue.cpp) | 原生 queue Signal 的 fence 值 | 完成值达到 LastSubmission 后 Complete 并允许复用 | allocator、descriptor heap、上传资源不可提前重置 |
 | [OpenGLQueue.cpp](../../../src/Framework/RHIOpenGL/Private/OpenGLQueue.cpp) | 每个逻辑 queue 分配的单调值 | in-flight 集合保护，worker 执行完后 FinishContextExecution | 当前完成值表示 worker 已调用 GL 命令，不是硬件 GPU fence |
 
+OpenGL 图形上下文的顶点流缓存是借用的资源指针。复用上下文时，设置 PSO 只将布局标记为 dirty，Draw/DrawIndexed 在本次 SetStreamSource 命令完成后应用顶点属性。这样跨场景释放旧网格后，PSO 设置阶段不会读取旧缓存。调用方仍需在绘制时绑定有效且存活的顶点流。具体异常栈及修正见 [开发记录](../../dev/bugfix/故障与修复记录-2026-11-13.md#rdg-非-shader-访问回归参数元数据)。
+
 fence 必须理解为 `(QueueType, Value)`，不同队列的数值不能直接比较大小。相同 Value 不代表相同进度。
 
 ## Vulkan：提交、依赖和回收
@@ -33,6 +35,8 @@ swapchain acquire 的 binary semaphore 与长期 timeline 是两种同步对象�
 DirectX12SyncPoint::Signal 分配值并调用 queue Signal；Wait 首先比较 GetCompletedValue，必要时 SetEventOnCompletion + Windows event 等待。GetCompletedValue 为 UINT64_MAX 时检查设备移除。
 
 DirectX12CommandContext 记录 UsedResources 和暂存 COM 引用；提交写入各资源的 LastQueue/LastFence，Complete 释放 context 使用计数等记录。它不等价于所有 Engine 资产都由 context 强持有，原始资源包装对象仍有生命周期要求。
+
+DirectX12Queue 的申请、归还、提交和完成遍历共享 m_QueueMutex 递归锁，保护上下文 vector 和可复用标记，防止 RDG 并行录制同时扩容容器。Release 沿既有路径调用 WaitValue，完成回调可重入队列方法，因此使用递归锁。普通 WaitValue 先等待 Fence，再持锁清理仍可复用的上下文，已被借出录制的上下文跳过。锁会串行化这些上下文管理操作，GPU 命令录制仍在各自任务中执行。此次堆损坏的证据和回归结果见 [开发记录](../../dev/bugfix/故障与修复记录-2026-11-13.md#rdg-非-shader-访问回归参数元数据)。
 
 当前 ExecuteContext 的 wait lambda 直接忽略没有 SyncPoint 的 waitInfo，而 RDG 等调用方有按 QueueType/Value 填写的路径；还存在资源自身 ResourceWaits 补充依赖的机制。文档不能因此声称所有逻辑队列等待在 D3D12 都等价实现，新增跨队列用例须核对实际原生 Wait。
 

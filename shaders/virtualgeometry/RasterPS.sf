@@ -1,0 +1,5 @@
+#include "/Generated/VertexFactory.sf"
+uint2 MainPS(VirtualGeometryVaryings input, uint primitiveID : SV_PrimitiveID) : SV_Target0
+{
+    return uint2(input.DrawID, primitiveID);
+}

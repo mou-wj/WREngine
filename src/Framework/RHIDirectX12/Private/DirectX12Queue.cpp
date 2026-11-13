@@ -72,6 +72,7 @@ namespace RHIDirectX12
     }
     RHI::RHIContextBase* DirectX12Queue::AcquireCommandContext()
     {
+        std::lock_guard<std::recursive_mutex> lock(m_QueueMutex);
         const auto completed = m_SyncPoint.GetCurrentValue();
         for (const auto& context : m_Contexts)
             if (context->bReusable && context->LastSubmission <= completed)
@@ -91,6 +92,7 @@ namespace RHIDirectX12
     }
     RHI::RHIContextBase* DirectX12Queue::ReleaseCommandContext(RHI::RHIContextBase* context)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_QueueMutex);
         if (auto* dx = dynamic_cast<DirectX12CommandContext*>(context))
         {
             if (dx->GetQueue() != this)
@@ -108,7 +110,7 @@ namespace RHIDirectX12
     uint64_t DirectX12Queue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& contexts,
                                             const std::vector<RHI::RHIWaitInfo>& waits)
     {
-        std::lock_guard<std::mutex> lock(m_QueueMutex);
+        std::lock_guard<std::recursive_mutex> lock(m_QueueMutex);
         auto wait = [&](const RHI::RHIWaitInfo& info) {
             if (!info.SyncPoint || !info.Value)
                 return;
@@ -153,8 +155,9 @@ namespace RHIDirectX12
     void DirectX12Queue::WaitValue(uint64_t value)
     {
         m_SyncPoint.Wait(value);
+        std::lock_guard<std::recursive_mutex> lock(m_QueueMutex);
         for (const auto& context : m_Contexts)
-            if (context->LastSubmission && context->LastSubmission <= value)
+            if (context->bReusable && context->LastSubmission && context->LastSubmission <= value)
                 context->Complete();
         m_Device->CheckDebugMessages();
     }

@@ -881,7 +881,27 @@ namespace RHIDirectX12
         {
             if (!m_Device->AllocateCbvSrvUavDescriptor(m_DefaultSRV))
                 throw std::runtime_error("SRV heap exhausted");
-            m_Device->GetNativeDevice()->CreateShaderResourceView(m_Resource.Get(), nullptr, m_DefaultSRV);
+            D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+            view.Format = ToDxgiSrvFormat(GetDesc().Format, GetNativeFormat());
+            view.ViewDimension = ToSrvDimension(GetDesc().Type, RHI::ERHITextureViewType::Derived);
+            view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            switch (view.ViewDimension)
+            {
+            case D3D12_SRV_DIMENSION_TEXTURE1D: view.Texture1D.MipLevels = GetDesc().MipLevels; break;
+            case D3D12_SRV_DIMENSION_TEXTURE2D: view.Texture2D.MipLevels = GetDesc().MipLevels; break;
+            case D3D12_SRV_DIMENSION_TEXTURE2DARRAY:
+                view.Texture2DArray.MipLevels = GetDesc().MipLevels;
+                view.Texture2DArray.ArraySize = GetDesc().ArraySize;
+                break;
+            case D3D12_SRV_DIMENSION_TEXTURE3D: view.Texture3D.MipLevels = GetDesc().MipLevels; break;
+            case D3D12_SRV_DIMENSION_TEXTURECUBE: view.TextureCube.MipLevels = GetDesc().MipLevels; break;
+            case D3D12_SRV_DIMENSION_TEXTURECUBEARRAY:
+                view.TextureCubeArray.MipLevels = GetDesc().MipLevels;
+                view.TextureCubeArray.NumCubes = GetDesc().ArraySize / 6;
+                break;
+            default: throw std::invalid_argument("Unsupported default texture SRV dimension");
+            }
+            m_Device->GetNativeDevice()->CreateShaderResourceView(m_Resource.Get(), &view, m_DefaultSRV);
         }
         return m_DefaultSRV;
     }

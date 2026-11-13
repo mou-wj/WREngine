@@ -459,6 +459,10 @@ namespace RenderCore {
         {
             for (const auto& member : metadata.GetMembers())
             {
+                if (member.IsAccessOnly())
+                {
+                    continue;
+                }
                 std::string name = member.Name;
 
                 if (member.IsResource())
@@ -1095,8 +1099,19 @@ void ShaderCompiler::CompileToOpenGL(const std::string& preprocessedSource, cons
     options.es = false;
 
     compiler.set_common_options(options);
-    compiler.build_dummy_sampler_for_combined_images();
+    const auto dummySampler = compiler.build_dummy_sampler_for_combined_images();
+    if (dummySampler)
+    {
+        compiler.set_decoration(dummySampler, spv::DecorationBinding, UINT32_MAX);
+    }
     compiler.build_combined_image_samplers();
+    // Combined GLSL samplers use the original image unit. Dummy samplers have
+    // no RHI binding; real samplers are paired through reflection at bind time.
+    for (const auto& combined : compiler.get_combined_image_samplers())
+    {
+        compiler.set_decoration(combined.combined_id, spv::DecorationBinding,
+                               compiler.get_decoration(combined.image_id, spv::DecorationBinding));
+    }
     std::string glsl = compiler.compile();
     
 

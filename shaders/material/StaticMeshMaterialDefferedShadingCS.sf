@@ -16,6 +16,10 @@
 void MainCS(uint3 DTid : SV_DispatchThreadID)
 {
     uint2 PixelPos = DTid.xy;
+    if (any(PixelPos >= uint2(ScreenSize)))
+    {
+        return;
+    }
     float2 UV = (PixelPos + 0.5) / ScreenSize;
     ShadingContext Context;
     Context.WorldPosition = ReconstructWorldPosition(UV,InvViewProj);

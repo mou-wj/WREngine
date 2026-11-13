@@ -1,5 +1,15 @@
 # 核心实现阅读指南
 
+2026-11-13 非 Shader 的纹理/缓冲访问改由 RDG_TEXTURE_ACCESS、RDG_BUFFER_ACCESS 参数宏声明，Builder 统一解析，相关元数据及 HLSL 排除规则见 [RDG 实现](performance/03-rdg-execution-and-state.md#显式非-shader-访问与只读状态转换)。回归中修正的 DirectX12 上下文池同步见 [队列实现](performance/02-rhi-queues-and-sync.md)。
+
+2026-11-13 增加 [Virtual Geometry Material Resolve](algorithm/12-virtual-geometry-material-resolve.md)，保留独立 Pass 的三角形属性恢复、透视校正、材质槽映射及 GBuffer 接口。同日按要求回退 RenderModule 的场景集成与公共材质采样 Helper 改动，主场景恢复传统渲染；Compute 显式梯度采样尚未接通，回退前的测试结果仅代表当时版本。
+
+2026-11-12 增加 Virtual Geometry VertexFactory、Visibility Raster 和 Cluster Debug 显示。2026-11-13 已撤销场景启用开关，当前由调用方显式编排独立 Pass。ID 映射、整数清屏、RDG 访问和后端修正见 [Visibility 实现](algorithm/11-virtual-geometry-visibility.md)，运行结果见 [开发记录](../dev/bugfix/故障与修复记录-2026-11-12.md) 及 [2026-11-13 验证与回退记录](../dev/bugfix/故障与修复记录-2026-11-13.md)。
+
+2026-11-12 为 VirtualGeometryResource 增加显式 InitializeResources/ReleaseResources，并由 StaticMeshRenderData::VirtualGeometryData 持有。CPU 构建与 GPU 上传分开，传统 LOD 绘制不变；缓冲布局、所有权及 Fence 前置条件见 [资源生命周期](performance/05-assets-materials-and-instance-data.md#虚拟几何的-rhi-资源生命周期)，三后端读回验证见 [开发记录](../dev/bugfix/故障与修复记录-2026-11-12.md)。
+
+2026-11-11 增加 VirtualGeometryResource 的 CPU 构建：拓扑区域生长、Group 整体 QEM 简化、重新分簇、替换 DAG 及独立几何误差，详见 [算法与边界](algorithm/10-virtual-geometry-cpu-build.md)。当前只生成 CPU 数据，不改变传统 StaticMesh 绘制；过程和实际验证见 [开发记录](../dev/bugfix/故障与修复记录-2026-11-11.md)。
+
 2026-11-05 收窄 TextureViewer 来源：仅列出 Content 纹理资产和已生成的环境光输出，不再列举场景/快照及环境输入的运行时副本。路径身份、所有权和边界见 [来源与所有者](performance/08-ui-rendering-and-window-lifetime.md#来源与所有者)，实际复现与验证见 [修正记录](../dev/bugfix/故障与修复记录-2026-11-05.md#来源列表仅保留资产与环境光输出)。
 
 2026-11-04 完成工程基础层快照和 IBL 初始化完成点续验：存储与所有权见 [工程快照](performance/10-project-snapshots.md)，缩图和色彩空间见 [Mip 重建算法](algorithm/05-pbr-ibl-and-sampling.md#工程纹理的普通-mip-重建)，实际通过范围与已知限制见 [续验记录](../dev/bugfix/故障与修复记录-2026-11-04.md)。
@@ -54,6 +64,7 @@
 | [屏幕空间与抗锯齿](algorithm/07-screen-space-and-antialiasing.md) | HZB、SSR、SSGI、FXAA、TAA 当前做到哪一步？ |
 | [网格导入与几何生成](algorithm/08-mesh-import-and-geometry.md) | 顶点访问、法线切线、实例索引和程序化网格怎样组织？ |
 | [TextureViewer 画布与预览](algorithm/09-texture-viewer-canvas.md) | 多图片如何居中、选中、拖动和围绕鼠标缩放，网格如何分级，Cube/Mip/数组层如何显示？ |
+| [CPU 虚拟几何构建](algorithm/10-virtual-geometry-cpu-build.md) | 拓扑分簇、组内 QEM、边界合法性、多对多 DAG、几何误差和有限终止怎样实现？ |
 
 ## 如何阅读和核查
 

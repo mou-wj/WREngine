@@ -202,6 +202,8 @@ namespace RenderCore {
         RHI_SRV,
         RHI_UAV,
         ColorBindings,
+        RDGTexture_Access,
+        RDGBuffer_Access,
 
         //
 

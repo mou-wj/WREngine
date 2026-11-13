@@ -180,6 +180,7 @@ namespace RenderCore {
             uint32_t NumColumns = 1;
             uint32_t NumElements = 0;
             const ShaderParametersMetadata* StructMetadata = nullptr;
+            RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
             Member(
             const char* inTypeName,
             const char* inName,
@@ -188,7 +189,8 @@ namespace RenderCore {
             uint32_t inNumRows,
             uint32_t inNumColumns,
             uint32_t inNumElements,
-            const ShaderParametersMetadata* inStructMetadata
+            const ShaderParametersMetadata* inStructMetadata,
+            RHI::ERHIResourceAccess inResourceAccess = RHI::ERHIResourceAccess::Unknown
             ):
 				TypeName(inTypeName),
 				Name(inName),
@@ -197,7 +199,8 @@ namespace RenderCore {
                 NumRows(inNumRows),
                 NumColumns(inNumColumns),
                 NumElements(inNumElements),
-                StructMetadata(inStructMetadata)
+                StructMetadata(inStructMetadata),
+                RHIResourceAccess(inResourceAccess)
             
             {
 
@@ -207,6 +210,11 @@ namespace RenderCore {
             bool IsReferenceStruct() const { return StructMetadata != nullptr && BaseType == EShaderParameterBaseType::StructReference; }
             bool IsNestedStruct() const { return StructMetadata != nullptr && BaseType == EShaderParameterBaseType::StructNested; }
             bool IsResource() const { return (BaseType >= EShaderParameterBaseType::RDGTexture); }
+            bool IsAccessOnly() const
+            {
+                return BaseType == EShaderParameterBaseType::RDGTexture_Access ||
+                       BaseType == EShaderParameterBaseType::RDGBuffer_Access;
+            }
             bool IsArray() const { return (NumElements > 1); }
             bool IsRenderTargetSlots() const { return BaseType == EShaderParameterBaseType::RenderTargetSlots; }
         };
@@ -312,6 +320,7 @@ void SetShaderParameters(
 template<typename T>
 struct ShaderParameterTypeInfo
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::Unknown;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -327,6 +336,28 @@ struct ShaderParameterTypeInfo
         return nullptr;
     }
 };
+// Access-only fields participate in RDG dependency analysis.
+template<typename ResourceType, RHI::ERHIResourceAccess Access>
+struct ShaderParameterAccessTypeInfo : ShaderParameterTypeInfo<ResourceType>
+{
+    static_assert(std::is_same_v<ResourceType, RenderCore::RenderGraphTexture> ||
+                  std::is_same_v<ResourceType, RenderCore::RenderGraphBuffer>);
+    static constexpr RenderCore::EShaderParameterBaseType BaseType =
+        std::is_same_v<ResourceType, RenderCore::RenderGraphTexture>
+        ? RenderCore::EShaderParameterBaseType::RDGTexture_Access
+        : RenderCore::EShaderParameterBaseType::RDGBuffer_Access;
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = Access;
+    static constexpr bool bIsStoredInConstantBuffer = false;
+    static constexpr uint32_t Alignment = 0;
+    using TAlignedType = ResourceType*;
+};
+
+template<RHI::ERHIResourceAccess Access>
+using ShaderParameterTextureAccessInfo = ShaderParameterAccessTypeInfo<RenderCore::RenderGraphTexture, Access>;
+
+template<RHI::ERHIResourceAccess Access>
+using ShaderParameterBufferAccessInfo = ShaderParameterAccessTypeInfo<RenderCore::RenderGraphBuffer, Access>;
+
 class ShaderParameterElementAccessor {
 public:
     virtual const uint8_t* GetElementOffset(uint32_t index) const = 0;
@@ -346,6 +377,7 @@ public:
 template<typename T,size_t InNumElements, RenderCore::EShaderParameterBaseType InBaseType>
 struct ShaderParameterArrayInfo
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = InBaseType;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -364,6 +396,7 @@ struct ShaderParameterArrayInfo
 template<>
 struct ShaderParameterTypeInfo<RenderCore::RenderGraphTexture>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::RDGTexture;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -381,6 +414,7 @@ using ShaderParameterTypeRDGTextureArray = ShaderParameterArrayInfo<RenderCore::
 template<>
 struct ShaderParameterTypeInfo<RenderCore::RenderGraphTextureUAV>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::RDGTexture_UAV;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -395,6 +429,7 @@ struct ShaderParameterTypeInfo<RenderCore::RenderGraphTextureUAV>
 template<>
 struct ShaderParameterTypeInfo<RenderCore::RenderGraphBufferSRV>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::RDGBuffer_SRV;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -409,6 +444,7 @@ struct ShaderParameterTypeInfo<RenderCore::RenderGraphBufferSRV>
 template<>
 struct ShaderParameterTypeInfo<RHI::RHISampler>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::RHISampler;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -424,6 +460,7 @@ struct ShaderParameterTypeInfo<RHI::RHISampler>
 template<>
 struct ShaderParameterTypeInfo<RHI::RHITexture>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::RHITexture;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -439,6 +476,7 @@ struct ShaderParameterTypeInfo<RHI::RHITexture>
 template<>
 struct ShaderParameterTypeInfo<RHI::RHIShaderResourceView>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::RHI_SRV;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -453,6 +491,7 @@ struct ShaderParameterTypeInfo<RHI::RHIShaderResourceView>
 template<>
 struct ShaderParameterTypeInfo<RHI::RHIUnorderedAccessView>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::RHI_UAV;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -469,6 +508,7 @@ struct ShaderParameterTypeInfo<RHI::RHIUnorderedAccessView>
 template<>
 struct ShaderParameterTypeInfo<uint32_t>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::UInt32;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -483,6 +523,7 @@ struct ShaderParameterTypeInfo<uint32_t>
 template<>
 struct ShaderParameterTypeInfo<Core::Int2>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::Int32;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 2;
@@ -497,6 +538,7 @@ struct ShaderParameterTypeInfo<Core::Int2>
 template<>
 struct ShaderParameterTypeInfo<Core::Int3>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::Int32;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 3;
@@ -512,6 +554,7 @@ struct ShaderParameterTypeInfo<Core::Int3>
 template<>
 struct ShaderParameterTypeInfo<Core::UInt3>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::UInt32;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 3;
@@ -527,6 +570,7 @@ struct ShaderParameterTypeInfo<Core::UInt3>
 template<>
 struct ShaderParameterTypeInfo<float>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::Float32;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -541,6 +585,7 @@ struct ShaderParameterTypeInfo<float>
 template<>
 struct ShaderParameterTypeInfo<Core::Float2>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::Float32;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 2;
@@ -555,6 +600,7 @@ struct ShaderParameterTypeInfo<Core::Float2>
 template<>
 struct ShaderParameterTypeInfo<Core::Float3>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::Float32;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 3;
@@ -569,6 +615,7 @@ struct ShaderParameterTypeInfo<Core::Float3>
 template<>
 struct ShaderParameterTypeInfo<Core::Float4>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::Float32;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 4;
@@ -583,6 +630,7 @@ struct ShaderParameterTypeInfo<Core::Float4>
 template<>
 struct ShaderParameterTypeInfo<Core::Float4x4>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::Float32;
     static constexpr uint32_t NumRows = 4;
     static constexpr uint32_t NumColumns = 4;
@@ -598,6 +646,7 @@ struct ShaderParameterTypeInfo<Core::Float4x4>
 template<>
 struct ShaderParameterTypeInfo<RenderCore::RenderTargetBindingSlots>
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::RenderTargetSlots;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -613,6 +662,7 @@ struct ShaderParameterTypeInfo<RenderCore::RenderTargetBindingSlots>
 template<typename T>
 struct StructNestedShaderParameterTypeInfo
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::StructNested;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -627,6 +677,7 @@ struct StructNestedShaderParameterTypeInfo
 template<typename T>
 struct StructReferenceShaderParameterTypeInfo
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::StructReference;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -642,6 +693,7 @@ struct StructReferenceShaderParameterTypeInfo
 template<typename T>
 struct StructIncludeShaderParameterTypeInfo
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = RenderCore::EShaderParameterBaseType::StructInclude;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -657,6 +709,7 @@ struct StructIncludeShaderParameterTypeInfo
 template<typename ElementType,typename T, RenderCore::EShaderParameterBaseType InBaseType>
 struct StructNestedBufferShaderParameterTypeInfo
 {
+    static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
     static constexpr RenderCore::EShaderParameterBaseType BaseType = InBaseType;
     static constexpr uint32_t NumRows = 1;
     static constexpr uint32_t NumColumns = 1;
@@ -725,12 +778,19 @@ private:\
             TypeInfo::NumRows,\
             TypeInfo::NumColumns,\
             TypeInfo::NumElements,\
-            TypeInfo::GetStructMetadata()));\
+            TypeInfo::GetStructMetadata(),\
+            TypeInfo::RHIResourceAccess));\
 			FuncPtr(*PrevFunc)(PrevType##MemberName, std::vector<RenderCore::ShaderParametersMetadata::Member>*); \
 			PrevFunc = sAppendMemberGetPrev; \
             return (FuncPtr)PrevFunc; \
 		} \
 	typedef CurMemberIdType##MemberName
+
+#define RDG_TEXTURE_ACCESS(MemberName, Access) \
+    SHADER_PARAMETER_INTERNAL("", MemberName, ShaderParameterTextureAccessInfo<Access>)
+
+#define RDG_BUFFER_ACCESS(MemberName, Access) \
+    SHADER_PARAMETER_INTERNAL("", MemberName, ShaderParameterBufferAccessInfo<Access>)
 
 // Define a texture parameter
 #define SHADER_PARAMETER(ClassType,Name) \

@@ -357,8 +357,9 @@ namespace RenderCore {
                 if (isUav(before) && isUav(after))
                     return true;
 
+                // Read-only uses can still require different layouts or buffer states.
                 if (!beforeWrite && !afterWrite)
-                    return false;
+                    return before != after;
 
                 return before != after;
             };
@@ -805,7 +806,23 @@ namespace RenderCore {
                     // ============================
                     // Texture SRV
                     // ============================
-                    if (member.BaseType == EShaderParameterBaseType::RDGTexture_SRV)
+                    if (member.BaseType == EShaderParameterBaseType::RDGTexture_Access)
+                    {
+                        auto* texture = *reinterpret_cast<RenderGraphTexture* const*>(memberAddr);
+                        if (texture)
+                        {
+                            pass->AddTextureIntent({texture, member.RHIResourceAccess, RHISubresourceRange()});
+                        }
+                    }
+                    else if (member.BaseType == EShaderParameterBaseType::RDGBuffer_Access)
+                    {
+                        auto* buffer = *reinterpret_cast<RenderGraphBuffer* const*>(memberAddr);
+                        if (buffer)
+                        {
+                            pass->AddBufferIntent({buffer, member.RHIResourceAccess});
+                        }
+                    }
+                    else if (member.BaseType == EShaderParameterBaseType::RDGTexture_SRV)
                     {
                         auto srv = *reinterpret_cast<RenderGraphTextureSRV* const*>(memberAddr);
 

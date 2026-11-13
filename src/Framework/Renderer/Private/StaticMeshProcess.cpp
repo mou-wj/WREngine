@@ -314,7 +314,8 @@ namespace Renderer {
                 // Bind shader parameters.
                 SetShaderParameters(cmd, cshader, params);
 
-                cmd.Dispatch(params->ScreenSize.X / 8, params->ScreenSize.Y / 8, 1);
+                cmd.Dispatch((static_cast<uint32_t>(params->ScreenSize.X) + 7) / 8,
+                             (static_cast<uint32_t>(params->ScreenSize.Y) + 7) / 8, 1);
             }
         );
     }

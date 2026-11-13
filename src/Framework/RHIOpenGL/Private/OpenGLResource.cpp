@@ -40,7 +40,7 @@ namespace RHIOpenGL
         OpenGLTextureView::Desc BuildTextureViewDesc(OpenGLTexture* source, const RHI::RHITexSRVCreateInfo& d)
         {
             OpenGLTextureView::Desc out;
-            out.InternalFormat = ConvertRHIFormatToGLInternalFormat(d.Format);
+            out.InternalFormat = ConvertRHIFormatToGLInternalFormat(d.Format == RHI::ERHIFormat::Unknown ? source->GetDesc().Format : d.Format);
             out.FirstMipSlice = d.FirstMipSlice;
             out.MipCount = d.MipCount == 0 ? 1u : d.MipCount;
             out.FirstArraySlice = d.FirstArraySlice;
@@ -51,7 +51,7 @@ namespace RHIOpenGL
         OpenGLTextureView::Desc BuildTextureViewDesc(OpenGLTexture* source, const RHI::RHITexUAVCreateInfo& d)
         {
             OpenGLTextureView::Desc out;
-            out.InternalFormat = ConvertRHIFormatToGLInternalFormat(d.Format);
+            out.InternalFormat = ConvertRHIFormatToGLInternalFormat(d.Format == RHI::ERHIFormat::Unknown ? source->GetDesc().Format : d.Format);
             out.FirstMipSlice = d.FirstMipSlice;
             out.MipCount = d.MipCount == 0 ? 1u : d.MipCount;
             out.FirstArraySlice = d.FirstArraySlice;

@@ -1,0 +1,20 @@
+struct VirtualGeometryVaryings
+{
+    float4 Position : SV_Position;
+    nointerpolation uint DrawID : TEXCOORD0;
+};
+#if VERTEX_SHADER
+#include "/Generated/ShaderParameters/VirtualGeometryVertexFactoryParameters.sf"
+struct VirtualGeometryInput
+{
+    float3 Position : ATTRIBUTE0;
+};
+VirtualGeometryVaryings GetVirtualGeometryVertex(VirtualGeometryInput input)
+{
+    VirtualGeometryVaryings result;
+    float4 world = mul(LocalToWorld, float4(input.Position, 1.0));
+    result.Position = mul(ViewProjection, world);
+    result.DrawID = DrawID;
+    return result;
+}
+#endif

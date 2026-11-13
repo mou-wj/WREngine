@@ -1,0 +1,136 @@
+﻿#include "/Generated/ShaderParameters/VirtualGeometryMaterialResolveParameters.sf"
+static float2 materialGradientX;
+static float2 materialGradientY;
+#define MATERIAL_TEXTURE_SAMPLE(Texture, UV) Texture.SampleGrad(LinearWrapSampler, UV, materialGradientX, materialGradientY)
+#include "/core/MaterialGBufferHelper.sf"
+
+float3 ReadPosition(uint index)
+{
+    uint offset = index * 3;
+    return float3(Positions[offset], Positions[offset + 1], Positions[offset + 2]);
+}
+
+float3 ReadNormal(uint index)
+{
+    uint offset = index * 3;
+    return float3(Normals[offset], Normals[offset + 1], Normals[offset + 2]);
+}
+
+float4 ReadTangent(uint index)
+{
+    uint offset = index * 4;
+    return float4(Tangents[offset], Tangents[offset + 1], Tangents[offset + 2], Tangents[offset + 3]);
+}
+
+float2 ReadUV(uint index)
+{
+    return float2(TexCoords[index * 2], TexCoords[index * 2 + 1]);
+}
+
+float Cross2(float2 a, float2 b)
+{
+    return a.x * b.y - a.y * b.x;
+}
+
+// Perspective interpolation is a quotient of affine functions. Its analytic
+// derivative remains valid at cluster boundaries and across SIMD quads.
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    if (any(thread.xy >= uint2(ViewSize)))
+    {
+        return;
+    }
+    uint2 pixel = uint2(ViewOrigin) + thread.xy;
+    uint2 visible = Visibility.Load(int3(pixel, 0));
+    if (visible.x != ResolveDrawID || visible.y == 0xFFFFFFFFu || VisibilityDepth.Load(int3(pixel, 0)) >= 1.0)
+    {
+        return;
+    }
+    VirtualGeometryDrawMetadata draw = DrawMetadata[visible.x];
+    uint cluster = draw.ClusterID * ClusterStrideWords;
+    uint vertexOffset = Clusters[cluster];
+    uint indexOffset = Clusters[cluster + 2];
+    if (visible.y >= Clusters[cluster + 3])
+    {
+        return;
+    }
+    uint triangleOffset = indexOffset + visible.y * 3;
+    uint3 indices = vertexOffset + uint3(Indices[triangleOffset], Indices[triangleOffset + 1], Indices[triangleOffset + 2]);
+    float3 world[3];
+    float3 normal[3];
+    float4 tangent[3];
+    float2 uv[3];
+    float4 clip[3];
+    float2 screen[3];
+    [unroll]
+    for (uint corner = 0; corner < 3; ++corner)
+    {
+        uint index = indices[corner];
+        world[corner] = mul(LocalToWorld, float4(ReadPosition(index), 1.0)).xyz;
+        normal[corner] = normalize(mul((float3x3)NormalToWorld, ReadNormal(index)));
+        float4 localTangent = ReadTangent(index);
+        tangent[corner] = float4(normalize(mul((float3x3)LocalToWorld, localTangent.xyz)), localTangent.w);
+        uv[corner] = ReadUV(index);
+        clip[corner] = mul(ViewProjection, float4(world[corner], 1.0));
+        if (!all(isfinite(clip[corner])) || abs(clip[corner].w) < 1e-7)
+        {
+            return;
+        }
+        float2 ndc = clip[corner].xy / clip[corner].w;
+        screen[corner] = float2(ViewOrigin) + (ndc * float2(1.0, ScreenYSign) * 0.5 + 0.5) * float2(ViewSize);
+    }
+    float2 edge1 = screen[1] - screen[0];
+    float2 edge2 = screen[2] - screen[0];
+    float area = Cross2(edge1, edge2);
+    if (!isfinite(area) || abs(area) < 1e-8)
+    {
+        return;
+    }
+    float2 p = float2(pixel) + 0.5 - screen[0];
+    float3 lambda;
+    lambda.y = Cross2(p, edge2) / area;
+    lambda.z = Cross2(edge1, p) / area;
+    lambda.x = 1.0 - lambda.y - lambda.z;
+    float3 dx = float3(edge1.y - edge2.y, edge2.y, -edge1.y) / area;
+    float3 dy = float3(edge2.x - edge1.x, -edge2.x, edge1.x) / area;
+    float3 inverseW = 1.0 / float3(clip[0].w, clip[1].w, clip[2].w);
+    float denominator = dot(lambda, inverseW);
+    if (!isfinite(denominator) || abs(denominator) < 1e-10)
+    {
+        return;
+    }
+    float3 weights = lambda * inverseW / denominator;
+    float2 interpolatedUV = uv[0] * weights.x + uv[1] * weights.y + uv[2] * weights.z;
+    float3 weightedDx = dx * inverseW;
+    float3 weightedDy = dy * inverseW;
+    materialGradientX = (uv[0] * weightedDx.x + uv[1] * weightedDx.y + uv[2] * weightedDx.z -
+                         interpolatedUV * dot(dx, inverseW)) / denominator * UVTiling;
+    materialGradientY = (uv[0] * weightedDy.x + uv[1] * weightedDy.y + uv[2] * weightedDy.z -
+                         interpolatedUV * dot(dy, inverseW)) / denominator * UVTiling;
+    ShadingContext context;
+    context.WorldPosition = world[0] * weights.x + world[1] * weights.y + world[2] * weights.z;
+    context.WorldNormal = normalize(normal[0] * weights.x + normal[1] * weights.y + normal[2] * weights.z);
+    float4 interpolatedTangent = tangent[0] * weights.x + tangent[1] * weights.y + tangent[2] * weights.z;
+    float3 t = interpolatedTangent.xyz - context.WorldNormal * dot(interpolatedTangent.xyz, context.WorldNormal);
+    if (dot(t, t) < 1e-12)
+    {
+        float3 helper = abs(context.WorldNormal.z) < 0.9 ? float3(0, 0, 1) : float3(0, 1, 0);
+        t = cross(helper, context.WorldNormal);
+    }
+    t = normalize(t);
+    float3 b = cross(context.WorldNormal, t) * (interpolatedTangent.w < 0 ? -1.0 : 1.0) * TransformHandedness;
+    context.TangentToWorld = float3x3(t, b, context.WorldNormal);
+    context.UV0 = interpolatedUV;
+    context.VertexColor = 1;
+    context.CameraPosition = CameraPosition;
+    context.ViewDirection = normalize(CameraPosition - context.WorldPosition);
+    if (!all(isfinite(materialGradientX)) || !all(isfinite(materialGradientY)))
+    {
+        return;
+    }
+    FGBufferOutput result = EvaluateMaterialGBuffer(context);
+    ResolveGBufferA[pixel] = result.GBufferA;
+    ResolveGBufferB[pixel] = result.GBufferB;
+    ResolveGBufferC[pixel] = result.GBufferC;
+}

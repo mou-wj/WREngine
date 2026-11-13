@@ -12,6 +12,7 @@
 
 namespace RHIOpenGL
 {
+    class OpenGLShaderBase;
     // =========================================================================
     // UniformBufferCache
     // -----------------------------------------------------------------------------
@@ -259,7 +260,7 @@ namespace RHIOpenGL
         // Texture / SRV / UAV / Sampler / UniformBuffer。shader 类型
         // （RHIGraphicShader vs RHIComputeShader）当前未被逻辑引用，由派生
         // 类在自己的 SetBatchedShaderParameters 包装一层 lambda 后转发到本函数。
-        void ApplyShaderParameters(const RHI::RHIBatchedShaderParameters& parameter);
+        void ApplyShaderParameters(const RHI::RHIBatchedShaderParameters& parameter, OpenGLShaderBase* shader);
         OpenGLQueue* _queue = nullptr;
         UniformBufferCache _uboCache;
     };

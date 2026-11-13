@@ -18,6 +18,7 @@ namespace RHI {
             return 8;
         case ERHIFormat::R32_Float:
             return 4;
+        case ERHIFormat::R32G32_UInt:
         case ERHIFormat::R32G32_Float:
             return 8;
         case ERHIFormat::R32G32B32A32_Float:

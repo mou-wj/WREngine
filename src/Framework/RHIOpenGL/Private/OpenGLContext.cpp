@@ -225,7 +225,7 @@ namespace RHIOpenGL
         if (depthStencil.bDepthTestEnable)
         {
             glEnable(GL_DEPTH_TEST);
-            glDepthFunc(GL_LESS);
+            glDepthFunc(ConvertRHICompareOpToGL(depthStencil.DepthCompareOp));
         }
         else
         {
@@ -319,7 +319,7 @@ namespace RHIOpenGL
         }
     }
 
-    void OpenGLCommandContext::ApplyShaderParameters(const RHI::RHIBatchedShaderParameters& parameter)
+    void OpenGLCommandContext::ApplyShaderParameters(const RHI::RHIBatchedShaderParameters& parameter, OpenGLShaderBase* shader)
     {
         UploadUniformBufferData(parameter);
 
@@ -348,13 +348,29 @@ namespace RHIOpenGL
                     glBindTextureUnit(slot, view ? view->GetHandle() : 0u);
                     glBindSampler(slot, 0u);
                 }
-                // buffer SRV — 描述符层信息，GL 无需显式绑定
+                else if (auto* buffer = dynamic_cast<OpenGLBuffer*>(srv->GetResource()))
+                {
+                    const auto& view = srv->GetBufferSRVDesc();
+                    const uint64_t size = view.NumElements ? view.NumElements * view.Stride
+                                                          : buffer->GetDesc().Size - view.Offset;
+                    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, slot, buffer->GetHandle(),
+                                      static_cast<GLintptr>(view.Offset), static_cast<GLsizeiptr>(size));
+                }
                 break;
             }
             case RHI::RHIShaderResourceParameter::EType::Sampler:
             {
                 auto* sampler = dynamic_cast<OpenGLSampler*>(resourceParam.GetResourceAs<RHI::RHISampler>());
-                glBindSampler(slot, sampler ? sampler->GetHandle() : 0u);
+                if (shader)
+                {
+                    for (const auto& combined : shader->GetShaderReflection().CombinedBindings)
+                    {
+                        if (combined.SamplerBinding == slot)
+                        {
+                            glBindSampler(combined.CombinedBinding, sampler ? sampler->GetHandle() : 0u);
+                        }
+                    }
+                }
                 break;
             }
             case RHI::RHIShaderResourceParameter::EType::UniformBuffer:
@@ -537,7 +553,7 @@ namespace RHIOpenGL
         {
             RHI::RHIBatchedShaderParameters parameterCopy = parameter;
             (void)shader; // shader 类型当前未被绑定逻辑使用
-            ApplyShaderParameters(parameterCopy);
+            ApplyShaderParameters(parameterCopy, dynamic_cast<OpenGLShaderBase*>(shader));
         });
     }
 
@@ -562,7 +578,7 @@ namespace RHIOpenGL
         _nativeCommands.emplace_back([this, shader, parameter]()
         {
             (void)shader; // shader 类型当前未被绑定逻辑使用
-            ApplyShaderParameters(parameter);
+            ApplyShaderParameters(parameter, dynamic_cast<OpenGLShaderBase*>(shader));
         });
     }
 
@@ -603,7 +619,8 @@ namespace RHIOpenGL
             glUseProgram(glPipeline->GetProgramHandle());
 
             const auto& desc = pipelineState->GetDesc();
-            ApplyVertexDescState(desc);
+            // Vertex streams may be rebound after the PSO. Apply the layout at draw time.
+            m_bVertexLayoutDirty = true;
             ApplyPrimitiveTopologyState(desc);
             ApplyRasterizerState(desc);
             ApplyDepthStencilState(desc);
@@ -689,9 +706,10 @@ namespace RHIOpenGL
 
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, glIndexBuffer->GetHandle());
             const GLenum indexType = glIndexBuffer->GetDesc().Stride == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-            glDrawElements(m_CurrentPrimitiveTopology, static_cast<GLsizei>(indexCount * instanceCount), indexType, reinterpret_cast<void*>(static_cast<uintptr_t>(firstIndex * static_cast<uint32_t>(glIndexBuffer->GetDesc().Stride))));
-            (void)vertexOffset;
-            (void)firstInstance;
+            glDrawElementsInstancedBaseVertexBaseInstance(
+                m_CurrentPrimitiveTopology, static_cast<GLsizei>(indexCount), indexType,
+                reinterpret_cast<void*>(static_cast<uintptr_t>(firstIndex) * glIndexBuffer->GetDesc().Stride),
+                static_cast<GLsizei>(instanceCount), vertexOffset, firstInstance);
         });
     }
 

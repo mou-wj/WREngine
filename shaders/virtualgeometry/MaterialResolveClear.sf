@@ -1,0 +1,13 @@
+#include "/Generated/ShaderParameters/VirtualGeometryResolveTargets.sf"
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    if (any(thread.xy >= uint2(ViewSize)))
+    {
+        return;
+    }
+    uint2 pixel = uint2(ViewOrigin) + thread.xy;
+    ResolveGBufferA[pixel] = 0;
+    ResolveGBufferB[pixel] = 0;
+    ResolveGBufferC[pixel] = 0;
+}

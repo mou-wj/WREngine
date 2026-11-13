@@ -11,6 +11,7 @@
 #include "RenderResource.h"
 #include "LocalVertexFactory.h"
 #include "DistanceFieldData.h"
+#include "VirtualGeometryResource.h"
 namespace Engine {
     // Forward placeholders for shader/texture types. In a real engine, replace
     // these with concrete types or resource handles managed by the RHI/resource system.
@@ -93,6 +94,9 @@ namespace Engine {
 
         // LOD resources (LOD0 = highest detail)
         std::vector<LODResource> LODResources;
+
+        // Optional virtual geometry; Build and InitializeResources are explicit.
+        VirtualGeometryResource VirtualGeometryData;
 
         // Bounds (AABB) for frustum culling and coarse occlusion
         Core::BoxSphereBounds Bounds;

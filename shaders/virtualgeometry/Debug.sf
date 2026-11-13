@@ -1,0 +1,13 @@
+#include "/Generated/ShaderParameters/VirtualGeometryDebugParameters.sf"
+float4 MainPS(float4 position : SV_Position) : SV_Target0
+{
+    uint2 visibility = Visibility.Load(int3(uint2(position.xy), 0));
+    float3 color = float3(0.025, 0.025, 0.025);
+    if (visibility.x < DrawCount && visibility.y != 0xFFFFFFFFu)
+    {
+        uint clusterID = DrawMetadata[visibility.x].ClusterID;
+        uint hash = (clusterID + 1u) * 1664525u + 1013904223u;
+        color = 0.2 + 0.8 * float3(hash & 255u, (hash >> 8) & 255u, (hash >> 16) & 255u) / 255.0;
+    }
+    return float4(color, 1.0);
+}

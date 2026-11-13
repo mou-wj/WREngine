@@ -80,7 +80,7 @@ namespace RHIDirectX12
         RHI::EQueueType m_QueueType = RHI::EQueueType::Graphics;
         DirectX12SyncPoint m_SyncPoint;
         std::vector<std::unique_ptr<class DirectX12CommandContext>> m_Contexts;
-        std::mutex m_QueueMutex;
+        std::recursive_mutex m_QueueMutex;
     };
 
     class DirectX12PresentExecutor : public RHI::RHIPresentExecutor

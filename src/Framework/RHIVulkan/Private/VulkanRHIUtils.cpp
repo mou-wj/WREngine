@@ -12,6 +12,7 @@ namespace RHIVulkan {
         case ERHIFormat::R16G16_Float: return VK_FORMAT_R16G16_SFLOAT;
         case ERHIFormat::R16G16B16A16_Float: return VK_FORMAT_R16G16B16A16_SFLOAT;
         case ERHIFormat::R32_Float: return VK_FORMAT_R32_SFLOAT;
+        case ERHIFormat::R32G32_UInt: return VK_FORMAT_R32G32_UINT;
         case ERHIFormat::R32G32_Float: return VK_FORMAT_R32G32_SFLOAT;
         case ERHIFormat::R32G32B32_Float: return VK_FORMAT_R32G32B32_SFLOAT;
         case ERHIFormat::R32G32B32A32_Float: return VK_FORMAT_R32G32B32A32_SFLOAT;

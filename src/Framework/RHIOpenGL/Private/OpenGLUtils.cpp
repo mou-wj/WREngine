@@ -7,10 +7,37 @@ namespace RHIOpenGL
     {
         throw std::runtime_error("OpenGLRHI does not support RHI ray tracing pipelines: OpenGL has no standard native ray tracing pipeline, and software BVH traversal/shader lowering is not implemented. Use Vulkan or DirectX12.");
     }
+    GLenum ConvertRHICompareOpToGL(RHI::ERHICompareOp op)
+    {
+        switch (op)
+        {
+        case RHI::ERHICompareOp::Never:
+            return GL_NEVER;
+        case RHI::ERHICompareOp::Less:
+            return GL_LESS;
+        case RHI::ERHICompareOp::Equal:
+            return GL_EQUAL;
+        case RHI::ERHICompareOp::LessOrEqual:
+            return GL_LEQUAL;
+        case RHI::ERHICompareOp::Greater:
+            return GL_GREATER;
+        case RHI::ERHICompareOp::NotEqual:
+            return GL_NOTEQUAL;
+        case RHI::ERHICompareOp::GreaterOrEqual:
+            return GL_GEQUAL;
+        case RHI::ERHICompareOp::Always:
+            return GL_ALWAYS;
+        default:
+            throw std::invalid_argument("Invalid RHI depth comparison");
+        }
+    }
+
     GLenum ConvertRHIFormatToGLInternalFormat(RHI::ERHIFormat format)
     {
         switch (format)
         {
+        case RHI::ERHIFormat::R32G32_UInt:
+            return GL_RG32UI;
         case RHI::ERHIFormat::R8_UNorm:
             return GL_R8;
         case RHI::ERHIFormat::R8G8B8A8_UNorm:
@@ -39,6 +66,8 @@ namespace RHIOpenGL
     {
         switch (format)
         {
+        case RHI::ERHIFormat::R32G32_UInt:
+            return GL_RG_INTEGER;
         case RHI::ERHIFormat::R8_UNorm:
             return GL_RED;
         case RHI::ERHIFormat::R8G8B8A8_UNorm:
@@ -67,6 +96,8 @@ namespace RHIOpenGL
     {
         switch (format)
         {
+        case RHI::ERHIFormat::R32G32_UInt:
+            return GL_UNSIGNED_INT;
         case RHI::ERHIFormat::R8_UNorm:
         case RHI::ERHIFormat::R8G8B8A8_UNorm:
         case RHI::ERHIFormat::B8G8R8A8_UNorm:
@@ -90,6 +121,8 @@ namespace RHIOpenGL
     {
         switch (format)
         {
+        case RHI::ERHIFormat::R32G32_UInt:
+            return GL_RG_INTEGER;
         case RHI::ERHIFormat::R8_UNorm:
         case RHI::ERHIFormat::R32_Float:
             return GL_RED;
@@ -107,6 +140,8 @@ namespace RHIOpenGL
     {
         switch (format)
         {
+        case RHI::ERHIFormat::R32G32_UInt:
+            return GL_UNSIGNED_INT;
         case RHI::ERHIFormat::R8_UNorm:
         case RHI::ERHIFormat::R8G8B8A8_UNorm:
         case RHI::ERHIFormat::B8G8R8A8_UNorm:

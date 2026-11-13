@@ -1,0 +1,22 @@
+#include "/core/GBufferCommon.sf"
+#include "/core/MaterialParametersHelper.sf"
+
+FGBufferOutput EvaluateMaterialGBuffer(ShadingContext context)
+{
+    MaterialData material = BuildMaterialData(context.UV0);
+    FGBufferOutput output = (FGBufferOutput)0;
+#if MATERIAL_SHADING_MODEL == 1
+    float3 worldNormal = normalize(mul(material.NormalTS, context.TangentToWorld));
+    WriteBaseColor(output, material.BaseColor);
+    WriteMetallic(output, material.Metallic);
+    WriteNormal(output, worldNormal);
+    WriteRoughness(output, material.Roughness);
+    WriteSpecular(output, material.Specular);
+    WriteAO(output, material.AmbientOcclusion);
+    WriteShadingModelId(output, 1);
+#else
+    WriteBaseColor(output, material.BaseColor + material.EmissiveColor);
+    WriteShadingModelId(output, 0);
+#endif
+    return output;
+}

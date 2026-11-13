@@ -1,0 +1,12 @@
+#if VERTEX_SHADER
+float4 MainVS(uint vertexID : SV_VertexID) : SV_Position
+{
+    float2 position = float2((vertexID << 1) & 2, vertexID & 2);
+    return float4(position * 2.0 - 1.0, 1.0, 1.0);
+}
+#else
+uint2 MainPS() : SV_Target0
+{
+    return uint2(0xFFFFFFFFu, 0xFFFFFFFFu);
+}
+#endif

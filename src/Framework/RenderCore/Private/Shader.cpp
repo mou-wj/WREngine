@@ -61,6 +61,10 @@ void Shader::ProcessMetadataRecursive(
 {
     for (const auto& member : metadata.GetMembers())
     {
+        if (member.IsAccessOnly())
+        {
+            continue;
+        }
         std::string name = prefix.empty()
             ? member.Name
             : member.Name;

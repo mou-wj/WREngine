@@ -19,6 +19,7 @@ namespace RHI{
     { ERHIFormat::R16G16_Float, {"R16G16_Float", 4, 2, false, false, false, true } },
     { ERHIFormat::R16G16B16A16_Float, {"R16G16B16A16_Float", 8, 4, false, false, false, true } },
     { ERHIFormat::R32_Float, {"R32_Float", 4, 1, false, false, false, true } },
+    { ERHIFormat::R32G32_UInt, {"R32G32_UInt", 8, 2, false, false, false, false} },
     { ERHIFormat::R32G32_Float, {"R32G32_Float", 8, 2, false, false, false, true } },
     { ERHIFormat::R32G32B32A32_Float, {"R32G32B32A32_Float",16,4, false, false, false, true } },
     { ERHIFormat::D24_UNorm_S8_UInt, {"D24_UNorm_S8_UInt", 4, 2, true, true, false, false} },

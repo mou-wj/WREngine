@@ -12,6 +12,18 @@
 
 Registry 只保存名字、规范化路径和类型，不拥有实际资源。NormalizePath 使用 absolute + lexically_normal + generic_string，不解析文件系统符号链接，也不是大小写无关的资源 GUID；不同文本是否对应同一实际文件，不能单凭“规范化”名称保证。
 
+## 虚拟几何的 RHI 资源生命周期
+
+[StaticMeshRenderData](../../../src/Framework/Engine/PublicHeader/StaticMeshResources.h) 以值成员 VirtualGeometryData 持有 [VirtualGeometryResource](../../../src/Framework/Engine/PublicHeader/VirtualGeometryResource.h)，与传统 LODResources 并存。不会在导入、工程加载或创建基础几何时自动构建虚拟几何，也不改变传统 VertexFactory/绘制路径。显式使用顺序为 `data->VirtualGeometryData.Build(mesh)`，再调用 `InitializeResources()`；构建算法见 [CPU 虚拟几何](../algorithm/10-virtual-geometry-cpu-build.md)。
+
+InitializeResources 在已有 RHI 设备下同步创建 11 类 RenderBuffer：位置、法线、切线、UV、颜色、局部索引、Cluster、Group、Child/Parent Cluster 索引和 Root Group 索引。空数组不分配缓冲，未构建的资源可无设备空初始化。各缓冲支持 Structured/SRV 和 TransferDst/TransferSrc，顶点及索引额外带对应用途；Stride 使用真实元素 sizeof，Core::Float4 的对齐和结构体填充也包含在上传字节中。Cluster/Group 是当前 C++ 结构布局的完整快照，不是已约定的 Shader ABI、压缩格式或磁盘格式；后续 Shader 消费必须明确匹配字段偏移和步长。
+
+创建先保存在局部独占缓冲数组中，全部创建、上传成功后才发布到成员，失败由局部对象自然释放，不使用 try/catch，也不会发布一半新缓冲。重初始化失败时旧成员缓冲保持原状；调用方在修改 CPU 数据后不能继续把旧缓冲当作新数据。UploadData 的字节数接口是 uint32_t，因此单缓冲超过其可表达范围会明确报错。UploadData 和 TransitionBufferImmediate 复用既有命令提交、WaitValue、访问状态及最后访问 Fence 更新，结束状态为 Graphics 队列 SRV；没有新增 WaitIdle。此实现同步上传，提交次数随非空数组数量增加，尚无批量上传优化。
+
+ReleaseResources 清理各缓冲的 ViewCache、调用 ReleaseRHIResource 并销毁包装对象，保留 CPU 数据，可重复调用并再次初始化。Clear 先释放 GPU，再清 CPU 数组与 Bounds，Build 通过 Clear 使旧 GPU 数据失效。独占指针使 VirtualGeometryResource 不可复制、可移动。所有者析构时缓冲也随成员释放，禁止在 RHI 设备关闭后仍保留这些对象。初始化、释放、Clear、Build 须串行执行。释放、重新上传或重建前，调用方必须通过现有队列/Fence 完成所有旧 GPU 使用。实际读取命令须声明访问并维护完成点。现有 [Visibility Raster](../algorithm/11-virtual-geometry-visibility.md) 通过 RDG 的外部 Buffer 注册及 VertexOrIndexBuffer 访问意向，将位置和索引纳入转换与提交 Fence 更新。
+
+验证入口 `Tests.exe -test=VirtualGeometryResourceRHITest -rhi=Vulkan|DirectX12|OpenGL` 核对 GPU 逐字节读回、Stride/Size、SRV 访问记录、重复初始化、释放保留 CPU、重复释放及 Clear。CPU 构建回归仍用 VirtualGeometryBuildTest 和 VirtualGeometryInvalidInput0 至 7；实际结果见 [2026-11-12 记录](../../dev/bugfix/故障与修复记录-2026-11-12.md)。
+
 ## LoadSync 的锁边界
 
 1. 锁内检查 stopping，查 weak loaded；命中后验证动态类型并重新驻留。
