@@ -68,6 +68,8 @@
 
 ## 如何阅读和核查
 
+模块功能使用约定按需查阅 Doc/specification。Virtual Geometry 的独立场景构图入口、SceneDepth/GBuffer 要求及当前限制见 [renderer_spec](../specification/renderer_spec.md#virtual-geometry-场景绘制入口)，具体算法仍由上述核心实现专题说明。
+
 先读对应架构文档，再沿专题“源码入口 → 数据/公式 → 执行步骤 → 约束/限制 → 验证入口”查看。文档中的源码链接为相对仓库路径，关键函数名称供 IDE 搜索；不将易变行号当成永久定位方式。
 
 [源码覆盖清单](source-coverage.md) 记录本次全量文件枚举和归类。范围包括自有 `src`、全部 `shaders`、构建脚本与现有文档；第三方 `deps`、生成文件、构建产物、二进制资产和 `temp` 中实验不作为自有实现逐项讲解。引用第三方的接口边界会记录，但不声称审计了 DXC、SPIRV-Cross、ImGui、tinygltf 或图形驱动内部算法。

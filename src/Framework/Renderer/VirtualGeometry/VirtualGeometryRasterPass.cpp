@@ -209,9 +209,10 @@ namespace Renderer
         };
     } // namespace
 
-    std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPass(
+    static std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPassInternal(
         RenderGraphBuilder& builder, const Engine::SceneView& view,
-        const std::vector<VirtualGeometryInstance>& instances, uint32_t width, uint32_t height)
+        const std::vector<VirtualGeometryInstance>& instances, uint32_t width, uint32_t height,
+        RenderGraphTextureRef sceneDepth)
     {
         if (!width || !height || view.Viewport.X < 0 || view.Viewport.Y < 0 || view.Viewport.Width <= 0 ||
             view.Viewport.Height <= 0 || uint64_t(view.Viewport.X) + uint64_t(view.Viewport.Width) > width ||
@@ -236,7 +237,8 @@ namespace Renderer
         depth.Format = ERHIFormat::D32_Float;
         depth.Usage = ERHITextureCreateFlag::DepthStencil | ERHITextureCreateFlag::ShaderResource |
                       ERHITextureCreateFlag::TransferSrc;
-        output->VirtualGeometryDepthTexture = builder.CreateTexture(prefix + "VirtualGeometryDepthTexture", depth);
+        output->VirtualGeometryDepthTexture =
+            sceneDepth ? sceneDepth : builder.CreateTexture(prefix + "VirtualGeometryDepthTexture", depth);
 
         std::vector<RasterInstance> rasterInstances;
         for (const auto& instance : instances)
@@ -367,6 +369,31 @@ namespace Renderer
             });
         }
         return output;
+    }
+
+    std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPass(
+        RenderGraphBuilder& builder, const Engine::SceneView& view,
+        const std::vector<VirtualGeometryInstance>& instances, uint32_t width, uint32_t height)
+    {
+        return AddVirtualGeometryRasterPassInternal(builder, view, instances, width, height, nullptr);
+    }
+
+    std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPass(
+        RenderGraphBuilder& builder, const Engine::SceneView& view,
+        const std::vector<VirtualGeometryInstance>& instances, RenderGraphTextureRef sceneDepth)
+    {
+        if (!sceneDepth)
+        {
+            throw std::invalid_argument("Virtual geometry raster requires a scene depth target");
+        }
+        const auto& desc = sceneDepth->GetDesc();
+        if (desc.Format != ERHIFormat::D32_Float || desc.Type != ERHITextureType::Texture2D ||
+            desc.SampleCount != 1 || desc.ArraySize != 1 ||
+            !desc.Usage.HasAll(ERHITextureCreateFlag::DepthStencil | ERHITextureCreateFlag::ShaderResource))
+        {
+            throw std::invalid_argument("Virtual geometry scene depth requires shader-readable D32 depth usage");
+        }
+        return AddVirtualGeometryRasterPassInternal(builder, view, instances, desc.Width, desc.Height, sceneDepth);
     }
 
     void AddVirtualGeometryVisibilityDebugPass(RenderGraphBuilder& builder,

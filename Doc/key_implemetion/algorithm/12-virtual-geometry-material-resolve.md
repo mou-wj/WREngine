@@ -30,6 +30,8 @@ MaterialParametersHelper 已恢复直接调用 Sample 的原实现，不再使�
 
 独立 AddVirtualGeometryDeferredShadingPass 封装调用已有 AddStaticMeshDefferedShadingPass 执行直接光照，有环境贴图时再执行其 IBL 变体。调用方需要自行创建具有 UAV 用途的 GBuffer 和 SceneColor，Depth 使用 Raster 结果。当前这一光照封装要求视口覆盖完整输出目标，独立 Resolve 本身支持视口原点。主场景已恢复原有 GBuffer 用途与 SceneRenderer::Build 调用，不自动调用上述接口。此前对原光照 Dispatch 向上取整及 Shader 范围检查的修正仍保留。
 
+AddVirtualGeometryRender 将场景实例整理、使用调用方 SceneDepth 的 Raster 和本 Resolve 组合为单个构图入口，返回原 Visibility 输出。它不调用光照封装，也未恢复主场景集成；使用前提和当前采样限制见 [Renderer 使用约定](../../specification/renderer_spec.md#virtual-geometry-场景绘制入口)。
+
 Visibility、Depth、Metadata、属性和 Cluster 视图通过 Shader 参数声明 SRV，GBuffer 声明 UAV。既有 RDG 负责 Raster 到 Resolve、UAV 到光照 SRV 的依赖和屏障，以及实际提交处的 Fence 更新。实例和材质快照保持录制期引用，资源释放或重建仍需调用方完成已提交 GPU 使用。没有内部锁，构图与业务数据修改须串行。
 
 ## 验证入口与范围

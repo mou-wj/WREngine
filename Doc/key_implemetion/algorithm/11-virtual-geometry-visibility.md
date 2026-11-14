@@ -10,6 +10,8 @@
 
 2026-11-13 已回退 RenderModule 的 Virtual Geometry 分支及对应 SceneSetting 开关。主场景不再自动收集实例或调用这些 Pass，传统渲染流程保持原样。独立 Raster 和 Debug 的实现、资源初始化接口及验证入口继续保留。
 
+场景调用方也可通过独立的 AddVirtualGeometryRender 整理可见实例并组合 Raster 与 Resolve，参数及限制见 [Renderer 使用约定](../../specification/renderer_spec.md#virtual-geometry-场景绘制入口)。该入口仍未接入 RenderModule。
+
 ## 顶点输入与绘制范围
 
 VirtualGeometryVertexFactory 继承 RenderCore::VertexFactory，注册 VertexFactoryType，绑定整个 PositionBuffer。ATTRIBUTE0 使用 R32G32B32_Float，步长为 sizeof(Core::Float3)。位置转换由 [VertexFactory Shader](../../../shaders/vertexfactory/VirtualGeometryVertexFactory.sf) 完成，计算 `clip = ViewProjection × LocalToWorld × float4(position, 1)`。DrawID 通过 nointerpolation 的整数 varying 传递。
@@ -42,6 +44,8 @@ Raster 的 CPU 遍历复杂度为实例引用的 Cluster 总数，Draw 次数为
 ## RDG、所有权和完成点
 
 Clear 和 Raster 通过 RenderTargetBindingSlots 声明颜色、深度附件，Debug 声明 Visibility SRV、Metadata SRV 和输出附件。Metadata 使用现有 AddUploadBuffer 上传，空场景上传一条占位记录并令 DrawCount 为零。位置与索引注册为外部 Buffer，通过参数中的 RDG_BUFFER_ACCESS 声明 VertexOrIndexBuffer 访问。RDG 按名称缓存对象，资源名称采用 graph arena 中 Clear 参数的稳定地址作为本次调用前缀，并按几何资源地址区分位置/索引缓冲。跨视图及不同资源具有独立名称，同一实际 RHI Buffer 的再次注册由原外部表复用。框架现有分析及提交流程负责状态转换和最后访问 Fence 更新。
+
+Raster 保留按 width/height 创建深度的原接口，并增加接收 sceneDepth 的重载。后者检查单样本、单层 Texture2D、D32_Float 格式和深度/Shader 可读用途后，直接将该对象写入原有附件参数。Clear 仍覆盖完整目标，未增加深度复制或保留已有深度的混合路径。
 
 RDG_TEXTURE_ACCESS 和 RDG_BUFFER_ACCESS 的访问元数据由 Builder 解析到原有意向集合，Shader 源码生成和绑定会跳过这些成员。读回测试通过前者声明 TransferSrc。RDG 的只读状态发生改变时也必须生成屏障，例如 SRV 到 TransferSrc，以及 SRV 到 VertexOrIndexBuffer。声明相同读取权限才可以省略这类转换。
 

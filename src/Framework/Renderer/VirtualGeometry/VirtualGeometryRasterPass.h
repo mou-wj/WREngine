@@ -34,6 +34,10 @@ namespace Renderer
     RENDERER_API std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPass(
         RenderCore::RenderGraphBuilder& builder, const Engine::SceneView& view,
         const std::vector<VirtualGeometryInstance>& instances, uint32_t width, uint32_t height);
+    // Reuse and clear the caller's D32 scene depth instead of creating another depth texture.
+    RENDERER_API std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPass(
+        RenderCore::RenderGraphBuilder& builder, const Engine::SceneView& view,
+        const std::vector<VirtualGeometryInstance>& instances, RenderCore::RenderGraphTextureRef sceneDepth);
     RENDERER_API void AddVirtualGeometryVisibilityDebugPass(RenderCore::RenderGraphBuilder& builder,
                                                             const std::shared_ptr<VirtualGeometryRasterOutput>& output,
                                                             RenderCore::RenderGraphTextureRef target,
