@@ -54,7 +54,8 @@ namespace Renderer
     std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRender(
         RenderCore::RenderGraphBuilder& builder, Scene* scene, const Engine::SceneView& view,
         RenderCore::RenderGraphTextureRef sceneDepth, RenderCore::RenderGraphTextureRef gbufferA,
-        RenderCore::RenderGraphTextureRef gbufferB, RenderCore::RenderGraphTextureRef gbufferC, float targetPixelError)
+        RenderCore::RenderGraphTextureRef gbufferB, RenderCore::RenderGraphTextureRef gbufferC, float targetPixelError,
+        const VirtualGeometryRasterSettings& rasterSettings)
     {
         if (!scene || !sceneDepth || !gbufferA || !gbufferB || !gbufferC)
         {
@@ -85,7 +86,7 @@ namespace Renderer
             }
         }
         auto instances = BuildVirtualGeometryInstances(*scene, view, targetPixelError);
-        auto visibility = AddVirtualGeometryRasterPass(builder, view, instances, sceneDepth);
+        auto visibility = AddVirtualGeometryRasterPass(builder, view, instances, sceneDepth, rasterSettings);
         AddVirtualGeometryMaterialResolvePass(builder, view, visibility, gbufferA, gbufferB, gbufferC);
         return visibility;
     }

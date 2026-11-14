@@ -66,6 +66,7 @@
 | [TextureViewer 画布与预览](algorithm/09-texture-viewer-canvas.md) | 多图片如何居中、选中、拖动和围绕鼠标缩放，网格如何分级，Cube/Mip/数组层如何显示？ |
 | [CPU 虚拟几何构建](algorithm/10-virtual-geometry-cpu-build.md) | 拓扑分簇、组内 QEM、边界合法性、多对多 DAG、几何误差和有限终止怎样实现？ |
 | [Virtual Geometry CPU / GPU 动态 LOD](algorithm/13-virtual-geometry-lod-selection.md) | 如何投影误差、并行求值多对多 DAG Cut、视锥剔除并生成间接参数，怎样与 CPU 和 Raster/Resolve 对照？ |
+| [Virtual Geometry GPU 软件光栅化](algorithm/14-virtual-geometry-software-rasterization.md) | 如何按投影大小分流、用两阶段原子维持深度与 ID 一致，并合并硬件结果、统计和验证？ |
 
 ## 如何阅读和核查
 

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
+#include <cmath>
 
 using namespace RenderCore;
 using namespace RHI;
@@ -210,13 +211,14 @@ namespace Renderer
             uint32_t FirstDraw = 0;
             std::vector<uint32_t> Clusters;
             VirtualGeometryGPUSelection GPUSelection;
+            VirtualGeometryRasterRouting Routing;
         };
     } // namespace
 
     static std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPassInternal(
         RenderGraphBuilder& builder, const Engine::SceneView& view,
         const std::vector<VirtualGeometryInstance>& instances, uint32_t width, uint32_t height,
-        RenderGraphTextureRef sceneDepth)
+        RenderGraphTextureRef sceneDepth, const VirtualGeometryRasterSettings& settings)
     {
         if (!width || !height || view.Viewport.X < 0 || view.Viewport.Y < 0 || view.Viewport.Width <= 0 ||
             view.Viewport.Height <= 0 || uint64_t(view.Viewport.X) + uint64_t(view.Viewport.Width) > width ||
@@ -225,8 +227,19 @@ namespace Renderer
             throw std::invalid_argument("Invalid virtual geometry viewport");
         }
         auto output = std::make_shared<VirtualGeometryRasterOutput>();
+        const bool software = settings.Mode != EVirtualGeometryRasterMode::Hardware;
+        if (static_cast<uint32_t>(settings.Mode) > 2 || !std::isfinite(settings.SoftwareClusterPixels) ||
+            settings.SoftwareClusterPixels <= 0 || settings.SoftwareClusterPixels > 128 || uint64_t(width) * height > UINT32_MAX)
+        {
+            throw std::invalid_argument("Invalid virtual geometry software raster settings or target size");
+        }
+        if (software && (GRHIApi->GetPlatformInfo().RasterSubPixelBits < 4 || GRHIApi->GetPlatformInfo().RasterSubPixelBits > 8))
+        {
+            throw std::invalid_argument("Virtual geometry software raster requires reported 4 to 8 bit subpixel precision");
+        }
         output->Instances = instances;
         output->GPUSelections.resize(instances.size());
+        output->RasterRouting.resize(instances.size());
         // Graph-owned parameters remain unique until execution completes, including across views.
         auto* clearParams = builder.AllocateParameter<VirtualGeometryRasterParameters>();
         const auto prefix = "VirtualGeometry." + std::to_string(reinterpret_cast<uintptr_t>(clearParams)) + ".";
@@ -244,10 +257,18 @@ namespace Renderer
                       ERHITextureCreateFlag::TransferSrc;
         output->VirtualGeometryDepthTexture =
             sceneDepth ? sceneDepth : builder.CreateTexture(prefix + "VirtualGeometryDepthTexture", depth);
+        auto hardwareVisibility = software ? builder.CreateTexture(prefix + "HardwareVisibility", visibility) :
+                                             output->VirtualGeometryVisibilityTexture;
+        auto hardwareDepth = software ? builder.CreateTexture(prefix + "HardwareDepth", depth) :
+                                       output->VirtualGeometryDepthTexture;
 
         std::vector<RasterInstance> rasterInstances;
         for (const auto& instance : instances)
         {
+            if (software && (!instance.bGPUSelection || instance.bInspectGeneratedLevel))
+            {
+                throw std::invalid_argument("Software raster requires GPU DAG selection, not generated-level inspection");
+            }
             if (!instance.RenderData)
             {
                 throw std::invalid_argument("Virtual geometry instance has no render data");
@@ -272,6 +293,12 @@ namespace Renderer
                 selection = AddVirtualGeometryGPUSelectionPass(builder, geometry, instance.LocalToWorld, view,
                                                                instance.TargetPixelError, instance.bFrustumCulling);
                 output->GPUSelections[rasterInstances.size() - 1] = selection;
+                if (software)
+                {
+                    auto& routing = rasterInstances.back().Routing;
+                    routing = AddVirtualGeometryRasterRouting(builder, geometry, selection, instance.LocalToWorld, view, settings);
+                    output->RasterRouting[rasterInstances.size() - 1] = routing;
+                }
                 // Stable DrawIDs for all candidates; GPU rejects draws by writing an index count of zero.
                 for (uint32_t c = 0; c < geometry.Clusters.size(); ++c)
                 {
@@ -310,6 +337,10 @@ namespace Renderer
             }
         }
 
+        if (software && output->Draws.size() > 0x01ffffffu)
+        {
+            throw std::invalid_argument("Software visibility exceeds its 25-bit DrawID and 7-bit triangle range");
+        }
         RenderGraphBufferDesc metadataDesc;
         metadataDesc.Size = std::max<size_t>(1, output->Draws.size()) * sizeof(VirtualGeometryDrawMetadata);
         metadataDesc.Stride = sizeof(VirtualGeometryDrawMetadata);
@@ -334,9 +365,9 @@ namespace Renderer
         auto emptyState = RHIPipelineStateCache::GetOrCreateVertexDescState({});
         auto clearPipeline = Pipeline(clearVS, clearPS, emptyState, visibility.Format, true, true);
         clearParams->Targets.NumColorRenderTargets = 1;
-        clearParams->Targets[0].Texture = output->VirtualGeometryVisibilityTexture;
+        clearParams->Targets[0].Texture = hardwareVisibility;
         clearParams->Targets[0].Action = ERenderTargetActions::DontCare_Store;
-        clearParams->Targets.DepthStencil.Texture = output->VirtualGeometryDepthTexture;
+        clearParams->Targets.DepthStencil.Texture = hardwareDepth;
         builder.AddPass("VirtualGeometryVisibilityClear", VirtualGeometryRasterParameters::GetMetaData(), clearParams,
                         EPassFlag::Graphic, [=](RHICommandListBase& list)
         {
@@ -368,7 +399,7 @@ namespace Renderer
             auto indices = builder.RegisterExternalBuffer(resourceName + ".Indices", geometry.IndexBuffer.get());
             params->Positions = positions;
             params->Indices = indices;
-            params->Arguments = raster.GPUSelection.IndirectArguments;
+            params->Arguments = software ? raster.Routing.HardwareArguments : raster.GPUSelection.IndirectArguments;
             builder.AddPass("VirtualGeometryRasterPass", VirtualGeometryRasterParameters::GetMetaData(),
                                          params, EPassFlag::Graphic, [=](RHICommandListBase& list)
             {
@@ -376,9 +407,10 @@ namespace Renderer
                 const auto& data = raster.Instance.RenderData->VirtualGeometryData;
                 cmd.SetGraphicPipelineState(pipeline);
                 raster.Factory->Bind(cmd);
+                cmd.BeginRenderPass(RenderPass(params->Targets, width, height));
+                // BeginRenderPass establishes backend defaults; apply the requested sub-view afterwards.
                 cmd.SetViewport(view.Viewport.X, view.Viewport.Y, view.Viewport.Width, view.Viewport.Height, 0, 1);
                 cmd.SetScissor(view.Viewport.X, view.Viewport.Y, view.Viewport.Width, view.Viewport.Height);
-                cmd.BeginRenderPass(RenderPass(params->Targets, width, height));
                 uint32_t draw = raster.FirstDraw;
                 for (const auto clusterIndex : raster.Clusters)
                 {
@@ -391,7 +423,7 @@ namespace Renderer
                     if (raster.GPUSelection.IndirectArguments)
                     {
                         cmd.DrawIndexedIndirect(data.IndexBuffer->GetRHI(),
-                            raster.GPUSelection.IndirectArguments->GetRHIBuffer(),
+                            params->Arguments->GetRHIBuffer(),
                             uint64_t(clusterIndex) * sizeof(RHIDrawIndexedIndirectArguments));
                     }
                     else
@@ -403,19 +435,37 @@ namespace Renderer
                 cmd.EndRenderPass();
             });
         }
+        if (software)
+        {
+            const auto targets = AddVirtualGeometrySoftwareClear(builder, {int(width), int(height)});
+            output->SoftwareTargets = targets;
+            // Finish every instance's depth reduction before ANY instance resolves the winning visibility ID.
+            for (const bool writeVisibility : {false, true})
+            {
+                for (const auto& raster : rasterInstances)
+                {
+                    AddVirtualGeometrySoftwareRaster(builder, raster.Instance.RenderData->VirtualGeometryData,
+                        raster.Routing, targets, raster.Instance.LocalToWorld, view, raster.FirstDraw, writeVisibility);
+                }
+            }
+            AddVirtualGeometryRasterMerge(builder, view, targets, hardwareVisibility, hardwareDepth,
+                output->VirtualGeometryVisibilityTexture, output->VirtualGeometryDepthTexture);
+        }
         return output;
     }
 
     std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPass(
         RenderGraphBuilder& builder, const Engine::SceneView& view,
-        const std::vector<VirtualGeometryInstance>& instances, uint32_t width, uint32_t height)
+        const std::vector<VirtualGeometryInstance>& instances, uint32_t width, uint32_t height,
+        const VirtualGeometryRasterSettings& settings)
     {
-        return AddVirtualGeometryRasterPassInternal(builder, view, instances, width, height, nullptr);
+        return AddVirtualGeometryRasterPassInternal(builder, view, instances, width, height, nullptr, settings);
     }
 
     std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPass(
         RenderGraphBuilder& builder, const Engine::SceneView& view,
-        const std::vector<VirtualGeometryInstance>& instances, RenderGraphTextureRef sceneDepth)
+        const std::vector<VirtualGeometryInstance>& instances, RenderGraphTextureRef sceneDepth,
+        const VirtualGeometryRasterSettings& settings)
     {
         if (!sceneDepth)
         {
@@ -428,7 +478,7 @@ namespace Renderer
         {
             throw std::invalid_argument("Virtual geometry scene depth requires shader-readable D32 depth usage");
         }
-        return AddVirtualGeometryRasterPassInternal(builder, view, instances, desc.Width, desc.Height, sceneDepth);
+        return AddVirtualGeometryRasterPassInternal(builder, view, instances, desc.Width, desc.Height, sceneDepth, settings);
     }
 
     void AddVirtualGeometryVisibilityDebugPass(RenderGraphBuilder& builder,

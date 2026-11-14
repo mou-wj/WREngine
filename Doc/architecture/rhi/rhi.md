@@ -47,6 +47,8 @@ public:
 - 分发命令、获取队列和同步对象
 - 处理资源转换和临时资源管理
 
+`GetPlatformInfo()` 的 `RasterSubPixelBits` 报告原生光栅化屏幕坐标的子像素精度位数，0 表示未报告。Vulkan 在 Device 的属性查询中缓存，DirectX12 使用规定的 8 位，OpenGL 在自身 context worker 查询。上层软件光栅化用它匹配覆盖设置，不因此改变 RHI 的资源或命令体系；使用限制见 [软件光栅专题](../../key_implemetion/algorithm/14-virtual-geometry-software-rasterization.md)。
+
 也就是说，`RHIApi` 是整个 RHI 模块的“统一驱动接口”。
 
 ---

@@ -74,6 +74,12 @@ GPU Group 批次之间依靠 UAV→UAV 屏障；参数生成到绘制依靠 UAV�
 
 GPU Cut、紧凑列表、固定参数槽与实际开销见 [LOD 算法](../algorithm/13-virtual-geometry-lod-selection.md#gpu-依赖求值与完整-cut)。间接绘制使 GPU 决定是否产生几何，但当前 CPU 仍录制每个候选的一条命令，不能据此声称已经消除 CPU Draw 录制成本。
 
+### 软件光栅两阶段依赖与诊断计时
+
+VG 的软件深度和 ID 是本次图内的两个 uint Buffer：先完成所有实例的 DepthCS UAV 原子最小值，再由 VisibilityCS 只读深度、原子写 ID，最后 Merge 读取二者并写最终颜色/深度附件。参数 SRV/UAV 及附件声明让原 RDG 建立写后读/写屏障和队列依赖，不通过 CPU 每阶段等待或 WaitIdle 实现。中间 Buffer 和硬件附件来自原 transient 分配器，外部几何及最终预览纹理继续在实际提交/采样处更新 Fence；数学、内存成本及 ID 一致性证明见 [软件光栅专题](../algorithm/14-virtual-geometry-software-rasterization.md)。
+
+Viewer 的 Measure completed frame 是显式诊断：先沿已有资源 Fence 排除上一帧，再从构图前开始计时，Execute 后等待当前颜色最后访问 Fence。正常帧不因新增计时而等待，Capture 读回和计时分到两帧执行，避免把统计复制混入计时。数值包括 CPU 构图、录制、提交及队列完成等待，不是各 Pass 的 GPU timestamp，也不是纯 GPU 光栅时间。Vulkan/D3D12 等待原生 Fence；OpenGL 的现有 WaitValue 只保证 worker 执行结束，不能将其数值称作 GPU 完成时间，界面明确提示该区别。没有为计时增加 glFinish、查询池、跨帧保活或 RHI 同步新体系。
+
 ## 修改前必须检查
 
 同队列 FIFO、跨队列等待、worker 可达性、命令使用的原始资源所有者，以及资源重新录制/复用的时间点。CPU mutex、GPU barrier、queue wait 和对象引用计数分别解决不同问题，不能互相替代。

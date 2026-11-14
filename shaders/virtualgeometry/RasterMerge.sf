@@ -1,0 +1,33 @@
+#include "/Generated/ShaderParameters/VirtualGeometryRasterMergeParameters.sf"
+
+float4 MainVS(uint vertex : SV_VertexID) : SV_Position
+{
+    float2 position = float2((vertex << 1) & 2, vertex & 2);
+    return float4(position * 2 - 1, 0, 1);
+}
+
+struct MergeOutput
+{
+    uint2 Visibility : SV_Target0;
+    float Depth : SV_Depth;
+};
+
+MergeOutput MainPS(float4 position : SV_Position)
+{
+    uint2 pixel = uint2(position.xy);
+    uint address = pixel.y * uint(MergeTargetSize.x) + pixel.x;
+    uint2 hardware = HardwareVisibility.Load(int3(pixel, 0));
+    float hardwareDepth = HardwareDepth.Load(int3(pixel, 0));
+    uint software = MergeSoftwareVisibility[address];
+    float softwareDepth = asfloat(MergeSoftwareDepth[address]);
+    bool valid = software != 0xffffffffu;
+    uint2 softwareID = uint2(software >> 7, software & 127u);
+    // Exact depth comparison; ties use the same ascending DrawID/PrimitiveID order as hardware submission.
+    bool earlier = hardware.x == 0xffffffffu || softwareID.x < hardware.x ||
+                   (softwareID.x == hardware.x && softwareID.y < hardware.y);
+    bool chooseSoftware = valid && (softwareDepth < hardwareDepth || (softwareDepth == hardwareDepth && earlier));
+    MergeOutput output;
+    output.Visibility = chooseSoftware ? softwareID : hardware;
+    output.Depth = chooseSoftware ? softwareDepth : hardwareDepth;
+    return output;
+}

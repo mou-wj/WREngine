@@ -1,0 +1,12 @@
+#include "/Generated/ShaderParameters/VirtualGeometrySoftwareClearParameters.sf"
+
+[numthreads(64, 1, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint pixel = thread.x + thread.y * (65535u * 64u);
+    if (pixel < uint(SoftwareTargetSize.x) * uint(SoftwareTargetSize.y))
+    {
+        SoftwareDepth[pixel].Value = asuint(1.0f);
+        SoftwareVisibility[pixel].Value = 0xffffffffu;
+    }
+}

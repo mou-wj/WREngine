@@ -39,7 +39,9 @@ Draw Metadata 使用 Shader 参数元数据宏声明四个 uint32，依次为 In
 
 [Debug Shader](../../../shaders/virtualgeometry/Debug.sf) 使用 Texture.Load 读取屏幕位置的整数 Visibility，对合法 DrawID 查 StructuredBuffer 中的 ClusterID。颜色散列为 `h = (ClusterID + 1) × 1664525 + 1013904223`，取低三个字节并映射到 0.2 至 1.0 的 RGB 区间。背景为 0.025 灰色，Alpha 为 1。最终使用全屏图形 Pass 写入目标 RenderTarget。
 
-Raster 的 CPU 选择复杂度为每实例 O(Cluster+Group+引用数)，Draw 次数为选中 Cluster 数。Metadata 内存为 Draw 数乘元素步长，Visibility 和深度分别需要每像素 8 和 4 字节，另有 Debug 颜色目标。硬件负责三角形覆盖、插值与深度比较。CPU 动态 LOD 和后续材质 Resolve 已实现，仍使用普通 Vertex Input 和 DrawIndexed；GPU Culling、间接命令、软件光栅及 Streaming 尚未实现。
+Raster 的 CPU 选择复杂度为每实例 O(Cluster+Group+引用数)，Draw 次数为选中 Cluster 数。Metadata 内存为 Draw 数乘元素步长，Visibility 和深度分别需要每像素 8 和 4 字节，另有 Debug 颜色目标。CPU 参考仍使用普通 Vertex Input 和 DrawIndexed。GPU 模式使用全部候选的稳定 Metadata、GPU DAG 选择/视锥剔除和固定槽间接参数，详见 [LOD 选择](13-virtual-geometry-lod-selection.md)；候选数不等于实际选择数。
+
+Raster 的可选 VirtualGeometryRasterSettings 默认 Hardware；Hybrid/SoftwarePreferred 在 GPU 选择后按投影尺寸分流，Compute 两次覆盖分别归约深度和获胜 ID，再与硬件中间附件合并为相同的 uint2/D32 输出。原 Debug、Material Resolve 和 GBuffer 不改变 ID 协议。覆盖规则、边界回退、内存及精度限制见 [软件光栅专题](14-virtual-geometry-software-rasterization.md)。Streaming 仍未实现。
 
 ## RDG、所有权和完成点
 

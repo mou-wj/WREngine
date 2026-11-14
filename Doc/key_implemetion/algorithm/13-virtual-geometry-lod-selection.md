@@ -136,11 +136,11 @@ VertexFactory 不承担选择职责；仍绑定完整 PositionBuffer，每个选
 
 AddVirtualGeometryRender 的 targetPixelError 默认 1，现为所整理实例开启 GPU 选择和视锥剔除。独立 Raster 的 bGPUSelection 默认 false，保留显式 CPU 参考用法；设置 true 即使用 Compute+间接绘制，bFrustumCulling 控制其剔除。VirtualGeometryViewer 默认 GPU 动态模式，统计与列表需通过 Capture GPU 获取一次快照；CPU 模式直接显示当前选择。Generated level 只在关闭 Dynamic LOD 时检查生成产物，bInspectGeneratedLevel 优先于 GPU 模式，不是合法 Cut 模式。
 
-GPU 使用相同的完整替换序列和 Build 边界契约，因而不额外破坏混合层边界。它没有新增边界修复算法，现有输入缺口和采样误差限制仍然适用。
+GPU 使用相同的完整替换序列和 Build 边界契约，因而不额外破坏混合层边界。它没有新增边界修复算法，现有输入缺口和采样误差限制仍然适用。后续可选的 [软件光栅化](14-virtual-geometry-software-rasterization.md) 只对可见 Cut 分类，保持 selection 的原始全量间接参数不变，另外生成硬件参数与软件标记，不改变 DAG 的替换关系。
 
 ## 复杂度、验证与限制
 
-设 C 为全部 Cluster 数、G 为 Group 数、E 为 Child/Parent 引用总数。CPU 参考每实例验证和选择时间 O(C+G+E)，临时内存 O(C+G)。GPU 路径 CPU 验证/调度仍为 O(C+G+E)；GPU 工作量 O(C+G+Child引用数)，Dispatch 数为依赖深度+1。Selection 数据为约 28C+8G+16 字节，另有既有资源、候选 Metadata 和图参数，不包含 Viewer 线框索引。CPU 仍录制 O(C) 间接绘制；Resolve 为每个候选扫描视口，实际成本可能高于仅选择后提交的 CPU 模式，未做性能收益保证。没有 Indirect Count、批量 MultiDraw、遮挡剔除、滞回、Software Rasterization 或 Streaming。
+设 C 为全部 Cluster 数、G 为 Group 数、E 为 Child/Parent 引用总数。CPU 参考每实例验证和选择时间 O(C+G+E)，临时内存 O(C+G)。GPU 路径 CPU 验证/调度仍为 O(C+G+E)；GPU 工作量 O(C+G+Child引用数)，Dispatch 数为依赖深度+1。Selection 数据为约 28C+8G+16 字节，另有既有资源、候选 Metadata 和图参数，不包含 Viewer 线框索引。CPU 仍录制 O(C) 间接绘制；Resolve 为每个候选扫描视口，实际成本可能高于仅选择后提交的 CPU 模式，未做性能收益保证。没有 Indirect Count、批量 MultiDraw、遮挡剔除、滞回或 Streaming；软件光栅的独立后续成本见上述专题。
 
 - [VirtualGeometryLODSelectionTest](../../../src/Tests/VirtualGeometryLODSelectionTest.cpp)：手工跨组 DAG 的精确预期 Cut、多根和停滞叶、正交/透视、分辨率/投影放大、镜像/非均匀缩放/剪切、近面处理；真实 576 面曲面的阈值序列、逆向整组还原为全部叶的独立合法性检查，以及全 Cut 有向边界一致性。全程不初始化 RHI。
 - 同文件注册 VirtualGeometryLODInvalidInput0～7，分别检查负预算、无效根、重复 Child、越界范围、循环关系、非法 Metric、非仿射变换和零尺寸视口。通过原有 main 捕获异常，不能将任意失败退出视为预期通过。

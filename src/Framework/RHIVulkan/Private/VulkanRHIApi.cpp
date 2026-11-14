@@ -142,6 +142,7 @@ bool VulkanRHIApi::Init()
 		return false;
 	}
 	m_Device = device;
+	m_PlatformInfo.RasterSubPixelBits = m_Device->GetRasterSubPixelBits();
 	// 1. 确定头大小
 	uint32_t headerSize = sizeof(RHITransition);
 

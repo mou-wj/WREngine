@@ -16,7 +16,8 @@ namespace Editor
         void SetMesh(const std::shared_ptr<Engine::StaticMeshAsset>& asset);
         void Render(Core::Int2 size, uint32_t mipLevel, bool material, float yaw, float pitch, float distance,
                     bool dynamicLOD = true, float targetPixelError = 1.0f, bool wireframe = false,
-                    bool gpuSelection = false, bool frustumCulling = true, bool captureGPU = false);
+                    bool gpuSelection = false, bool frustumCulling = true, bool captureGPU = false,
+                    uint32_t rasterMode = 0, float softwareClusterPixels = 32, bool measureFrame = false);
         void Reset();
         RenderCore::RenderTexture* GetTexture() const { return m_Color.get(); }
         const Engine::VirtualGeometryResource* GetGeometry() const;
@@ -24,6 +25,8 @@ namespace Editor
         const std::array<uint32_t, 4>& GetGPUStatistics() const { return m_GPUStatistics; }
         uint32_t GetCutDifferenceCount() const { return m_CutDifferenceCount; }
         bool HasGPUCapture() const { return m_bGPUCapture; }
+        const std::array<uint32_t, 4>& GetRasterStatistics() const { return m_RasterStatistics; }
+        double GetCompletedFrameMilliseconds() const { return m_CompletedFrameMilliseconds; }
     private:
         void WaitForLastDraw();
         std::shared_ptr<Engine::StaticMeshAsset> m_Asset;
@@ -36,5 +39,7 @@ namespace Editor
         std::array<uint32_t, 4> m_GPUStatistics{};
         uint32_t m_CutDifferenceCount = 0;
         bool m_bGPUCapture = false;
+        std::array<uint32_t, 4> m_RasterStatistics{};
+        double m_CompletedFrameMilliseconds = 0;
     };
 }

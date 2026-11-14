@@ -1,12 +1,12 @@
 # 源码检索与文档覆盖清单
 
-更新日期：2026-11-15；基于 `dcfccdf` 及 GPU DAG 选择、视锥剔除、RHI 索引间接绘制和 Viewer GPU 调试的工作区实现。首次整理基线为 `04f910d`。本清单来自文件枚举、文本关键词检索及专题调用链核对，本次仅增补相关新增文件和变化记录；不是逐行正确性审计，也不是运行验证。每行列出的专题是阅读入口，不保证已解释该文件的每个辅助函数。
+更新日期：2026-11-15；基于 `4008c6c` 及 GPU 软件光栅、软硬件合并、Viewer 路由统计和完成帧诊断的工作区实现。首次整理基线为 `04f910d`。本清单来自文件枚举、文本关键词检索及专题调用链核对，本次仅增补相关新增文件和变化记录；不是逐行正确性审计，也不是运行验证。每行列出的专题是阅读入口，不保证已解释该文件的每个辅助函数。
 
 范围：自有 src、全部 Shader、CMake/BuildDeps、依赖元信息和 VS Code 配置。extern/glad 是外部生成 loader；deps、构建目录、生成文件、二进制资源、validation 产物、temp 实验不逐项展开。外部库的使用边界见工程专题，驱动和第三方算法不冒充自有实现。
 
 检索标记：并发=线程/锁/任务/完成点；内存=分配/回收/临时工作区；算法=几何/数学/空间查询；渲染=Shader/管线/绘制。标记只是命中，不是已确认问题；未命中不代表没有核心语义。
 
-本次清单共 **492 个文件、90755 行**；文件数包含接口、配置和构建声明。原始逐文件内容 hash 与关键词计数仅保存在忽略目录 `out/diagnostics/key-implementation-source-scan.json`，正式阅读以本清单和源码链接为准。
+本次清单共 **499 个文件、92073 行**；文件数包含接口、配置和构建声明。原始逐文件内容 hash 与关键词计数仅保存在忽略目录 `out/diagnostics/key-implementation-source-scan.json`，正式阅读以本清单和源码链接为准。
 
 ## 现有 architecture 的补充关系
 
@@ -59,7 +59,7 @@
 | [config/3rds/tinygltf.json](../../config/3rds/tinygltf.json) | 41 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [config/3rds/vulkan.json](../../config/3rds/vulkan.json) | 39 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## shaders（53 个文件）
+## shaders（57 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -116,6 +116,10 @@
 | [shaders/editor/VirtualGeometryWireframe.sf](../../shaders/editor/VirtualGeometryWireframe.sf) | 15 | 渲染 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [shaders/editor/VirtualGeometryWireframeArguments.sf](../../shaders/editor/VirtualGeometryWireframeArguments.sf) | 17 | 渲染 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 | [shaders/virtualgeometry/GPUSelection.sf](../../shaders/virtualgeometry/GPUSelection.sf) | 122 | 算法/渲染 | [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
+| [shaders/virtualgeometry/RasterMerge.sf](../../shaders/virtualgeometry/RasterMerge.sf) | 33 | 渲染 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
+| [shaders/virtualgeometry/RasterRouting.sf](../../shaders/virtualgeometry/RasterRouting.sf) | 67 | 渲染 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
+| [shaders/virtualgeometry/SoftwareClear.sf](../../shaders/virtualgeometry/SoftwareClear.sf) | 12 | 渲染 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
+| [shaders/virtualgeometry/SoftwareRaster.sf](../../shaders/virtualgeometry/SoftwareRaster.sf) | 133 | 渲染 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 
 ## src/Application（13 个文件）
 
@@ -191,11 +195,11 @@
 | [src/Editor/AssetEditor/Private/EditorAssetFileOperations.cpp](../../src/Editor/AssetEditor/Private/EditorAssetFileOperations.cpp) | 238 | 接口/配置/基础辅助 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 
 | [src/Editor/VirtualGeometryViewer/CMakeLists.txt](../../src/Editor/VirtualGeometryViewer/CMakeLists.txt) | 9 | 接口/配置 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) |
-| [src/Editor/VirtualGeometryViewer/Private/EditorVirtualGeometryViewer.cpp](../../src/Editor/VirtualGeometryViewer/Private/EditorVirtualGeometryViewer.cpp) | 259 | 渲染 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.cpp](../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.cpp) | 514 | 并发、内存、算法、渲染 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
-| [src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.h](../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.h) | 40 | 内存、接口 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Editor/VirtualGeometryViewer/Private/EditorVirtualGeometryViewer.cpp](../../src/Editor/VirtualGeometryViewer/Private/EditorVirtualGeometryViewer.cpp) | 283 | 渲染 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.cpp](../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.cpp) | 559 | 并发、内存、算法、渲染 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
+| [src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.h](../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.h) | 45 | 内存、接口 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Editor/VirtualGeometryViewer/Private/VirtualGeometryViewerModule.cpp](../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryViewerModule.cpp) | 15 | 接口/配置 | [架构：editor](../architecture/app/editor.md) |
-| [src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h](../../src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h) | 54 | 接口/内存 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) |
+| [src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h](../../src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h) | 57 | 接口/内存 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) |
 
 ## src/Framework（1 个文件）
 
@@ -369,7 +373,7 @@
 | [src/Framework/RenderCore/PublicHeader/ToolShaders.h](../../src/Framework/RenderCore/PublicHeader/ToolShaders.h) | 58 | 渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Framework/RenderCore/PublicHeader/VertexFactory.h](../../src/Framework/RenderCore/PublicHeader/VertexFactory.h) | 195 | 渲染 | [08-mesh-import-and-geometry](algorithm/08-mesh-import-and-geometry.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 
-## src/Framework/Renderer（61 个文件）
+## src/Framework/Renderer（63 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -422,9 +426,9 @@
 | [src/Framework/Renderer/PublicHeader/RenderModule.h](../../src/Framework/Renderer/PublicHeader/RenderModule.h) | 34 | 接口/配置/基础辅助 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
 | [src/Framework/Renderer/PublicHeader/ScreenPass.h](../../src/Framework/Renderer/PublicHeader/ScreenPass.h) | 11 | 渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
 | [src/Framework/Renderer/PublicHeader/StaticMeshProcess.h](../../src/Framework/Renderer/PublicHeader/StaticMeshProcess.h) | 67 | 渲染 | [08-mesh-import-and-geometry](algorithm/08-mesh-import-and-geometry.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
-| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.cpp) | 466 | 渲染 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
-| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h) | 52 | 接口/配置/基础辅助 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
-| [src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.cpp) | 92 | 渲染 | [renderer_spec](../specification/renderer_spec.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.cpp) | 516 | 渲染 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h) | 57 | 接口/配置/基础辅助 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.cpp) | 93 | 渲染 | [renderer_spec](../specification/renderer_spec.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.h) | 18 | 接口/渲染 | [renderer_spec](../specification/renderer_spec.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryVertexFactory.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryVertexFactory.cpp) | 46 | 渲染 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryVertexFactory.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryVertexFactory.h) | 28 | 渲染 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
@@ -434,6 +438,8 @@
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.cpp) | 239 | 接口/算法 | [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryGPUSelection.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryGPUSelection.cpp) | 255 | 渲染 | [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryGPUSelection.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryGPUSelection.h) | 21 | 接口/配置/基础辅助 | [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeometrySoftwareRaster.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometrySoftwareRaster.cpp) | 290 | 渲染 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeometrySoftwareRaster.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometrySoftwareRaster.h) | 40 | 接口/配置/基础辅助 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 
 ## src/Framework/RHI（24 个文件）
 
@@ -450,7 +456,7 @@
 | [src/Framework/RHI/Private/RHITransition.cpp](../../src/Framework/RHI/Private/RHITransition.cpp) | 7 | 接口/配置/基础辅助 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHI/Private/RHIUtils.cpp](../../src/Framework/RHI/Private/RHIUtils.cpp) | 49 | 接口/配置/基础辅助 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
 | [src/Framework/RHI/Private/ShaderLibrary.cpp](../../src/Framework/RHI/Private/ShaderLibrary.cpp) | 0 | 接口/配置/基础辅助 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
-| [src/Framework/RHI/PublicHeader/RHIApi.h](../../src/Framework/RHI/PublicHeader/RHIApi.h) | 110 | 渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
+| [src/Framework/RHI/PublicHeader/RHIApi.h](../../src/Framework/RHI/PublicHeader/RHIApi.h) | 111 | 渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHI/PublicHeader/RHICaptureHelper.h](../../src/Framework/RHI/PublicHeader/RHICaptureHelper.h) | 47 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md)；[02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 | [src/Framework/RHI/PublicHeader/RHICommandContex.h](../../src/Framework/RHI/PublicHeader/RHICommandContex.h) | 204 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHI/PublicHeader/RHICommandList.h](../../src/Framework/RHI/PublicHeader/RHICommandList.h) | 322 | 渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
@@ -474,7 +480,7 @@
 | [src/Framework/RHIDirectX12/Private/DirectX12PipelineState.cpp](../../src/Framework/RHIDirectX12/Private/DirectX12PipelineState.cpp) | 424 | 渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) / [07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
 | [src/Framework/RHIDirectX12/Private/DirectX12Queue.cpp](../../src/Framework/RHIDirectX12/Private/DirectX12Queue.cpp) | 221 | 并发 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIDirectX12/Private/DirectX12Resource.cpp](../../src/Framework/RHIDirectX12/Private/DirectX12Resource.cpp) | 985 | 并发、内存、渲染 | [04-memory-and-transient-resources](performance/04-memory-and-transient-resources.md) / [07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
-| [src/Framework/RHIDirectX12/Private/DirectX12RHIApi.cpp](../../src/Framework/RHIDirectX12/Private/DirectX12RHIApi.cpp) | 581 | 并发、内存、算法、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
+| [src/Framework/RHIDirectX12/Private/DirectX12RHIApi.cpp](../../src/Framework/RHIDirectX12/Private/DirectX12RHIApi.cpp) | 582 | 并发、内存、算法、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIDirectX12/Private/DirectX12RHIUtils.cpp](../../src/Framework/RHIDirectX12/Private/DirectX12RHIUtils.cpp) | 514 | 内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
 | [src/Framework/RHIDirectX12/Private/DirectX12RHIUtils.h](../../src/Framework/RHIDirectX12/Private/DirectX12RHIUtils.h) | 105 | 内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIDirectX12/Private/DirectX12ShaderAccess.cpp](../../src/Framework/RHIDirectX12/Private/DirectX12ShaderAccess.cpp) | 117 | 渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
@@ -501,9 +507,9 @@
 | [src/Framework/RHIOpenGL/Private/OpenGLRenderTarget.cpp](../../src/Framework/RHIOpenGL/Private/OpenGLRenderTarget.cpp) | 137 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIOpenGL/Private/OpenGLRenderTarget.h](../../src/Framework/RHIOpenGL/Private/OpenGLRenderTarget.h) | 36 | 渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIOpenGL/Private/OpenGLResource.cpp](../../src/Framework/RHIOpenGL/Private/OpenGLResource.cpp) | 538 | 并发、内存、渲染 | [04-memory-and-transient-resources](performance/04-memory-and-transient-resources.md) / [10-project-snapshots](performance/10-project-snapshots.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
-| [src/Framework/RHIOpenGL/Private/OpenGLRHIApi.cpp](../../src/Framework/RHIOpenGL/Private/OpenGLRHIApi.cpp) | 424 | 并发、内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
+| [src/Framework/RHIOpenGL/Private/OpenGLRHIApi.cpp](../../src/Framework/RHIOpenGL/Private/OpenGLRHIApi.cpp) | 430 | 并发、内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
 | [src/Framework/RHIOpenGL/Private/OpenGLTransientResource.cpp](../../src/Framework/RHIOpenGL/Private/OpenGLTransientResource.cpp) | 53 | 并发 | [04-memory-and-transient-resources](performance/04-memory-and-transient-resources.md) |
-| [src/Framework/RHIOpenGL/Private/OpenGLUtils.cpp](../../src/Framework/RHIOpenGL/Private/OpenGLUtils.cpp) | 220 | 算法 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
+| [src/Framework/RHIOpenGL/Private/OpenGLUtils.cpp](../../src/Framework/RHIOpenGL/Private/OpenGLUtils.cpp) | 222 | 算法 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
 | [src/Framework/RHIOpenGL/PublicHeader/OpenGLContext.h](../../src/Framework/RHIOpenGL/PublicHeader/OpenGLContext.h) | 318 | 内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
 | [src/Framework/RHIOpenGL/PublicHeader/OpenGLPipelineState.h](../../src/Framework/RHIOpenGL/PublicHeader/OpenGLPipelineState.h) | 35 | 渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
 | [src/Framework/RHIOpenGL/PublicHeader/OpenGLQueue.h](../../src/Framework/RHIOpenGL/PublicHeader/OpenGLQueue.h) | 203 | 并发、内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
@@ -522,7 +528,7 @@
 | [src/Framework/RHIVulkan/Private/VulkanCommandBuffer.cpp](../../src/Framework/RHIVulkan/Private/VulkanCommandBuffer.cpp) | 215 | 内存 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/Private/VulkanContex.cpp](../../src/Framework/RHIVulkan/Private/VulkanContex.cpp) | 652 | 内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/Private/VulkanDescriptorSets.cpp](../../src/Framework/RHIVulkan/Private/VulkanDescriptorSets.cpp) | 309 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
-| [src/Framework/RHIVulkan/Private/VulkanDevice.cpp](../../src/Framework/RHIVulkan/Private/VulkanDevice.cpp) | 606 | 并发、内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
+| [src/Framework/RHIVulkan/Private/VulkanDevice.cpp](../../src/Framework/RHIVulkan/Private/VulkanDevice.cpp) | 607 | 并发、内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
 | [src/Framework/RHIVulkan/Private/VulkanFuncWrapper.cpp](../../src/Framework/RHIVulkan/Private/VulkanFuncWrapper.cpp) | 1065 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/Private/VulkanMemory.cpp](../../src/Framework/RHIVulkan/Private/VulkanMemory.cpp) | 350 | 并发、内存 | [04-memory-and-transient-resources](performance/04-memory-and-transient-resources.md) |
 | [src/Framework/RHIVulkan/Private/VulkanPendingPipelineState.cpp](../../src/Framework/RHIVulkan/Private/VulkanPendingPipelineState.cpp) | 110 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
@@ -531,7 +537,7 @@
 | [src/Framework/RHIVulkan/Private/VulkanQueue.cpp](../../src/Framework/RHIVulkan/Private/VulkanQueue.cpp) | 398 | 并发、内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/Private/VulkanRenderPass.cpp](../../src/Framework/RHIVulkan/Private/VulkanRenderPass.cpp) | 565 | 并发、内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/Private/VulkanResource.cpp](../../src/Framework/RHIVulkan/Private/VulkanResource.cpp) | 1619 | 内存、渲染 | [04-memory-and-transient-resources](performance/04-memory-and-transient-resources.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
-| [src/Framework/RHIVulkan/Private/VulkanRHIApi.cpp](../../src/Framework/RHIVulkan/Private/VulkanRHIApi.cpp) | 983 | 内存、算法、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
+| [src/Framework/RHIVulkan/Private/VulkanRHIApi.cpp](../../src/Framework/RHIVulkan/Private/VulkanRHIApi.cpp) | 984 | 内存、算法、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/Private/VulkanRHIUtils.cpp](../../src/Framework/RHIVulkan/Private/VulkanRHIUtils.cpp) | 444 | 算法、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
 | [src/Framework/RHIVulkan/Private/VulkanShader.cpp](../../src/Framework/RHIVulkan/Private/VulkanShader.cpp) | 46 | 渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
 | [src/Framework/RHIVulkan/Private/VulkanSwapchain.cpp](../../src/Framework/RHIVulkan/Private/VulkanSwapchain.cpp) | 244 | 渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
@@ -540,7 +546,7 @@
 | [src/Framework/RHIVulkan/PublicHeader/VulkanCommandBuffer.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanCommandBuffer.h) | 118 | 内存 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanCommandContex.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanCommandContex.h) | 256 | 渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanDescriptorSets.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanDescriptorSets.h) | 317 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
-| [src/Framework/RHIVulkan/PublicHeader/VulkanDevice.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanDevice.h) | 193 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
+| [src/Framework/RHIVulkan/PublicHeader/VulkanDevice.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanDevice.h) | 195 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanFuncWrapper.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanFuncWrapper.h) | 200 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanMemory.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanMemory.h) | 139 | 并发、内存 | [04-memory-and-transient-resources](performance/04-memory-and-transient-resources.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanPendingPipelineState.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanPendingPipelineState.h) | 1520 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
@@ -599,7 +605,7 @@
 | [src/Lancher/Loop.h](../../src/Lancher/Loop.h) | 8 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Lancher/main.cpp](../../src/Lancher/main.cpp) | 16 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## src/Tests（20 个文件）
+## src/Tests（21 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -623,6 +629,7 @@
 | [src/Tests/VirtualGeometryLODRenderTest.cpp](../../src/Tests/VirtualGeometryLODRenderTest.cpp) | 313 | 并发、内存、渲染 | [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
 | [src/Tests/VirtualGeometryGPULODRenderTest.cpp](../../src/Tests/VirtualGeometryGPULODRenderTest.cpp) | 327 | 并发/内存/渲染 | [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
 | [src/Tests/VirtualGeometryGPUSelectionTest.cpp](../../src/Tests/VirtualGeometryGPUSelectionTest.cpp) | 355 | 并发/内存/算法/渲染 | [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
+| [src/Tests/VirtualGeometrySoftwareRasterTest.cpp](../../src/Tests/VirtualGeometrySoftwareRasterTest.cpp) | 596 | 并发/内存/渲染 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 
 ## 后续维护
 

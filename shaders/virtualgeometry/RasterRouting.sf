@@ -1,0 +1,67 @@
+#include "/Generated/ShaderParameters/VirtualGeometryRasterRoutingParameters.sf"
+
+bool CanRasterizeSoftware(uint offset)
+{
+    if (RoutingClusters[offset + 1] > 384 || RoutingClusters[offset + 3] > 128)
+    {
+        return false;
+    }
+    float4 sphere = asfloat(uint4(RoutingClusters[offset + 14], RoutingClusters[offset + 15],
+                                  RoutingClusters[offset + 16], RoutingClusters[offset + 17]));
+    float4 clip = mul(RoutingLocalToClip, float4(sphere.xyz, 1));
+    float minimumW = clip.w - sphere.w * RoutingRowLengths.w;
+    if (minimumW <= 1e-6)
+    {
+        return false;
+    }
+    // Hardware retains every Cluster that may require clipping. No partially clipped software triangle is dropped.
+    [unroll]
+    for (uint axis = 0; axis < 3; ++axis)
+    {
+        float3 row = RoutingLocalToClip[axis].xyz, wrow = RoutingLocalToClip[3].xyz;
+        float lower = axis == 2 && NativeZeroToOne != 0 ? clip.z : clip.w + clip[axis];
+        float3 lowerNormal = axis == 2 && NativeZeroToOne != 0 ? row : wrow + row;
+        if (clip.w - clip[axis] <= sphere.w * length(wrow - row) + 1e-5 ||
+            lower <= sphere.w * length(lowerNormal) + 1e-5)
+        {
+            return false;
+        }
+    }
+    float2 diameter = sphere.w * (RoutingRowLengths.xy + abs(clip.xy / clip.w) * RoutingRowLengths.w) /
+                      minimumW * RoutingViewportSize;
+    // The hard 128-pixel bound keeps 8-bit subpixel edge products inside signed 32 bits.
+    float limit = RasterMode == 2 ? 128.0 : min(128.0, SoftwareClusterPixels);
+    return all(isfinite(diameter)) && all(diameter <= limit);
+}
+
+[numthreads(64, 1, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint cluster = thread.x + thread.y * (65535u * 64u);
+    if (cluster >= RoutingClusterCount)
+    {
+        return;
+    }
+    uint argument = cluster * 5;
+    bool visible = FullArguments[argument] != 0;
+    bool software = visible && RasterMode != 0 && CanRasterizeSoftware(cluster * VG_CLUSTER_WORDS);
+    RasterPaths[cluster].Value = visible ? (software ? 2u : 1u) : 0u;
+    [unroll]
+    for (uint i = 0; i < 5; ++i)
+    {
+        HardwareArguments[argument + i].Value = i == 0 && software ? 0 : FullArguments[argument + i];
+    }
+    uint unused;
+    if (visible)
+    {
+        InterlockedAdd(RoutingStatistics[software ? 1 : 0].Value, 1, unused);
+        if (software)
+        {
+            InterlockedAdd(RoutingStatistics[3].Value, FullArguments[argument] / 3, unused);
+        }
+        else if (RasterMode == 2)
+        {
+            InterlockedAdd(RoutingStatistics[2].Value, 1, unused);
+        }
+    }
+}

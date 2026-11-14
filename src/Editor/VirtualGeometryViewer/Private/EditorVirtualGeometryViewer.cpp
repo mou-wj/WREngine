@@ -74,8 +74,13 @@ namespace Editor
         {
             m_Preview->Render(m_PreviewSize, m_MipLevel, m_bMaterial, m_Yaw, m_Pitch, m_Distance,
                               m_bDynamicLOD, m_TargetPixelError, m_bWireframe,
-                              m_bGPUSelection, m_bFrustumCulling, m_bCaptureGPU);
-            m_bCaptureGPU = false;
+                              m_bGPUSelection, m_bFrustumCulling, m_bCaptureGPU && !m_bMeasureRasterFrame,
+                              static_cast<uint32_t>(m_RasterMode), m_SoftwareClusterPixels, m_bMeasureRasterFrame);
+            if (!m_bMeasureRasterFrame)
+            {
+                m_bCaptureGPU = false;
+            }
+            m_bMeasureRasterFrame = false;
         }
     }
 
@@ -134,6 +139,22 @@ namespace Editor
                 }
                 ImGui::EndDisabled();
                 ImGui::EndDisabled();
+                ImGui::BeginDisabled(!m_bGPUSelection || !m_bDynamicLOD);
+                ImGui::SetNextItemWidth(190);
+                ImGui::Combo("Raster path", &m_RasterMode, "Hardware\0Hybrid\0Software preferred\0");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(110);
+                ImGui::DragFloat("SW cluster pixels", &m_SoftwareClusterPixels, 1, 1, 128, "%.0f");
+                ImGui::SameLine();
+                if (ImGui::Button("Measure completed frame"))
+                {
+                    m_bMeasureRasterFrame = true;
+                }
+                ImGui::EndDisabled();
+                ImGui::TextDisabled("Software preferred keeps clipping/oversized Clusters on hardware. Hard limit: 128 px.");
+                ImGui::Text("Completed preview frame: %.3f ms (CPU + queue completion; on demand, not GPU timestamp)",
+                            m_Preview->GetCompletedFrameMilliseconds());
+                ImGui::TextDisabled("OpenGL queue completion measures worker execution, not GPU completion.");
                 if (m_bGPUSelection && m_bDynamicLOD)
                 {
                     if (m_Preview->HasGPUCapture())
@@ -141,6 +162,9 @@ namespace Editor
                         const auto& stats = m_Preview->GetGPUStatistics();
                         ImGui::Text("GPU snapshot: cut %u | visible %u | culled %u | triangles %u | CPU cut differences %u",
                             stats[0], stats[1], stats[2], stats[3], m_Preview->GetCutDifferenceCount());
+                        const auto& raster = m_Preview->GetRasterStatistics();
+                        ImGui::Text("Raster snapshot: hardware %u | software %u | forced hardware fallback %u | SW triangles %u",
+                                    raster[0], raster[1], raster[2], raster[3]);
                     }
                     ImGui::TextDisabled("GPU table is a captured snapshot; refresh after changing the camera or error budget.");
                 }

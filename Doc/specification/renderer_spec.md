@@ -13,6 +13,8 @@ auto visibility = Renderer::AddVirtualGeometryRender(
 
 `scene` 是 Renderer 的 Scene，提供对象查询和现有实例 ID 映射。`view` 提供视口、视锥及相机矩阵，Scene 本身不保存这些信息。附件参数均为调用方当前 RenderGraph 中的引用。最后的 targetPixelError 可省略，默认 1 像素；0 请求完整最细 Cut，负数和非有限值报错。独立 Raster 调用可在每个 VirtualGeometryInstance 上配置 TargetPixelError。
 
+targetPixelError 后可追加 `VirtualGeometryRasterSettings`，默认 Mode=Hardware 保持旧调用行为；Hybrid 按 SoftwareClusterPixels（默认 32，最大 128 像素）分流，SoftwarePreferred 将安全且不超过 128 像素的 Cluster 送入 Compute。软件模式要求 GPU selection，保留原 Metadata/Resolve，最终 Visibility 和传入 SceneDepth 的引用不变；内部额外建立硬件附件和两个软件 Buffer，Merge 后再执行 Resolve。低层输出的 RasterRouting/SoftwareTargets 仅供本次图内诊断，不能跨帧持有 transient 引用。回退、ID 限制、精度和成本见 [软件光栅化](../key_implemetion/algorithm/14-virtual-geometry-software-rasterization.md)。
+
 此入口仅编排 Visibility Raster 和 Material Resolve，写入 SceneDepth 与 GBuffer A/B/C。它不提交图、不创建交换链、不执行光照，也不在调用时构建或上传虚拟几何。返回值复用 `VirtualGeometryRasterOutput`，供调试显示、Metadata 检查或其他后续消费者使用。
 
 ### 调用前提与附件语义
@@ -44,7 +46,7 @@ MaterialParametersHelper 现支持显式 UV 梯度，Compute 使用 SampleGrad�
 
 [VirtualGeometryRenderTest](../../src/Tests/VirtualGeometryRenderTest.cpp) 通过 `Tests.exe -test=VirtualGeometryRenderTest -rhi=Vulkan` 运行，也可选择 DirectX12 或 OpenGL。它只验证空 Scene 经完整入口的组合行为，包括调用方深度复用、提交 Fence、无效 Visibility，以及非 8 倍数尺寸的深度与 GBuffer 清空读回，不覆盖非空场景实例收集和材质求值正确性。原 VirtualGeometryRasterTest 继续覆盖独立 Raster 的非空网格、多实例和 ID 映射。
 
-本轮最终空场景测试在 Vulkan、DirectX12 退出 0，标准错误为空。OpenGL 的 D32 读回发生 GL_INVALID_OPERATION，深度断言失败，不能将其记为完整通过；现有 GetOpenGLTextureFormat 没有 D32 分支，读回落到 GL_RGBA。没有据此修改渲染逻辑、降低断言或扩展修复后端。独立 Raster 在三个后端均通过。具体复测及早期测试自身问题见 [2026-11-14 记录](../dev/bugfix/故障与修复记录-2026-11-14.md)。
+2026-11-14 的空场景测试在 Vulkan、DirectX12 退出 0；当时 OpenGL D32 读回落到 GL_RGBA 并发生 GL_INVALID_OPERATION，未记为通过。2026-11-15 软件光栅深度对比需要实际读取 D32，因此仅在 OpenGLUtils 补齐 D32_Float→GL_DEPTH_COMPONENT 映射，保留原读取流程和断言；此次复测结果见 [当日记录](../dev/bugfix/故障与修复记录-2026-11-15.md#virtual-geometry-gpu-software-rasterization)。独立 Raster 的历史验证及早期测试自身问题见 [2026-11-14 记录](../dev/bugfix/故障与修复记录-2026-11-14.md)。
 
 ## VirtualGeometryViewer 消费方式
 

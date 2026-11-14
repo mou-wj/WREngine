@@ -47,6 +47,7 @@ namespace RHIDirectX12
         RHI::GShaderPlatform = RHI::ERHIShaderPlatform::D3D12;
         m_PlatformInfo.DepthRange = RHI::EDepthRange::ZeroToOne;
         m_PlatformInfo.bEnableRayTracing = false;
+        m_PlatformInfo.RasterSubPixelBits = 8;
 
         const uint32_t headerSize = static_cast<uint32_t>(sizeof(RHI::RHITransition));
         const uint32_t alignment = static_cast<uint32_t>(alignof(std::max_align_t));

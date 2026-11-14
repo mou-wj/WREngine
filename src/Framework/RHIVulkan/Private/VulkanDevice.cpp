@@ -67,6 +67,7 @@ void VulkanDevice::QueryDeviceProperties()
     VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
     properties.pNext = &m_RayTracingPipelineProperties;
     VKFunc::GetPhysicalDeviceProperties2(m_PhysicalDevice, &properties);
+    m_RasterSubPixelBits = properties.properties.limits.subPixelPrecisionBits;
 }
 
 void VulkanDevice::SelectQueueFamilies(VkPhysicalDevice physicalDevice)

@@ -50,5 +50,8 @@ namespace Editor
         bool m_bGPUSelection = true;
         bool m_bFrustumCulling = true;
         bool m_bCaptureGPU = false;
+        int m_RasterMode = 1;
+        float m_SoftwareClusterPixels = 32;
+        bool m_bMeasureRasterFrame = false;
     };
 }

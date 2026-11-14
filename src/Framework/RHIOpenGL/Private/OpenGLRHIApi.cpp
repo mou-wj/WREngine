@@ -27,6 +27,12 @@ namespace RHIOpenGL
         RHI::G_RHITransition_TotalSize = RHI::G_RHITransition_PrivateDataOffset + sizeof(GLbitfield);
         bool initPlatform = InitializePlatformSurport();
         OpenGLQueueManager::GetInstance().StartWorker();
+        EnqueueTaskAndWait([this]()
+        {
+            GLint bits = 0;
+            glGetIntegerv(GL_SUBPIXEL_BITS, &bits);
+            m_PlatformInfo.RasterSubPixelBits = static_cast<uint32_t>(std::max(0, bits));
+        });
 
         return initPlatform;
     }

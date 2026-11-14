@@ -22,6 +22,7 @@ enum class EDepthRange {
 struct RHIPlatformInfo {
     EDepthRange DepthRange;
     bool bEnableRayTracing;
+    uint32_t RasterSubPixelBits = 0; // Zero means the raster precision has not been reported.
 };
 
 class RHI_API RHIApi

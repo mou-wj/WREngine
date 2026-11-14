@@ -1,0 +1,133 @@
+#include "/Generated/ShaderParameters/VirtualGeometrySoftwareRasterParameters.sf"
+
+groupshared float3 ScreenVertices[384];
+
+int Edge(int2 a, int2 b, int2 p)
+{
+    int2 ab = b - a, ap = p - a;
+    return ab.x * ap.y - ab.y * ap.x;
+}
+
+bool IncludedEdge(int2 a, int2 b)
+{
+    int2 direction = b - a;
+    return direction.y < 0 || (direction.y == 0 && direction.x > 0);
+}
+
+float Cross2(float2 a, float2 b)
+{
+    return a.x * b.y - a.y * b.x;
+}
+
+void RasterTriangle(uint clusterOffset, uint primitive, uint cluster)
+{
+    uint index = SoftwareClusters[clusterOffset + 2] + primitive * 3;
+    float3 p0 = ScreenVertices[SoftwareIndices[index]];
+    float3 p1 = ScreenVertices[SoftwareIndices[index + 1]];
+    float3 p2 = ScreenVertices[SoftwareIndices[index + 2]];
+    int scale = 1 << SubPixelBits;
+    int2 a = int2(round(p0.xy * scale)), b = int2(round(p1.xy * scale)), c = int2(round(p2.xy * scale));
+    int area = Edge(a, b, c);
+    if (area == 0)
+    {
+        return;
+    }
+    if (area < 0)
+    {
+        int2 temporary = b;
+        b = c;
+        c = temporary;
+        float3 vertex = p1;
+        p1 = p2;
+        p2 = vertex;
+    }
+    // Native raster depth planes use the same snapped screen vertices as coverage setup.
+    p0.xy = float2(a) / scale;
+    p1.xy = float2(b) / scale;
+    p2.xy = float2(c) / scale;
+    float2 ab = p1.xy - p0.xy, ac = p2.xy - p0.xy;
+    float determinant = Cross2(ab, ac);
+    if (!isfinite(determinant) || abs(determinant) < 1e-12)
+    {
+        return;
+    }
+    int2 first = max(SoftwareViewOrigin, int2(ceil(float2(min(a, min(b, c))) / scale - 0.5)));
+    int2 last = min(SoftwareViewOrigin + SoftwareViewSize - 1,
+                   int2(floor(float2(max(a, max(b, c))) / scale - 0.5)));
+    bool edge0 = IncludedEdge(b, c), edge1 = IncludedEdge(c, a), edge2 = IncludedEdge(a, b);
+    for (int y = first.y; y <= last.y; ++y)
+    {
+        for (int x = first.x; x <= last.x; ++x)
+        {
+            int2 sample = int2(x, y) * scale + scale / 2;
+            int e0 = Edge(b, c, sample), e1 = Edge(c, a, sample), e2 = Edge(a, b, sample);
+            if ((e0 < 0 || (e0 == 0 && !edge0)) || (e1 < 0 || (e1 == 0 && !edge1)) ||
+                (e2 < 0 || (e2 == 0 && !edge2)))
+            {
+                continue;
+            }
+            float2 relative = float2(x + 0.5, y + 0.5) - p0.xy;
+            float w1 = Cross2(relative, ac) / determinant, w2 = Cross2(ab, relative) / determinant;
+            precise float depth = p0.z + w1 * (p1.z - p0.z) + w2 * (p2.z - p0.z);
+            depth = clamp(depth, 0.0, 1.0);
+            if (!isfinite(depth) || depth >= 1.0)
+            {
+                continue;
+            }
+            uint pixel = uint(y) * uint(SoftwareTargetSize.x) + uint(x);
+            uint bits = asuint(depth == 0.0 ? 0.0 : depth), unused;
+#if SOFTWARE_WRITE_VISIBILITY
+            if (WinnerDepth[pixel] == bits)
+            {
+                uint visibility = ((SoftwareFirstDraw + cluster) << 7) | primitive;
+                InterlockedMin(SoftwareVisibility[pixel].Value, visibility, unused);
+            }
+#else
+            InterlockedMin(SoftwareDepth[pixel].Value, bits, unused);
+#endif
+        }
+    }
+}
+
+void RasterCluster(uint3 group, uint thread)
+{
+    uint cluster = group.x + group.y * 65535u;
+    if (cluster >= SoftwareClusterCount)
+    {
+        return;
+    }
+    if (SoftwarePaths[cluster] != 2)
+    {
+        return;
+    }
+    uint offset = cluster * VG_CLUSTER_WORDS;
+    uint vertexOffset = SoftwareClusters[offset], vertexCount = SoftwareClusters[offset + 1];
+    for (uint vertex = thread; vertex < vertexCount; vertex += 64)
+    {
+        uint position = (vertexOffset + vertex) * 3;
+        float3 local = float3(SoftwarePositions[position], SoftwarePositions[position + 1], SoftwarePositions[position + 2]);
+        float4 world = mul(SoftwareLocalToWorld, float4(local, 1));
+        float4 clip = mul(SoftwareViewProjection, world);
+        float3 ndc = clip.xyz / clip.w;
+        ScreenVertices[vertex] = float3(float2(SoftwareViewOrigin) +
+            (ndc.xy * float2(1, SoftwareScreenYSign) * 0.5 + 0.5) * float2(SoftwareViewSize),
+            ndc.z * NativeDepthScaleBias.x + NativeDepthScaleBias.y);
+    }
+    GroupMemoryBarrierWithGroupSync();
+    for (uint primitive = thread; primitive < SoftwareClusters[offset + 3]; primitive += 64)
+    {
+        RasterTriangle(offset, primitive, cluster);
+    }
+}
+
+[numthreads(64, 1, 1)]
+void DepthCS(uint3 group : SV_GroupID, uint thread : SV_GroupIndex)
+{
+    RasterCluster(group, thread);
+}
+
+[numthreads(64, 1, 1)]
+void VisibilityCS(uint3 group : SV_GroupID, uint thread : SV_GroupIndex)
+{
+    RasterCluster(group, thread);
+}

@@ -14,6 +14,9 @@
 - 关闭 Dynamic LOD 后，Generated level 选择该层生成的 meshlet，0 为完整初始细节。较高层不包含所有停止简化的旧 Cluster，可能不能覆盖整个网格；该选项用于诊断生成数据，界面明确提示不是完整 DAG Cut。
 - Material + deferred lighting 使用 Visibility → 属性重建 → 材质求值 → GBuffer A/B/C → 既有 DeferredShadingCS，预览场景提供一个不投影的方向光，没有 IBL 或主场景光源。
 - Wireframe 默认关闭，开启后在 Cluster 或材质预览上叠加深灰色三角形边线。边线使用本帧实际选中的 Cluster，随动态 LOD 或生成层检查变化，不绘制原始 LOD0 的另一套网格。
+- GPU 动态模式提供 Raster path：Hardware、Hybrid、Software preferred，默认 Hybrid，SW cluster pixels 默认 32，范围 1～128 像素。后者是 Cluster 包围球的投影直径上限；Software preferred 使用 128 的硬上限，触及裁剪边界或超出限制仍明确回退硬件。CPU 选择和 Generated level 检查强制使用原硬件路径。
+- Capture 同时抓取 HW/SW Cluster、强制回退 Cluster 和 SW 三角形数。切换路径后需要重新 Capture；统计是当前快照，不是持续刷新或通过深度测试的像素数。Wireframe 使用原完整选择参数并对合并后的深度测试，两条路径都覆盖。
+- Measure completed frame 按需测量一次完整预览的 CPU 构图、提交和队列完成等待；它不是 GPU timestamp 或单个 Raster Pass 时间。OpenGL 仅保证 worker 执行完成，界面明确标注不能当作 GPU 完成计时。Capture 和计时若同时请求，分别在两帧执行，正常帧不增加计时等待。
 - 显示 Cluster、Group、Root 总数和最大累计误差，以及当前层的 Cluster 和三角形数。表格显示各 Cluster 的顶点数、三角形数、材质槽、Group、GeneratingGroup 和包围球半径；行选择仅选择信息行，不改变光栅输出。
 - 图片上右键拖动环绕，滚轮缩放。Rebuild 重新构建该预览副本。
 
@@ -27,7 +30,7 @@ Render 使用资源包围盒将网格归一化并放在原点，生成独立 Sce
 
 预览拥有颜色目标、派生几何和默认材质，借由资产引用保持输入所有者。RDG 在实际提交处维护几何缓冲与颜色目标的访问 Fence，ImGui 后端在采样处继续更新颜色目标的 Fence。窗口关闭、项目重置、网格切换、重建或尺寸变化时，先按所用资源的最后 Fence 等待，再释放或替换；几何释放也检查上传 Fence，不使用 WaitIdle 或全局保活列表。
 
-Compute 材质采样使用显式参数传递解析梯度，细节见 [Material Resolve](../key_implemetion/algorithm/12-virtual-geometry-material-resolve.md)。独立光照复用既有阴影访问表与级联参数准备函数，即使方向光关闭投影也创建绑定所需的合法参数；无 IBL 时跳过环境绑定，避免依赖未初始化的 LUT。
+Compute 材质采样使用显式参数传递解析梯度，细节见 [Material Resolve](../key_implemetion/algorithm/12-virtual-geometry-material-resolve.md)。软件/混合路径最终仍输出同一 Visibility 和 D32，原 Resolve 与光照无需识别来源；两阶段深度/ID 归约及合并见 [软件光栅化](../key_implemetion/algorithm/14-virtual-geometry-software-rasterization.md)。独立光照复用既有阴影访问表与级联参数准备函数，即使方向光关闭投影也创建绑定所需的合法参数；无 IBL 时跳过环境绑定，避免依赖未初始化的 LUT。
 
 动态选择的 Group 替换、GPU 依赖调度、投影公式和边界条件见 [LOD Selection](../key_implemetion/algorithm/13-virtual-geometry-lod-selection.md)。预算使用 Build 的累计采样误差，不能视为严格几何误差上界；没有几何渐变或切换滞回。
 
@@ -44,3 +47,5 @@ Material Resolve 和 Raster 的现有 GPU 测试在 Vulkan、DirectX12、OpenGL 
 2026-11-15 补充 CPU/GPU 对照：使用同一份 559 顶点、960 面球体快照，在 0/0.5/1/4 像素预算下，Vulkan、DirectX12 的 Cluster/材质及线框开关、OpenGL 的 Cluster 及线框开关，共 40 对离屏图像逐像素一致；所有 GPU Capture 的完整 Cut 与 CPU 差异为零，原工程文件哈希未变。OpenGL 的独立光照预览仍未纳入这组检查，不能据此声称已验证；三后端的 GPU Material Resolve 像素测试另行通过。复杂模型和全部生成层的完整画面对照仍未完成。
 
 Launcher 已编译并启动的历史首帧范围及 Computer Use 原生连接限制见 [2026-11-14 记录](../dev/bugfix/故障与修复记录-2026-11-14.md)，GPU 阶段的实际验证见 [2026-11-15 记录](../dev/bugfix/故障与修复记录-2026-11-15.md)。离屏读回不等同于真实按钮点击、拖动和浮窗交互验证。
+
+同日软件光栅复测覆盖三后端三种 Raster 模式，默认 Hybrid 的 40 对球体图像与 Hardware 逐像素一致；SoftwarePreferred 的实心图像一致，但 Vulkan/D3D12 的原生线框叠加仍有 1～3 个边缘像素精度差异。完成帧测量在该小输入下没有显示软件路径速度收益，且没有 GPU 单阶段 timestamp；具体输入、计数、实测表格及未定位的偶发 Vulkan 诊断失败见 [软件光栅记录](../dev/bugfix/故障与修复记录-2026-11-15.md#virtual-geometry-gpu-software-rasterization)。

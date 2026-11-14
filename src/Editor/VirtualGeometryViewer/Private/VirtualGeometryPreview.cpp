@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <stdexcept>
+#include <chrono>
 
 namespace Editor
 {
@@ -55,6 +56,7 @@ namespace Editor
     RDG_TEXTURE_ACCESS(Color, ERHIResourceAccess::TransferSrc)
     RDG_BUFFER_ACCESS(Flags, ERHIResourceAccess::TransferSrc)
     RDG_BUFFER_ACCESS(Statistics, ERHIResourceAccess::TransferSrc)
+    RDG_BUFFER_ACCESS(RoutingStatistics, ERHIResourceAccess::TransferSrc)
     END_SHADER_PARAMETER_STRUCT(VirtualGeometryViewerReadbackParameters)
 
     class VirtualGeometryViewerWireframeVS : public GlobalShader
@@ -294,6 +296,8 @@ namespace Editor
         m_Asset.reset();
         m_SelectedClusters.clear();
         m_bGPUCapture = false;
+        m_RasterStatistics = {};
+        m_CompletedFrameMilliseconds = 0;
     }
 
     const Engine::VirtualGeometryResource* VirtualGeometryPreview::GetGeometry() const
@@ -324,7 +328,8 @@ namespace Editor
 
     void VirtualGeometryPreview::Render(Core::Int2 size, uint32_t mipLevel, bool material,
                                        float yaw, float pitch, float distance, bool dynamicLOD, float targetPixelError,
-                                       bool wireframe, bool gpuSelection, bool frustumCulling, bool captureGPU)
+                                       bool wireframe, bool gpuSelection, bool frustumCulling, bool captureGPU,
+                                       uint32_t rasterMode, float softwareClusterPixels, bool measureFrame)
     {
         using namespace RenderCore;
         using namespace RHI;
@@ -332,6 +337,11 @@ namespace Editor
         {
             return;
         }
+        if (measureFrame)
+        {
+            WaitForLastDraw();
+        }
+        const auto start = std::chrono::steady_clock::now();
         if (!m_Color || m_Color->GetRHI()->GetDesc().Width != uint32_t(size.X) ||
             m_Color->GetRHI()->GetDesc().Height != uint32_t(size.Y))
         {
@@ -388,7 +398,11 @@ namespace Editor
         view.BuildSplitDepths();
         RenderGraphBuilder builder;
         auto color = builder.RegisterExternalTexture("VirtualGeometryViewer.Color", m_Color.get());
-        auto visibility = Renderer::AddVirtualGeometryRasterPass(builder, view, {instance}, size.X, size.Y);
+        Renderer::VirtualGeometryRasterSettings rasterSettings;
+        rasterSettings.Mode = instance.bGPUSelection ? static_cast<Renderer::EVirtualGeometryRasterMode>(rasterMode) :
+                                                      Renderer::EVirtualGeometryRasterMode::Hardware;
+        rasterSettings.SoftwareClusterPixels = softwareClusterPixels;
+        auto visibility = Renderer::AddVirtualGeometryRasterPass(builder, view, {instance}, size.X, size.Y, rasterSettings);
         std::vector<uint32_t> candidates;
         for (const auto& draw : visibility->Draws)
         {
@@ -437,14 +451,19 @@ namespace Editor
             AddWireframePass(builder, view, instance, candidates, color, visibility->VirtualGeometryDepthTexture,
                              visibility->GPUSelections.front().IndirectArguments);
         }
-        std::array<void*, 2> mapped{};
+        std::array<void*, 3> mapped{};
         const auto& selection = visibility->GPUSelections.front();
+        const auto routingStatistics = visibility->RasterRouting.front().Statistics;
         const bool readGPU = instance.bGPUSelection && captureGPU;
         const bool immediate = GShaderPlatform == ERHIShaderPlatform::OpenGL;
         const auto read = [&](RHICommandListBase& cmd)
         {
             mapped[0] = GRHIApi->MapReadBuffer(cmd, selection.ClusterFlags->GetRHIBuffer(), {});
             mapped[1] = GRHIApi->MapReadBuffer(cmd, selection.Statistics->GetRHIBuffer(), {});
+            if (routingStatistics)
+            {
+                mapped[2] = GRHIApi->MapReadBuffer(cmd, routingStatistics->GetRHIBuffer(), {});
+            }
         };
         if (readGPU)
         {
@@ -452,6 +471,7 @@ namespace Editor
             params->Color = color;
             params->Flags = selection.ClusterFlags;
             params->Statistics = selection.Statistics;
+            params->RoutingStatistics = routingStatistics;
             builder.AddPass("VirtualGeometryViewer.CaptureGPU", VirtualGeometryViewerReadbackParameters::GetMetaData(),
                             params, EPassFlag::Graphic, [&](RHICommandListBase& cmd)
             {
@@ -462,6 +482,13 @@ namespace Editor
             });
         }
         builder.Execute();
+        if (measureFrame && !readGPU)
+        {
+            const auto fence = m_Color->GetTracker().GetLastAccessFence();
+            GRHIApi->GetQueue(fence.QueueType)->WaitValue(fence.Value);
+            m_CompletedFrameMilliseconds = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - start).count();
+        }
         if (readGPU)
         {
             const auto fence = m_Color->GetTracker().GetLastAccessFence();
@@ -491,6 +518,21 @@ namespace Editor
             const auto* flags = static_cast<const uint32_t*>(mapped[0]);
             const auto* statistics = static_cast<const uint32_t*>(mapped[1]);
             std::copy(statistics, statistics + 4, m_GPUStatistics.begin());
+            if (routingStatistics && !mapped[2])
+            {
+                GRHIApi->Unmap(mapped[0]);
+                GRHIApi->Unmap(mapped[1]);
+                throw std::runtime_error("Virtual geometry routing statistics readback failed");
+            }
+            if (mapped[2])
+            {
+                const auto* rasterStatistics = static_cast<const uint32_t*>(mapped[2]);
+                std::copy(rasterStatistics, rasterStatistics + 4, m_RasterStatistics.begin());
+            }
+            else
+            {
+                m_RasterStatistics = {m_GPUStatistics[1], 0, 0, 0};
+            }
             const auto reference = Renderer::SelectVirtualGeometryClusters(m_Data->VirtualGeometryData,
                 instance.LocalToWorld, view, targetPixelError);
             m_SelectedClusters.clear();
@@ -506,7 +548,10 @@ namespace Editor
             }
             for (auto* mapping : mapped)
             {
-                GRHIApi->Unmap(mapping);
+                if (mapping)
+                {
+                    GRHIApi->Unmap(mapping);
+                }
             }
             m_bGPUCapture = true;
         }

@@ -152,6 +152,8 @@ namespace RHIOpenGL
     {
         switch (format)
         {
+        case RHI::ERHIFormat::D32_Float:
+            return GL_DEPTH_COMPONENT;
         case RHI::ERHIFormat::R32G32_UInt:
             return GL_RG_INTEGER;
         case RHI::ERHIFormat::R8_UNorm:

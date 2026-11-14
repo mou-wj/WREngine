@@ -4,6 +4,7 @@
 #include "StaticMeshResources.h"
 #include "Material.h"
 #include "VirtualGeometryGPUSelection.h"
+#include "VirtualGeometrySoftwareRaster.h"
 
 namespace Renderer
 {
@@ -36,15 +37,19 @@ namespace Renderer
         std::vector<std::shared_ptr<Engine::StaticMeshRenderData>> Resources;
         std::vector<VirtualGeometryInstance> Instances;
         std::vector<VirtualGeometryGPUSelection> GPUSelections; // Indexed by InstanceIndex; empty handles in CPU mode.
+        std::vector<VirtualGeometryRasterRouting> RasterRouting;
+        VirtualGeometrySoftwareTargets SoftwareTargets;
     };
 
     RENDERER_API std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPass(
         RenderCore::RenderGraphBuilder& builder, const Engine::SceneView& view,
-        const std::vector<VirtualGeometryInstance>& instances, uint32_t width, uint32_t height);
+        const std::vector<VirtualGeometryInstance>& instances, uint32_t width, uint32_t height,
+        const VirtualGeometryRasterSettings& settings = {});
     // Reuse and clear the caller's D32 scene depth instead of creating another depth texture.
     RENDERER_API std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPass(
         RenderCore::RenderGraphBuilder& builder, const Engine::SceneView& view,
-        const std::vector<VirtualGeometryInstance>& instances, RenderCore::RenderGraphTextureRef sceneDepth);
+        const std::vector<VirtualGeometryInstance>& instances, RenderCore::RenderGraphTextureRef sceneDepth,
+        const VirtualGeometryRasterSettings& settings = {});
     RENDERER_API void AddVirtualGeometryVisibilityDebugPass(RenderCore::RenderGraphBuilder& builder,
                                                             const std::shared_ptr<VirtualGeometryRasterOutput>& output,
                                                             RenderCore::RenderGraphTextureRef target,
