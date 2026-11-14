@@ -2,7 +2,7 @@
 
 实现入口为 [VirtualGeometryMaterialResolvePass](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryMaterialResolvePass.cpp)。前序输入见 [Visibility Raster](11-virtual-geometry-visibility.md)。
 
-2026-11-13 已按要求撤销 RenderModule 的场景集成和 MaterialParametersHelper 的采样宏改动。独立 Pass 和测试代码继续保留，但不再由主场景调用。Compute 的显式梯度与材质采样目前未接通，下文说明保留实现的数据流及该限制；回退前的测试结果只代表当时版本。
+独立 Pass 和测试代码继续保留，不由主场景调用。2026-11-13 回退过公共采样 Helper；2026-11-14 经确认，以显式梯度参数重新适配 Compute，并由独立 VirtualGeometryViewer 验证，不恢复主场景集成。
 
 ## 数据与材质对应
 
@@ -12,6 +12,8 @@ Compute 直接读取已经上传的位置、法线、切线、UV、索引及 Clu
 
 Triangle 的三个全局顶点下标为 VertexOffset 加 Indices[IndexOffset + PrimitiveID×3 + corner]。每个 Draw 提交一次覆盖视口的 Compute Dispatch，先以 Visibility.DrawID 筛选像素，再读取本 Draw 对应的缓冲和材质。绑定通过现有 MaterialShaderMap 和 BuildShaderParameters 完成。第一版计算量随 Draw 数乘视口像素数增长。
 
+[CPU 动态 LOD](13-virtual-geometry-lod-selection.md) 已接入 Raster，Metadata 可以指向同一资源不同生成层的 Cluster。Resolve 不按 Mip 或叶身份过滤，继续用该 Cluster 自己的顶点/索引偏移和 MaterialIndex，因此无需更改 Shader 或 GBuffer 布局。
+
 ## 属性恢复和梯度
 
 每个顶点先由 LocalToWorld 变换到世界空间，再由 ViewProjection 变换到裁剪空间。透视除法得到屏幕坐标，像素中心为整数坐标加 0.5。Vulkan/OpenGL 的当前原生 viewport 使用正 Y，DirectX12 使用负 Y，Shader 参数 ScreenYSign 明确表达此差异。
@@ -20,7 +22,7 @@ Triangle 的三个全局顶点下标为 VertexOffset 加 Indices[IndexOffset + P
 
 UV 插值是 U=N/D，其中 N=Σ(λi×UVi/clipWi)，D=Σ(λi/clipWi)。根据屏幕边计算 λ 的 X/Y 导数，再用商法则求 dU/dx、dU/dy。梯度同时乘 UVTiling，UVOffset 不贡献梯度。
 
-MaterialParametersHelper 已恢复直接调用 Sample 的原实现，不再使用 MATERIAL_TEXTURE_SAMPLE。Resolve Shader 中原有 SampleGrad 宏因此不再控制材质采样，计算出的 UV 梯度也未传入采样。Compute 不能据此获得与像素 Shader 相同的隐式导数语义，当前不能声称其纹理 LOD 正确或维持回退前的跨后端验证结论。本次未新增替代采样机制。
+Resolve 在 MainCS 内计算局部 materialGradientX/Y，经 EvaluateMaterialGBuffer 和 BuildMaterialData 的参数传给 SampleMaterialTexture。后者在 MATERIAL_EXPLICIT_GRADIENTS 编译条件下使用 SampleGrad，否则沿用像素 Shader 的 Sample。UVTiling 在 BuildMaterialData 中对坐标和两项梯度分别应用一次，UVOffset 只影响坐标。像素 Shader 旧调用使用默认梯度参数，无需改动调用方式。没有外部全局梯度变量、函数替换宏或另外复制一份材质计算公式。
 
 非有限裁剪坐标、接近零的 W、退化屏幕面积及插值分母会跳过求值，保留清空后的 GBuffer。奇异实例变换在 CPU 构图时失败。当前没有对顶点 W 接近零的跨相机三角形重新执行裁剪，极端裁剪情况仍需后续完善。
 
@@ -32,12 +34,14 @@ MaterialParametersHelper 已恢复直接调用 Sample 的原实现，不再使�
 
 AddVirtualGeometryRender 将场景实例整理、使用调用方 SceneDepth 的 Raster 和本 Resolve 组合为单个构图入口，返回原 Visibility 输出。它不调用光照封装，也未恢复主场景集成；使用前提和当前采样限制见 [Renderer 使用约定](../../specification/renderer_spec.md#virtual-geometry-场景绘制入口)。
 
+独立光照封装在绑定 SceneShaderParameters 前调用已有 UploadShadowMapInfo 和 UpdateCascadeShadowInfo，准备阴影索引和级联参数，即使所有预览灯关闭投影也满足绑定前提。UpdateCascadeShadowInfo 的访问级别调整为 Renderer 内部可复用的 public static，原延迟流程的调用和行为不变。仅存在 IBL 时才构建环境参数，避免无环境的独立场景无谓依赖 GlobalIBLLutTexture。Viewer 使用一个不投影的方向光，并继续调用既有 DeferredShadingCS。
+
 Visibility、Depth、Metadata、属性和 Cluster 视图通过 Shader 参数声明 SRV，GBuffer 声明 UAV。既有 RDG 负责 Raster 到 Resolve、UAV 到光照 SRV 的依赖和屏障，以及实际提交处的 Fence 更新。实例和材质快照保持录制期引用，资源释放或重建仍需调用方完成已提交 GPU 使用。没有内部锁，构图与业务数据修改须串行。
 
 ## 验证入口与范围
 
 [VirtualGeometryMaterialResolveTest](../../../src/Tests/VirtualGeometryMaterialResolveTest.cpp) 通过 Tests.exe -test=VirtualGeometryMaterialResolveTest -rhi=Vulkan 运行，也支持 DirectX12、OpenGL。测试覆盖共享及独立资源、多实例不同材质、交换绘制顺序、空场景、透视 UV、线性循环采样的边缘、法线和 PBR 通道读回。透视场景检查属性插值，遮挡顺序由正交场景检查。背景保留清空值。实际结果和后端修复见 [开发记录](../../dev/bugfix/故障与修复记录-2026-11-13.md)。
 
-恢复原采样 Helper 后的同日复测未通过。DirectX12 的 Shader 编译因 Compute 隐式导数与当前 Shader Model 不兼容而失败，Vulkan/OpenGL 出现材质读回不匹配及失败退出或超时。独立 Raster 三后端复测通过，不能据此推断 Resolve 也通过。详细错误与退出情况见开发记录的回退章节。
+恢复原采样 Helper 后曾出现 Compute 隐式导数编译及材质读回失败，详见历史回退记录。2026-11-14 显式梯度适配后的 MaterialResolveTest 在 Vulkan、DirectX12、OpenGL 均退出 0，原像素期望和用例不变。Viewer 的实际预览实现另通过 Vulkan 第 0、1 层两种模式的离屏读回验证，具体范围见 [本日记录](../../dev/bugfix/故障与修复记录-2026-11-14.md)。
 
-当前测试没有完成任意复杂材质、不同材质槽、非均匀缩放法线及传统 StaticMesh 全画面的逐像素对照。传统 GBuffer PS 的法线贴图目前直接写入切线空间结果，本流程按世界法线约定转换，两者在旋转后的法线贴图场景有既有语义差异。此处明确记录该差异，传统材质 Shader 保持原有实现。
+新增 VirtualGeometryLODRenderTest 在三个后端检查两个材质区域、动态粗 Cluster、透视 UV 和镜像/非均匀缩放实例下的平面法线与 GBuffer 参数，具体见 [LOD 验证](13-virtual-geometry-lod-selection.md#复杂度验证与限制)。当前仍没有完成任意复杂材质、任意方向非均匀缩放法线及传统 StaticMesh 全画面的逐像素对照。传统 GBuffer PS 的法线贴图目前直接写入切线空间结果，本流程按世界法线约定转换，两者在旋转后的法线贴图场景有既有语义差异。此处明确记录该差异，传统材质 Shader 保持原有实现。

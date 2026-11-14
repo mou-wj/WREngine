@@ -11,7 +11,10 @@ namespace Renderer
         std::shared_ptr<Engine::StaticMeshRenderData> RenderData;
         Core::Mat4 LocalToWorld = Core::Mat4::Identity();
         uint32_t InstanceID = 0;
+        uint32_t MipLevel = 0;
         std::vector<std::shared_ptr<const Engine::MaterialRenderProxy>> Materials;
+        float TargetPixelError = 1.0f;
+        bool bInspectGeneratedLevel = false; // Viewer diagnostic only; a generated level is not a DAG cut.
     };
 
     BEGIN_SHADER_PARAMETER_STRUCT(VirtualGeometryDrawMetadata)

@@ -18,6 +18,7 @@ namespace Editor
     class EditorMaterialPanel;
     class EditorNodePanel;
     class EditorMeshViewer;
+    class EditorVirtualGeometryViewer;
     class EditorTextureViewer;
     struct TextureViewerSource;
 
@@ -55,6 +56,7 @@ namespace Editor
         std::unique_ptr<EditorMaterialPanel> m_MaterialPanel;
         std::unique_ptr<EditorNodePanel> m_NodePanel;
         std::unique_ptr<EditorMeshViewer> m_MeshViewer;
+        std::unique_ptr<EditorVirtualGeometryViewer> m_VirtualGeometryViewer;
         std::unique_ptr<EditorTextureViewer> m_TextureViewer;
         std::unique_ptr<ImGUISlate::ImWidget> m_MenuWidget;
         std::unique_ptr<ImGUISlate::ImFileDialogWidget> m_ProjectDialog;

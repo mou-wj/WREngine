@@ -1,12 +1,12 @@
 # 源码检索与文档覆盖清单
 
-更新日期：2026-11-14；基于 `837ee07` 及 Virtual Geometry 独立场景构图入口的工作区实现。首次整理基线为 `04f910d`。本清单来自文件枚举、文本关键词检索及专题调用链核对，本次仅增补相关新增文件和变化记录；不是逐行正确性审计，也不是运行验证。每行列出的专题是阅读入口，不保证已解释该文件的每个辅助函数。
+更新日期：2026-11-14；基于 `9ec19f7` 及 VirtualGeometryViewer、显式 Compute 采样、CPU 动态 LOD 选择与线框预览的工作区实现。首次整理基线为 `04f910d`。本清单来自文件枚举、文本关键词检索及专题调用链核对，本次仅增补相关新增文件和变化记录；不是逐行正确性审计，也不是运行验证。每行列出的专题是阅读入口，不保证已解释该文件的每个辅助函数。
 
 范围：自有 src、全部 Shader、CMake/BuildDeps、依赖元信息和 VS Code 配置。extern/glad 是外部生成 loader；deps、构建目录、生成文件、二进制资源、validation 产物、temp 实验不逐项展开。外部库的使用边界见工程专题，驱动和第三方算法不冒充自有实现。
 
 检索标记：并发=线程/锁/任务/完成点；内存=分配/回收/临时工作区；算法=几何/数学/空间查询；渲染=Shader/管线/绘制。标记只是命中，不是已确认问题；未命中不代表没有核心语义。
 
-本次清单共 **475 个文件、87553 行**；文件数包含接口、配置和构建声明。原始逐文件内容 hash 与关键词计数仅保存在忽略目录 `out/diagnostics/key-implementation-source-scan.json`，正式阅读以本清单和源码链接为准。
+本次清单共 **486 个文件、89197 行**；文件数包含接口、配置和构建声明。原始逐文件内容 hash 与关键词计数仅保存在忽略目录 `out/diagnostics/key-implementation-source-scan.json`，正式阅读以本清单和源码链接为准。
 
 ## 现有 architecture 的补充关系
 
@@ -59,7 +59,7 @@
 | [config/3rds/tinygltf.json](../../config/3rds/tinygltf.json) | 41 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [config/3rds/vulkan.json](../../config/3rds/vulkan.json) | 39 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## shaders（50 个文件）
+## shaders（51 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -68,7 +68,7 @@
 | [shaders/core/GBufferParametersHelper.sf](../../shaders/core/GBufferParametersHelper.sf) | 63 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/GlobalDefine.sf](../../shaders/core/GlobalDefine.sf) | 10 | 接口/配置/基础辅助 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md) |
 | [shaders/core/GlobalDistanceFieldHelper.sf](../../shaders/core/GlobalDistanceFieldHelper.sf) | 170 | 内存、渲染 | [04-distance-fields-and-jump-flood](algorithm/04-distance-fields-and-jump-flood.md) |
-| [shaders/core/MaterialParametersHelper.sf](../../shaders/core/MaterialParametersHelper.sf) | 185 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) / [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
+| [shaders/core/MaterialParametersHelper.sf](../../shaders/core/MaterialParametersHelper.sf) | 187 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) / [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
 | [shaders/core/Sample.sf](../../shaders/core/Sample.sf) | 167 | 算法 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/SceneParametersHelper.sf](../../shaders/core/SceneParametersHelper.sf) | 191 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/ShadingCommon.sf](../../shaders/core/ShadingCommon.sf) | 405 | 算法 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
@@ -111,8 +111,9 @@
 | [shaders/virtualgeometry/RasterPS.sf](../../shaders/virtualgeometry/RasterPS.sf) | 5 | 接口/配置/基础辅助 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
 | [shaders/virtualgeometry/RasterVS.sf](../../shaders/virtualgeometry/RasterVS.sf) | 5 | 接口/配置/基础辅助 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
 | [shaders/core/MaterialGBufferHelper.sf](../../shaders/core/MaterialGBufferHelper.sf) | 22 | 接口/配置/基础辅助 | [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
-| [shaders/virtualgeometry/MaterialResolve.sf](../../shaders/virtualgeometry/MaterialResolve.sf) | 136 | 算法、渲染 | [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
+| [shaders/virtualgeometry/MaterialResolve.sf](../../shaders/virtualgeometry/MaterialResolve.sf) | 134 | 算法、渲染 | [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
 | [shaders/virtualgeometry/MaterialResolveClear.sf](../../shaders/virtualgeometry/MaterialResolveClear.sf) | 13 | 渲染 | [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
+| [shaders/editor/VirtualGeometryWireframe.sf](../../shaders/editor/VirtualGeometryWireframe.sf) | 15 | 渲染 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 
 ## src/Application（13 个文件）
 
@@ -138,7 +139,7 @@
 | --- | ---: | --- | --- |
 | [src/CMakeLists.txt](../../src/CMakeLists.txt) | 9 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## src/Editor（44 个文件）
+## src/Editor（50 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -146,11 +147,11 @@
 | [src/Editor/AssetEditor/Private/AssetEditorModule.cpp](../../src/Editor/AssetEditor/Private/AssetEditorModule.cpp) | 15 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/AssetEditor/Private/EditorAssetPanel.cpp](../../src/Editor/AssetEditor/Private/EditorAssetPanel.cpp) | 474 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
 | [src/Editor/AssetEditor/PublicHeader/EditorAssetPanel.h](../../src/Editor/AssetEditor/PublicHeader/EditorAssetPanel.h) | 95 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
-| [src/Editor/CMakeLists.txt](../../src/Editor/CMakeLists.txt) | 7 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Editor/CMakeLists.txt](../../src/Editor/CMakeLists.txt) | 8 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Editor/Editor/CMakeLists.txt](../../src/Editor/Editor/CMakeLists.txt) | 10 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
-| [src/Editor/Editor/Private/EditorApplication.cpp](../../src/Editor/Editor/Private/EditorApplication.cpp) | 573 | 内存 | [架构：editor](../architecture/app/editor.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
+| [src/Editor/Editor/Private/EditorApplication.cpp](../../src/Editor/Editor/Private/EditorApplication.cpp) | 604 | 内存 | [架构：editor](../architecture/app/editor.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
 | [src/Editor/Editor/Private/EditorModule.cpp](../../src/Editor/Editor/Private/EditorModule.cpp) | 24 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
-| [src/Editor/Editor/PublicHeader/EditorApplication.h](../../src/Editor/Editor/PublicHeader/EditorApplication.h) | 82 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
+| [src/Editor/Editor/PublicHeader/EditorApplication.h](../../src/Editor/Editor/PublicHeader/EditorApplication.h) | 84 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
 | [src/Editor/MaterialEditor/CMakeLists.txt](../../src/Editor/MaterialEditor/CMakeLists.txt) | 10 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Editor/MaterialEditor/Private/EditorMaterialPanel.cpp](../../src/Editor/MaterialEditor/Private/EditorMaterialPanel.cpp) | 403 | 内存、渲染 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/MaterialEditor/Private/MaterialEditorModule.cpp](../../src/Editor/MaterialEditor/Private/MaterialEditorModule.cpp) | 15 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
@@ -171,13 +172,13 @@
 | [src/Editor/SceneEditor/Private/EditorRotationGizmo.cpp](../../src/Editor/SceneEditor/Private/EditorRotationGizmo.cpp) | 287 | 算法 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/EditorScaleGizmo.cpp](../../src/Editor/SceneEditor/Private/EditorScaleGizmo.cpp) | 188 | 算法 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/EditorScene.cpp](../../src/Editor/SceneEditor/Private/EditorScene.cpp) | 720 | 并发、算法 | [架构：editor](../architecture/app/editor.md) / [01-ray-triangle-and-distance](algorithm/01-ray-triangle-and-distance.md) / [03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
-| [src/Editor/SceneEditor/Private/EditorScenePanel.cpp](../../src/Editor/SceneEditor/Private/EditorScenePanel.cpp) | 185 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/Private/EditorScenePanel.cpp](../../src/Editor/SceneEditor/Private/EditorScenePanel.cpp) | 196 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/SceneEditor/Private/EditorTranslationGizmo.cpp](../../src/Editor/SceneEditor/Private/EditorTranslationGizmo.cpp) | 441 | 渲染 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/EditorViewAxes.cpp](../../src/Editor/SceneEditor/Private/EditorViewAxes.cpp) | 174 | 渲染 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/EditorViewAxes.h](../../src/Editor/SceneEditor/Private/EditorViewAxes.h) | 11 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/SceneEditorModule.cpp](../../src/Editor/SceneEditor/Private/SceneEditorModule.cpp) | 15 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/SceneEditor/PublicHeader/EditorScene.h](../../src/Editor/SceneEditor/PublicHeader/EditorScene.h) | 112 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
-| [src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h](../../src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h) | 55 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h](../../src/Editor/SceneEditor/PublicHeader/EditorScenePanel.h) | 57 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h](../../src/Editor/SceneEditor/PublicHeader/EditorTranslationGizmo.h) | 112 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/TextureViewer/CMakeLists.txt](../../src/Editor/TextureViewer/CMakeLists.txt) | 9 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Editor/TextureViewer/Private/EditorTextureViewer.cpp](../../src/Editor/TextureViewer/Private/EditorTextureViewer.cpp) | 276 | 算法 | [09-texture-viewer-canvas](algorithm/09-texture-viewer-canvas.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
@@ -186,6 +187,13 @@
 | [src/Editor/TextureViewer/Private/TextureViewerPreview.h](../../src/Editor/TextureViewer/Private/TextureViewerPreview.h) | 19 | 接口/配置/基础辅助 | [09-texture-viewer-canvas](algorithm/09-texture-viewer-canvas.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Editor/TextureViewer/PublicHeader/EditorTextureViewer.h](../../src/Editor/TextureViewer/PublicHeader/EditorTextureViewer.h) | 72 | 接口/配置/基础辅助 | [09-texture-viewer-canvas](algorithm/09-texture-viewer-canvas.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Editor/AssetEditor/Private/EditorAssetFileOperations.cpp](../../src/Editor/AssetEditor/Private/EditorAssetFileOperations.cpp) | 238 | 接口/配置/基础辅助 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+
+| [src/Editor/VirtualGeometryViewer/CMakeLists.txt](../../src/Editor/VirtualGeometryViewer/CMakeLists.txt) | 9 | 接口/配置 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) |
+| [src/Editor/VirtualGeometryViewer/Private/EditorVirtualGeometryViewer.cpp](../../src/Editor/VirtualGeometryViewer/Private/EditorVirtualGeometryViewer.cpp) | 223 | 渲染 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.cpp](../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.cpp) | 331 | 并发、内存、算法、渲染 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
+| [src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.h](../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.h) | 32 | 内存、接口 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Editor/VirtualGeometryViewer/Private/VirtualGeometryViewerModule.cpp](../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryViewerModule.cpp) | 15 | 接口/配置 | [架构：editor](../architecture/app/editor.md) |
+| [src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h](../../src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h) | 51 | 接口/内存 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) |
 
 ## src/Framework（1 个文件）
 
@@ -359,7 +367,7 @@
 | [src/Framework/RenderCore/PublicHeader/ToolShaders.h](../../src/Framework/RenderCore/PublicHeader/ToolShaders.h) | 58 | 渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Framework/RenderCore/PublicHeader/VertexFactory.h](../../src/Framework/RenderCore/PublicHeader/VertexFactory.h) | 195 | 渲染 | [08-mesh-import-and-geometry](algorithm/08-mesh-import-and-geometry.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 
-## src/Framework/Renderer（57 个文件）
+## src/Framework/Renderer（59 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -395,7 +403,7 @@
 | [src/Framework/Renderer/Private/Scene.cpp](../../src/Framework/Renderer/Private/Scene.cpp) | 1212 | 内存、算法、渲染 | [02-bvh-octree-and-scene-query](algorithm/02-bvh-octree-and-scene-query.md)；[01-ray-triangle-and-distance](algorithm/01-ray-triangle-and-distance.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/Renderer/Private/Scene.h](../../src/Framework/Renderer/Private/Scene.h) | 332 | 并发、内存 | [02-bvh-octree-and-scene-query](algorithm/02-bvh-octree-and-scene-query.md)；[01-ray-triangle-and-distance](algorithm/01-ray-triangle-and-distance.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/Renderer/Private/SceneRenderer.cpp](../../src/Framework/Renderer/Private/SceneRenderer.cpp) | 905 | 内存、算法、渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
-| [src/Framework/Renderer/Private/SceneRenderer.h](../../src/Framework/Renderer/Private/SceneRenderer.h) | 80 | 内存、渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
+| [src/Framework/Renderer/Private/SceneRenderer.h](../../src/Framework/Renderer/Private/SceneRenderer.h) | 81 | 内存、渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
 | [src/Framework/Renderer/Private/SceneShaderParameters.cpp](../../src/Framework/Renderer/Private/SceneShaderParameters.cpp) | 167 | 内存、渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Framework/Renderer/Private/SceneShaderParameters.h](../../src/Framework/Renderer/Private/SceneShaderParameters.h) | 127 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Framework/Renderer/Private/ScreenPass.cpp](../../src/Framework/Renderer/Private/ScreenPass.cpp) | 38 | 渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
@@ -412,14 +420,16 @@
 | [src/Framework/Renderer/PublicHeader/RenderModule.h](../../src/Framework/Renderer/PublicHeader/RenderModule.h) | 34 | 接口/配置/基础辅助 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
 | [src/Framework/Renderer/PublicHeader/ScreenPass.h](../../src/Framework/Renderer/PublicHeader/ScreenPass.h) | 11 | 渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
 | [src/Framework/Renderer/PublicHeader/StaticMeshProcess.h](../../src/Framework/Renderer/PublicHeader/StaticMeshProcess.h) | 67 | 渲染 | [08-mesh-import-and-geometry](algorithm/08-mesh-import-and-geometry.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
-| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.cpp) | 431 | 渲染 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
-| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h) | 45 | 接口/配置/基础辅助 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
-| [src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.cpp) | 84 | 渲染 | [renderer_spec](../specification/renderer_spec.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
-| [src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.h) | 16 | 接口/渲染 | [renderer_spec](../specification/renderer_spec.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.cpp) | 441 | 渲染 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h) | 48 | 接口/配置/基础辅助 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.cpp) | 91 | 渲染 | [renderer_spec](../specification/renderer_spec.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.h) | 18 | 接口/渲染 | [renderer_spec](../specification/renderer_spec.md) / [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryVertexFactory.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryVertexFactory.cpp) | 46 | 渲染 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryVertexFactory.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryVertexFactory.h) | 28 | 渲染 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
-| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryMaterialResolvePass.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryMaterialResolvePass.cpp) | 268 | 算法、渲染 | [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryMaterialResolvePass.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryMaterialResolvePass.cpp) | 272 | 算法、渲染 | [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryMaterialResolvePass.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryMaterialResolvePass.h) | 25 | 接口/配置/基础辅助 | [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.h) | 12 | 接口/算法 | [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
+| [src/Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.cpp) | 231 | 接口/算法 | [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
 
 ## src/Framework/RHI（24 个文件）
 
@@ -579,13 +589,13 @@
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
-| [src/Lancher/apps.json](../../src/Lancher/apps.json) | 29 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
+| [src/Lancher/apps.json](../../src/Lancher/apps.json) | 30 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Lancher/CMakeLists.txt](../../src/Lancher/CMakeLists.txt) | 18 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Lancher/Loop.cpp](../../src/Lancher/Loop.cpp) | 95 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Lancher/Loop.h](../../src/Lancher/Loop.h) | 8 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Lancher/main.cpp](../../src/Lancher/main.cpp) | 16 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## src/Tests（16 个文件）
+## src/Tests（18 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -605,6 +615,8 @@
 | [src/Tests/VirtualGeometryRasterTest.cpp](../../src/Tests/VirtualGeometryRasterTest.cpp) | 306 | 并发、内存、渲染 | [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Tests/VirtualGeometryMaterialResolveTest.cpp](../../src/Tests/VirtualGeometryMaterialResolveTest.cpp) | 411 | 并发、内存、渲染 | [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Tests/VirtualGeometryRenderTest.cpp](../../src/Tests/VirtualGeometryRenderTest.cpp) | 169 | 并发、内存、渲染 | [renderer_spec](../specification/renderer_spec.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
+| [src/Tests/VirtualGeometryLODSelectionTest.cpp](../../src/Tests/VirtualGeometryLODSelectionTest.cpp) | 337 | 算法 | [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) |
+| [src/Tests/VirtualGeometryLODRenderTest.cpp](../../src/Tests/VirtualGeometryLODRenderTest.cpp) | 313 | 并发、内存、渲染 | [13-virtual-geometry-lod-selection](algorithm/13-virtual-geometry-lod-selection.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
 
 ## 后续维护
 

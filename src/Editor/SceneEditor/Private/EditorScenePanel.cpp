@@ -54,6 +54,10 @@ namespace Editor
     EditorViewToolbar::EditorViewToolbar(EditorScene& scene) : m_Scene(scene) {}
     void EditorViewToolbar::SetOnOpenMeshViewer(std::function<void()> callback)
     { m_OnOpenMeshViewer=std::move(callback); }
+    void EditorViewToolbar::SetOnOpenVirtualGeometryViewer(std::function<void()> callback)
+    {
+        m_OnOpenVirtualGeometryViewer = std::move(callback);
+    }
     void EditorViewToolbar::SetOnOpenTextureViewer(std::function<void()> callback)
     { m_OnOpenTextureViewer=std::move(callback); }
     void EditorViewToolbar::Draw()
@@ -109,6 +113,13 @@ namespace Editor
                     ImGui::SameLine();
                     ImGui::BeginDisabled(!m_OnOpenTextureViewer);
                     if (ImGui::Button("Texture\nviewer",{80,44})) m_OnOpenTextureViewer();
+                    ImGui::EndDisabled();
+                    ImGui::SameLine();
+                    ImGui::BeginDisabled(!m_OnOpenVirtualGeometryViewer);
+                    if (ImGui::Button("Virtual geometry\nviewer", {130, 44}))
+                    {
+                        m_OnOpenVirtualGeometryViewer();
+                    }
                     ImGui::EndDisabled();
                     ImGui::TextDisabled("Inspect mesh");
                     ImGui::EndGroup();

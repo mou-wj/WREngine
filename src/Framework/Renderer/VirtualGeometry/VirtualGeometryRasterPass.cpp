@@ -1,4 +1,5 @@
 #include "VirtualGeometryRasterPass.h"
+#include "VirtualGeometryLODSelection.h"
 #include "VirtualGeometryVertexFactory.h"
 #include "MeshMaterialShader.h"
 #include "GlobalShader.h"
@@ -206,6 +207,7 @@ namespace Renderer
             VirtualGeometryInstance Instance;
             std::shared_ptr<VirtualGeometryVertexFactory> Factory;
             uint32_t FirstDraw = 0;
+            std::vector<uint32_t> Clusters;
         };
     } // namespace
 
@@ -260,13 +262,24 @@ namespace Renderer
             }
             rasterInstances.push_back({instance, std::make_shared<VirtualGeometryVertexFactory>(geometry),
                                        static_cast<uint32_t>(output->Draws.size())});
-            for (uint32_t c = 0; c < geometry.Clusters.size(); ++c)
+            auto& selected = rasterInstances.back().Clusters;
+            if (instance.bInspectGeneratedLevel)
+            {
+                for (uint32_t c = 0; c < geometry.Clusters.size(); ++c)
+                {
+                    if (geometry.Clusters[c].MipLevel == instance.MipLevel)
+                    {
+                        selected.push_back(c);
+                    }
+                }
+            }
+            else
+            {
+                selected = SelectVirtualGeometryClusters(geometry, instance.LocalToWorld, view, instance.TargetPixelError);
+            }
+            for (const auto c : selected)
             {
                 const auto& cluster = geometry.Clusters[c];
-                if (cluster.GeneratingGroupIndex != Engine::INVALID_VIRTUAL_GEOMETRY_INDEX)
-                {
-                    continue;
-                }
                 if (output->Draws.size() >= UINT32_MAX || cluster.VertexOffset > INT32_MAX ||
                     uint64_t(cluster.IndexOffset) + cluster.TriangleCount * 3ull > geometry.Indices.size() ||
                     uint64_t(cluster.VertexOffset) + cluster.VertexCount > geometry.Positions.size())
@@ -351,12 +364,9 @@ namespace Renderer
                 cmd.SetScissor(view.Viewport.X, view.Viewport.Y, view.Viewport.Width, view.Viewport.Height);
                 cmd.BeginRenderPass(RenderPass(params->Targets, width, height));
                 uint32_t draw = raster.FirstDraw;
-                for (const auto& cluster : data.Clusters)
+                for (const auto clusterIndex : raster.Clusters)
                 {
-                    if (cluster.GeneratingGroupIndex != Engine::INVALID_VIRTUAL_GEOMETRY_INDEX)
-                    {
-                        continue;
-                    }
+                    const auto& cluster = data.Clusters[clusterIndex];
                     VirtualGeometryVertexFactoryParameters vertexParams{};
                     vertexParams.LocalToWorld = raster.Instance.LocalToWorld;
                     vertexParams.ViewProjection = view.ViewProjectionMatrix;

@@ -65,10 +65,13 @@
 | [网格导入与几何生成](algorithm/08-mesh-import-and-geometry.md) | 顶点访问、法线切线、实例索引和程序化网格怎样组织？ |
 | [TextureViewer 画布与预览](algorithm/09-texture-viewer-canvas.md) | 多图片如何居中、选中、拖动和围绕鼠标缩放，网格如何分级，Cube/Mip/数组层如何显示？ |
 | [CPU 虚拟几何构建](algorithm/10-virtual-geometry-cpu-build.md) | 拓扑分簇、组内 QEM、边界合法性、多对多 DAG、几何误差和有限终止怎样实现？ |
+| [Virtual Geometry CPU 动态 LOD](algorithm/13-virtual-geometry-lod-selection.md) | 如何将累计几何误差投影为像素误差、按完整 Group 替换构造多对多 DAG Cut，并与 Raster/Resolve 衔接？ |
 
 ## 如何阅读和核查
 
 模块功能使用约定按需查阅 Doc/specification。Virtual Geometry 的独立场景构图入口、SceneDepth/GBuffer 要求及当前限制见 [renderer_spec](../specification/renderer_spec.md#virtual-geometry-场景绘制入口)，具体算法仍由上述核心实现专题说明。
+
+独立 [VirtualGeometryViewer](../specification/virtualgeometryviewer_spec.md) 在 View Ribbon 中检查生成层与材质光照预览；Compute 显式梯度及独立场景参数准备见 [Material Resolve](algorithm/12-virtual-geometry-material-resolve.md)。主场景流程保持独立。
 
 先读对应架构文档，再沿专题“源码入口 → 数据/公式 → 执行步骤 → 约束/限制 → 验证入口”查看。文档中的源码链接为相对仓库路径，关键函数名称供 IDE 搜索；不将易变行号当成永久定位方式。
 

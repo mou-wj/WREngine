@@ -1,7 +1,5 @@
 ﻿#include "/Generated/ShaderParameters/VirtualGeometryMaterialResolveParameters.sf"
-static float2 materialGradientX;
-static float2 materialGradientY;
-#define MATERIAL_TEXTURE_SAMPLE(Texture, UV) Texture.SampleGrad(LinearWrapSampler, UV, materialGradientX, materialGradientY)
+#define MATERIAL_EXPLICIT_GRADIENTS 1
 #include "/core/MaterialGBufferHelper.sf"
 
 float3 ReadPosition(uint index)
@@ -104,10 +102,10 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     float2 interpolatedUV = uv[0] * weights.x + uv[1] * weights.y + uv[2] * weights.z;
     float3 weightedDx = dx * inverseW;
     float3 weightedDy = dy * inverseW;
-    materialGradientX = (uv[0] * weightedDx.x + uv[1] * weightedDx.y + uv[2] * weightedDx.z -
-                         interpolatedUV * dot(dx, inverseW)) / denominator * UVTiling;
-    materialGradientY = (uv[0] * weightedDy.x + uv[1] * weightedDy.y + uv[2] * weightedDy.z -
-                         interpolatedUV * dot(dy, inverseW)) / denominator * UVTiling;
+    float2 materialGradientX = (uv[0] * weightedDx.x + uv[1] * weightedDx.y + uv[2] * weightedDx.z -
+                         interpolatedUV * dot(dx, inverseW)) / denominator;
+    float2 materialGradientY = (uv[0] * weightedDy.x + uv[1] * weightedDy.y + uv[2] * weightedDy.z -
+                         interpolatedUV * dot(dy, inverseW)) / denominator;
     ShadingContext context;
     context.WorldPosition = world[0] * weights.x + world[1] * weights.y + world[2] * weights.z;
     context.WorldNormal = normalize(normal[0] * weights.x + normal[1] * weights.y + normal[2] * weights.z);
@@ -129,7 +127,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     {
         return;
     }
-    FGBufferOutput result = EvaluateMaterialGBuffer(context);
+    FGBufferOutput result = EvaluateMaterialGBuffer(context, materialGradientX, materialGradientY);
     ResolveGBufferA[pixel] = result.GBufferA;
     ResolveGBufferB[pixel] = result.GBufferB;
     ResolveGBufferC[pixel] = result.GBufferC;

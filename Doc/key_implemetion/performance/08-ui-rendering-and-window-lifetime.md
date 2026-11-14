@@ -277,6 +277,18 @@ Builder 在实际提交位置更新原有 Tracker。窗口 GUI 采样前，imgui
 
 关闭工程先沿既有窗口完成点等待，再 Reset MeshViewer、清空场景和 AssetManager。应用关闭先 ReleaseWindow，随后销毁面板及预览资源，模块依赖保证 RHI/RenderCore 尚可使用。顶点表每帧只构建裁剪后的可见行及开启的属性列，读取 CPU 原数据，不每行查询 GPU；网格列表刷新 O(场景网格数)，首次打包 O(V+I)，正常渲染最多两次 Draw，成本及退化条件见 [预览算法](../algorithm/05-pbr-ibl-and-sampling.md#meshviewer-的-phong-预览)。
 
+## VirtualGeometryViewer 的独立预览生命周期
+
+[EditorVirtualGeometryViewer](../../../src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h) 由 EditorApplication 持有，经 SceneEditor 的 View 回调打开，Tick 在主窗口 Draw 前执行，Draw 只记录纹理引用和下一次模式、层级、尺寸、相机输入。模块显式链接 Renderer，但主场景的 RenderModule、DefferedSceneRenderer 编排保持原样，具体功能入口见 [使用说明](../../specification/virtualgeometryviewer_spec.md)。
+
+[VirtualGeometryPreview](../../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.cpp) 持有输入资产引用、自有 StaticMeshRenderData、颜色纹理、默认材质和只包含预览灯的 Scene。派生虚拟几何在选择或重建时同步 Build/InitializeResources，不写回共享源网格。每帧用同一 RDG 组织 Raster、Debug 或 Resolve/既有延迟光照。Scene 复用既有构造资源；第一版没有后台 CPU 构建、跨资源共享预览缓存或自有 GPU 队列。
+
+默认动态模式在构图线程同步运行 [CPU LOD Selection](../algorithm/13-virtual-geometry-lod-selection.md)，只读既有 DAG；每实例使用当前调用局部的 selected/applied 数组。Raster 把选中列表按值保留到 Metadata 生成和命令录制，Preview 仅复制本次实际 Draw 的 ClusterID 用于列表和统计，不承担资源保活或再运行一次选择。阈值、视口和相机变化在下一次 Tick 生效，不重建几何、不重新上传常驻 Buffer，也不增加同步点；成本为每实例扫描全部 DAG。显式生成层检查仍是诊断模式，不代表完整 Cut。
+
+Wireframe 开启时，Preview 按实际选中三角形生成临时 LineList 索引，上传向量放在 Builder arena，索引 Buffer 为 RDG transient；位置 Buffer 复用派生几何。叠加 Pass 明确登记 VertexOrIndexBuffer、颜色和深度附件访问，最后访问记录继续覆盖线框提交。没有新增常驻边缓存、资源所有者或等待；关闭时不生成这项数据。绘制参数及成本见 [Viewer 说明](../../specification/virtualgeometryviewer_spec.md)。
+
+关闭、重建、换网格与改变预览尺寸时，检查颜色目标及全部派生几何 Buffer 的最后访问 Fence，包含未首帧绘制前的上传。颜色 Tracker 同时接受预览输出和 ImGui 实际采样的 Fence；等待完成后才能释放或替换目标。关闭项目沿 ResetProjectPanels 清空，应用关闭仍先释放 ImMainWindow，再销毁 Viewer，最后由模块依赖关闭 Renderer/RHI。没有 WaitIdle、新的全局保活列表或资源所有权转移。
+
 ## TextureViewer 来源与资源生命周期
 
 源码：[EditorTextureViewer](../../../src/Editor/TextureViewer/Private/EditorTextureViewer.cpp)、[TextureViewerPreview](../../../src/Editor/TextureViewer/Private/TextureViewerPreview.cpp)、[EditorApplication::CollectTextureViewerSources](../../../src/Editor/Editor/Private/EditorApplication.cpp)。模块入口见 [Editor 架构](../../architecture/app/editor.md#textureviewer-多纹理检查)，数学见 [二维画布](../algorithm/09-texture-viewer-canvas.md)。

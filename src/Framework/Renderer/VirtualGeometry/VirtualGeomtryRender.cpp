@@ -4,13 +4,15 @@
 #include "StaticMeshComponent.h"
 #include "StaticMeshProxy.h"
 #include "GBufferInfo.h"
+#include <cmath>
 #include <stdexcept>
 
 namespace Renderer
 {
     namespace
     {
-        std::vector<VirtualGeometryInstance> BuildVirtualGeometryInstances(Scene& scene, const Engine::SceneView& view)
+        std::vector<VirtualGeometryInstance> BuildVirtualGeometryInstances(Scene& scene, const Engine::SceneView& view,
+                                                                          float targetPixelError)
         {
             std::vector<VirtualGeometryInstance> instances;
             const auto& instanceIDs = scene.GetGPUResourceInfo().PrimitiveResourceInfo
@@ -35,6 +37,7 @@ namespace Renderer
                     throw std::invalid_argument("Virtual geometry scene instance is missing; flush scene updates first");
                 }
                 VirtualGeometryInstance instance{data, proxy->GetLocalToWorld(), instanceID->second};
+                instance.TargetPixelError = targetPixelError;
                 instance.Materials.reserve(component->GetNumMaterials());
                 for (uint32_t slot = 0; slot < component->GetNumMaterials(); ++slot)
                 {
@@ -50,11 +53,15 @@ namespace Renderer
     std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRender(
         RenderCore::RenderGraphBuilder& builder, Scene* scene, const Engine::SceneView& view,
         RenderCore::RenderGraphTextureRef sceneDepth, RenderCore::RenderGraphTextureRef gbufferA,
-        RenderCore::RenderGraphTextureRef gbufferB, RenderCore::RenderGraphTextureRef gbufferC)
+        RenderCore::RenderGraphTextureRef gbufferB, RenderCore::RenderGraphTextureRef gbufferC, float targetPixelError)
     {
         if (!scene || !sceneDepth || !gbufferA || !gbufferB || !gbufferC)
         {
             throw std::invalid_argument("Virtual geometry render requires a scene, depth and GBuffer A/B/C");
+        }
+        if (!std::isfinite(targetPixelError) || targetPixelError < 0)
+        {
+            throw std::invalid_argument("Virtual geometry target pixel error must be finite and nonnegative");
         }
         const auto& depthDesc = sceneDepth->GetDesc();
         // The current raster clear covers the entire attachment. Do not erase another view implicitly.
@@ -76,7 +83,7 @@ namespace Renderer
                 throw std::invalid_argument("Virtual geometry render requires matching UAV GBuffer targets");
             }
         }
-        auto instances = BuildVirtualGeometryInstances(*scene, view);
+        auto instances = BuildVirtualGeometryInstances(*scene, view, targetPixelError);
         auto visibility = AddVirtualGeometryRasterPass(builder, view, instances, sceneDepth);
         AddVirtualGeometryMaterialResolvePass(builder, view, visibility, gbufferA, gbufferB, gbufferC);
         return visibility;

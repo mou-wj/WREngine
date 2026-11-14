@@ -11,7 +11,7 @@
       }
     },
     "Editor": {
-      "modules": ["RHIVulkan", "Engine", "Renderer", "SlateRHIRenderer", "SceneEditor", "AssetEditor", "MaterialEditor", "NodeEditor", "MeshViewer", "TextureViewer", "Editor"],
+      "modules": ["RHIVulkan", "Engine", "Renderer", "SlateRHIRenderer", "SceneEditor", "AssetEditor", "MaterialEditor", "NodeEditor", "MeshViewer", "TextureViewer", "VirtualGeometryViewer", "Editor"],
       "dependencies": {
         "Engine": ["RHIVulkan"],
         "Renderer": ["Engine"],
@@ -22,7 +22,8 @@
         "NodeEditor": ["Engine"],
         "MeshViewer": ["Engine"],
         "TextureViewer": ["Engine"],
-        "Editor": ["Engine", "SlateRHIRenderer", "SceneEditor", "AssetEditor", "MaterialEditor", "NodeEditor", "MeshViewer", "TextureViewer"]
+        "VirtualGeometryViewer": ["Engine", "Renderer"],
+        "Editor": ["Engine", "SlateRHIRenderer", "SceneEditor", "AssetEditor", "MaterialEditor", "NodeEditor", "MeshViewer", "TextureViewer", "VirtualGeometryViewer"]
       }
     }
   }

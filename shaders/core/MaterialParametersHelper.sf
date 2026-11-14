@@ -37,7 +37,17 @@ float2 GetMaterialUV(float2 UV)
 // Sampling
 //=============================================================================
 
-float3 SampleBaseColor(float2 UV)
+// Pixel shaders retain implicit derivatives. Compute callers supply explicit UV gradients.
+float4 SampleMaterialTexture(Texture2D texture, float2 uv, float2 uvGradientX, float2 uvGradientY)
+{
+#if MATERIAL_EXPLICIT_GRADIENTS
+    return texture.SampleGrad(LinearWrapSampler, uv, uvGradientX, uvGradientY);
+#else
+    return texture.Sample(LinearWrapSampler, uv);
+#endif
+}
+
+float3 SampleBaseColor(float2 UV, float2 uvGradientX = 0, float2 uvGradientY = 0)
 {
     float3 Result =
         BaseColor.rgb;
@@ -46,15 +56,13 @@ float3 SampleBaseColor(float2 UV)
         MATERIAL_TEXTURE_BASECOLOR))
     {
         Result *=
-            BaseColorTexture.Sample(
-                LinearWrapSampler,
-                UV).rgb;
+            SampleMaterialTexture(BaseColorTexture, UV, uvGradientX, uvGradientY).rgb;
     }
 
     return Result;
 }
 
-float SampleOpacity(float2 UV)
+float SampleOpacity(float2 UV, float2 uvGradientX = 0, float2 uvGradientY = 0)
 {
     float Result =
         Opacity;
@@ -63,15 +71,13 @@ float SampleOpacity(float2 UV)
         MATERIAL_TEXTURE_OPACITY))
     {
         Result *=
-            OpacityTexture.Sample(
-                LinearWrapSampler,
-                UV).r;
+            SampleMaterialTexture(OpacityTexture, UV, uvGradientX, uvGradientY).r;
     }
 
     return Result;
 }
 
-float3 SampleEmissive(float2 UV)
+float3 SampleEmissive(float2 UV, float2 uvGradientX = 0, float2 uvGradientY = 0)
 {
     float3 Result =
         EmissiveColor;
@@ -80,16 +86,14 @@ float3 SampleEmissive(float2 UV)
         MATERIAL_TEXTURE_EMISSIVE))
     {
         Result *=
-            EmissiveTexture.Sample(
-                LinearWrapSampler,
-                UV).rgb;
+            SampleMaterialTexture(EmissiveTexture, UV, uvGradientX, uvGradientY).rgb;
     }
 
     return Result;
 }
 
 void SampleORM(
-    float2 UV,
+    float2 UV, float2 uvGradientX, float2 uvGradientY,
     out float AO,
     out float RoughnessValue,
     out float MetallicValue)
@@ -107,9 +111,7 @@ void SampleORM(
         MATERIAL_TEXTURE_ORM))
     {
         float3 ORM =
-            ORMTexture.Sample(
-                LinearWrapSampler,
-                UV).rgb;
+            SampleMaterialTexture(ORMTexture, UV, uvGradientX, uvGradientY).rgb;
 
         AO *= ORM.r;
         RoughnessValue *= ORM.g;
@@ -118,7 +120,7 @@ void SampleORM(
 }
 
 float3 SampleNormalTS(
-    float2 UV)
+    float2 UV, float2 uvGradientX = 0, float2 uvGradientY = 0)
 {
     float3 Result =
         float3(0, 0, 1);
@@ -127,9 +129,7 @@ float3 SampleNormalTS(
         MATERIAL_TEXTURE_NORMAL))
     {
         Result =
-            NormalTexture.Sample(
-                LinearWrapSampler,
-                UV).xyz;
+            SampleMaterialTexture(NormalTexture, UV, uvGradientX, uvGradientY).xyz;
 
         Result =
             Result * 2.0 - 1.0;
@@ -150,21 +150,23 @@ float3 SampleNormalTS(
 //=============================================================================
 
 MaterialData BuildMaterialData(
-    float2 UV)
+    float2 UV, float2 uvGradientX = 0, float2 uvGradientY = 0)
 {
     MaterialData M;
+    uvGradientX *= UVTiling;
+    uvGradientY *= UVTiling;
 
     UV =
         GetMaterialUV(UV);
 
     M.BaseColor =
-        SampleBaseColor(UV);
+        SampleBaseColor(UV, uvGradientX, uvGradientY);
 
     M.EmissiveColor =
-        SampleEmissive(UV);
+        SampleEmissive(UV, uvGradientX, uvGradientY);
 
     M.Opacity =
-        SampleOpacity(UV);
+        SampleOpacity(UV, uvGradientX, uvGradientY);
 
     M.OpacityMask =
         OpacityMask;
@@ -173,13 +175,13 @@ MaterialData BuildMaterialData(
         Specular;
 
     SampleORM(
-        UV,
+        UV, uvGradientX, uvGradientY,
         M.AmbientOcclusion,
         M.Roughness,
         M.Metallic);
 
     M.NormalTS =
-        SampleNormalTS(UV);
+        SampleNormalTS(UV, uvGradientX, uvGradientY);
 
     return M;
 }

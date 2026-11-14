@@ -67,10 +67,11 @@ namespace Renderer {
         static void BuildSceneLightShadowMap(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder);
         
         static void UploadShadowMapInfo(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder);
+        // Shared parameter preparation for independent deferred consumers as well as scene renderers.
+        static void UpdateCascadeShadowInfo(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder, const Engine::SceneView& view);
         static void AddPreDepthPass(RenderCore::RenderGraphBuilder& graphBuilder,const MeshBatchList& meshBatchList,const Core::Mat4& viewProj, RenderCore::RenderGraphTextureRef depth, std::optional<RHI::ERHICullMode> cullModeOverride = std::nullopt);
     protected:
         static void BuildSceneLightCascadeShadowMap(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder, const Engine::SceneView& view);
-        static void UpdateCascadeShadowInfo(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder, const Engine::SceneView& view);
         static void AddClearShadowMapPass( RenderCore::RenderGraphBuilder& graphBuilder, std::vector<ShadowRenderView>& shadowRenderViews);
         static void BuildLightShadow(Renderer::Scene* scene, RenderCore::RenderGraphBuilder& graphBuilder , std::vector<ShadowRenderView>& shadowRenderViews, std::optional<RHI::ERHICullMode> cullModeOverride = std::nullopt);
     };

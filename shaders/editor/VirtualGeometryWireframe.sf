@@ -1,0 +1,15 @@
+#if VERTEX_SHADER
+#include "/Generated/ShaderParameters/VirtualGeometryVertexFactoryParameters.sf"
+float4 MainVS(float3 position : ATTRIBUTE0) : SV_Position
+{
+    float4 clip = mul(ViewProjection, mul(LocalToWorld, float4(position, 1)));
+    // Pull only the overlay slightly towards the camera to avoid coincident-depth flicker.
+    clip.z -= 0.00001 * clip.w;
+    return clip;
+}
+#else
+float4 MainPS(float4 position : SV_Position) : SV_Target0
+{
+    return float4(0.035, 0.04, 0.05, 1);
+}
+#endif

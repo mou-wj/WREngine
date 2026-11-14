@@ -2,7 +2,7 @@
 
 ## 模块和边界
 
-`src/Editor/CMakeLists.txt` 纳入 SceneEditor、AssetEditor、MaterialEditor、NodeEditor、MeshViewer、TextureViewer、Editor 七个独立 DLL。Editor 与原 Application 都提供 ApplicationBase 实现，由 Launcher 选择其一；Editor 负责工程生命周期、菜单与应用组装，功能面板由各自模块实现。
+`src/Editor/CMakeLists.txt` 纳入 SceneEditor、AssetEditor、MaterialEditor、NodeEditor、MeshViewer、TextureViewer、VirtualGeometryViewer、Editor 八个独立 DLL。Editor 与原 Application 都提供 ApplicationBase 实现，由 Launcher 选择其一；Editor 负责工程生命周期、菜单与应用组装，功能面板由各自模块实现。
 
 | 实现 | 职责 |
 | --- | --- |
@@ -16,6 +16,7 @@
 | [MaterialEditor / MaterialLibrary](../../../src/Editor/MaterialEditor/PublicHeader/MaterialLibrary.h) | 项目材质文件的元数据扫描、新建、复制与依赖文件导入，不持有运行时资产 |
 | [NodeEditor / EditorNodePanel](../../../src/Editor/NodeEditor/PublicHeader/EditorNodePanel.h) | 借用当前 SceneComponent；网格编辑局部 TRS/材质槽信息，光源编辑位置和实际光照属性 |
 | [MeshViewer / EditorMeshViewer](../../../src/Editor/MeshViewer/PublicHeader/EditorMeshViewer.h) | 从场景网格列表选择节点，单网格 Phong/线框预览、法线叠加与 LOD/顶点属性/区域检查 |
+| [VirtualGeometryViewer](../../../src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h) | 独立虚拟几何预览和生成层检查，调用 Renderer 的 Visibility、Resolve 和延迟光照 Pass |
 | [TextureViewer / EditorTextureViewer](../../../src/Editor/TextureViewer/PublicHeader/EditorTextureViewer.h) | 多来源纹理列表、二维画布、Mip/立方体面/数组层检查，来源由宿主回调提供 |
 
 ## 依赖和模块协作
@@ -38,6 +39,10 @@ flowchart LR
     ImGuiSlate --> MeshViewer
     RenderCore --> MeshViewer
     MeshViewer --> Editor
+    Engine --> VirtualGeometryViewer
+    ImGuiSlate --> VirtualGeometryViewer
+    Renderer --> VirtualGeometryViewer
+    VirtualGeometryViewer --> Editor
     Engine --> TextureViewer
     ImGuiSlate --> TextureViewer
     RenderCore --> TextureViewer
@@ -177,6 +182,10 @@ Vertices 页按原始分量数展示位置、法线、UV、切线和颜色，各
 关闭先销毁窗口，由既有 ReleaseWindow 完成该窗口提交，再销毁面板、视口和场景；移除组件前先消费借用它的移除命令。RHI/Renderer 由模块依赖保证此时仍可用。更详细的时序见 [UI 工程实现](../../key_implemetion/performance/08-ui-rendering-and-window-lifetime.md)。
 
 分隔条是 ImGUISlate 的 ImSplitterWidget，只负责当前 ImGuiContext 的命中、光标请求和拖动增量。布局比例仍属于 EditorLayout；回调只在数值实际改变时调用 ImMainWindow::UpdateLayout。三个分隔条在任何视口/面板绘制前登记，重新布局前等待上一窗口完成标记，再经既有 SetGeometry/SceneViewport::Resize 更新纹理。内部拖动不销毁窗口交换链，不添加 WaitIdle 或资源保活容器；边界达到下限时也不重复等待。
+
+### VirtualGeometryViewer 虚拟几何检查
+
+View Ribbon 通过回调打开 VirtualGeometryViewer，Editor 提供网格资产列表并在 Window::Draw 前 Tick。该模块显式依赖 Renderer，独立持有派生几何、离屏目标与预览灯光场景，不向主 Scene 注册预览对象，不改主延迟渲染编排。项目关闭和应用退出沿现有宿主生命周期重置窗口。使用、生成层语义及验证范围见 [模块说明](../../specification/virtualgeometryviewer_spec.md)。
 
 ## TextureViewer 多纹理检查
 

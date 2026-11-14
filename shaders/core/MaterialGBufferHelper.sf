@@ -1,9 +1,9 @@
 #include "/core/GBufferCommon.sf"
 #include "/core/MaterialParametersHelper.sf"
 
-FGBufferOutput EvaluateMaterialGBuffer(ShadingContext context)
+FGBufferOutput EvaluateMaterialGBuffer(ShadingContext context, float2 uvGradientX = 0, float2 uvGradientY = 0)
 {
-    MaterialData material = BuildMaterialData(context.UV0);
+    MaterialData material = BuildMaterialData(context.UV0, uvGradientX, uvGradientY);
     FGBufferOutput output = (FGBufferOutput)0;
 #if MATERIAL_SHADING_MODEL == 1
     float3 worldNormal = normalize(mul(material.NormalTS, context.TangentToWorld));

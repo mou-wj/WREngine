@@ -5,6 +5,7 @@
 #include "EditorMaterialPanel.h"
 #include "EditorNodePanel.h"
 #include "EditorMeshViewer.h"
+#include "EditorVirtualGeometryViewer.h"
 #include "EditorTextureViewer.h"
 #include "Widgets/ImFileDialogWidget.h"
 #include "AssetManager.h"
@@ -208,6 +209,32 @@ namespace Editor
                 }
             return result;
         });
+        m_VirtualGeometryViewer = std::make_unique<EditorVirtualGeometryViewer>([this]
+        {
+            std::vector<VirtualGeometryViewerMesh> result;
+            for (const auto& object : m_Scene->GetObjects())
+            {
+                if (const auto* component = dynamic_cast<const Engine::StaticMeshComponent*>(object.Component.get()))
+                {
+                    const auto* mesh = component->GetStaticMesh();
+                    result.push_back({object.Name, mesh ? mesh->GetAsset() : nullptr});
+                }
+            }
+            return result;
+        });
+        m_ViewToolbar->SetOnOpenVirtualGeometryViewer([this]
+        {
+            std::string selected;
+            for (const auto& object : m_Scene->GetObjects())
+            {
+                if (object.Component.get() == m_Scene->GetSelectedMesh())
+                {
+                    selected = object.Name;
+                    break;
+                }
+            }
+            m_VirtualGeometryViewer->Open(selected);
+        });
         m_TextureViewer=std::make_unique<EditorTextureViewer>([this] { return CollectTextureViewerSources(); });
         m_ViewToolbar->SetOnOpenTextureViewer([this] { m_TextureViewer->Open(); });
         m_ViewToolbar->SetOnOpenMeshViewer([this] {
@@ -250,6 +277,7 @@ namespace Editor
         m_Window->AddWidget(m_NodePanel.get(),layout);
         m_Window->AddWidget(m_MaterialPanel.get(),{});
         m_Window->AddWidget(m_MeshViewer.get(),{});
+        m_Window->AddWidget(m_VirtualGeometryViewer.get(), {});
         m_Window->AddWidget(m_TextureViewer.get(),{});
         m_Window->Show();
         std::cout << "[Editor] Initialized Scene / Assets / Material panels" << std::endl;
@@ -262,6 +290,7 @@ namespace Editor
         // Keep widgets, viewport and assets alive until that release has completed.
         m_Window.reset();
         m_MeshViewer.reset();
+        m_VirtualGeometryViewer.reset();
         m_TextureViewer.reset();
         m_ProjectDialog.reset(); m_MenuWidget.reset(); m_NodePanel.reset();
         m_LeftSplitter.reset();
@@ -348,6 +377,7 @@ namespace Editor
             m_Window->UpdateLayout();
         }
         m_MeshViewer->Tick();
+        m_VirtualGeometryViewer->Tick();
         m_TextureViewer->Tick();
         m_Window->Draw();
         const auto& io = ImGui::GetIO();
@@ -413,6 +443,7 @@ namespace Editor
     void EditorApplication::ResetProjectPanels()
     {
         m_MeshViewer->Reset();
+        m_VirtualGeometryViewer->Reset();
         m_TextureViewer->Reset();
         m_PendingMeshAsset.reset(); m_AssetPanel->SetProjectAssets({});
         m_PendingObject.reset(); m_PendingDeleteObject=-1; m_ScenePanel->SetCreationEnabled(false);

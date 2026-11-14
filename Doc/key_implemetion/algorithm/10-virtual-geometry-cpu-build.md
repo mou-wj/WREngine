@@ -65,7 +65,7 @@ Group 的 Child 集合是简化前的整个区域，Parent 集合是简化后重
 
 接受的替换必须严格减少三角形且不增加 Cluster 数，避免第一次区域生长碎片化造成资源膨胀；这种保守条件可能拒绝仍有价值的简化。失败区域留在前沿，其他区域变粗后仍允许重新分组再尝试。整轮没有接受的替换就终止；前沿三角形整数总数每个成功轮次严格下降，保证有限终止，不靠固定距离或任意层数代替几何构建。
 
-最终为前沿建立一个或多个 Root Group，Root 的 Child 非空，Parent 为空，ParentMetric=ChildMetric。每个 Cluster 恰好被一个 Group 消费，所有生成和消费关系都有合法索引；生成 Group 编号严格早于消费 Group，Parent Cluster 编号严格晚于所有 Child，这提供可验证的拓扑序。Root 的定义是终端替换集合，不是一个空占位 Group。后续屏幕 LOD 遍历必须理解此约定。
+最终为前沿建立一个或多个 Root Group，Root 的 Child 非空，Parent 为空，ParentMetric=ChildMetric。每个 Cluster 恰好被一个 Group 消费，所有生成和消费关系都有合法索引；生成 Group 编号严格早于消费 Group，Parent Cluster 编号严格晚于所有 Child，这提供可验证的拓扑序。Root 的定义是终端替换集合，不是一个空占位 Group。现有 [CPU 动态 LOD](13-virtual-geometry-lod-selection.md) 直接利用该拓扑序，从叶 Cut 按整组替换构造本帧表示，Root 不执行空替换。
 
 ## 几何误差及 LOD 包围球
 

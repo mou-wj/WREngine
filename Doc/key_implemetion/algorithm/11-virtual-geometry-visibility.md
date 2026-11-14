@@ -16,7 +16,7 @@
 
 VirtualGeometryVertexFactory 继承 RenderCore::VertexFactory，注册 VertexFactoryType，绑定整个 PositionBuffer。ATTRIBUTE0 使用 R32G32B32_Float，步长为 sizeof(Core::Float3)。位置转换由 [VertexFactory Shader](../../../shaders/vertexfactory/VirtualGeometryVertexFactory.sf) 完成，计算 `clip = ViewProjection × LocalToWorld × float4(position, 1)`。DrawID 通过 nointerpolation 的整数 varying 传递。
 
-Raster 遍历 GeneratingGroupIndex 等于 INVALID 的叶 Cluster。每个 Cluster 调用一次 DrawIndexed，IndexCount 为 TriangleCount×3，FirstIndex 为 IndexOffset，BaseVertex 为 VertexOffset，InstanceCount 为 1。索引中保存的是 Cluster Local Index，因此第 k 个三角形的第 j 个角对应如下位置。
+Raster 默认调用独立的 [CPU LOD Selection](13-virtual-geometry-lod-selection.md)，按实例 TargetPixelError、变换和当前视图取得合法 DAG Cut，默认预算为 1 像素，0 表示完整叶集合。Metadata 和 DrawIndexed 使用同一份选中列表，不再固定选择最细层。Viewer 显式启用 bInspectGeneratedLevel 时仍可按 MipLevel 检查某一轮产物；这个诊断分支不是完整 Cut，不能用作场景 LOD。每个 Cluster 调用一次 DrawIndexed，IndexCount 为 TriangleCount×3，FirstIndex 为 IndexOffset，BaseVertex 为 VertexOffset，InstanceCount 为 1。索引中保存的是 Cluster Local Index，因此第 k 个三角形的第 j 个角对应如下位置。
 
 ```cpp
 uint32_t local = geometry.Indices[cluster.IndexOffset + k * 3 + j];
@@ -39,7 +39,7 @@ Draw Metadata 使用 Shader 参数元数据宏声明四个 uint32，依次为 In
 
 [Debug Shader](../../../shaders/virtualgeometry/Debug.sf) 使用 Texture.Load 读取屏幕位置的整数 Visibility，对合法 DrawID 查 StructuredBuffer 中的 ClusterID。颜色散列为 `h = (ClusterID + 1) × 1664525 + 1013904223`，取低三个字节并映射到 0.2 至 1.0 的 RGB 区间。背景为 0.025 灰色，Alpha 为 1。最终使用全屏图形 Pass 写入目标 RenderTarget。
 
-Raster 的 CPU 遍历复杂度为实例引用的 Cluster 总数，Draw 次数为叶 Cluster 总数。Metadata 内存为 Draw 数乘元素步长，Visibility 和深度分别需要每像素 8 和 4 字节，另有 Debug 颜色目标。硬件负责三角形覆盖、插值与深度比较。本流程使用 CPU 最细层选择、普通 Vertex Input 和 DrawIndexed，后续材质求值、动态 LOD、GPU Culling、间接命令、软件光栅及 Streaming 留待对应功能开发。
+Raster 的 CPU 选择复杂度为每实例 O(Cluster+Group+引用数)，Draw 次数为选中 Cluster 数。Metadata 内存为 Draw 数乘元素步长，Visibility 和深度分别需要每像素 8 和 4 字节，另有 Debug 颜色目标。硬件负责三角形覆盖、插值与深度比较。CPU 动态 LOD 和后续材质 Resolve 已实现，仍使用普通 Vertex Input 和 DrawIndexed；GPU Culling、间接命令、软件光栅及 Streaming 尚未实现。
 
 ## RDG、所有权和完成点
 

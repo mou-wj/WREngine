@@ -5,6 +5,7 @@
 #include "StaticMeshMaterialShader.h"
 #include "StaticMeshProcess.h"
 #include "Scene.h"
+#include "SceneRenderer.h"
 #include "RHIPipelineStateCache.h"
 #include <cmath>
 #include <cstddef>
@@ -257,11 +258,14 @@ namespace Renderer
         params->GBuffer.GBufferInput.GBufferC = material.GBufferC;
         params->GBuffer.GBufferInput.Depth = depth;
         params->GBuffer.GBufferInput.PointSampler = GlobalSampler.get();
+        // Independent consumers do not pass through the main scene renderer's preparation stages.
+        SceneRenderer::UploadShadowMapInfo(scene, builder);
+        SceneRenderer::UpdateCascadeShadowInfo(scene, builder, view);
         BuildShaderParameters(scene, builder, params->Scene);
-        BuildEvnIBLLightParameters(scene, builder, params->EnvIBLParameters);
         AddStaticMeshDefferedShadingPass(builder, params, false);
         if (scene->GetGPUResourceInfo().LightResourceInfo.IBLSpecularTexture)
         {
+            BuildEvnIBLLightParameters(scene, builder, params->EnvIBLParameters);
             AddStaticMeshDefferedShadingPass(builder, params, true);
         }
     }
