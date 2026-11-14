@@ -404,7 +404,14 @@ namespace RHIOpenGL
                         //                  ConvertRHIFormatToGLFormat(info.Format));
                     }
                 }
-                // buffer UAV — 描述符层信息，GL 无需显式绑定
+                else if (auto* buffer = dynamic_cast<OpenGLBuffer*>(uav->GetResource()))
+                {
+                    const auto& view = uav->GetBufferUAVDesc();
+                    const uint64_t size = view.NumElements ? view.NumElements * view.Stride
+                                                          : buffer->GetDesc().Size - view.Offset;
+                    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, slot, buffer->GetHandle(),
+                                      static_cast<GLintptr>(view.Offset), static_cast<GLsizeiptr>(size));
+                }
                 break;
             }
             case RHI::RHIShaderResourceParameter::EType::AccelerationStructure:
@@ -437,7 +444,16 @@ namespace RHIOpenGL
 
     void OpenGLCommandContext::EndTransitions(std::vector<const RHI::RHITransition*> transitions)
     {
-        (void)transitions;
+        GLbitfield barriers = 0;
+        for (const auto* transition : transitions)
+        {
+            barriers |= *transition->GetPrivateData<GLbitfield>();
+        }
+        if (barriers)
+        {
+            // Capture the mask, not transient transition pointers; GL runs on the context worker.
+            _nativeCommands.emplace_back([barriers]() { glMemoryBarrier(barriers); });
+        }
     }
 
     void OpenGLCommandContext::CopyTexture(RHI::RHITexture* src, RHI::RHITexture* dst, const RHI::RHICopyTextureDesc& copyDesc)
@@ -710,6 +726,28 @@ namespace RHIOpenGL
                 m_CurrentPrimitiveTopology, static_cast<GLsizei>(indexCount), indexType,
                 reinterpret_cast<void*>(static_cast<uintptr_t>(firstIndex) * glIndexBuffer->GetDesc().Stride),
                 static_cast<GLsizei>(instanceCount), vertexOffset, firstInstance);
+        });
+    }
+
+    void OpenGLGraphicContext::DrawIndexedIndirect(RHI::RHIBuffer* indexBuffer, RHI::RHIBuffer* argumentBuffer, uint64_t argumentOffset)
+    {
+        _nativeCommands.emplace_back([this, indexBuffer, argumentBuffer, argumentOffset]()
+        {
+            if (m_CurrentVertexArray != 0)
+            {
+                glBindVertexArray(m_CurrentVertexArray);
+            }
+            if (m_bVertexLayoutDirty && m_CurrentPipelineState)
+            {
+                ApplyVertexDescState(m_CurrentPipelineState->GetDesc());
+            }
+            auto* indices = static_cast<OpenGLBuffer*>(indexBuffer);
+            auto* arguments = static_cast<OpenGLBuffer*>(argumentBuffer);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices->GetHandle());
+            glBindBuffer(GL_DRAW_INDIRECT_BUFFER, arguments->GetHandle());
+            const GLenum type = indices->GetDesc().Stride == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
+            glDrawElementsIndirect(m_CurrentPrimitiveTopology, type, reinterpret_cast<const void*>(argumentOffset));
+            glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
         });
     }
 

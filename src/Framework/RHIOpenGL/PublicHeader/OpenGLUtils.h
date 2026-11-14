@@ -5,6 +5,7 @@
 
 namespace RHIOpenGL
 {
+    GLbitfield ConvertRHIAccessToGLBarrier(RHI::ERHIResourceAccess access);
     [[noreturn]] void ThrowRayTracingUnsupported();
     GLenum ConvertRHICompareOpToGL(RHI::ERHICompareOp op);
     GLenum ConvertRHIFormatToGLInternalFormat(RHI::ERHIFormat format);

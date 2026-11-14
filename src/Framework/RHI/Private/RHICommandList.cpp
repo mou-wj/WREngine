@@ -1,6 +1,7 @@
 #include "RHICommandList.h"
 #include "RHICommandContex.h"
 #include "RHIApi.h"
+#include <stdexcept>
 
 namespace RHI {
 
@@ -35,6 +36,29 @@ void RHICommandDrawIndexed::Execute(RHICommandListBase& cmdList) {
 	{
 		graphicsContext->DrawIndexed(IndexBuffer, IndexCount, InstanceCount, FirstIndex, VertexOffset, FirstInstance);
 	}
+}
+
+void RHICommandDrawIndexedIndirect::Execute(RHICommandListBase& cmdList)
+{
+    auto* context = dynamic_cast<RHIGraphicContex*>(cmdList.GetContext());
+    if (!context)
+    {
+        throw std::logic_error("Indexed indirect draw requires a graphics context");
+    }
+    context->DrawIndexedIndirect(IndexBuffer, ArgumentBuffer, ArgumentOffset);
+}
+
+void RHIGraphicCommandList::DrawIndexedIndirect(RHIBuffer* indexBuffer, RHIBuffer* argumentBuffer, uint64_t argumentOffset)
+{
+    if (!indexBuffer || !argumentBuffer || !indexBuffer->GetDesc().Usage.HasAll(ERHIBufferUsageFlag::Index) ||
+        (indexBuffer->GetDesc().Stride != 2 && indexBuffer->GetDesc().Stride != 4) ||
+        !argumentBuffer->GetDesc().Usage.HasAll(ERHIBufferUsageFlag::Indirect) || argumentOffset % 4 ||
+        argumentOffset > argumentBuffer->GetDesc().Size ||
+        sizeof(RHIDrawIndexedIndirectArguments) > argumentBuffer->GetDesc().Size - argumentOffset)
+    {
+        throw std::invalid_argument("Invalid indexed indirect buffers, offset or argument range");
+    }
+    AddCommand<RHICommandDrawIndexedIndirect>(indexBuffer, argumentBuffer, argumentOffset);
 }
 
 RHICommandTraceRays::RHICommandTraceRays(uint32_t w, uint32_t h, uint32_t d)

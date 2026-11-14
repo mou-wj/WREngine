@@ -51,6 +51,16 @@ namespace RHI {
         void Execute(RHICommandListBase& cmdList) override;
     };
 
+    struct RHI_API RHICommandDrawIndexedIndirect : public RHICommandBase
+    {
+        RHIBuffer* IndexBuffer;
+        RHIBuffer* ArgumentBuffer;
+        uint64_t ArgumentOffset;
+        RHICommandDrawIndexedIndirect(RHIBuffer* indexBuffer, RHIBuffer* argumentBuffer, uint64_t argumentOffset)
+            : IndexBuffer(indexBuffer), ArgumentBuffer(argumentBuffer), ArgumentOffset(argumentOffset) {}
+        void Execute(RHICommandListBase& cmdList) override;
+    };
+
     struct RHI_API RHICommandTraceRays : public RHICommandBase
     {
         uint32_t Width, Height, Depth;
@@ -297,6 +307,7 @@ namespace RHI {
         void SetScissor(int32_t x, int32_t y, uint32_t w, uint32_t h);
         void Draw(uint32_t vertexCount, uint32_t instanceCount = 1,
             uint32_t firstVertex = 0, uint32_t firstInstance = 0);
+        void DrawIndexedIndirect(RHIBuffer* indexBuffer, RHIBuffer* argumentBuffer, uint64_t argumentOffset = 0);
         void DrawIndexed(RHIBuffer* indexBuffer, uint32_t indexCount = 1, uint32_t instanceCount = 1, uint32_t firstIndex = 0, int32_t vertexOffset = 0, uint32_t firstInstance = 0);
 
         void BeginRenderPass(const RHIRenderPassInfo& renderPassInfo);

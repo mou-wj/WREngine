@@ -25,7 +25,37 @@ namespace Editor
     SHADER_PARAMETER_RENDER_TARGET_BINDING_SLOTS(Targets)
     RDG_BUFFER_ACCESS(Positions, ERHIResourceAccess::VertexOrIndexBuffer)
     RDG_BUFFER_ACCESS(Indices, ERHIResourceAccess::VertexOrIndexBuffer)
+    RDG_BUFFER_ACCESS(Arguments, ERHIResourceAccess::IndirectArgs)
     END_SHADER_PARAMETER_STRUCT(VirtualGeometryWireframePassParameters)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(VirtualGeometryWireframeWord)
+    SHADER_PARAMETER(uint32_t, Value)
+    END_SHADER_PARAMETER_STRUCT(VirtualGeometryWireframeWord)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(VirtualGeometryWireframeArgumentsParameters)
+    SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<uint>, TriangleArguments)
+    SHADER_PARAMETER_RDG_RWSTRUCTURED_BUFFER(VirtualGeometryWireframeWord, LineArguments)
+    SHADER_PARAMETER(uint32_t, ArgumentCount)
+    END_SHADER_PARAMETER_STRUCT(VirtualGeometryWireframeArgumentsParameters)
+
+    class VirtualGeometryViewerWireframeArgumentsCS : public GlobalShader
+    {
+    public:
+        DECLARE_GLOBAL_SHADER_TYPE(VirtualGeometryViewerWireframeArgumentsCS)
+        static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters&, ShaderCompilerEnvironment&) {}
+        static const ShaderParametersMetadata* GetShaderParameterMetadata()
+        {
+            return VirtualGeometryWireframeArgumentsParameters::GetMetaData();
+        }
+    };
+    IMPLEMENT_GLOBAL_SHADER_TYPE(VirtualGeometryViewerWireframeArgumentsCS, "VirtualGeometryViewerWireframeArgumentsCS",
+                                 "/editor/VirtualGeometryWireframeArguments.sf", "MainCS", ERHIShaderFrequency::Compute);
+
+    BEGIN_SHADER_PARAMETER_STRUCT(VirtualGeometryViewerReadbackParameters)
+    RDG_TEXTURE_ACCESS(Color, ERHIResourceAccess::TransferSrc)
+    RDG_BUFFER_ACCESS(Flags, ERHIResourceAccess::TransferSrc)
+    RDG_BUFFER_ACCESS(Statistics, ERHIResourceAccess::TransferSrc)
+    END_SHADER_PARAMETER_STRUCT(VirtualGeometryViewerReadbackParameters)
 
     class VirtualGeometryViewerWireframeVS : public GlobalShader
     {
@@ -57,7 +87,8 @@ namespace Editor
     {
         void AddWireframePass(RenderGraphBuilder& builder, const Engine::SceneView& view,
                               const Renderer::VirtualGeometryInstance& instance, const std::vector<uint32_t>& selected,
-                              RenderGraphTextureRef color, RenderGraphTextureRef depth)
+                              RenderGraphTextureRef color, RenderGraphTextureRef depth,
+                              RenderGraphBufferRef triangleArguments = nullptr)
         {
             if (selected.empty())
             {
@@ -65,10 +96,18 @@ namespace Editor
             }
             const auto& geometry = instance.RenderData->VirtualGeometryData;
             auto* edges = builder.AllocateParameter<std::vector<uint32_t>>();
+            if (triangleArguments)
+            {
+                if (geometry.Indices.size() > UINT32_MAX / 2)
+                {
+                    throw std::invalid_argument("GPU wireframe index range exceeds 32 bits");
+                }
+                edges->resize(geometry.Indices.size() * 2);
+            }
             for (const auto clusterIndex : selected)
             {
                 const auto& cluster = geometry.Clusters[clusterIndex];
-                if (uint64_t(edges->size()) + uint64_t(cluster.TriangleCount) * 6 > UINT32_MAX)
+                if (!triangleArguments && uint64_t(edges->size()) + uint64_t(cluster.TriangleCount) * 6 > UINT32_MAX)
                 {
                     throw std::invalid_argument("Virtual geometry wireframe exceeds the draw index range");
                 }
@@ -78,7 +117,15 @@ namespace Editor
                     const uint32_t a = cluster.VertexOffset + geometry.Indices[offset];
                     const uint32_t b = cluster.VertexOffset + geometry.Indices[offset + 1];
                     const uint32_t c = cluster.VertexOffset + geometry.Indices[offset + 2];
-                    edges->insert(edges->end(), {a, b, b, c, c, a});
+                    if (triangleArguments)
+                    {
+                        const std::array<uint32_t, 6> line{a, b, b, c, c, a};
+                        std::copy(line.begin(), line.end(), edges->begin() + offset * 2ull);
+                    }
+                    else
+                    {
+                        edges->insert(edges->end(), {a, b, b, c, c, a});
+                    }
                 }
             }
             RenderGraphBufferDesc indicesDesc;
@@ -92,6 +139,45 @@ namespace Editor
             params->Vertex.ViewProjection = view.ViewProjectionMatrix;
             params->Positions = builder.RegisterExternalBuffer("VirtualGeometryViewer.WireframePositions", geometry.PositionBuffer.get());
             params->Indices = indices;
+            if (triangleArguments)
+            {
+                RenderGraphBufferDesc argumentDesc;
+                argumentDesc.Size = triangleArguments->GetDesc().Size;
+                argumentDesc.Stride = 4;
+                argumentDesc.Usage = ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::UnorderedAccess |
+                                     ERHIBufferUsageFlag::Indirect;
+                params->Arguments = builder.CreateBuffer("VirtualGeometryViewer.WireframeArguments", argumentDesc);
+                auto* args = builder.AllocateParameter<VirtualGeometryWireframeArgumentsParameters>();
+                RenderGraphBufferSRVDesc srv;
+                srv.Buffer = triangleArguments;
+                srv.Stride = 4;
+                srv.NumElements = argumentDesc.Size / 4;
+                args->TriangleArguments = builder.CreateBufferSRV("VirtualGeometryViewer.TriangleArgs", srv);
+                RenderGraphBufferUAVDesc uav;
+                uav.Buffer = params->Arguments;
+                uav.Stride = 4;
+                uav.NumElements = argumentDesc.Size / 4;
+                args->LineArguments = builder.CreateBufferUAV("VirtualGeometryViewer.LineArgs", uav);
+                args->ArgumentCount = geometry.Clusters.size();
+                auto* shader = GShaderMap.GetShader<VirtualGeometryViewerWireframeArgumentsCS>(0);
+                if (!shader)
+                {
+                    throw std::runtime_error("GPU wireframe argument shader is unavailable");
+                }
+                RHIComputePipelineStateDesc pipeline;
+                pipeline.ComputeShader = static_cast<RHIComputeShader*>(shader->GetRHIShader());
+                auto* state = RHIPipelineStateCache::GetOrCreateComputePipelineState(pipeline);
+                builder.AddPass("VirtualGeometryViewer.WireframeArguments",
+                    VirtualGeometryWireframeArgumentsParameters::GetMetaData(), args, EPassFlag::Compute,
+                    [=](RHICommandListBase& commands)
+                {
+                    auto& cmd = static_cast<RHIComputeCommandList&>(commands);
+                    cmd.SetComputePipelineState(state);
+                    SetShaderParameters(cmd, shader, args);
+                    const uint32_t groups = (args->ArgumentCount + 63) / 64;
+                    cmd.Dispatch(std::min(65535u, groups), (groups + 65534) / 65535, 1);
+                });
+            }
             params->Targets.NumColorRenderTargets = 1;
             params->Targets[0].Texture = color;
             params->Targets[0].Action = ERenderTargetActions::Load_Store;
@@ -140,7 +226,18 @@ namespace Editor
                 cmd.SetScissor(0, 0, view.Viewport.Width, view.Viewport.Height);
                 cmd.BeginRenderPass(pass);
                 SetShaderParameters(cmd, vs, &params->Vertex);
-                cmd.DrawIndexed(indices->GetRHIBuffer(), uint32_t(edges->size()), 1, 0, 0, 0);
+                if (params->Arguments)
+                {
+                    for (const auto cluster : selected)
+                    {
+                        cmd.DrawIndexedIndirect(indices->GetRHIBuffer(), params->Arguments->GetRHIBuffer(),
+                                                uint64_t(cluster) * sizeof(RHIDrawIndexedIndirectArguments));
+                    }
+                }
+                else
+                {
+                    cmd.DrawIndexed(indices->GetRHIBuffer(), uint32_t(edges->size()), 1, 0, 0, 0);
+                }
                 cmd.EndRenderPass();
             });
         }
@@ -196,6 +293,7 @@ namespace Editor
         m_Data.reset();
         m_Asset.reset();
         m_SelectedClusters.clear();
+        m_bGPUCapture = false;
     }
 
     const Engine::VirtualGeometryResource* VirtualGeometryPreview::GetGeometry() const
@@ -225,7 +323,8 @@ namespace Editor
     }
 
     void VirtualGeometryPreview::Render(Core::Int2 size, uint32_t mipLevel, bool material,
-                                       float yaw, float pitch, float distance, bool dynamicLOD, float targetPixelError, bool wireframe)
+                                       float yaw, float pitch, float distance, bool dynamicLOD, float targetPixelError,
+                                       bool wireframe, bool gpuSelection, bool frustumCulling, bool captureGPU)
     {
         using namespace RenderCore;
         using namespace RHI;
@@ -254,6 +353,8 @@ namespace Editor
         instance.MipLevel = mipLevel;
         instance.bInspectGeneratedLevel = !dynamicLOD;
         instance.TargetPixelError = targetPixelError;
+        instance.bGPUSelection = gpuSelection && dynamicLOD;
+        instance.bFrustumCulling = frustumCulling;
         instance.LocalToWorld = Core::Mat4::Identity();
         for (uint32_t axis = 0; axis < 3; ++axis)
         {
@@ -288,10 +389,19 @@ namespace Editor
         RenderGraphBuilder builder;
         auto color = builder.RegisterExternalTexture("VirtualGeometryViewer.Color", m_Color.get());
         auto visibility = Renderer::AddVirtualGeometryRasterPass(builder, view, {instance}, size.X, size.Y);
-        m_SelectedClusters.clear();
+        std::vector<uint32_t> candidates;
         for (const auto& draw : visibility->Draws)
         {
-            m_SelectedClusters.push_back(draw.ClusterID);
+            candidates.push_back(draw.ClusterID);
+        }
+        if (!instance.bGPUSelection)
+        {
+            m_SelectedClusters = candidates;
+            m_bGPUCapture = false;
+        }
+        else if (!m_bGPUCapture)
+        {
+            m_SelectedClusters.clear();
         }
         if (!material)
         {
@@ -324,8 +434,81 @@ namespace Editor
         }
         if (wireframe)
         {
-            AddWireframePass(builder, view, instance, m_SelectedClusters, color, visibility->VirtualGeometryDepthTexture);
+            AddWireframePass(builder, view, instance, candidates, color, visibility->VirtualGeometryDepthTexture,
+                             visibility->GPUSelections.front().IndirectArguments);
+        }
+        std::array<void*, 2> mapped{};
+        const auto& selection = visibility->GPUSelections.front();
+        const bool readGPU = instance.bGPUSelection && captureGPU;
+        const bool immediate = GShaderPlatform == ERHIShaderPlatform::OpenGL;
+        const auto read = [&](RHICommandListBase& cmd)
+        {
+            mapped[0] = GRHIApi->MapReadBuffer(cmd, selection.ClusterFlags->GetRHIBuffer(), {});
+            mapped[1] = GRHIApi->MapReadBuffer(cmd, selection.Statistics->GetRHIBuffer(), {});
+        };
+        if (readGPU)
+        {
+            auto* params = builder.AllocateParameter<VirtualGeometryViewerReadbackParameters>();
+            params->Color = color;
+            params->Flags = selection.ClusterFlags;
+            params->Statistics = selection.Statistics;
+            builder.AddPass("VirtualGeometryViewer.CaptureGPU", VirtualGeometryViewerReadbackParameters::GetMetaData(),
+                            params, EPassFlag::Graphic, [&](RHICommandListBase& cmd)
+            {
+                if (!immediate)
+                {
+                    read(cmd);
+                }
+            });
         }
         builder.Execute();
+        if (readGPU)
+        {
+            const auto fence = m_Color->GetTracker().GetLastAccessFence();
+            GRHIApi->GetQueue(fence.QueueType)->WaitValue(fence.Value);
+            if (immediate)
+            {
+                auto* queue = GRHIApi->GetQueue(EQueueType::Graphics);
+                auto* context = queue->AcquireCommandContext();
+                RHICommandListBase cmd(context);
+                cmd.SetImmediate(true);
+                cmd.Begin();
+                read(cmd);
+                cmd.End();
+                queue->WaitValue(queue->ExecuteContext(context));
+            }
+            if (!mapped[0] || !mapped[1])
+            {
+                for (auto* mapping : mapped)
+                {
+                    if (mapping)
+                    {
+                        GRHIApi->Unmap(mapping);
+                    }
+                }
+                throw std::runtime_error("Virtual geometry GPU statistics readback failed");
+            }
+            const auto* flags = static_cast<const uint32_t*>(mapped[0]);
+            const auto* statistics = static_cast<const uint32_t*>(mapped[1]);
+            std::copy(statistics, statistics + 4, m_GPUStatistics.begin());
+            const auto reference = Renderer::SelectVirtualGeometryClusters(m_Data->VirtualGeometryData,
+                instance.LocalToWorld, view, targetPixelError);
+            m_SelectedClusters.clear();
+            m_CutDifferenceCount = 0;
+            for (uint32_t c = 0; c < m_Data->VirtualGeometryData.Clusters.size(); ++c)
+            {
+                const bool expected = std::binary_search(reference.begin(), reference.end(), c);
+                m_CutDifferenceCount += expected != bool(flags[c] & 1);
+                if (flags[c] & 2)
+                {
+                    m_SelectedClusters.push_back(c);
+                }
+            }
+            for (auto* mapping : mapped)
+            {
+                GRHIApi->Unmap(mapping);
+            }
+            m_bGPUCapture = true;
+        }
     }
 }

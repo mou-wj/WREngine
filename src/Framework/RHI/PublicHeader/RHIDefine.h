@@ -303,6 +303,17 @@ enum class ERHIShaderFrequency
     // 使用宏
     ENUM_CLASS_FLAGS(ERHIBufferUsageFlag, ERHIBufferUsageFlags);
 
+    // Native Vulkan, D3D12 and OpenGL indexed-indirect commands share this 20-byte layout.
+    struct RHIDrawIndexedIndirectArguments
+    {
+        uint32_t IndexCount = 0;
+        uint32_t InstanceCount = 1;
+        uint32_t FirstIndex = 0;
+        int32_t VertexOffset = 0;
+        uint32_t FirstInstance = 0;
+    };
+    static_assert(sizeof(RHIDrawIndexedIndirectArguments) == 20);
+
     // 缓冲区描述结构体
     struct RHI_API RHIBufferDesc
     {

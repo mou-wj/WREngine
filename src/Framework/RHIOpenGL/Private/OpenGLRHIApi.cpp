@@ -22,11 +22,9 @@ namespace RHIOpenGL
         m_PlatformInfo.bEnableRayTracing = false;
         RHI::GShaderPlatform = RHI::ERHIShaderPlatform::OpenGL;
 
-        // 转换数据的占位偏移；当前未创建原生屏障数据。
-        RHI::G_RHITransition_PrivateDataOffset = 1;
-
-        // 转换对象的占位大小。
-        RHI::G_RHITransition_TotalSize = 2;
+        const uint32_t alignment = alignof(GLbitfield);
+        RHI::G_RHITransition_PrivateDataOffset = (sizeof(RHI::RHITransition) + alignment - 1) & ~(alignment - 1);
+        RHI::G_RHITransition_TotalSize = RHI::G_RHITransition_PrivateDataOffset + sizeof(GLbitfield);
         bool initPlatform = InitializePlatformSurport();
         OpenGLQueueManager::GetInstance().StartWorker();
 
@@ -375,6 +373,15 @@ namespace RHIOpenGL
 
     void OpenGLRHIApi::RHICreateTransition(RHI::RHITransition* transition, const RHI::RHITransitionCreateInfo& createInfo)
     {
+        GLbitfield barriers = 0;
+        for (const auto& info : createInfo.TransitionInfos)
+        {
+            if (EnumHasAnyFlags(info.AccessBefore, RHI::ERHIResourceAccess::UAV))
+            {
+                barriers |= ConvertRHIAccessToGLBarrier(info.AccessAfter);
+            }
+        }
+        *transition->GetPrivateData<GLbitfield>() = barriers;
     }
 
     void OpenGLRHIApi::RHIReleaseTransition(RHI::RHITransition* transition)

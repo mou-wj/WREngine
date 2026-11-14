@@ -3,6 +3,37 @@
 
 namespace RHIOpenGL
 {
+    GLbitfield ConvertRHIAccessToGLBarrier(RHI::ERHIResourceAccess access)
+    {
+        using RHI::ERHIResourceAccess;
+        GLbitfield bits = 0;
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::IndirectArgs))
+        {
+            bits |= GL_COMMAND_BARRIER_BIT;
+        }
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::VertexOrIndexBuffer))
+        {
+            bits |= GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT;
+        }
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::SRV))
+        {
+            bits |= GL_SHADER_STORAGE_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_UNIFORM_BARRIER_BIT;
+        }
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::UAV))
+        {
+            bits |= GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT;
+        }
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::TransferSrc | ERHIResourceAccess::TransferDest | ERHIResourceAccess::CPURead))
+        {
+            bits |= GL_BUFFER_UPDATE_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT | GL_PIXEL_BUFFER_BARRIER_BIT;
+        }
+        if (EnumHasAnyFlags(access, ERHIResourceAccess::RenderTargetView | ERHIResourceAccess::DSVRead | ERHIResourceAccess::DSVWrite))
+        {
+            bits |= GL_FRAMEBUFFER_BARRIER_BIT;
+        }
+        return bits;
+    }
+
     [[noreturn]] void ThrowRayTracingUnsupported()
     {
         throw std::runtime_error("OpenGLRHI does not support RHI ray tracing pipelines: OpenGL has no standard native ray tracing pipeline, and software BVH traversal/shader lowering is not implemented. Use Vulkan or DirectX12.");

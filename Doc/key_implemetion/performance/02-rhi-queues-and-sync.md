@@ -50,6 +50,30 @@ TryExecuteQueue 先检查队首依赖，不能满足则保留队首，不能越�
 
 OpenGLQueue::WaitIdle 仅等待最新分配条目在 worker 执行完；没有 glFinish。某些 transient 回收路径另行执行 glFinish，才得到更保守的 GPU 完成保证。EnqueueTaskAndWait 虽把异常写入 promise，但等待方用 wait，不会 get 后重抛。
 
+## 索引间接绘制与 GPU 生成参数
+
+[RHIGraphicCommandList::DrawIndexedIndirect](../../../src/Framework/RHI/Private/RHICommandList.cpp) 沿用 RHICommand → RHIGraphicContex → 原生 API 的链路，没有新队列、提交器或资源所有者。入口借用 indexBuffer、argumentBuffer 和字节偏移。调用方必须保持资源在 GPU 使用期间有效，声明索引为 VertexOrIndexBuffer、参数为 IndirectArgs，并在实际提交处更新 Fence；VG 路径交由现有 RDG 完成。
+
+RHIDrawIndexedIndirectArguments 的顺序是 `uint IndexCount, InstanceCount, FirstIndex; int VertexOffset; uint FirstInstance`，共 20 字节。入口验证索引用途、16/32 位步长、参数的 Indirect 用途、四字节对齐与剩余范围；数据内容在执行时由 GPU 读取，RHI 不为检查 GPU 数据而读回。IndexCount=0 用来拒绝绘制。当前 VG 写 FirstInstance=0；本接口不增加多 Draw、计数缓冲或非索引 Draw 的变体，调用方也不能假设当前 Vulkan 已启用间接命令的非零 FirstInstance 特性。
+
+| 后端 | 原生执行及所有权 |
+| --- | --- |
+| [VulkanContex.cpp](../../../src/Framework/RHIVulkan/Private/VulkanContex.cpp) | 准备既有图形状态、绑定索引，然后 vkCmdDrawIndexedIndirect，drawCount=1、stride=20。函数由既有 VKFunc wrapper 装载；IndirectArgs 已映射到 DRAW_INDIRECT 阶段和 INDIRECT_COMMAND_READ 访问 |
+| [DirectX12Context.cpp](../../../src/Framework/RHIDirectX12/Private/DirectX12Context.cpp) | 每个图形 Context 首次使用时创建只含 DRAW_INDEXED 的 CommandSignature，Context 自有 ComPtr 复用并随其销毁。沿 RequireAccess 检查索引和参数状态，再 ExecuteIndirect 一条命令；不改 Root 参数 |
+| [OpenGLContext.cpp](../../../src/Framework/RHIOpenGL/Private/OpenGLContext.cpp) | lambda 按值捕获资源指针/偏移，实际 GL 调用仍在原 worker。恢复/应用 VAO 顶点描述、绑定 ELEMENT_ARRAY_BUFFER 和 DRAW_INDIRECT_BUFFER，调用 glDrawElementsIndirect 后解绑间接缓冲；元素首地址按索引数量解释 |
+
+原生语义可对照 [Vulkan vkCmdDrawIndexedIndirect](https://docs.vulkan.org/refpages/latest/refpages/source/vkCmdDrawIndexedIndirect.html)、[D3D12 ExecuteIndirect](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist-executeindirect) 和 [OpenGL 4.6 规范](https://registry.khronos.org/OpenGL/specs/gl/glspec46.core.pdf)。项目只使用这里列出的单条索引命令子集。
+
+### OpenGL 的存储写入、屏障和读回
+
+Buffer UAV 必须像 Buffer SRV 一样，将视图的 Offset、NumElements×Stride（未指定数量时为剩余范围）通过 glBindBufferRange 绑定到 GL_SHADER_STORAGE_BUFFER。原有“buffer UAV 无需绑定”分支并不能建立 Shader 访问，本轮 GPU 选择用例已暴露并修正它。
+
+OpenGLRHIApi::RHICreateTransition 将 UAV 写后消费者的屏障位存入既有 RHITransition 私有区域；EndTransitions 汇总为按值捕获的 mask，由 worker 执行 glMemoryBarrier，不捕获短生命周期 transition 指针。枚举映射在 [OpenGLUtils](../../../src/Framework/RHIOpenGL/Private/OpenGLUtils.cpp)：IndirectArgs→COMMAND，SRV→SHADER_STORAGE/TEXTURE_FETCH/UNIFORM，UAV→SHADER_STORAGE/SHADER_IMAGE_ACCESS，VertexOrIndexBuffer→VERTEX_ATTRIB_ARRAY/ELEMENT_ARRAY，传输和 CPURead→BUFFER_UPDATE/TEXTURE_UPDATE/PIXEL_BUFFER，附件→FRAMEBUFFER。由于 GL 屏障按消费者种类生效，这些位是全局类型屏障，不是假装对单个资源设置布局。
+
+GPU Group 批次之间依靠 UAV→UAV 屏障；参数生成到绘制依靠 UAV→IndirectArgs。它们保证 GPU 访问的顺序和可见性，不代表 CPU 已能读取结果。正常选择/绘制没有 CPU 等待。Viewer 的 Capture GPU 是显式诊断：在图中声明 Flags/Statistics 为 TransferSrc；Vulkan/D3D12 记录映射对应的复制并在提交完成后读取，OpenGL 在图提交完成后通过 worker 的 glGetBufferSubData 读回。映射只在该次 Capture 内使用并 Unmap，未跨帧保存 transient 指针。
+
+GPU Cut、紧凑列表、固定参数槽与实际开销见 [LOD 算法](../algorithm/13-virtual-geometry-lod-selection.md#gpu-依赖求值与完整-cut)。间接绘制使 GPU 决定是否产生几何，但当前 CPU 仍录制每个候选的一条命令，不能据此声称已经消除 CPU Draw 录制成本。
+
 ## 修改前必须检查
 
 同队列 FIFO、跨队列等待、worker 可达性、命令使用的原始资源所有者，以及资源重新录制/复用的时间点。CPU mutex、GPU barrier、queue wait 和对象引用计数分别解决不同问题，不能互相替代。

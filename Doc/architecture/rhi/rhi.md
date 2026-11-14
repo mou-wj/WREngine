@@ -156,6 +156,7 @@ RHIContextBase
          ├── SetViewport(...)
          ├── Draw(...)
          ├── DrawIndexed(...)
+         ├── DrawIndexedIndirect(indexBuffer, argumentBuffer, byteOffset)
          ├── BeginRenderPass(...)
          └── TraceRays(...)
 ```
@@ -163,6 +164,8 @@ RHIContextBase
 这说明 RHI 把图形/计算/光追操作统一放在上下文接口中，不直接绑定具体 API 调用方式。上层代码只依赖抽象接口，而具体实现由 Vulkan 后端负责。
 
 ---
+
+`DrawIndexedIndirect` 是现有图形命令链的扩展。它从带 Indirect 用途的缓冲中读取一个 RHIDrawIndexedIndirectArguments，索引/参数分别使用 VertexOrIndexBuffer / IndirectArgs 访问语义，不改变队列或资源体系。Vulkan、D3D12、OpenGL 映射和完成点约束见[间接绘制实现](../../key_implemetion/performance/02-rhi-queues-and-sync.md#索引间接绘制与-gpu-生成参数)。
 
 ## 6. 资源视图与同步机制
 

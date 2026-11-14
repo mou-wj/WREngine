@@ -936,7 +936,6 @@ namespace RenderCore {
                     else if (member.BaseType == EShaderParameterBaseType::RDGBuffer_UAV)
                     {
                         auto uav = *reinterpret_cast<RenderGraphBufferUAV* const*>(memberAddr);
-                        auto uavDesc = uav->m_Desc;
                         if (uav)
                         {
                             auto* buf = static_cast<RenderGraphBuffer*>(uav->m_Desc.Buffer);

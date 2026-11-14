@@ -174,6 +174,14 @@ namespace Renderer
         }
     }
 
+    void ValidateVirtualGeometryLODInput(const Engine::VirtualGeometryResource& resource,
+        const Core::Mat4& localToWorld, const Engine::SceneView& view, float targetPixelError)
+    {
+        Require(std::isfinite(targetPixelError) && targetPixelError >= 0, "target pixel error must be finite and nonnegative");
+        MakeProjection(localToWorld, view);
+        ValidateDAG(resource);
+    }
+
     std::vector<uint32_t> SelectVirtualGeometryClusters(const Engine::VirtualGeometryResource& resource,
         const Core::Mat4& localToWorld, const Engine::SceneView& view, float targetPixelError)
     {

@@ -484,6 +484,21 @@ void VulkanGraphicContext::DrawIndexed(RHIBuffer* indexBuffer, uint32_t indexCou
     }
 }
 
+void VulkanGraphicContext::DrawIndexedIndirect(RHIBuffer* indexBuffer, RHIBuffer* argumentBuffer, uint64_t argumentOffset)
+{
+    auto commandBuffer = _commandBufferManager->GetActiveCommandBuffer();
+    if (m_PendingGfx && m_PendingGfx->HasPipeline())
+    {
+        m_PendingGfx->PrepareForDraw(commandBuffer);
+        auto* indices = static_cast<VulkanBuffer*>(indexBuffer);
+        auto* arguments = static_cast<VulkanBuffer*>(argumentBuffer);
+        const auto indexType = indices->GetDesc().Stride == 4 ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
+        VKFunc::CmdBindIndexBuffer(commandBuffer->GetHandle(), indices->GetHandle(), 0, indexType);
+        VKFunc::CmdDrawIndexedIndirect(commandBuffer->GetHandle(), arguments->GetHandle(), argumentOffset, 1,
+                                      sizeof(RHIDrawIndexedIndirectArguments));
+    }
+}
+
 void VulkanGraphicContext::SetBatchedShaderParameters(RHIRayTracingShader* shader, const RHIBatchedShaderParameters& parameter)
 {
     if (!m_PendingRayTracing)

@@ -17,6 +17,7 @@ namespace Renderer
     SHADER_PARAMETER_RENDER_TARGET_BINDING_SLOTS(Targets)
     RDG_BUFFER_ACCESS(Positions, ERHIResourceAccess::VertexOrIndexBuffer)
     RDG_BUFFER_ACCESS(Indices, ERHIResourceAccess::VertexOrIndexBuffer)
+    RDG_BUFFER_ACCESS(Arguments, ERHIResourceAccess::IndirectArgs)
     END_SHADER_PARAMETER_STRUCT(VirtualGeometryRasterParameters)
 
     BEGIN_SHADER_PARAMETER_STRUCT(VirtualGeometryDebugParameters)
@@ -208,6 +209,7 @@ namespace Renderer
             std::shared_ptr<VirtualGeometryVertexFactory> Factory;
             uint32_t FirstDraw = 0;
             std::vector<uint32_t> Clusters;
+            VirtualGeometryGPUSelection GPUSelection;
         };
     } // namespace
 
@@ -224,6 +226,7 @@ namespace Renderer
         }
         auto output = std::make_shared<VirtualGeometryRasterOutput>();
         output->Instances = instances;
+        output->GPUSelections.resize(instances.size());
         // Graph-owned parameters remain unique until execution completes, including across views.
         auto* clearParams = builder.AllocateParameter<VirtualGeometryRasterParameters>();
         const auto prefix = "VirtualGeometry." + std::to_string(reinterpret_cast<uintptr_t>(clearParams)) + ".";
@@ -263,7 +266,19 @@ namespace Renderer
             rasterInstances.push_back({instance, std::make_shared<VirtualGeometryVertexFactory>(geometry),
                                        static_cast<uint32_t>(output->Draws.size())});
             auto& selected = rasterInstances.back().Clusters;
-            if (instance.bInspectGeneratedLevel)
+            if (instance.bGPUSelection && !instance.bInspectGeneratedLevel)
+            {
+                auto& selection = rasterInstances.back().GPUSelection;
+                selection = AddVirtualGeometryGPUSelectionPass(builder, geometry, instance.LocalToWorld, view,
+                                                               instance.TargetPixelError, instance.bFrustumCulling);
+                output->GPUSelections[rasterInstances.size() - 1] = selection;
+                // Stable DrawIDs for all candidates; GPU rejects draws by writing an index count of zero.
+                for (uint32_t c = 0; c < geometry.Clusters.size(); ++c)
+                {
+                    selected.push_back(c);
+                }
+            }
+            else if (instance.bInspectGeneratedLevel)
             {
                 for (uint32_t c = 0; c < geometry.Clusters.size(); ++c)
                 {
@@ -353,6 +368,7 @@ namespace Renderer
             auto indices = builder.RegisterExternalBuffer(resourceName + ".Indices", geometry.IndexBuffer.get());
             params->Positions = positions;
             params->Indices = indices;
+            params->Arguments = raster.GPUSelection.IndirectArguments;
             builder.AddPass("VirtualGeometryRasterPass", VirtualGeometryRasterParameters::GetMetaData(),
                                          params, EPassFlag::Graphic, [=](RHICommandListBase& list)
             {
@@ -372,8 +388,17 @@ namespace Renderer
                     vertexParams.ViewProjection = view.ViewProjectionMatrix;
                     vertexParams.DrawID = draw++;
                     SetShaderParameters(cmd, vs, &vertexParams);
-                    cmd.DrawIndexed(data.IndexBuffer->GetRHI(), cluster.TriangleCount * 3, 1, cluster.IndexOffset,
-                                    static_cast<int32_t>(cluster.VertexOffset), 0);
+                    if (raster.GPUSelection.IndirectArguments)
+                    {
+                        cmd.DrawIndexedIndirect(data.IndexBuffer->GetRHI(),
+                            raster.GPUSelection.IndirectArguments->GetRHIBuffer(),
+                            uint64_t(clusterIndex) * sizeof(RHIDrawIndexedIndirectArguments));
+                    }
+                    else
+                    {
+                        cmd.DrawIndexed(data.IndexBuffer->GetRHI(), cluster.TriangleCount * 3, 1, cluster.IndexOffset,
+                                        static_cast<int32_t>(cluster.VertexOffset), 0);
+                    }
                 }
                 cmd.EndRenderPass();
             });

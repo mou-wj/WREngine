@@ -73,7 +73,9 @@ namespace Editor
         if (m_Asset && m_bVisible)
         {
             m_Preview->Render(m_PreviewSize, m_MipLevel, m_bMaterial, m_Yaw, m_Pitch, m_Distance,
-                              m_bDynamicLOD, m_TargetPixelError, m_bWireframe);
+                              m_bDynamicLOD, m_TargetPixelError, m_bWireframe,
+                              m_bGPUSelection, m_bFrustumCulling, m_bCaptureGPU);
+            m_bCaptureGPU = false;
         }
     }
 
@@ -120,6 +122,28 @@ namespace Editor
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(150);
                 ImGui::DragFloat("Target pixel error", &m_TargetPixelError, 0.1f, 0, 64, "%.2f px");
+                ImGui::BeginDisabled(!m_bDynamicLOD);
+                ImGui::Checkbox("GPU selection + indirect draw", &m_bGPUSelection);
+                ImGui::SameLine();
+                ImGui::Checkbox("GPU frustum culling", &m_bFrustumCulling);
+                ImGui::SameLine();
+                ImGui::BeginDisabled(!m_bGPUSelection);
+                if (ImGui::Button("Capture GPU / compare CPU"))
+                {
+                    m_bCaptureGPU = true;
+                }
+                ImGui::EndDisabled();
+                ImGui::EndDisabled();
+                if (m_bGPUSelection && m_bDynamicLOD)
+                {
+                    if (m_Preview->HasGPUCapture())
+                    {
+                        const auto& stats = m_Preview->GetGPUStatistics();
+                        ImGui::Text("GPU snapshot: cut %u | visible %u | culled %u | triangles %u | CPU cut differences %u",
+                            stats[0], stats[1], stats[2], stats[3], m_Preview->GetCutDifferenceCount());
+                    }
+                    ImGui::TextDisabled("GPU table is a captured snapshot; refresh after changing the camera or error budget.");
+                }
                 ImGui::BeginDisabled(m_bDynamicLOD);
                 ImGui::SetNextItemWidth(120);
                 ImGui::SliderInt("Generated level", &m_MipLevel, 0, static_cast<int>(maxMip));
@@ -181,7 +205,19 @@ namespace Editor
         }
         ImGui::Text("All clusters: %zu | Groups: %zu | Roots: %zu | Max accumulated error: %.6g",
                     geometry.Clusters.size(), geometry.Groups.size(), geometry.RootGroupIndices.size(), error);
-        ImGui::Text("Displayed %s: %u meshlets, %u triangles", m_bDynamicLOD ? "DAG cut" : "generated level", count, triangles);
+        if (m_bGPUSelection && m_bDynamicLOD)
+        {
+            if (!m_Preview->HasGPUCapture())
+            {
+                ImGui::TextDisabled("Capture GPU / compare CPU to populate the statistics and Cluster table.");
+                return;
+            }
+            ImGui::Text("Captured visible subset: %u meshlets, %u triangles", count, triangles);
+        }
+        else
+        {
+            ImGui::Text("Displayed %s: %u meshlets, %u triangles", m_bDynamicLOD ? "DAG cut" : "generated level", count, triangles);
+        }
         const auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY;
         if (ImGui::BeginTable("Virtual geometry clusters", 7, flags, {0, 0}))
         {

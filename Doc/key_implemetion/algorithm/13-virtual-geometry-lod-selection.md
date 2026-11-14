@@ -1,8 +1,10 @@
-# Virtual Geometry CPU 动态 LOD 与合法 DAG Cut
+# Virtual Geometry CPU / GPU 动态 LOD 与合法 DAG Cut
 
 入口为 [SelectVirtualGeometryClusters](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.h)，实现在[同目录 cpp](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.cpp)。它消费 [CPU Build](10-virtual-geometry-cpu-build.md) 的原有数组，不改变 Engine 资源结构。Renderer 总体职责见[架构文档](../../architecture/render/renderer.md)，调用配置见 [Renderer 使用约定](../../specification/renderer_spec.md)。
 
-## 输入、输出与适用范围
+GPU 入口为 [AddVirtualGeometryGPUSelectionPass](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryGPUSelection.cpp)，计算程序为 [GPUSelection.sf](../../../shaders/virtualgeometry/GPUSelection.sf)。下文先解释 CPU 参考算法和共同投影公式，再说明 GPU 的依赖求值、视锥剔除及间接绘制。两条路径消费相同的 Build 数组。
+
+## CPU 输入、输出与适用范围
 
 输入为只读 VirtualGeometryResource、实例 LocalToWorld、SceneView 和非负有限的 TargetPixelError。相机矩阵、投影和分辨率取自本帧 SceneView：使用与 Raster 完全相同的 ViewProjectionMatrix、Viewport.Width/Height 和 bDepthRangeZeroToOne；调用方须先更新视图矩阵快照。输出是该实例本次要绘制的唯一 ClusterID 列表，按资源索引递增排列，不要求具有统一 MipLevel。
 
@@ -66,6 +68,56 @@ pixelError = hypot(pixelX, pixelY)
 
 上述齐次投影估算对“给定 e 的位置扰动”采用保守界定，但 Build 的 e 仍是双向表面采样估计，**不是严格 Hausdorff 上界**。因此 TargetPixelError 是控制几何精度的预算参数，不能据此宣称最终连续表面具有严格的最大像素误差保证。它也不衡量 UV、法线或材质信号的屏幕误差。
 
+## GPU 依赖求值与完整 Cut
+
+输入仍是资源、LocalToWorld、SceneView、TargetPixelError，另有 frustumCulling 开关。ValidateVirtualGeometryLODInput 复用已有 DAG、Metric 和投影合法性检查；随后 CPU 只构造静态依赖调度，不决定任何 Group 是否满足误差预算：
+
+```text
+depth(g) = 0                                      若全部 Child 都是叶
+depth(g) = 1 + max(depth(generator(child)))        否则
+```
+
+代码中的 depths、offsets、order 按深度组织 GroupID。每层一条 Compute Pass，每线程处理一个 Group，线程组大小 64；同一层不存在生成依赖。相邻 Pass 对 AppliedGroups 声明 UAV 访问，由现有 RDG 产生依赖和屏障。这里没有用线程组内 barrier 冒充全 GPU 同步，也没有跨工作组自旋等待。每帧仍重新验证和整理调度，未增加常驻缓存或 Engine 字段。
+
+令 E(g) 表示非 Root、非零预算且 ParentMetric 的像素误差达标；GPU 的 SelectGroupsCS 计算：
+
+```text
+A(g) = E(g) AND 每个非叶 Child 的 A(generator(child))
+A(root) = false
+```
+
+这个递推等价于 CPU 的“所有 Child 都在当前 frontier”条件：Child 的消费 Group 唯一，因此在求值 g 之前，它不可能已被另一个 Group 消费；叶从开始就存在，非叶只取决于其生成 Group 是否应用。所有生成 Group 都在前一批 Dispatch 中完成，同层线程只写自己的 A(g)。不同旧 Group 的 Parent 可以在新 Group 中共同被消费，仍是整体替换，不是单 Cluster 独立挑选。
+
+所有 Group 求值完成后，SelectClustersCS 每线程计算一个 Cluster 的完整 Cut 标志：
+
+```text
+cut(c) = (c 是叶 OR A(generator(c))) AND NOT A(consumer(c))
+```
+
+由 CPU 部分的替换归纳证明，这个集合保留多根和停止简化的区域，不包含同一替换关系的细、粗表示重叠。没有按 MipLevel 筛选，也没有把多对多关系改为树。GPU 只读取现有 ClusterBuffer、GroupBuffer、GroupChildClusterIndexBuffer；不需要另存一份 GPU Hierarchy 或重新设计资源。
+
+当前上传是原始 C++ 数据：Cluster 72 字节，Group 112 字节，通过 StructuredBuffer<uint> 标量读取；Cluster 球位于字节 56，ParentMetric 球位于字节 84、误差位于字节 100。C++ static_assert 对照真实 sizeof/offsetof，编译环境传递结构步长；不让 HLSL float3 对齐规则改变原始布局。输入的组合矩阵和行范数超出 FP32 范围时明确拒绝；标量数组寻址范围也显式检查。
+
+## GPU 视锥、输出与精度
+
+GPU 沿用上述齐次投影公式，但使用 FP32；CPU 参考使用 double。临界阈值附近可能因舍入而得到不同的合法 Cut，调试对比会报告差异，不静默回退或改写 CPU 结果。Build 的采样误差不是严格上界，这个限制同样存在于 GPU。视口原点不参与误差缩放，宽高参与；反向 Z 仍未支持。
+
+**先形成完整 Cut，再剔除其不可见 Cluster。** GPU 的 ClusterFlags bit 0 保存完整 Cut，bit 1 保存可见子集；可见子集因剔除而不覆盖全网格，不能把它当成完整 Cut 检查。剔除不反过来改变 Group 资格。
+
+对 `M=VP×LocalToWorld`，局部球 c、r 在任一裁剪半空间 `n·p+d>=0` 内的最大平面值为 `n·c+d+r|n|`。六个平面直接取 M 的行组合：左/右为 row3±row0，上/下为 row3±row1，远为 row3-row2，近为 ZO 的 row2 或 NO 的 row3+row2。因此平面法向与半径同时保留实例的非均匀缩放、镜像与剪切，不需要把球近似成一个世界缩放因子。只有球严格位于某平面外才拒绝，并加向外浮点容差。当前没有背面锥、HZB 遮挡剔除。
+
+输出 VirtualGeometryGPUSelection 保存本次图中的 RDG 引用：
+
+| 数据 | 含义 |
+| --- | --- |
+| AppliedGroups | 每 Group 一个 uint，终端 Root 为零 |
+| ClusterFlags | 每 Cluster 一个 uint，区分完整 Cut 和可见性 |
+| VisibleClusters | 原子追加的紧凑可见 ID 列表，无固定顺序；只有 Statistics[1] 个元素有效 |
+| Statistics | 完整 Cut 数、可见数、剔除数、可见三角形数 |
+| IndirectArguments | 按原 ClusterID 固定槽位排列的 20 字节索引绘制参数 |
+
+最终 Dispatch 为每个候选写入 IndexCount、InstanceCount=1、FirstIndex、VertexOffset、FirstInstance=0；未选择或已剔除项的 IndexCount=0。计数及紧凑列表用 InterlockedAdd 生成，多工作组的追加顺序不保证一致，正确性比较按集合进行。资源均属于本次 Builder，状态和 Fence 由既有 RDG 管理；正常路径无 CPU 等待读回。
+
 ## 裂缝条件与当前构建数据
 
 Build 的 TryCollapse 比较折叠前后有向几何外边界边的多重集合，Build 接受简化及最终 ValidateResource 又检查 Child 与 Parent 合并区域的外边界一致。共享端点使用相同 float 位置；UV/硬法线变体、材质边界和异常拓扑均保护。它保护的不只是边界顶点，还包括边段及重数。
@@ -80,14 +132,20 @@ Build 的 TryCollapse 比较折叠前后有向几何外边界边的多重集合�
 
 VertexFactory 不承担选择职责；仍绑定完整 PositionBuffer，每个选中 Cluster 使用自己的 VertexOffset、IndexOffset、TriangleCount。Visibility 保留 DrawID/PrimitiveID。[Material Resolve](12-virtual-geometry-material-resolve.md) 通过本次 Metadata 查找对应层的 Cluster，再使用局部索引和属性缓冲恢复三角形；材质仍取 Cluster.MaterialIndex 和实例快照。该链路不需要改变 Shader、GBuffer 编码、资源状态或 RHI 后端。
 
-AddVirtualGeometryRender 最后一个可选参数为 targetPixelError，默认 1，会传给所整理的实例。独立 Raster 输入可逐实例设置 TargetPixelError。VirtualGeometryViewer 默认 Dynamic LOD，展示实际选中的混合层级列表和数量；原 Generated level 仅在显式关闭动态模式时用于检查某轮产物，bInspectGeneratedLevel 不是合法 Cut 模式，不可用作场景 LOD 选择。
+上述列表与 Draw Metadata 一一对应的描述适用于 CPU 模式。GPU 模式为每个实例的**全部候选 Cluster** 建立稳定 Metadata，DrawID 不随选择改变；录制时遍历相同候选表，用 ClusterID×20 定位间接参数。参数为零的候选不产生像素，有效像素仍通过原 DrawID/PrimitiveID 找到正确层级的局部索引、VertexOffset 和 MaterialIndex。现有 Resolve 不需要改材质算法或 GBuffer 编码，但仍为每个候选编排 Compute Pass；不可用 Draws.size() 代替 GPU 选中数量。
+
+AddVirtualGeometryRender 的 targetPixelError 默认 1，现为所整理实例开启 GPU 选择和视锥剔除。独立 Raster 的 bGPUSelection 默认 false，保留显式 CPU 参考用法；设置 true 即使用 Compute+间接绘制，bFrustumCulling 控制其剔除。VirtualGeometryViewer 默认 GPU 动态模式，统计与列表需通过 Capture GPU 获取一次快照；CPU 模式直接显示当前选择。Generated level 只在关闭 Dynamic LOD 时检查生成产物，bInspectGeneratedLevel 优先于 GPU 模式，不是合法 Cut 模式。
+
+GPU 使用相同的完整替换序列和 Build 边界契约，因而不额外破坏混合层边界。它没有新增边界修复算法，现有输入缺口和采样误差限制仍然适用。
 
 ## 复杂度、验证与限制
 
-设 C 为全部 Cluster 数、G 为 Group 数、E 为 Child/Parent 引用总数。每实例验证和选择时间 O(C+G+E)，临时内存 O(C+G)，结果 O(C)。所有数据在当前调用线程同步处理，每帧重新扫描；没有多线程、GPU Culling、Indirect Draw 或 Streaming。Raster/Resolve 的成本仍取决于选中 Cluster 数，第一版 Resolve 每 Draw 编排一个 Compute Pass 并扫描视口。
+设 C 为全部 Cluster 数、G 为 Group 数、E 为 Child/Parent 引用总数。CPU 参考每实例验证和选择时间 O(C+G+E)，临时内存 O(C+G)。GPU 路径 CPU 验证/调度仍为 O(C+G+E)；GPU 工作量 O(C+G+Child引用数)，Dispatch 数为依赖深度+1。Selection 数据为约 28C+8G+16 字节，另有既有资源、候选 Metadata 和图参数，不包含 Viewer 线框索引。CPU 仍录制 O(C) 间接绘制；Resolve 为每个候选扫描视口，实际成本可能高于仅选择后提交的 CPU 模式，未做性能收益保证。没有 Indirect Count、批量 MultiDraw、遮挡剔除、滞回、Software Rasterization 或 Streaming。
 
 - [VirtualGeometryLODSelectionTest](../../../src/Tests/VirtualGeometryLODSelectionTest.cpp)：手工跨组 DAG 的精确预期 Cut、多根和停滞叶、正交/透视、分辨率/投影放大、镜像/非均匀缩放/剪切、近面处理；真实 576 面曲面的阈值序列、逆向整组还原为全部叶的独立合法性检查，以及全 Cut 有向边界一致性。全程不初始化 RHI。
 - 同文件注册 VirtualGeometryLODInvalidInput0～7，分别检查负预算、无效根、重复 Child、越界范围、循环关系、非法 Metric、非仿射变换和零尺寸视口。通过原有 main 捕获异常，不能将任意失败退出视为预期通过。
 - [VirtualGeometryLODRenderTest](../../../src/Tests/VirtualGeometryLODRenderTest.cpp)：512 面、两个材质区域、UV 渐变纹理，同屏一个细实例和一个可粗化的镜像/非均匀缩放实例。比较实际 Metadata 与选择结果，读回 Visibility、GBuffer A/B/C，逐像素检查 ID、UV、平面法线和材质参数。
 
-执行入口为 `Tests.exe -test=VirtualGeometryLODSelectionTest` 与 `Tests.exe -test=VirtualGeometryLODRenderTest -rhi=Vulkan`；GPU 测试也支持 DirectX12/OpenGL。实际后端结果、球体混合层预览和 Launcher/GUI 范围见[本日记录](../../dev/bugfix/故障与修复记录-2026-11-14.md#cpu-动态-lod-选择与渲染接入)。这些验证不替代任意复杂网格的严格像素误差与裂缝证明。
+执行入口为 `Tests.exe -test=VirtualGeometryLODSelectionTest` 与 `Tests.exe -test=VirtualGeometryLODRenderTest -rhi=Vulkan`；GPU 测试也支持 DirectX12/OpenGL。CPU 阶段结果见 [2026-11-14 记录](../../dev/bugfix/故障与修复记录-2026-11-14.md#cpu-动态-lod-选择与渲染接入)。
+
+新增 [VirtualGeometryGPUSelectionTest](../../../src/Tests/VirtualGeometryGPUSelectionTest.cpp) 在 20 个跨组替换岛组成的 240 Cluster、140 Group、60 Root 图上，对 9 种视图/变换、7 个阈值和剔除开关共 126 组用例逐项对比 CPU Cut、独立平面可见性、紧凑列表、统计和 20 字节间接参数；Group 与 Cluster Dispatch 均跨工作组。它是图逻辑夹具，不冒充真实 Build 的边界验证。[VirtualGeometryGPULODRenderTest](../../../src/Tests/VirtualGeometryGPULODRenderTest.cpp) 对真实 Build 的双材质平面、两个变换实例及三个预算，验证 GPU 间接绘制后的 Visibility/UV/法线/GBuffer，并确认可见 Cluster 属于 CPU 参考 Cut。测试命令只需替换 -test 名称。实际三后端、球体像素对照和 Launcher 范围见 [2026-11-15 记录](../../dev/bugfix/故障与修复记录-2026-11-15.md)。这些验证不替代任意复杂网格的严格像素误差与裂缝证明。

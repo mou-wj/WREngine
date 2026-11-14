@@ -3,6 +3,7 @@
 #include "SceneView.h"
 #include "StaticMeshResources.h"
 #include "Material.h"
+#include "VirtualGeometryGPUSelection.h"
 
 namespace Renderer
 {
@@ -15,6 +16,8 @@ namespace Renderer
         std::vector<std::shared_ptr<const Engine::MaterialRenderProxy>> Materials;
         float TargetPixelError = 1.0f;
         bool bInspectGeneratedLevel = false; // Viewer diagnostic only; a generated level is not a DAG cut.
+        bool bGPUSelection = false;
+        bool bFrustumCulling = true;
     };
 
     BEGIN_SHADER_PARAMETER_STRUCT(VirtualGeometryDrawMetadata)
@@ -32,6 +35,7 @@ namespace Renderer
         std::vector<VirtualGeometryDrawMetadata> Draws;
         std::vector<std::shared_ptr<Engine::StaticMeshRenderData>> Resources;
         std::vector<VirtualGeometryInstance> Instances;
+        std::vector<VirtualGeometryGPUSelection> GPUSelections; // Indexed by InstanceIndex; empty handles in CPU mode.
     };
 
     RENDERER_API std::shared_ptr<VirtualGeometryRasterOutput> AddVirtualGeometryRasterPass(

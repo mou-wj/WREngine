@@ -291,6 +291,7 @@ namespace RHIOpenGL
         void SetViewport(float x, float y, float w, float h, float minDepth, float maxDepth) override;
         void SetScissor(int32_t x, int32_t y, uint32_t w, uint32_t h) override;
         void Draw(uint32_t vertexCount, uint32_t instanceCount = 1, uint32_t firstVertex = 0, uint32_t firstInstance = 0) override;
+        void DrawIndexedIndirect(RHI::RHIBuffer* indexBuffer, RHI::RHIBuffer* argumentBuffer, uint64_t argumentOffset) override;
         void DrawIndexed(RHI::RHIBuffer* indexBuffer, uint32_t indexCount, uint32_t instanceCount = 1, uint32_t firstIndex = 0, int32_t vertexOffset = 0, uint32_t firstInstance = 0) override;
         void BeginRenderPass(const RHI::RHIRenderPassInfo& renderPassInfo) override;
         void EndRenderPass() override;

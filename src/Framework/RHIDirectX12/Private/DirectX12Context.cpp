@@ -906,6 +906,42 @@ namespace RHIDirectX12
 #endif
     }
 
+    void DirectX12GraphicContext::DrawIndexedIndirect(RHI::RHIBuffer* indexBuffer, RHI::RHIBuffer* argumentBuffer, uint64_t argumentOffset)
+    {
+#if defined(_WIN32)
+        auto* indices = dynamic_cast<DirectX12Buffer*>(indexBuffer);
+        auto* arguments = dynamic_cast<DirectX12Buffer*>(argumentBuffer);
+        if (!indices || !arguments || !indices->GetNativeResource() || !arguments->GetNativeResource() || !_commandList)
+        {
+            throw std::invalid_argument("DirectX12 indexed indirect draw requires native buffers and a recording context");
+        }
+        if (!m_IndexedIndirectSignature)
+        {
+            D3D12_INDIRECT_ARGUMENT_DESC argument{};
+            argument.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+            D3D12_COMMAND_SIGNATURE_DESC signature{};
+            signature.ByteStride = sizeof(RHI::RHIDrawIndexedIndirectArguments);
+            signature.NumArgumentDescs = 1;
+            signature.pArgumentDescs = &argument;
+            CheckDX12(_queue->GetDevice()->GetNativeDevice()->CreateCommandSignature(
+                &signature, nullptr, IID_PPV_ARGS(&m_IndexedIndirectSignature)), "Create indexed indirect signature");
+        }
+        RequireAccess(indices, RHI::ERHIResourceAccess::VertexOrIndexBuffer);
+        RequireAccess(arguments, RHI::ERHIResourceAccess::IndirectArgs);
+        D3D12_INDEX_BUFFER_VIEW view{};
+        view.BufferLocation = indices->GetNativeResource()->GetGPUVirtualAddress();
+        view.SizeInBytes = static_cast<UINT>(indices->GetDesc().Size);
+        view.Format = indices->GetDesc().Stride == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+        _commandList->IASetIndexBuffer(&view);
+        const auto storageStates = BeginReadOnlyStorageAccess(false);
+        _commandList->ExecuteIndirect(m_IndexedIndirectSignature.Get(), 1, arguments->GetNativeResource(),
+                                      argumentOffset, nullptr, 0);
+        EndReadOnlyStorageAccess(storageStates);
+#else
+        throw std::runtime_error("DirectX12 indexed indirect draw requires Windows");
+#endif
+    }
+
     void DirectX12GraphicContext::BeginRenderPass(const RHI::RHIRenderPassInfo& renderPassInfo)
     {
 #if defined(_WIN32)

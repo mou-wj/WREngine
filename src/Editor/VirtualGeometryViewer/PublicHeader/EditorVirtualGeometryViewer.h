@@ -47,5 +47,8 @@ namespace Editor
         bool m_bRebuild = false;
         bool m_bDynamicLOD = true;
         bool m_bWireframe = false;
+        bool m_bGPUSelection = true;
+        bool m_bFrustumCulling = true;
+        bool m_bCaptureGPU = false;
     };
 }

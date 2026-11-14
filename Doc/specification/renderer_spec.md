@@ -28,7 +28,7 @@ auto visibility = Renderer::AddVirtualGeometryRender(
 
 `AddVirtualGeometryRender` 内部使用 `BuildVirtualGeometryInstances`。该函数调用 `Scene::GatherVisiblePrimitives(view)`，沿用场景现有的可见性和视锥查询，再筛选 StaticMeshProxy。网格数据有效时，从既有 StaticMeshProxyToInstanceId 映射取得 InstanceID，并保存 RenderData、LocalToWorld 和按槽排列的 MaterialRenderProxy 快照。缺失实例映射会报错，提示先完成场景更新。
 
-收集结束后依次调用 `AddVirtualGeometryRasterPass(builder, view, instances, sceneDepth)` 和 `AddVirtualGeometryMaterialResolvePass`。前者先为每个实例运行 CPU LOD 选择，按完整 Group 替换构造合法 DAG Cut，再清空 Visibility 和调用方深度并绘制选中 Cluster；后者读取同一深度及 Visibility，重建所选各层属性并写入传入的 GBuffer。顶点/索引访问通过既有 RDG_BUFFER_ACCESS 声明，其余附件、SRV 和 UAV 继续沿用各 Pass 的参数声明，由 RDG 生成依赖、屏障和提交访问记录。
+收集结束后依次调用 `AddVirtualGeometryRasterPass(builder, view, instances, sceneDepth)` 和 `AddVirtualGeometryMaterialResolvePass`。场景入口为实例开启 GPU LOD 选择及视锥剔除：按 Group 依赖深度编排 Compute，先形成完整 DAG Cut，再生成可见 Cluster 和索引间接参数。Raster 清空 Visibility 和调用方深度，随后用稳定候选 DrawID 执行间接绘制；Resolve 读取同一深度及 Visibility，重建实际可见层的属性并写入 GBuffer。顶点/索引及 IndirectArgs 通过既有 RDG_BUFFER_ACCESS 声明，其余附件、SRV、UAV 沿用参数声明，由 RDG 生成依赖、屏障和提交访问记录。
 
 返回值和原有 Pass 捕获保存录制期所需的资源及材质快照。GPU 完成前的释放和重建仍遵守资源最后访问 Fence，不增加 WaitIdle、全局保活或另一套生命周期控制。
 
@@ -36,7 +36,7 @@ auto visibility = Renderer::AddVirtualGeometryRender(
 
 属性恢复与材质数据布局见 [Material Resolve 实现](../key_implemetion/algorithm/12-virtual-geometry-material-resolve.md)，Cluster 绘制和 ID 定位见 [Visibility 实现](../key_implemetion/algorithm/11-virtual-geometry-visibility.md)。
 
-CPU 选择的独立入口、屏幕误差公式、多对多依赖与裂缝条件见 [LOD Selection](../key_implemetion/algorithm/13-virtual-geometry-lod-selection.md)。选择只使用既有 Build 的累计采样误差与历史包围范围，不改资源格式，也不代表严格最大像素误差保证；本阶段没有滞回、GPU Culling 或 Streaming。
+CPU 参考和 GPU 选择的入口、屏幕误差公式、多对多依赖与裂缝条件见 [LOD Selection](../key_implemetion/algorithm/13-virtual-geometry-lod-selection.md)。独立 Raster 的 VirtualGeometryInstance::bGPUSelection 默认为 false，设置 true 开启 GPU 路径，bFrustumCulling 控制其剔除。GPU 输出的 Draws 是全部候选 Metadata，GPUSelections 才提供 Cut/可见标志、紧凑列表和统计。正常路径没有 CPU 读回；仍为每候选录制间接命令，Resolve 仍逐候选调度。选择只使用既有 Build 的累计采样误差与历史包围范围，不改资源格式，也不代表严格最大像素误差保证；没有滞回、遮挡剔除或 Streaming。
 
 ### 当前限制与验证入口
 
@@ -48,4 +48,4 @@ MaterialParametersHelper 现支持显式 UV 梯度，Compute 使用 SampleGrad�
 
 ## VirtualGeometryViewer 消费方式
 
-[VirtualGeometryViewer](virtualgeometryviewer_spec.md) 直接提供独立实例，调用 CPU 选择、Raster、Resolve 和 AddVirtualGeometryDeferredShadingPass，不注册到主 Scene。默认 Dynamic LOD，按当前相机与 Target pixel error 选择完整 Cut；关闭此选项才按 MipLevel 检查某一生成层，界面明确标记其不是完整 Cut。光照封装复用 SceneRenderer 的阴影访问表和级联参数准备，再运行既有 DeferredShadingCS；无 IBL 时不绑定环境参数。主 RenderModule 与 DefferedSceneRenderer 的流程没有改变。
+[VirtualGeometryViewer](virtualgeometryviewer_spec.md) 直接提供独立实例，调用选择、Raster、Resolve 和 AddVirtualGeometryDeferredShadingPass，不注册到主 Scene。默认 GPU Dynamic LOD，提供 CPU 参考切换、视锥开关和按需 GPU Capture 对比；关闭 Dynamic LOD 才按 MipLevel 检查生成层，界面明确标记其不是完整 Cut。线框同样由 GPU 选择参数驱动。光照封装复用 SceneRenderer 的阴影访问表和级联参数准备，再运行既有 DeferredShadingCS；无 IBL 时不绑定环境参数。主 RenderModule 与 DefferedSceneRenderer 的流程没有改变。

@@ -38,6 +38,7 @@ namespace Renderer
                 }
                 VirtualGeometryInstance instance{data, proxy->GetLocalToWorld(), instanceID->second};
                 instance.TargetPixelError = targetPixelError;
+                instance.bGPUSelection = true;
                 instance.Materials.reserve(component->GetNumMaterials());
                 for (uint32_t slot = 0; slot < component->GetNumMaterials(); ++slot)
                 {

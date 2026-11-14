@@ -99,6 +99,7 @@
     V(vkCmdSetViewport) \
     V(vkCmdSetScissor) \
     V(vkCmdDraw) \
+    V(vkCmdDrawIndexedIndirect) \
     V(vkCmdDrawIndexed) \
     V(vkCmdDispatch) \
     V(vkCmdCopyBuffer) \
@@ -806,6 +807,11 @@ namespace VKFunc {
 
     void CmdDraw(VkCommandBuffer commandBuffer, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
         if (commandBuffer) vkCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+    }
+
+    void CmdDrawIndexedIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+    {
+        vkCmdDrawIndexedIndirect(commandBuffer, buffer, offset, drawCount, stride);
     }
 
     void CmdDrawIndexed(VkCommandBuffer commandBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance) {

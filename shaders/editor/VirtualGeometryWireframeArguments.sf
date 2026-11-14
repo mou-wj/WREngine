@@ -1,0 +1,17 @@
+#include "/Generated/ShaderParameters/VirtualGeometryWireframeArgumentsParameters.sf"
+
+[numthreads(64, 1, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint index = thread.x + thread.y * (65535u * 64u);
+    if (index >= ArgumentCount)
+    {
+        return;
+    }
+    uint offset = index * 5;
+    LineArguments[offset].Value = TriangleArguments[offset] * 2;
+    LineArguments[offset + 1].Value = 1;
+    LineArguments[offset + 2].Value = TriangleArguments[offset + 2] * 2;
+    LineArguments[offset + 3].Value = 0; // Viewer edge indices already contain the global VertexOffset.
+    LineArguments[offset + 4].Value = 0;
+}

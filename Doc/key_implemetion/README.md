@@ -65,7 +65,7 @@
 | [网格导入与几何生成](algorithm/08-mesh-import-and-geometry.md) | 顶点访问、法线切线、实例索引和程序化网格怎样组织？ |
 | [TextureViewer 画布与预览](algorithm/09-texture-viewer-canvas.md) | 多图片如何居中、选中、拖动和围绕鼠标缩放，网格如何分级，Cube/Mip/数组层如何显示？ |
 | [CPU 虚拟几何构建](algorithm/10-virtual-geometry-cpu-build.md) | 拓扑分簇、组内 QEM、边界合法性、多对多 DAG、几何误差和有限终止怎样实现？ |
-| [Virtual Geometry CPU 动态 LOD](algorithm/13-virtual-geometry-lod-selection.md) | 如何将累计几何误差投影为像素误差、按完整 Group 替换构造多对多 DAG Cut，并与 Raster/Resolve 衔接？ |
+| [Virtual Geometry CPU / GPU 动态 LOD](algorithm/13-virtual-geometry-lod-selection.md) | 如何投影误差、并行求值多对多 DAG Cut、视锥剔除并生成间接参数，怎样与 CPU 和 Raster/Resolve 对照？ |
 
 ## 如何阅读和核查
 

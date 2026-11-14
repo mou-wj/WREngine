@@ -1,0 +1,122 @@
+#include "/Generated/ShaderParameters/VirtualGeometryGPUSelectionParameters.sf"
+
+float4 LoadSphere(uint offset, bool group)
+{
+    if (group)
+    {
+        return asfloat(uint4(SelectionGroups[offset], SelectionGroups[offset + 1],
+                             SelectionGroups[offset + 2], SelectionGroups[offset + 3]));
+    }
+    return asfloat(uint4(SelectionClusters[offset], SelectionClusters[offset + 1],
+                         SelectionClusters[offset + 2], SelectionClusters[offset + 3]));
+}
+
+float PixelError(float4 sphere, float error)
+{
+    float4 clip = mul(SelectionLocalToClip, float4(sphere.xyz, 1));
+    float minimumW = clip.w - sphere.w * SelectionRowLengths.w;
+    float perturbedW = minimumW - error * SelectionRowLengths.w;
+    if (minimumW <= 0 || perturbedW <= 0 ||
+        dot(SelectionNearPlane, float4(sphere.xyz, 1)) <= (sphere.w + error) * length(SelectionNearPlane.xyz))
+    {
+        return asfloat(0x7f800000u);
+    }
+    float2 maximumNDC = (abs(clip.xy) + sphere.w * SelectionRowLengths.xy) / minimumW;
+    float2 pixels = error * (SelectionRowLengths.xy + maximumNDC * SelectionRowLengths.w) /
+                    perturbedW * SelectionViewportSize * 0.5;
+    float result = length(pixels);
+    return isfinite(result) ? result : asfloat(0x7f800000u);
+}
+
+bool OutsideFrustum(float4 sphere)
+{
+    float4 clip = mul(SelectionLocalToClip, float4(sphere.xyz, 1));
+    [unroll]
+    for (uint axis = 0; axis < 3; ++axis)
+    {
+        float3 row = SelectionLocalToClip[axis].xyz;
+        float3 wrow = SelectionLocalToClip[3].xyz;
+        float upper = clip.w - clip[axis];
+        float lower = axis == 2 && SelectionZeroToOne != 0 ? clip.z : clip.w + clip[axis];
+        float3 lowerNormal = axis == 2 && SelectionZeroToOne != 0 ? row : wrow + row;
+        // A small outward tolerance keeps tangencies under FP32 rounding conservative.
+        float tolerance = 1e-5 * (1 + abs(clip.w) + abs(clip[axis]));
+        if (upper < -sphere.w * length(wrow - row) - tolerance ||
+            lower < -sphere.w * length(lowerNormal) - tolerance)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+[numthreads(64, 1, 1)]
+void SelectGroupsCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint work = thread.x + thread.y * (65535u * 64u);
+    if (work >= SelectionWorkCount)
+    {
+        return;
+    }
+    uint group = SelectionOrder[SelectionOrderOffset + work];
+    uint offset = group * VG_GROUP_WORDS;
+    bool apply = SelectionTargetError > 0 && SelectionGroups[offset + 3] != 0;
+    float error = asfloat(SelectionGroups[offset + 25]);
+    apply = apply && PixelError(LoadSphere(offset + 21, true), error) <= SelectionTargetError;
+    uint firstChild = SelectionGroups[offset], childCount = SelectionGroups[offset + 1];
+    for (uint i = 0; i < childCount && apply; ++i)
+    {
+        uint child = SelectionChildren[firstChild + i];
+        uint generator = SelectionClusters[child * VG_CLUSTER_WORDS + 5];
+        if (generator != 0xffffffffu)
+        {
+            apply = AppliedGroups[generator].Value != 0;
+        }
+    }
+    // Only this thread writes this Group; all generators were completed by earlier dispatches.
+    AppliedGroups[group].Value = apply ? 1u : 0u;
+}
+
+[numthreads(64, 1, 1)]
+void SelectClustersCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint cluster = thread.x + thread.y * (65535u * 64u);
+    if (cluster >= SelectionClusterCount)
+    {
+        return;
+    }
+    uint offset = cluster * VG_CLUSTER_WORDS;
+    uint consumer = SelectionClusters[offset + 4], generator = SelectionClusters[offset + 5];
+    bool generated = generator == 0xffffffffu;
+    if (!generated)
+    {
+        generated = AppliedGroups[generator].Value != 0;
+    }
+    bool cut = generated && AppliedGroups[consumer].Value == 0;
+    bool visible = cut && (SelectionCull == 0 || !OutsideFrustum(LoadSphere(offset + 14, false)));
+    ClusterFlags[cluster].Value = (cut ? 1u : 0u) | (visible ? 2u : 0u);
+    uint triangles = SelectionClusters[offset + 3];
+    // Fixed argument slots preserve the existing DrawID -> instance/resource/Cluster mapping without a CPU readback.
+    uint argument = cluster * 5;
+    IndirectArguments[argument].Value = visible ? triangles * 3 : 0;
+    IndirectArguments[argument + 1].Value = 1;
+    IndirectArguments[argument + 2].Value = SelectionClusters[offset + 2];
+    IndirectArguments[argument + 3].Value = SelectionClusters[offset];
+    IndirectArguments[argument + 4].Value = 0;
+    uint unused;
+    if (cut)
+    {
+        InterlockedAdd(Statistics[0].Value, 1, unused);
+        if (visible)
+        {
+            uint slot;
+            InterlockedAdd(Statistics[1].Value, 1, slot);
+            VisibleClusters[slot].Value = cluster;
+            InterlockedAdd(Statistics[3].Value, triangles, unused);
+        }
+        else
+        {
+            InterlockedAdd(Statistics[2].Value, 1, unused);
+        }
+    }
+}

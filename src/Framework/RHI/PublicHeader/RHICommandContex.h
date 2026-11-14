@@ -52,6 +52,8 @@ namespace RHI
             uint32_t instanceCount = 1, uint32_t firstIndex = 0,
             int32_t vertexOffset = 0, uint32_t firstInstance = 0) = 0;
 
+        virtual void DrawIndexedIndirect(RHIBuffer* indexBuffer, RHIBuffer* argumentBuffer, uint64_t argumentOffset) = 0;
+
         virtual void BeginRenderPass(const RHIRenderPassInfo& renderPassInfo) = 0;
         virtual void EndRenderPass() = 0;
 

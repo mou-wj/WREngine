@@ -134,6 +134,7 @@ namespace RHIDirectX12
         void SetScissor(int32_t x, int32_t y, uint32_t w, uint32_t h) override;
         void Draw(uint32_t vertexCount, uint32_t instanceCount = 1, uint32_t firstVertex = 0,
                   uint32_t firstInstance = 0) override;
+        void DrawIndexedIndirect(RHI::RHIBuffer* indexBuffer, RHI::RHIBuffer* argumentBuffer, uint64_t argumentOffset) override;
         void DrawIndexed(RHI::RHIBuffer* indexBuffer, uint32_t indexCount, uint32_t instanceCount = 1,
                          uint32_t firstIndex = 0, int32_t vertexOffset = 0, uint32_t firstInstance = 0) override;
         void BeginRenderPass(const RHI::RHIRenderPassInfo& renderPassInfo) override;
@@ -145,5 +146,9 @@ namespace RHIDirectX12
         void BuildAccelerationStructure(RHI::RHIRayTracingAccelerationStructure* accelerationStructure) override;
         void UpdateAccelerationStructure(RHI::RHIRayTracingAccelerationStructure* accelerationStructure) override;
         void TraceRays(uint32_t width, uint32_t height, uint32_t depth = 1) override;
+    private:
+#if defined(_WIN32)
+        Microsoft::WRL::ComPtr<ID3D12CommandSignature> m_IndexedIndirectSignature;
+#endif
     };
 } // namespace RHIDirectX12
