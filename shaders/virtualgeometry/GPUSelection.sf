@@ -77,6 +77,111 @@ void SelectGroupsCS(uint3 thread : SV_DispatchThreadID)
     AppliedGroups[group].Value = apply ? 1u : 0u;
 }
 
+#if VG_STREAMING
+void EnqueueGroup(uint group, inout uint tail)
+{
+    if (AppliedGroups[group].Value == 0)
+    {
+        AppliedGroups[group].Value = 1;
+        ResidencyQueue[tail++].Value = group;
+    }
+}
+
+// One bounded work queue: each Group is enqueued once, no GPU-wide spin/barrier or CPU readback.
+// Starting with desired coarsening, add exactly the dependencies forced by missing selected geometry.
+[numthreads(1, 1, 1)]
+void ResidentClosureCS()
+{
+    uint tail = 0;
+    for (uint g = 0; g < SelectionGroupCount; ++g)
+    {
+        AppliedGroups[g].Value = DesiredGroups[g];
+        if (DesiredGroups[g] != 0)
+        {
+            ResidencyQueue[tail++].Value = g;
+        }
+    }
+    for (uint c = 0; c < SelectionClusterCount; ++c)
+    {
+        uint offset = c * VG_CLUSTER_WORDS;
+        if (SelectionClusters[offset + 5] == 0xffffffffu && ClusterResidency[c] == 0)
+        {
+            EnqueueGroup(SelectionClusters[offset + 4], tail);
+        }
+    }
+    for (uint head = 0; head < tail; ++head)
+    {
+        uint g = ResidencyQueue[head].Value;
+        uint offset = g * VG_GROUP_WORDS;
+        uint first = SelectionGroups[offset], count = SelectionGroups[offset + 1];
+        for (uint i = 0; i < count; ++i)
+        {
+            uint child = SelectionChildren[first + i];
+            uint generator = SelectionClusters[child * VG_CLUSTER_WORDS + 5];
+            if (generator != 0xffffffffu)
+            {
+                EnqueueGroup(generator, tail); // Applying a replacement requires every generating replacement.
+            }
+        }
+        first = SelectionGroups[offset + 2];
+        count = SelectionGroups[offset + 3];
+        for (uint i = 0; i < count; ++i)
+        {
+            uint parent = SelectionParents[first + i];
+            if (ClusterResidency[parent] == 0)
+            {
+                EnqueueGroup(SelectionClusters[parent * VG_CLUSTER_WORDS + 4], tail);
+            }
+        }
+    }
+}
+
+[numthreads(64, 1, 1)]
+void RequestResidentPagesCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint work = thread.x + thread.y * (65535u * 64u);
+    if (work >= SelectionWorkCount)
+    {
+        return;
+    }
+    uint group = work;
+    uint offset = group * VG_GROUP_WORDS;
+    uint parentFirst = SelectionGroups[offset + 2], parentCount = SelectionGroups[offset + 3];
+    if (parentCount == 0 || DesiredGroups[group] != 0 || AppliedGroups[group].Value == 0)
+    {
+        return;
+    }
+    for (uint p = 0; p < parentCount; ++p)
+    {
+        uint parent = SelectionParents[parentFirst + p];
+        uint consumer = SelectionClusters[parent * VG_CLUSTER_WORDS + 4];
+        if (AppliedGroups[consumer].Value != 0)
+        {
+            return; // Some Parent is still consumed by a coarser replacement. Never refine a partial hyperedge.
+        }
+    }
+    uint first = SelectionGroups[offset], count = SelectionGroups[offset + 1];
+    bool complete = true;
+    bool request = SelectionCull == 0 || !OutsideFrustum(LoadSphere(offset + 21, true));
+    for (uint i = 0; i < count; ++i)
+    {
+        uint child = SelectionChildren[first + i];
+        bool resident = ClusterResidency[child] != 0;
+        complete = complete && resident;
+        if (request)
+        {
+            uint unused;
+            InterlockedOr(StreamingFeedback[SelectionGroupCount + ClusterPages[child]].Value, resident ? 3u : 1u, unused);
+        }
+    }
+    if (!complete && request)
+    {
+        uint unused;
+        InterlockedOr(StreamingFeedback[group].Value, 1u, unused);
+    }
+}
+#endif
+
 [numthreads(64, 1, 1)]
 void SelectClustersCS(uint3 thread : SV_DispatchThreadID)
 {
@@ -94,6 +199,14 @@ void SelectClustersCS(uint3 thread : SV_DispatchThreadID)
     }
     bool cut = generated && AppliedGroups[consumer].Value == 0;
     bool visible = cut && (SelectionCull == 0 || !OutsideFrustum(LoadSphere(offset + 14, false)));
+#if VG_STREAMING
+    // Root pages are pinned; closure consumes every nonresident leaf or generated Cluster before finalization.
+    if (visible)
+    {
+        uint unused;
+        InterlockedOr(StreamingFeedback[SelectionGroupCount + ClusterPages[cluster]].Value, 7u, unused);
+    }
+#endif
     ClusterFlags[cluster].Value = (cut ? 1u : 0u) | (visible ? 2u : 0u);
     uint triangles = SelectionClusters[offset + 3];
     // Fixed argument slots preserve the existing DrawID -> instance/resource/Cluster mapping without a CPU readback.

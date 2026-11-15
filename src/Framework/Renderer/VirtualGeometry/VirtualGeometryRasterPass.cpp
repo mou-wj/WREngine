@@ -1,6 +1,7 @@
 #include "VirtualGeometryRasterPass.h"
 #include "VirtualGeometryLODSelection.h"
 #include "VirtualGeometryVertexFactory.h"
+#include "VirtualGeometryStreaming.h"
 #include "MeshMaterialShader.h"
 #include "GlobalShader.h"
 #include "RHIPipelineStateCache.h"
@@ -20,6 +21,10 @@ namespace Renderer
     RDG_BUFFER_ACCESS(Indices, ERHIResourceAccess::VertexOrIndexBuffer)
     RDG_BUFFER_ACCESS(Arguments, ERHIResourceAccess::IndirectArgs)
     END_SHADER_PARAMETER_STRUCT(VirtualGeometryRasterParameters)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(VirtualGeometryDrawUploadParameters)
+    RDG_BUFFER_ACCESS(Metadata, ERHIResourceAccess::TransferDest)
+    END_SHADER_PARAMETER_STRUCT(VirtualGeometryDrawUploadParameters)
 
     BEGIN_SHADER_PARAMETER_STRUCT(VirtualGeometryDebugParameters)
     SHADER_PARAMETER_RDG_TEXTURE(Texture2D<uint2>, Visibility)
@@ -274,6 +279,18 @@ namespace Renderer
                 throw std::invalid_argument("Virtual geometry instance has no render data");
             }
             const auto& geometry = instance.RenderData->VirtualGeometryData;
+            if (instance.Streaming)
+            {
+                if (&instance.Streaming->GetResource() != &geometry || !instance.bGPUSelection || instance.bInspectGeneratedLevel)
+                {
+                    throw std::invalid_argument("Streaming requires its matching resource and GPU DAG selection");
+                }
+                instance.Streaming->Prepare(builder);
+            }
+            else if (geometry.StreamingPageSlots)
+            {
+                throw std::invalid_argument("Paged geometry requires its streaming cache on every instance");
+            }
             if (!geometry.IsValid() || !geometry.IndexBuffer || !geometry.IndexBuffer->GetRHI())
             {
                 throw std::invalid_argument("Virtual geometry must be built and uploaded before rasterization");
@@ -291,7 +308,8 @@ namespace Renderer
             {
                 auto& selection = rasterInstances.back().GPUSelection;
                 selection = AddVirtualGeometryGPUSelectionPass(builder, geometry, instance.LocalToWorld, view,
-                                                               instance.TargetPixelError, instance.bFrustumCulling);
+                                                               instance.TargetPixelError, instance.bFrustumCulling,
+                                                               instance.Streaming.get());
                 output->GPUSelections[rasterInstances.size() - 1] = selection;
                 if (software)
                 {
@@ -343,6 +361,10 @@ namespace Renderer
         }
         RenderGraphBufferDesc metadataDesc;
         metadataDesc.Size = std::max<size_t>(1, output->Draws.size()) * sizeof(VirtualGeometryDrawMetadata);
+        if (metadataDesc.Size > UINT32_MAX)
+        {
+            throw std::invalid_argument("Virtual geometry draw metadata exceeds the upload byte range");
+        }
         metadataDesc.Stride = sizeof(VirtualGeometryDrawMetadata);
         metadataDesc.Usage =
             ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::ShaderResource | ERHIBufferUsageFlag::TransferDst;
@@ -353,7 +375,15 @@ namespace Renderer
         {
             snapshot->emplace_back();
         }
-        builder.AddUploadBuffer(metadata, snapshot->data(), metadataDesc.Size);
+        auto* metadataUpload = builder.AllocateParameter<VirtualGeometryDrawUploadParameters>();
+        metadataUpload->Metadata = metadata;
+        builder.AddPass("VirtualGeometryDrawMetadataUpload", VirtualGeometryDrawUploadParameters::GetMetaData(),
+                        metadataUpload, EPassFlag::Graphic, [=](RHICommandListBase& cmd)
+        {
+            RHIUpdateBufferRegion region;
+            region.Size = metadataDesc.Size;
+            GRHIApi->UpdateBuffer(cmd, metadataUpload->Metadata->GetRHIBuffer(), snapshot->data(), region);
+        });
         RenderGraphBufferSRVDesc srv;
         srv.Buffer = metadata;
         srv.Stride = sizeof(VirtualGeometryDrawMetadata);
@@ -450,6 +480,15 @@ namespace Renderer
             }
             AddVirtualGeometryRasterMerge(builder, view, targets, hardwareVisibility, hardwareDepth,
                 output->VirtualGeometryVisibilityTexture, output->VirtualGeometryDepthTexture);
+        }
+        std::vector<VirtualGeometryStreaming*> feedbackCaches;
+        for (const auto& instance : instances)
+        {
+            if (instance.Streaming && std::find(feedbackCaches.begin(), feedbackCaches.end(), instance.Streaming.get()) == feedbackCaches.end())
+            {
+                instance.Streaming->AddFeedbackReadback(builder);
+                feedbackCaches.push_back(instance.Streaming.get());
+            }
         }
         return output;
     }

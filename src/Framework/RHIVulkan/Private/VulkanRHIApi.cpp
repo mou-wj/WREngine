@@ -380,7 +380,10 @@ void* VulkanRHIApi::MapReadTexture(RHICommandListBase& cmdList, RHITexture* text
 
 	void* mapped =
 		staging->Map(0, totalSize);
-	m_MappedStagingBuffers[mapped] = staging;
+	{
+		std::lock_guard<std::mutex> lock(m_MappedStagingMutex);
+		m_MappedStagingBuffers[mapped] = staging;
+	}
 
 	return mapped;
 }
@@ -458,14 +461,17 @@ void* VulkanRHIApi::MapReadBuffer(RHICommandListBase& cmdList, RHIBuffer* buffer
 			0,
 			size);
 
-	m_MappedStagingBuffers[mapped] =
-		staging;
+	{
+		std::lock_guard<std::mutex> lock(m_MappedStagingMutex);
+		m_MappedStagingBuffers[mapped] = staging;
+	}
 
 	return mapped;
 }
 
 void VulkanRHIApi::Unmap(void* mappedPtr)
 {
+	std::lock_guard<std::mutex> lock(m_MappedStagingMutex);
 	auto it = m_MappedStagingBuffers.find(mappedPtr);
 	if (it != m_MappedStagingBuffers.end())
 	{

@@ -259,8 +259,11 @@ namespace RHIDirectX12
             });
         });
         void* result = packed->data();
-        m_MappedStagingBuffers[result] = readback;
-        m_PackedReadbacks[result] = packed;
+        {
+            std::lock_guard<std::mutex> lock(m_MappedStagingMutex);
+            m_MappedStagingBuffers[result] = readback;
+            m_PackedReadbacks[result] = packed;
+        }
         return result;
     }
     void* DirectX12RHIApi::MapReadBuffer(RHI::RHICommandListBase& cmdList, RHI::RHIBuffer* buffer,
@@ -285,12 +288,16 @@ namespace RHIDirectX12
             context->RetainResource(readback->GetNativeResource());
         });
         void* result = readback->Map(0, static_cast<UINT>(size));
-        m_MappedStagingBuffers[result] = readback;
+        {
+            std::lock_guard<std::mutex> lock(m_MappedStagingMutex);
+            m_MappedStagingBuffers[result] = readback;
+        }
         return result;
     }
 
     void DirectX12RHIApi::Unmap(void* mappedData)
     {
+        std::lock_guard<std::mutex> lock(m_MappedStagingMutex);
         if (!mappedData)
         {
             return;

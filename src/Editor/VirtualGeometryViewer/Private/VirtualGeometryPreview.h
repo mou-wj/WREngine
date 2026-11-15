@@ -3,9 +3,10 @@
 #include "Math.hpp"
 #include <memory>
 #include <array>
+#include <filesystem>
 
 namespace Engine { class StaticMeshAsset; class Material; class DirectionalLightComponent; }
-namespace Renderer { class Scene; }
+namespace Renderer { class Scene; class VirtualGeometryStreaming; struct VirtualGeometryStreamingStatistics; }
 namespace Editor
 {
     class VirtualGeometryPreview
@@ -17,7 +18,8 @@ namespace Editor
         void Render(Core::Int2 size, uint32_t mipLevel, bool material, float yaw, float pitch, float distance,
                     bool dynamicLOD = true, float targetPixelError = 1.0f, bool wireframe = false,
                     bool gpuSelection = false, bool frustumCulling = true, bool captureGPU = false,
-                    uint32_t rasterMode = 0, float softwareClusterPixels = 32, bool measureFrame = false);
+                    uint32_t rasterMode = 0, float softwareClusterPixels = 32, bool measureFrame = false,
+                    bool streaming = false, uint64_t streamingBudget = 16ull * 1024 * 1024);
         void Reset();
         RenderCore::RenderTexture* GetTexture() const { return m_Color.get(); }
         const Engine::VirtualGeometryResource* GetGeometry() const;
@@ -27,6 +29,7 @@ namespace Editor
         bool HasGPUCapture() const { return m_bGPUCapture; }
         const std::array<uint32_t, 4>& GetRasterStatistics() const { return m_RasterStatistics; }
         double GetCompletedFrameMilliseconds() const { return m_CompletedFrameMilliseconds; }
+        const Renderer::VirtualGeometryStreamingStatistics* GetStreamingStatistics() const;
     private:
         void WaitForLastDraw();
         std::shared_ptr<Engine::StaticMeshAsset> m_Asset;
@@ -41,5 +44,7 @@ namespace Editor
         bool m_bGPUCapture = false;
         std::array<uint32_t, 4> m_RasterStatistics{};
         double m_CompletedFrameMilliseconds = 0;
+        std::shared_ptr<Renderer::VirtualGeometryStreaming> m_Streaming;
+        std::filesystem::path m_PageArchive;
     };
 }

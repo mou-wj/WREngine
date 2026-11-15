@@ -87,6 +87,7 @@ namespace Engine
         std::unique_ptr<RenderCore::RenderBuffer> RootGroupIndexBuffer;
 
         uint32_t Version = 1;
+        uint32_t StreamingPageSlots = 0; // Zero: original full buffers; nonzero: bounded physical page slots.
 
         void Clear()
         {
@@ -115,7 +116,11 @@ namespace Engine
 
         // Upload completed CPU data; release retains it for subsequent reinitialization.
         ENGINE_API void InitializeResources();
+        ENGINE_API void InitializeStreamingResources(uint32_t pageSlots);
         ENGINE_API void ReleaseResources();
+
+    private:
+        void InitializeResourcesInternal(uint32_t pageSlots);
     };
 
 } // namespace Engine

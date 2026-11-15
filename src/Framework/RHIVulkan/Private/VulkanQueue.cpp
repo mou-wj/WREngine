@@ -221,7 +221,7 @@ uint64_t VulkanQueue::ExecuteContext(const std::vector<RHI::RHIContextBase*>& co
                 }
             }
         }
-        VulkanRHISyncPoint* vkSyncPoint = static_cast<VulkanRHISyncPoint*>(waitInfo.SyncPoint);
+        VulkanRHISyncPoint* vkSyncPoint = static_cast<VulkanRHISyncPoint*>(rhivkSyncPoint);
         if (!vkSyncPoint) {
             // 无法获取到SyncPoint，跳过
             continue;

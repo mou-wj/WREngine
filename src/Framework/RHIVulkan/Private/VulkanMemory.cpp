@@ -160,6 +160,8 @@ uint32_t VulkanMemoryManager::FindMemoryType(uint32_t typeBits, VkMemoryProperty
 
 bool VulkanMemoryManager::Allocate(const VkMemoryRequirements& memReqs, VkMemoryPropertyFlags props, VulkanAllocation& outAlloc)
 {
+    // RDG records independent passes concurrently; protect blocks and their free-list iterators together.
+    std::lock_guard<std::mutex> lock(m_Mutex);
     uint32_t typeIndex = FindMemoryType(memReqs.memoryTypeBits, props);
     for (auto& block : m_Blocks)
     {
@@ -182,12 +184,14 @@ bool VulkanMemoryManager::Allocate(const VkMemoryRequirements& memReqs, VkMemory
 
 void VulkanMemoryManager::Reset()
 {
+    std::lock_guard<std::mutex> lock(m_Mutex);
     for (auto& block : m_Blocks)
         block->Reset();
 }
 
 bool VulkanMemoryManager::Free( VulkanAllocation& alloc)
 {
+    std::lock_guard<std::mutex> lock(m_Mutex);
     if (alloc.GetMemory() == VK_NULL_HANDLE)
         return true;
 

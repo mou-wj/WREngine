@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include "../../../Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.h"
 
 namespace Editor
 {
@@ -75,7 +76,8 @@ namespace Editor
             m_Preview->Render(m_PreviewSize, m_MipLevel, m_bMaterial, m_Yaw, m_Pitch, m_Distance,
                               m_bDynamicLOD, m_TargetPixelError, m_bWireframe,
                               m_bGPUSelection, m_bFrustumCulling, m_bCaptureGPU && !m_bMeasureRasterFrame,
-                              static_cast<uint32_t>(m_RasterMode), m_SoftwareClusterPixels, m_bMeasureRasterFrame);
+                              static_cast<uint32_t>(m_RasterMode), m_SoftwareClusterPixels, m_bMeasureRasterFrame,
+                              m_bStreaming, uint64_t(m_StreamingBudgetMB) * 1024 * 1024);
             if (!m_bMeasureRasterFrame)
             {
                 m_bCaptureGPU = false;
@@ -155,6 +157,23 @@ namespace Editor
                 ImGui::Text("Completed preview frame: %.3f ms (CPU + queue completion; on demand, not GPU timestamp)",
                             m_Preview->GetCompletedFrameMilliseconds());
                 ImGui::TextDisabled("OpenGL queue completion measures worker execution, not GPU completion.");
+                ImGui::BeginDisabled(!m_bGPUSelection || !m_bDynamicLOD);
+                ImGui::Checkbox("Geometry streaming", &m_bStreaming);
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(100);
+                ImGui::DragInt("Cache budget MiB", &m_StreamingBudgetMB, 1, 1, 4096);
+                m_StreamingBudgetMB = std::clamp(m_StreamingBudgetMB, 1, 4096);
+                ImGui::EndDisabled();
+                if (const auto* stats = m_Preview->GetStreamingStatistics())
+                {
+                    const double hit = stats->PageReferences ? 100.0 * stats->PageHits / stats->PageReferences : 0;
+                    ImGui::Text("Pages %u/%u | pinned %u | loading %u | cache %.2f/%.2f MiB | page hits %.1f%%",
+                        stats->ResidentPages, stats->TotalPages, stats->PinnedPages, stats->LoadingPages,
+                        stats->CacheBytes / 1048576.0, stats->BudgetBytes / 1048576.0, hit);
+                    ImGui::Text("Disk %.1f/%.1f KiB | loads %llu | evictions %llu | failed %llu | budget blocks %llu | I/O + decode %.2f ms",
+                        stats->StoredBytes / 1024.0, stats->RawBytes / 1024.0, stats->Loads, stats->Evictions,
+                        stats->FailedLoads, stats->BudgetBlocked, stats->LoadMilliseconds);
+                }
                 if (m_bGPUSelection && m_bDynamicLOD)
                 {
                     if (m_Preview->HasGPUCapture())

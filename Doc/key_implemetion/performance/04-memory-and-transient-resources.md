@@ -44,6 +44,8 @@ RenderTargetPool 将 MarkUsed 与最后访问 Fence 一起用于可复用判断�
 
 VulkanMemoryManager 按 memory type 管理通常 64 MiB 起的大块，block 内 first-fit 对齐切分，Free 后排序合并空闲段。staging manager 保存上传/映射 buffer，并关联提交的 command buffer 再回收；不能在 CPU memcpy 返回时直接复用 GPU 仍读取的 staging。
 
+VulkanMemoryManager::Allocate/Free/Reset 在同一对象 mutex 内操作 m_Blocks 和块内 free list。RDG 并行录制会同时分配 staging/参数缓冲，先前无锁访问实际触发 vector 迭代器越界断言；本次只保护原分配与释放算法，没有增加全局 allocator 或改变 GPU 完成后才能释放的前提。定位和复测见 [流送故障记录](../../dev/bugfix/故障与修复记录-2026-11-15.md#virtual-geometry-geometry-streaming--compression)。
+
 VulkanResource 的句柄销毁会进入 Device deferred delete 队列，但当前 ReleaseResources 遍历释放，frameDelay 未实际用于完成点判断；普通内存 Free 与延后句柄销毁也不是同一操作。**不能仅依据类名 Deferred 就宣称资源自动按 GPU fence 安全销毁。**
 
 D3D12 区分 DEFAULT/UPLOAD/READBACK heap，纹理上传/读回依据原生 footprint 处理 row pitch，读回再去行填充；descriptor 槽有独立分配/释放路径。context 的暂存资源需要覆盖实际命令执行期，见 [队列专题](02-rhi-queues-and-sync.md)。

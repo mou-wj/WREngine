@@ -75,7 +75,7 @@ RHIPlatformInfo::RasterSubPixelBits 提供覆盖设置的子像素位数：Vulka
 
 软件模式额外需要约 20P 字节：HW Visibility/D32 为 12P，软件两个 uint Buffer 为 8P；每实例另约 24C+16 字节的路由和统计，未计资源池对齐、已有 selection 参数、最终目标和 Viewer 线框。双遍覆盖、额外全屏合并和 CPU 按候选提交仍有成本，本版不声称一定比硬件更快。
 
-当前只支持双面、不透明、单样本、常规近 0 远 1 深度；不实现 MSAA、AlphaTest、位移、保守光栅、软件裁剪、反向 Z、Streaming 或持久 GPU 工作队列。依赖既有 Build 的几何边界和合法 Cut；软件光栅不修补构建产生的边界缺口。浮点矩阵运算、深度插值和原生线光栅化仍可能存在边缘精度差异，不以深度容差改变遮挡比较规则。
+当前只支持双面、不透明、单样本、常规近 0 远 1 深度；不实现 MSAA、AlphaTest、位移、保守光栅、软件裁剪、反向 Z 或持久 GPU 光栅工作队列。可叠加 [Page Streaming](../performance/11-virtual-geometry-streaming.md)，软件光栅仍读取同一物理 ClusterBuffer/属性池，不负责 I/O。依赖既有 Build 的几何边界和合法 Cut；软件光栅不修补构建产生的边界缺口。浮点矩阵运算、深度插值和原生线光栅化仍可能存在边缘精度差异，不以深度容差改变遮挡比较规则。
 
 ## 可复查验证
 

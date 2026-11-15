@@ -50,6 +50,7 @@
 | [UI 合成与窗口生命周期](performance/08-ui-rendering-and-window-lifetime.md) | 当前鼠标事件怎样分发，ImGui 怎样共用 RHI，纹理与窗口完成点怎样维护？ |
 | [构建与模块启动](performance/09-module-build-and-startup.md) | 依赖准备、DLL 注册、拓扑启动和逆序关闭怎样串起来？ |
 | [工程快照与二进制数据](performance/10-project-snapshots.md) | 如何保存运行时节点、层级及资源，脱离源文件恢复，并保持多文件一致和 GPU 状态？ |
+| [Virtual Geometry 流送](performance/11-virtual-geometry-streaming.md) | 如何管理有限 Page Cache、异步读取/上传、缺页合法 Cut、去重、预算、淘汰和完成点？ |
 
 ## 原理与算法：algorithm
 
@@ -67,6 +68,7 @@
 | [CPU 虚拟几何构建](algorithm/10-virtual-geometry-cpu-build.md) | 拓扑分簇、组内 QEM、边界合法性、多对多 DAG、几何误差和有限终止怎样实现？ |
 | [Virtual Geometry CPU / GPU 动态 LOD](algorithm/13-virtual-geometry-lod-selection.md) | 如何投影误差、并行求值多对多 DAG Cut、视锥剔除并生成间接参数，怎样与 CPU 和 Raster/Resolve 对照？ |
 | [Virtual Geometry GPU 软件光栅化](algorithm/14-virtual-geometry-software-rasterization.md) | 如何按投影大小分流、用两阶段原子维持深度与 ID 一致，并合并硬件结果、统计和验证？ |
+| [Virtual Geometry Page 压缩](algorithm/15-virtual-geometry-page-compression.md) | 如何组织根页与普通页、无损编码顶点/索引、独立校验与恢复物理地址？ |
 
 ## 如何阅读和核查
 
@@ -92,7 +94,7 @@
 
 以下是源码核对中需要开发者掌握的限制，本轮只记录，没有修改实现或新增运行验证：
 
-- [队列同步](performance/02-rhi-queues-and-sync.md)：OpenGL 的逻辑完成值是 worker 执行完成，不能直接等同 GPU 完成；D3D12 对仅有 QueueType/Value 的等待有未兑现分支。
+- [队列同步](performance/02-rhi-queues-and-sync.md)：OpenGL 的逻辑完成值是 worker 执行完成，不能直接等同 GPU 完成；Vulkan/D3D12 的 QueueType/Value 等待已在虚拟几何流送验证中修正为原生同步点等待，具体边界仍须核对。
 - [RDG 与资源回收](performance/03-rdg-execution-and-state.md)：Pass 析构已补齐，混合队列 Fence 更新和重叠子资源范围仍存在限制；[内存专题](performance/04-memory-and-transient-resources.md) 另外区分实际等待、延后删除与精确完成点回收。
 - [几何与距离场](algorithm/04-distance-fields-and-jump-flood.md)：现有符号判断不严格等于奇偶规则，GPU mask/JFA 的数据契约也不能直接拼成已验证流程。
 - [投影与屏幕算法](algorithm/03-transforms-frustum-and-depth.md)：NO/ZO 近面公式、深度金字塔 min/max 与实际深度约定需要联合核查；[屏幕效果](algorithm/07-screen-space-and-antialiasing.md) 中还标出了缺失 Shader 和未完整接入的路径。

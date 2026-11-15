@@ -1,4 +1,5 @@
 #include "VirtualGeometryGPUSelection.h"
+#include "VirtualGeometryStreaming.h"
 #include "GlobalShader.h"
 #include "RHIPipelineStateCache.h"
 #include <algorithm>
@@ -20,6 +21,12 @@ namespace Renderer
     SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<uint>, SelectionGroups)
     SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<uint>, SelectionChildren)
     SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<uint>, SelectionOrder)
+    SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<uint>, SelectionParents)
+    SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<uint>, DesiredGroups)
+    SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<uint>, ClusterResidency)
+    SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<uint>, ClusterPages)
+    SHADER_PARAMETER_RDG_RWSTRUCTURED_BUFFER(VirtualGeometryGPUWord, StreamingFeedback)
+    SHADER_PARAMETER_RDG_RWSTRUCTURED_BUFFER(VirtualGeometryGPUWord, ResidencyQueue)
     SHADER_PARAMETER_RDG_RWSTRUCTURED_BUFFER(VirtualGeometryGPUWord, AppliedGroups)
     SHADER_PARAMETER_RDG_RWSTRUCTURED_BUFFER(VirtualGeometryGPUWord, ClusterFlags)
     SHADER_PARAMETER_RDG_RWSTRUCTURED_BUFFER(VirtualGeometryGPUWord, VisibleClusters)
@@ -35,7 +42,12 @@ namespace Renderer
     SHADER_PARAMETER(uint32_t, SelectionClusterCount)
     SHADER_PARAMETER(uint32_t, SelectionOrderOffset)
     SHADER_PARAMETER(uint32_t, SelectionWorkCount)
+    SHADER_PARAMETER(uint32_t, SelectionGroupCount)
     END_SHADER_PARAMETER_STRUCT(VirtualGeometryGPUSelectionParameters)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(VirtualGeometrySelectionUploadParameters)
+    RDG_BUFFER_ACCESS(Buffer, ERHIResourceAccess::TransferDest)
+    END_SHADER_PARAMETER_STRUCT(VirtualGeometrySelectionUploadParameters)
 
     class VirtualGeometrySelectGroupsCS : public GlobalShader
     {
@@ -71,8 +83,61 @@ namespace Renderer
     IMPLEMENT_GLOBAL_SHADER_TYPE(VirtualGeometrySelectClustersCS, "VirtualGeometrySelectClustersCS",
                                  "/virtualgeometry/GPUSelection.sf", "SelectClustersCS", ERHIShaderFrequency::Compute);
 
+    class VirtualGeometryResidentClosureCS : public GlobalShader
+    {
+    public:
+        DECLARE_GLOBAL_SHADER_TYPE(VirtualGeometryResidentClosureCS)
+        static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters& p, ShaderCompilerEnvironment& env)
+        {
+            VirtualGeometrySelectGroupsCS::ModifyShaderCompilerEnvironment(p, env);
+            env.SetDefine("VG_STREAMING", 1);
+        }
+        static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VirtualGeometryGPUSelectionParameters::GetMetaData(); }
+    };
+    class VirtualGeometrySelectResidentClustersCS : public GlobalShader
+    {
+    public:
+        DECLARE_GLOBAL_SHADER_TYPE(VirtualGeometrySelectResidentClustersCS)
+        static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters& p, ShaderCompilerEnvironment& env)
+        {
+            VirtualGeometryResidentClosureCS::ModifyShaderCompilerEnvironment(p, env);
+        }
+        static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VirtualGeometryGPUSelectionParameters::GetMetaData(); }
+    };
+    class VirtualGeometryRequestResidentPagesCS : public GlobalShader
+    {
+    public:
+        DECLARE_GLOBAL_SHADER_TYPE(VirtualGeometryRequestResidentPagesCS)
+        static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters& p, ShaderCompilerEnvironment& env)
+        {
+            VirtualGeometryResidentClosureCS::ModifyShaderCompilerEnvironment(p, env);
+        }
+        static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VirtualGeometryGPUSelectionParameters::GetMetaData(); }
+    };
+    IMPLEMENT_GLOBAL_SHADER_TYPE(VirtualGeometryResidentClosureCS, "VirtualGeometryResidentClosureCS",
+                                 "/virtualgeometry/GPUSelection.sf", "ResidentClosureCS", ERHIShaderFrequency::Compute);
+    IMPLEMENT_GLOBAL_SHADER_TYPE(VirtualGeometryRequestResidentPagesCS, "VirtualGeometryRequestResidentPagesCS",
+                                 "/virtualgeometry/GPUSelection.sf", "RequestResidentPagesCS", ERHIShaderFrequency::Compute);
+    IMPLEMENT_GLOBAL_SHADER_TYPE(VirtualGeometrySelectResidentClustersCS, "VirtualGeometrySelectResidentClustersCS",
+                                 "/virtualgeometry/GPUSelection.sf", "SelectClustersCS", ERHIShaderFrequency::Compute);
+
     namespace
     {
+        // CPU vectors belong to the graph arena, but their payload stays in std::vector storage.
+        // Do not copy unbounded DAG tables into RenderGraphAllocator's fixed 64 KiB raw pages.
+        void Upload(RenderGraphBuilder& builder, RenderGraphBufferRef buffer, const void* data, uint64_t size)
+        {
+            auto* p = builder.AllocateParameter<VirtualGeometrySelectionUploadParameters>();
+            p->Buffer = buffer;
+            builder.AddPass("VirtualGeometrySelectionTableUpload", VirtualGeometrySelectionUploadParameters::GetMetaData(),
+                            p, EPassFlag::Graphic, [=](RHICommandListBase& cmd)
+            {
+                RHIUpdateBufferRegion region;
+                region.Size = size;
+                GRHIApi->UpdateBuffer(cmd, p->Buffer->GetRHIBuffer(), data, region);
+            });
+        }
+
         RenderGraphBufferRef Buffer(RenderGraphBuilder& builder, const std::string& name, uint64_t words,
                                     bool indirect = false)
         {
@@ -139,7 +204,7 @@ namespace Renderer
 
     VirtualGeometryGPUSelection AddVirtualGeometryGPUSelectionPass(RenderGraphBuilder& builder,
         const Engine::VirtualGeometryResource& resource, const Core::Mat4& localToWorld,
-        const Engine::SceneView& view, float targetPixelError, bool frustumCulling)
+        const Engine::SceneView& view, float targetPixelError, bool frustumCulling, VirtualGeometryStreaming* streaming)
     {
         ValidateVirtualGeometryLODInput(resource, localToWorld, view, targetPixelError);
         if (resource.Clusters.size() > UINT32_MAX / (sizeof(Engine::VirtualGeometryCluster) / 4) ||
@@ -198,11 +263,11 @@ namespace Renderer
         output.Statistics = Buffer(builder, prefix + ".Stats", 4);
         output.IndirectArguments = Buffer(builder, prefix + ".Arguments", resource.Clusters.size() * 5ull, true);
         auto orderBuffer = Buffer(builder, prefix + ".Order", order->size());
-        builder.AddUploadBuffer(orderBuffer, order->data(), order->size() * 4);
+        Upload(builder, orderBuffer, order->data(), order->size() * 4);
         auto* zeroes = builder.AllocateParameter<std::vector<uint32_t>>();
         zeroes->resize(std::max<size_t>(4, resource.Groups.size()), 0);
-        builder.AddUploadBuffer(output.AppliedGroups, zeroes->data(), resource.Groups.size() * 4);
-        builder.AddUploadBuffer(output.Statistics, zeroes->data(), 16);
+        Upload(builder, output.AppliedGroups, zeroes->data(), resource.Groups.size() * 4);
+        Upload(builder, output.Statistics, zeroes->data(), 16);
         base->SelectionClusters = External(builder, resource.ClusterBuffer.get(), prefix + ".Clusters");
         base->SelectionGroups = External(builder, resource.GroupBuffer.get(), prefix + ".Groups");
         base->SelectionChildren = External(builder, resource.GroupChildClusterIndexBuffer.get(), prefix + ".Children");
@@ -232,6 +297,7 @@ namespace Renderer
         base->SelectionZeroToOne = view.bDepthRangeZeroToOne;
         base->SelectionCull = frustumCulling;
         base->SelectionClusterCount = static_cast<uint32_t>(resource.Clusters.size());
+        base->SelectionGroupCount = static_cast<uint32_t>(resource.Groups.size());
         auto groupShader = GShaderMap.GetShader<VirtualGeometrySelectGroupsCS>(0);
         for (uint32_t level = 0; level < levelCount; ++level)
         {
@@ -242,6 +308,34 @@ namespace Renderer
             // Consecutive UAV accesses declare the dependency and emit a dispatch-to-dispatch memory barrier.
             Dispatch(builder, groupShader, parameters);
         }
+        if (streaming)
+        {
+            base->DesiredGroups = SRV(builder, output.AppliedGroups);
+            output.AppliedGroups = Buffer(builder, prefix + ".ResidentApplied", resource.Groups.size());
+            base->AppliedGroups = UAV(builder, output.AppliedGroups);
+            base->ResidencyQueue = UAV(builder, Buffer(builder, prefix + ".ResidencyQueue", resource.Groups.size()));
+            if (resource.GroupParentClusterIndices.empty())
+            {
+                auto dummy = Buffer(builder, prefix + ".NoParents", 1);
+                Upload(builder, dummy, zeroes->data(), 4);
+                base->SelectionParents = SRV(builder, dummy);
+            }
+            else
+            {
+                base->SelectionParents = External(builder, resource.GroupParentClusterIndexBuffer.get(), prefix + ".Parents");
+            }
+            base->ClusterResidency = SRV(builder, streaming->GetResidencyBuffer());
+            base->ClusterPages = SRV(builder, streaming->GetClusterPageBuffer());
+            base->StreamingFeedback = UAV(builder, streaming->GetFeedbackBuffer());
+            auto* closure = builder.AllocateParameter<VirtualGeometryGPUSelectionParameters>();
+            *closure = *base;
+            closure->SelectionWorkCount = 1;
+            Dispatch(builder, GShaderMap.GetShader<VirtualGeometryResidentClosureCS>(0), closure);
+            auto* request = builder.AllocateParameter<VirtualGeometryGPUSelectionParameters>();
+            *request = *base;
+            request->SelectionWorkCount = static_cast<uint32_t>(resource.Groups.size());
+            Dispatch(builder, GShaderMap.GetShader<VirtualGeometryRequestResidentPagesCS>(0), request);
+        }
         auto* finalize = builder.AllocateParameter<VirtualGeometryGPUSelectionParameters>();
         *finalize = *base;
         finalize->SelectionWorkCount = static_cast<uint32_t>(resource.Clusters.size());
@@ -249,7 +343,9 @@ namespace Renderer
         finalize->VisibleClusters = UAV(builder, output.VisibleClusters);
         finalize->Statistics = UAV(builder, output.Statistics);
         finalize->IndirectArguments = UAV(builder, output.IndirectArguments);
-        Dispatch(builder, GShaderMap.GetShader<VirtualGeometrySelectClustersCS>(0), finalize);
+        auto* finalizeShader = streaming ? GShaderMap.GetShader<VirtualGeometrySelectResidentClustersCS>(0) :
+                                           GShaderMap.GetShader<VirtualGeometrySelectClustersCS>(0);
+        Dispatch(builder, finalizeShader, finalize);
         return output;
     }
 }

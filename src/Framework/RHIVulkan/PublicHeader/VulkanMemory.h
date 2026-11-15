@@ -71,6 +71,7 @@ public:
 private:
     VulkanDevice* m_Device;
     std::vector<std::unique_ptr<VulkanMemoryBlock>> m_Blocks;
+    std::mutex m_Mutex;
 
     uint32_t FindMemoryType(uint32_t typeBits, VkMemoryPropertyFlags properties) const;
 };

@@ -4,6 +4,7 @@
 
 namespace Renderer
 {
+    class VirtualGeometryStreaming;
     struct VirtualGeometryGPUSelection
     {
         RenderCore::RenderGraphBufferRef AppliedGroups = nullptr;
@@ -17,5 +18,5 @@ namespace Renderer
     RENDERER_API VirtualGeometryGPUSelection AddVirtualGeometryGPUSelectionPass(
         RenderCore::RenderGraphBuilder& builder, const Engine::VirtualGeometryResource& resource,
         const Core::Mat4& localToWorld, const Engine::SceneView& view, float targetPixelError,
-        bool frustumCulling = true);
+        bool frustumCulling = true, VirtualGeometryStreaming* streaming = nullptr);
 }

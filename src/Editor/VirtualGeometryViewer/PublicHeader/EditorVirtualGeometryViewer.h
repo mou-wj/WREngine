@@ -53,5 +53,7 @@ namespace Editor
         int m_RasterMode = 1;
         float m_SoftwareClusterPixels = 32;
         bool m_bMeasureRasterFrame = false;
+        bool m_bStreaming = true;
+        int m_StreamingBudgetMB = 16;
     };
 }

@@ -93,6 +93,8 @@ static bool ShouldCompilePermutation(
 3. 在场景中收集 mesh/material/camera/view 信息
 4. 调度渲染图执行
 
+Virtual Geometry 的可选流送由 Renderer::VirtualGeometryStreaming 管理每资源的 GPU Page Cache、驻留反馈和后台读取任务，Engine 的 PageStorage 负责压缩文件。Raster 沿原 Shader 参数、RDG 和队列 Fence 编排上传与选择，主场景 Renderer 不自动创建 Cache，也没有替换 RenderCore 的资源所有权或提交机制；接口与生命周期见 [流送实现](../../key_implemetion/performance/11-virtual-geometry-streaming.md)。
+
 换句话说：
 
 - `RenderCore` 提供“图形系统框架”

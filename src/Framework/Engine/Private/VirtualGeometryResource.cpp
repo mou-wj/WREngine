@@ -1,4 +1,5 @@
 #include "VirtualGeometryResource.h"
+#include "VirtualGeometryPages.h"
 #include "StaticMesh.h"
 #include "DistanceFieldMgr.h"
 #include <algorithm>
@@ -1370,6 +1371,17 @@ namespace Engine
 
     void VirtualGeometryResource::InitializeResources()
     {
+        InitializeResourcesInternal(0);
+    }
+
+    void VirtualGeometryResource::InitializeStreamingResources(uint32_t pageSlots)
+    {
+        Require(pageSlots > 0, "streaming requires at least one physical page slot");
+        InitializeResourcesInternal(pageSlots);
+    }
+
+    void VirtualGeometryResource::InitializeResourcesInternal(uint32_t pageSlots)
+    {
         // An unbuilt mesh keeps using its traditional LOD resources.
         if (Positions.empty() && Indices.empty() && Clusters.empty() && Groups.empty())
         {
@@ -1382,7 +1394,7 @@ namespace Engine
                 "cannot upload mismatched vertex attributes");
         Require(RHI::GRHIApi != nullptr, "InitializeResources requires an initialized RHI");
 
-        const auto createBuffer = [](const auto& data, const char* name, RHI::ERHIBufferUsageFlag usage)
+        const auto createBuffer = [pageSlots](const auto& data, const char* name, RHI::ERHIBufferUsageFlag usage)
         {
             using Element = typename std::decay_t<decltype(data)>::value_type;
             static_assert(std::is_trivially_copyable_v<Element>);
@@ -1400,12 +1412,22 @@ namespace Engine
                          RHI::ERHIBufferUsageFlag::TransferDst | RHI::ERHIBufferUsageFlag::TransferSrc;
             desc.bCPUAccessible = false;
             desc.DebugName = name;
+            const bool geometry = usage == RHI::ERHIBufferUsageFlag::Vertex || usage == RHI::ERHIBufferUsageFlag::Index;
+            if (pageSlots && geometry)
+            {
+                desc.Size = uint64_t(pageSlots) * (usage == RHI::ERHIBufferUsageFlag::Index ?
+                    VIRTUAL_GEOMETRY_PAGE_INDICES : VIRTUAL_GEOMETRY_PAGE_VERTICES) * sizeof(Element);
+                Require(desc.Size <= UINT32_MAX, "streaming cache exceeds buffer offset limit");
+            }
             buffer = std::make_unique<RenderCore::RenderBuffer>(desc);
             buffer->InitRHIResource();
             Require(buffer->GetRHI() != nullptr, "RHI buffer creation failed");
-            buffer->UploadData(data.data(), static_cast<uint32_t>(desc.Size));
-            RenderCore::TransitionBufferImmediate(RHI::GRHIApi, buffer.get(), RHI::ERHIResourceAccess::SRV,
-                                                  RHI::EQueueType::Graphics);
+            if (!pageSlots || !geometry)
+            {
+                buffer->UploadData(data.data(), static_cast<uint32_t>(desc.Size));
+                RenderCore::TransitionBufferImmediate(RHI::GRHIApi, buffer.get(), RHI::ERHIResourceAccess::SRV,
+                                                      RHI::EQueueType::Graphics);
+            }
             return buffer;
         };
 
@@ -1436,10 +1458,12 @@ namespace Engine
         GroupChildClusterIndexBuffer = std::move(buffers[8]);
         GroupParentClusterIndexBuffer = std::move(buffers[9]);
         RootGroupIndexBuffer = std::move(buffers[10]);
+        StreamingPageSlots = pageSlots;
     }
 
     void VirtualGeometryResource::ReleaseResources()
     {
+        StreamingPageSlots = 0;
         // The caller must retire outstanding GPU users before release/rebuild. No global wait is added.
         for (auto* buffer : std::array{&PositionBuffer, &NormalBuffer, &TangentBuffer, &TexCoordBuffer, &ColorBuffer,
                                        &IndexBuffer, &ClusterBuffer, &GroupBuffer, &GroupChildClusterIndexBuffer,

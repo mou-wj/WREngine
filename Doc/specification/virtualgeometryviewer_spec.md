@@ -17,6 +17,8 @@
 - GPU 动态模式提供 Raster path：Hardware、Hybrid、Software preferred，默认 Hybrid，SW cluster pixels 默认 32，范围 1～128 像素。后者是 Cluster 包围球的投影直径上限；Software preferred 使用 128 的硬上限，触及裁剪边界或超出限制仍明确回退硬件。CPU 选择和 Generated level 检查强制使用原硬件路径。
 - Capture 同时抓取 HW/SW Cluster、强制回退 Cluster 和 SW 三角形数。切换路径后需要重新 Capture；统计是当前快照，不是持续刷新或通过深度测试的像素数。Wireframe 使用原完整选择参数并对合并后的深度测试，两条路径都覆盖。
 - Measure completed frame 按需测量一次完整预览的 CPU 构图、提交和队列完成等待；它不是 GPU timestamp 或单个 Raster Pass 时间。OpenGL 仅保证 worker 执行完成，界面明确标注不能当作 GPU 完成计时。Capture 和计时若同时请求，分别在两帧执行，正常帧不增加计时等待。
+- Geometry streaming 默认开启，仅在 GPU Dynamic LOD 下生效；Cache budget MiB 默认 16。显示驻留/总页、Pinned、加载页数、Cache 申请字节/预算、唯一 Page 命中率、压缩载荷/原载荷、加载/淘汰/失败/预算阻塞和 I/O+解码累计时间。预算包含该资源的固定几何池和持久元数据，未计 GPU 附件、临时选择、驱动对齐和 staging。粗 Root 页必须装得下，否则明确报错。
+- 缺页或预算不足时保留合法粗 Cut，达到目标精度可能要等待多帧；低预算不保证最终达到 Target pixel error。Capture 的 CPU 对比在流送开启时使用同一驻留约束下的合法 Cut 参考，而非要求与尚未驻留的理想细层相同。关闭流送、切到 CPU 或 Generated level 才恢复原全量 GPU 缓冲。
 - 显示 Cluster、Group、Root 总数和最大累计误差，以及当前层的 Cluster 和三角形数。表格显示各 Cluster 的顶点数、三角形数、材质槽、Group、GeneratingGroup 和包围球半径；行选择仅选择信息行，不改变光栅输出。
 - 图片上右键拖动环绕，滚轮缩放。Rebuild 重新构建该预览副本。
 
@@ -34,7 +36,7 @@ Compute 材质采样使用显式参数传递解析梯度，细节见 [Material R
 
 动态选择的 Group 替换、GPU 依赖调度、投影公式和边界条件见 [LOD Selection](../key_implemetion/algorithm/13-virtual-geometry-lod-selection.md)。预算使用 Build 的累计采样误差，不能视为严格几何误差上界；没有几何渐变或切换滞回。
 
-线框在预览颜色输出后追加一个 LineList Pass，复用 VirtualGeometryVertexFactory 的 PositionBuffer、局部到世界和视图矩阵；由三角形局部索引加 VertexOffset 生成临时线段索引，每面六个 uint32，共享边可能重复提交。CPU 模式只生成选中三角形。GPU 模式为全部候选生成边索引，再用一个 Compute Pass 将 GPU 三角形间接参数的 IndexCount/FirstIndex 乘 2、VertexOffset 置零，按同一选择结果间接绘制线段；没有为线框另跑 CPU LOD。CPU 构造与上传成本分别为 O(选中面数)/O(全部候选面数)，索引每面 24 字节，GPU 模式另有每 Cluster 20 字节参数。关闭线框时不生成这些数据或 Pass。不使用原生 PolygonMode::Line，因而不依赖 Vulkan 的非实心多边形特性。
+线框在预览颜色输出后追加一个 LineList Pass，复用 VirtualGeometryVertexFactory 的 PositionBuffer、局部到世界和视图矩阵；由三角形局部索引加 VertexOffset 生成临时线段索引，每面六个 uint32，共享边可能重复提交。CPU 模式只生成选中三角形。GPU 模式为候选生成边索引，再用一个 Compute Pass 将 GPU 三角形间接参数的 IndexCount/FirstIndex 乘 2、VertexOffset 置零，按同一选择结果间接绘制线段；没有为线框另跑 CPU LOD。流送时只填充驻留页，线索引按物理 IndexOffset 放置，顶点加物理 VertexOffset，数组上限为 PageSlots×1536×2，不再按全量逻辑索引地址上传。未开启流送时仍按全部候选生成，CPU 构造与上传为 O(全部候选面数)，每面 24 字节，GPU 模式另有每 Cluster 20 字节参数。关闭线框不生成这些数据或 Pass，不依赖原生 PolygonMode::Line。
 
 Pass 对颜色和现有 Visibility Depth 均为 Load/Store，声明顶点/索引访问并沿用 RDG 上传依赖。深度比较为 LessOrEqual、关闭深度写入，VS 仅对线框施加 0.00001 的 NDC 近向偏移来缓解重合深度闪烁；它不会改写原几何、Visibility 或 GBuffer。参数与上传向量属于本次 Builder，几何仍由 Preview 持有，访问 Fence 由实际 Pass 提交更新，沿用现有释放完成点。
 

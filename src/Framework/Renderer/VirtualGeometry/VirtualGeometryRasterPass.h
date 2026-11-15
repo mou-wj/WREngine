@@ -8,6 +8,7 @@
 
 namespace Renderer
 {
+    class VirtualGeometryStreaming;
     struct VirtualGeometryInstance
     {
         std::shared_ptr<Engine::StaticMeshRenderData> RenderData;
@@ -19,6 +20,7 @@ namespace Renderer
         bool bInspectGeneratedLevel = false; // Viewer diagnostic only; a generated level is not a DAG cut.
         bool bGPUSelection = false;
         bool bFrustumCulling = true;
+        std::shared_ptr<VirtualGeometryStreaming> Streaming;
     };
 
     BEGIN_SHADER_PARAMETER_STRUCT(VirtualGeometryDrawMetadata)

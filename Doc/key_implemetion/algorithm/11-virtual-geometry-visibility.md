@@ -41,11 +41,11 @@ Draw Metadata 使用 Shader 参数元数据宏声明四个 uint32，依次为 In
 
 Raster 的 CPU 选择复杂度为每实例 O(Cluster+Group+引用数)，Draw 次数为选中 Cluster 数。Metadata 内存为 Draw 数乘元素步长，Visibility 和深度分别需要每像素 8 和 4 字节，另有 Debug 颜色目标。CPU 参考仍使用普通 Vertex Input 和 DrawIndexed。GPU 模式使用全部候选的稳定 Metadata、GPU DAG 选择/视锥剔除和固定槽间接参数，详见 [LOD 选择](13-virtual-geometry-lod-selection.md)；候选数不等于实际选择数。
 
-Raster 的可选 VirtualGeometryRasterSettings 默认 Hardware；Hybrid/SoftwarePreferred 在 GPU 选择后按投影尺寸分流，Compute 两次覆盖分别归约深度和获胜 ID，再与硬件中间附件合并为相同的 uint2/D32 输出。原 Debug、Material Resolve 和 GBuffer 不改变 ID 协议。覆盖规则、边界回退、内存及精度限制见 [软件光栅专题](14-virtual-geometry-software-rasterization.md)。Streaming 仍未实现。
+Raster 的可选 VirtualGeometryRasterSettings 默认 Hardware；Hybrid/SoftwarePreferred 在 GPU 选择后按投影尺寸分流，Compute 两次覆盖分别归约深度和获胜 ID，再与硬件中间附件合并为相同的 uint2/D32 输出。原 Debug、Material Resolve 和 GBuffer 不改变 ID 协议。覆盖规则、边界回退、内存及精度限制见 [软件光栅专题](14-virtual-geometry-software-rasterization.md)。可选的 [Page Streaming](../performance/11-virtual-geometry-streaming.md) 继续使用同一 GPU ClusterBuffer 的物理地址，不改变这些输出协议。
 
 ## RDG、所有权和完成点
 
-Clear 和 Raster 通过 RenderTargetBindingSlots 声明颜色、深度附件，Debug 声明 Visibility SRV、Metadata SRV 和输出附件。Metadata 使用现有 AddUploadBuffer 上传，空场景上传一条占位记录并令 DrawCount 为零。位置与索引注册为外部 Buffer，通过参数中的 RDG_BUFFER_ACCESS 声明 VertexOrIndexBuffer 访问。RDG 按名称缓存对象，资源名称采用 graph arena 中 Clear 参数的稳定地址作为本次调用前缀，并按几何资源地址区分位置/索引缓冲。跨视图及不同资源具有独立名称，同一实际 RHI Buffer 的再次注册由原外部表复用。框架现有分析及提交流程负责状态转换和最后访问 Fence 更新。
+Clear 和 Raster 通过 RenderTargetBindingSlots 声明颜色、深度附件，Debug 声明 Visibility SRV、Metadata SRV 和输出附件。Metadata 由声明 RDG_BUFFER_ACCESS(TransferDest) 的上传 Pass 调用原 UpdateBuffer，CPU 向量快照归本图 arena 所有，其堆载荷不受原始字节 arena 单页 64 KiB 限制；空场景上传一条占位记录并令 DrawCount 为零。位置与索引注册为外部 Buffer，通过参数中的 RDG_BUFFER_ACCESS 声明 VertexOrIndexBuffer 访问。RDG 按名称缓存对象，资源名称采用 graph arena 中 Clear 参数的稳定地址作为本次调用前缀，并按几何资源地址区分位置/索引缓冲。跨视图及不同资源具有独立名称，同一实际 RHI Buffer 的再次注册由原外部表复用。框架现有分析及提交流程负责状态转换和最后访问 Fence 更新。
 
 Raster 保留按 width/height 创建深度的原接口，并增加接收 sceneDepth 的重载。后者检查单样本、单层 Texture2D、D32_Float 格式和深度/Shader 可读用途后，直接将该对象写入原有附件参数。Clear 仍覆盖完整目标，未增加深度复制或保留已有深度的混合路径。
 

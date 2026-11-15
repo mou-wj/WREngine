@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <mutex>
 
 namespace RHIDirectX12
 {
@@ -100,6 +101,7 @@ namespace RHIDirectX12
         std::unique_ptr<DirectX12PresentExecutor> m_PresentExecutor;
         std::unique_ptr<DirectX12Device> m_Device;
         std::unordered_map<void*, std::shared_ptr<DirectX12StagingBuffer>> m_MappedStagingBuffers;
+        std::mutex m_MappedStagingMutex;
         std::unordered_map<void*, std::shared_ptr<std::vector<uint8_t>>> m_PackedReadbacks;
     };
 

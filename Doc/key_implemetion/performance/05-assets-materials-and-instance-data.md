@@ -24,6 +24,8 @@ ReleaseResources 清理各缓冲的 ViewCache、调用 ReleaseRHIResource 并销
 
 验证入口 `Tests.exe -test=VirtualGeometryResourceRHITest -rhi=Vulkan|DirectX12|OpenGL` 核对 GPU 逐字节读回、Stride/Size、SRV 访问记录、重复初始化、释放保留 CPU、重复释放及 Clear。CPU 构建回归仍用 VirtualGeometryBuildTest 和 VirtualGeometryInvalidInput0 至 7；实际结果见 [2026-11-12 记录](../../dev/bugfix/故障与修复记录-2026-11-12.md)。
 
+流送调用方可改用 InitializeStreamingResources(pageSlots)，同一个资源只分配有限物理几何池，CPU 几何和 DAG 元数据保留，原 InitializeResources 行为不变。PageStorage 是无 RHI 的派生缓存；Renderer 的每资源 Cache 拥有任务、驻留映射及反馈，而非 AssetManager 新驻留体系。物理重定位、预算和退役规则见 [Geometry Streaming](11-virtual-geometry-streaming.md)，压缩格式见 [Page 压缩](../algorithm/15-virtual-geometry-page-compression.md)。
+
 ## LoadSync 的锁边界
 
 1. 锁内检查 stopping，查 weak loaded；命中后验证动态类型并重新驻留。

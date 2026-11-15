@@ -15,6 +15,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <chrono>
+#include "../../../Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.h"
 
 namespace Editor
 {
@@ -104,11 +105,17 @@ namespace Editor
                 {
                     throw std::invalid_argument("GPU wireframe index range exceeds 32 bits");
                 }
-                edges->resize(geometry.Indices.size() * 2);
+                edges->resize((instance.Streaming ? uint64_t(geometry.StreamingPageSlots) * Engine::VIRTUAL_GEOMETRY_PAGE_INDICES :
+                                                    geometry.Indices.size()) * 2);
             }
             for (const auto clusterIndex : selected)
             {
                 const auto& cluster = geometry.Clusters[clusterIndex];
+                if (instance.Streaming && !instance.Streaming->GetResidency()[clusterIndex])
+                {
+                    continue;
+                }
+                const auto& physical = instance.Streaming ? instance.Streaming->GetPhysicalClusters()[clusterIndex] : cluster;
                 if (!triangleArguments && uint64_t(edges->size()) + uint64_t(cluster.TriangleCount) * 6 > UINT32_MAX)
                 {
                     throw std::invalid_argument("Virtual geometry wireframe exceeds the draw index range");
@@ -116,13 +123,13 @@ namespace Editor
                 for (uint32_t triangle = 0; triangle < cluster.TriangleCount; ++triangle)
                 {
                     const auto offset = cluster.IndexOffset + triangle * 3;
-                    const uint32_t a = cluster.VertexOffset + geometry.Indices[offset];
-                    const uint32_t b = cluster.VertexOffset + geometry.Indices[offset + 1];
-                    const uint32_t c = cluster.VertexOffset + geometry.Indices[offset + 2];
+                    const uint32_t a = physical.VertexOffset + geometry.Indices[offset];
+                    const uint32_t b = physical.VertexOffset + geometry.Indices[offset + 1];
+                    const uint32_t c = physical.VertexOffset + geometry.Indices[offset + 2];
                     if (triangleArguments)
                     {
                         const std::array<uint32_t, 6> line{a, b, b, c, c, a};
-                        std::copy(line.begin(), line.end(), edges->begin() + offset * 2ull);
+                        std::copy(line.begin(), line.end(), edges->begin() + (physical.IndexOffset + triangle * 3ull) * 2);
                     }
                     else
                     {
@@ -283,6 +290,13 @@ namespace Editor
     void VirtualGeometryPreview::Reset()
     {
         WaitForLastDraw();
+        m_Streaming.reset();
+        if (!m_PageArchive.empty())
+        {
+            std::error_code error;
+            std::filesystem::remove(m_PageArchive, error);
+            m_PageArchive.clear();
+        }
         if (m_LightScene && m_Light)
         {
             m_LightScene->RemoveLight(m_Light.get());
@@ -305,6 +319,11 @@ namespace Editor
         return m_Data ? &m_Data->VirtualGeometryData : nullptr;
     }
 
+    const Renderer::VirtualGeometryStreamingStatistics* VirtualGeometryPreview::GetStreamingStatistics() const
+    {
+        return m_Streaming ? &m_Streaming->GetStatistics() : nullptr;
+    }
+
     void VirtualGeometryPreview::SetMesh(const std::shared_ptr<Engine::StaticMeshAsset>& asset)
     {
         if (asset == m_Asset)
@@ -319,7 +338,6 @@ namespace Editor
         // Preview owns its derived geometry; the shared asset's traditional data is untouched.
         m_Data = std::make_shared<Engine::StaticMeshRenderData>();
         m_Data->VirtualGeometryData.Build(asset->GetMesh());
-        m_Data->VirtualGeometryData.InitializeResources();
         m_Asset = asset;
         m_DefaultMaterial = std::make_unique<Engine::Material>();
         m_DefaultMaterial->SetShadingModel(Engine::EShadingModel::Lit);
@@ -329,13 +347,42 @@ namespace Editor
     void VirtualGeometryPreview::Render(Core::Int2 size, uint32_t mipLevel, bool material,
                                        float yaw, float pitch, float distance, bool dynamicLOD, float targetPixelError,
                                        bool wireframe, bool gpuSelection, bool frustumCulling, bool captureGPU,
-                                       uint32_t rasterMode, float softwareClusterPixels, bool measureFrame)
+                                       uint32_t rasterMode, float softwareClusterPixels, bool measureFrame,
+                                       bool streaming, uint64_t streamingBudget)
     {
         using namespace RenderCore;
         using namespace RHI;
         if (!m_Data || !m_Data->VirtualGeometryData.IsValid())
         {
             return;
+        }
+        const bool useStreaming = streaming && dynamicLOD && gpuSelection;
+        if (useStreaming && (!m_Streaming || m_Streaming->GetStatistics().BudgetBytes != streamingBudget))
+        {
+            WaitForLastDraw();
+            m_Streaming.reset();
+            auto storage = std::make_shared<Engine::VirtualGeometryPageStorage>();
+            std::string error;
+            if (m_PageArchive.empty())
+            {
+                const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+                m_PageArchive = std::filesystem::temp_directory_path() / ("RenderingLearn-VG-" + std::to_string(stamp) + ".vgpages");
+                if (!storage->Build(m_Data->VirtualGeometryData, m_PageArchive, error))
+                {
+                    throw std::runtime_error(error);
+                }
+            }
+            else if (!storage->Open(m_PageArchive, error))
+            {
+                throw std::runtime_error(error);
+            }
+            m_Streaming = std::make_shared<Renderer::VirtualGeometryStreaming>(m_Data, storage, streamingBudget);
+        }
+        else if (!useStreaming && (m_Streaming || !m_Data->VirtualGeometryData.PositionBuffer))
+        {
+            WaitForLastDraw();
+            m_Streaming.reset();
+            m_Data->VirtualGeometryData.InitializeResources();
         }
         if (measureFrame)
         {
@@ -360,6 +407,7 @@ namespace Editor
         const float scale = 1.0f / std::max(0.00001f, (bounds.Max - bounds.Min).Length() * 0.5f);
         Renderer::VirtualGeometryInstance instance;
         instance.RenderData = m_Data;
+        instance.Streaming = m_Streaming;
         instance.MipLevel = mipLevel;
         instance.bInspectGeneratedLevel = !dynamicLOD;
         instance.TargetPixelError = targetPixelError;
@@ -482,6 +530,10 @@ namespace Editor
             });
         }
         builder.Execute();
+        if (m_Streaming)
+        {
+            m_Streaming->EndFrame();
+        }
         if (measureFrame && !readGPU)
         {
             const auto fence = m_Color->GetTracker().GetLastAccessFence();
@@ -533,8 +585,8 @@ namespace Editor
             {
                 m_RasterStatistics = {m_GPUStatistics[1], 0, 0, 0};
             }
-            const auto reference = Renderer::SelectVirtualGeometryClusters(m_Data->VirtualGeometryData,
-                instance.LocalToWorld, view, targetPixelError);
+            const auto reference = m_Streaming ? m_Streaming->SelectResidentReference(instance.LocalToWorld, view, targetPixelError) :
+                Renderer::SelectVirtualGeometryClusters(m_Data->VirtualGeometryData, instance.LocalToWorld, view, targetPixelError);
             m_SelectedClusters.clear();
             m_CutDifferenceCount = 0;
             for (uint32_t c = 0; c < m_Data->VirtualGeometryData.Clusters.size(); ++c)

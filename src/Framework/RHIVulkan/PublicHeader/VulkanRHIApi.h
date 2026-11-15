@@ -1,6 +1,7 @@
 #pragma once
 #include "vulkan/vulkan.h"
 #include "RHIApi.h"
+#include <mutex>
 
 
 
@@ -89,6 +90,7 @@ private:
 
     std::vector<const char*> GetWantedDeviceExtensions();
     std::map<void*,std::shared_ptr<VulkanStagingBuffer>> m_MappedStagingBuffers;
+    std::mutex m_MappedStagingMutex;
 
 
     // Vulkan 设备和上下文资源

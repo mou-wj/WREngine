@@ -38,7 +38,9 @@ DirectX12CommandContext 记录 UsedResources 和暂存 COM 引用；提交写入
 
 DirectX12Queue 的申请、归还、提交和完成遍历共享 m_QueueMutex 递归锁，保护上下文 vector 和可复用标记，防止 RDG 并行录制同时扩容容器。Release 沿既有路径调用 WaitValue，完成回调可重入队列方法，因此使用递归锁。普通 WaitValue 先等待 Fence，再持锁清理仍可复用的上下文，已被借出录制的上下文跳过。锁会串行化这些上下文管理操作，GPU 命令录制仍在各自任务中执行。此次堆损坏的证据和回归结果见 [开发记录](../../dev/bugfix/故障与修复记录-2026-11-13.md#rdg-非-shader-访问回归参数元数据)。
 
-当前 ExecuteContext 的 wait lambda 直接忽略没有 SyncPoint 的 waitInfo，而 RDG 等调用方有按 QueueType/Value 填写的路径；还存在资源自身 ResourceWaits 补充依赖的机制。文档不能因此声称所有逻辑队列等待在 D3D12 都等价实现，新增跨队列用例须核对实际原生 Wait。
+ExecuteContext 的 wait lambda 在缺少 SyncPoint 时按 QueueType 查询现有队列同步点，再执行原生 GPU queue Wait；显式 SyncPoint 的调用保持原行为。此前直接跳过这类等待，而 RDG 正按 QueueType/Value 传入，因此在 Page 池异步更新验证中作了局部修正。仍保留资源自身 ResourceWaits 补充依赖，没有用 CPU WaitIdle 替代 GPU 排序。Vulkan 同类分支原本解析了 rhivkSyncPoint 却错误转换原始空指针，现使用实际解析结果。证据和连续在途图检查见 [流送记录](../../dev/bugfix/故障与修复记录-2026-11-15.md#virtual-geometry-geometry-streaming--compression)。
+
+Vulkan/D3D12 的 MapReadTexture、MapReadBuffer 和 Unmap 共享本 RHIApi 的 staging 映射表；RDG 可在不同 Pass 的录制任务中并发调用，因此表的插入/移除由各自局部 mutex 保护，D3D12 的 packed texture readback 所有权表同样在该锁下维护。锁只覆盖 CPU 容器操作，不跨 GPU 等待或整个录制过程。Vulkan 全局 VulkanMemoryManager 的 Allocate/Free/Reset 也使用一把现有对象内的 mutex，共同保护 m_Blocks 和块内 free list，避免并行 staging/参数分配使 vector 迭代器失效；不改变分配算法和回收时机。
 
 ## OpenGL：一个 context worker、两个逻辑队列
 

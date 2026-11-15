@@ -385,6 +385,8 @@ glTF 内嵌材质使用 `MaterialAsset::Create` 创建子资产，由网格保�
 
 `StaticMeshAsset::CreateShape(EBasicMeshShape)` 在既有 Shape.cpp 中复用几何生成器，创建独立网格、默认材质依赖及距离场，设置资源到资产的弱引用，供组件保留资产。它不借用全局 GStaticMesh_*，不增加缓存；builtin 标识不交给 LoadSync。工程保存实际顶点/索引数据，加载由 StaticMeshAsset::Create 接收恢复的网格，不重新调用生成器或读取源模型。分配和释放条件见 [资产实现](../key_implemetion/performance/05-assets-materials-and-instance-data.md)。
 
+虚拟几何的 CPU Build 和原 RHI 缓冲仍由 StaticMeshRenderData::VirtualGeometryData 持有。新增的 VirtualGeometryPageStorage 在 Engine 内提供派生 Page 文件的构建、压缩和独立读取，不创建 GPU 或后台线程；InitializeStreamingResources 为同一资源创建有限物理槽，原 InitializeResources 保留全量上传行为。GPU 驻留与请求调度属于 Renderer 的显式 Cache，未加入 AssetManager 或工程保存格式，职责与调用约定见 [虚拟几何流送](../key_implemetion/performance/11-virtual-geometry-streaming.md)。
+
 ### 工程对象持久化
 
 [ProjectArchive](../../src/Framework/Engine/PublicHeader/ProjectArchive.h) 位于现有 Engine 模块，提供 Save/Load；ProjectNode 保存组件所有者、名称及节点 ID，ProjectSnapshot 保存节点集合与工程资产内容。SceneComponent 的父关系和局部属性按值保存，资产引用转换为工程内部编号。几何写入 .geoms，纹理基础层像素写入 .texs，加载重建普通 Mip；材质参数写入场景 JSON，恢复不依赖导入源文件。天空光只持久化环境输入 TextureAsset 的基础层，加载后由 EnvironmentLightResourceManager 构建并应用运行时结果；IBL 不进入工程资产表。Editor 负责交互及工程路径，SceneEditor 负责组件注册与旧场景替换，Engine 不依赖这些界面模块。文件格式、逐代发布、GPU 读回状态和异常路径见 [工程快照实现](../key_implemetion/performance/10-project-snapshots.md)。

@@ -38,7 +38,13 @@ targetPixelError 后可追加 `VirtualGeometryRasterSettings`，默认 Mode=Hard
 
 属性恢复与材质数据布局见 [Material Resolve 实现](../key_implemetion/algorithm/12-virtual-geometry-material-resolve.md)，Cluster 绘制和 ID 定位见 [Visibility 实现](../key_implemetion/algorithm/11-virtual-geometry-visibility.md)。
 
-CPU 参考和 GPU 选择的入口、屏幕误差公式、多对多依赖与裂缝条件见 [LOD Selection](../key_implemetion/algorithm/13-virtual-geometry-lod-selection.md)。独立 Raster 的 VirtualGeometryInstance::bGPUSelection 默认为 false，设置 true 开启 GPU 路径，bFrustumCulling 控制其剔除。GPU 输出的 Draws 是全部候选 Metadata，GPUSelections 才提供 Cut/可见标志、紧凑列表和统计。正常路径没有 CPU 读回；仍为每候选录制间接命令，Resolve 仍逐候选调度。选择只使用既有 Build 的累计采样误差与历史包围范围，不改资源格式，也不代表严格最大像素误差保证；没有滞回、遮挡剔除或 Streaming。
+CPU 参考和 GPU 选择的入口、屏幕误差公式、多对多依赖与裂缝条件见 [LOD Selection](../key_implemetion/algorithm/13-virtual-geometry-lod-selection.md)。独立 Raster 的 VirtualGeometryInstance::bGPUSelection 默认为 false，设置 true 开启 GPU 路径，bFrustumCulling 控制其剔除。GPU 输出的 Draws 是全部候选 Metadata，GPUSelections 才提供 Cut/可见标志、紧凑列表和统计。不启用流送或显式诊断时没有 CPU 读回；仍为每候选录制间接命令，Resolve 仍逐候选调度。选择只使用既有 Build 的累计采样误差与历史包围范围，不代表严格最大像素误差保证；没有滞回或遮挡剔除。可选流送及其反馈读回通过下一节的显式 Cache 接入。
+
+### 显式 Page Streaming 调用
+
+独立 Raster 的 VirtualGeometryInstance 可提供共享的 VirtualGeometryStreaming Cache，必须匹配同一个 RenderData，并开启 bGPUSelection，不能用于 Generated level 检查。调用方先 Build CPU 几何，再创建/打开 Engine 的 VirtualGeometryPageStorage，由 Cache 构造有限 GPU 池，无需全量 InitializeResources；每次 Execute 后、图销毁前调用 Cache::EndFrame，缺页反馈和上传由后续帧推进。同一资源的多个实例共用 Cache，其他资源可拥有独立预算；不在 Scene 封装中隐式创建全局缓存。完整调用及预算、释放前提见 [流送工程实现](../key_implemetion/performance/11-virtual-geometry-streaming.md)。
+
+GPU 会保留理想误差选择，再计算因缺页必须粗化的 Group 依赖闭包，保证整个 Cut 完整且驻留，不要求所有中间层同时常驻；目标像素误差在缺页/受限预算期间可能超出。HW/SW Raster、Metadata、Material Resolve 均继续使用同一物理 ClusterBuffer 和原 Visibility/GBuffer 格式。
 
 ### 当前限制与验证入口
 

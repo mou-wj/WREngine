@@ -112,12 +112,13 @@ namespace RHIDirectX12
     {
         std::lock_guard<std::recursive_mutex> lock(m_QueueMutex);
         auto wait = [&](const RHI::RHIWaitInfo& info) {
-            if (!info.SyncPoint || !info.Value)
+            if (!info.Value)
                 return;
-            if (auto* point = dynamic_cast<DirectX12SyncPoint*>(info.SyncPoint))
+            auto* sync = info.SyncPoint ? info.SyncPoint : RHI::GRHIApi->GetQueue(info.QueueType)->GetSyncPoint();
+            if (auto* point = dynamic_cast<DirectX12SyncPoint*>(sync))
                 CheckDX12(m_NativeQueue->Wait(point->GetNativeFence(), info.Value), "GPU queue wait");
             else
-                info.SyncPoint->Wait(info.Value);
+                sync->Wait(info.Value);
         };
         for (const auto& info : waits)
             wait(info);
