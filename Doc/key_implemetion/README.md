@@ -51,6 +51,7 @@
 | [构建与模块启动](performance/09-module-build-and-startup.md) | 依赖准备、DLL 注册、拓扑启动和逆序关闭怎样串起来？ |
 | [工程快照与二进制数据](performance/10-project-snapshots.md) | 如何保存运行时节点、层级及资源，脱离源文件恢复，并保持多文件一致和 GPU 状态？ |
 | [Virtual Geometry 流送](performance/11-virtual-geometry-streaming.md) | 如何管理有限 Page Cache、异步读取/上传、缺页合法 Cut、去重、预算、淘汰和完成点？ |
+| [Surface Cache 材质资源](performance/12-surface-cache-material.md) | Card 捕获如何复用材质和 RDG，Atlas 如何跨图保存，来源资源与查询的完成点如何维护？ |
 
 ## 原理与算法：algorithm
 
@@ -69,6 +70,7 @@
 | [Virtual Geometry CPU / GPU 动态 LOD](algorithm/13-virtual-geometry-lod-selection.md) | 如何投影误差、并行求值多对多 DAG Cut、视锥剔除并生成间接参数，怎样与 CPU 和 Raster/Resolve 对照？ |
 | [Virtual Geometry GPU 软件光栅化](algorithm/14-virtual-geometry-software-rasterization.md) | 如何按投影大小分流、用两阶段原子维持深度与 ID 一致，并合并硬件结果、统计和验证？ |
 | [Virtual Geometry Page 压缩](algorithm/15-virtual-geometry-page-compression.md) | 如何组织根页与普通页、无损编码顶点/索引、独立校验与恢复物理地址？ |
+| [Surface Card 与 SDF 材质查询](algorithm/16-surface-cache-material.md) | 六向 Card 如何正交捕获、验证覆盖，局部 SDF 如何找实例并查询离屏表面材质？ |
 
 ## 如何阅读和核查
 

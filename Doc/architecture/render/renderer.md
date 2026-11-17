@@ -95,6 +95,8 @@ static bool ShouldCompilePermutation(
 
 Virtual Geometry 的可选流送由 Renderer::VirtualGeometryStreaming 管理每资源的 GPU Page Cache、驻留反馈和后台读取任务，Engine 的 PageStorage 负责压缩文件。Raster 沿原 Shader 参数、RDG 和队列 Fence 编排上传与选择，主场景 Renderer 不自动创建 Cache，也没有替换 RenderCore 的资源所有权或提交机制；接口与生命周期见 [流送实现](../../key_implemetion/performance/11-virtual-geometry-streaming.md)。
 
+Private/GI 的 SurfaceCacheMaterial 提供独立的表面材质捕获与查询基础：使用 Engine 静态网格、材质代理和局部 SDF，持有材质 Atlas，沿既有 MeshMaterialShader 和 RDG 编排；不改变场景、全局距离场或 RHI 的职责，也不自动加入主场景光照。后续 GI 消费者显式持有和调用该缓存，接口及生命周期见 [Surface Cache 工程实现](../../key_implemetion/performance/12-surface-cache-material.md)，投影与查询见 [算法专题](../../key_implemetion/algorithm/16-surface-cache-material.md)。
+
 换句话说：
 
 - `RenderCore` 提供“图形系统框架”

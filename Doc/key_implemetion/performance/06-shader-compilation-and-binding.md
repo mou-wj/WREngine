@@ -18,6 +18,8 @@
 
 结构 include/reference/nested 并非同一种内存关系。引用、数组、资源视图和 RenderTargetSlots 必须按元数据类型遍历，不能把整个 C++ struct 直接 memcpy 当作所有平台的 cbuffer。
 
+Surface Cache 使用 Core::UInt2/UInt4 保存整数坐标和 ID，ShaderParameterTypeInfo 现沿已有 UInt3 特化补齐 NumColumns 和实际存储类型，生成 uint2/uint4；缺失特化会落到默认 float 元数据，即使 CPU 成员本来是整数向量也不能正确反射。结构引用只负责生成/注册对应虚拟头，Shader 仍需按现有约定 include 所需头；开发中的实际错误及三后端验证见 [Surface Cache 记录](../../dev/bugfix/故障与修复记录-2026-11-17.md)。
+
 RDG Buffer SRV 的 BaseType 必须为 RDGBuffer_SRV。2026-10-31 发现 ShaderParameterTypeInfo<RenderGraphBufferSRV> 原先误填 RDGTexture_UAV：SHADER_PARAMETER_RDG_BUFFER_SRV 产生的 HLSL 仍可写成 StructuredBuffer 并编译，但 SetupPassInternal 会把 CPU BufferSRV 当 TextureUAV 解释，无法得到正确的缓冲 SRV 依赖；SetShaderParameters 也会选择 UAV 类型。当前已更正这个枚举，不通过更改网格的只读声明或新包装类迁就错误类型。受影响的自有调用为 HintGridParameters 的两个 uint 缓冲和 SceneLightShadowParameters::SplitBuffer；其他带嵌套元数据的 SHADER_PARAMETER_RDG_STRUCTURED_BUFFER 路径原本就使用 RDGBuffer_SRV。编译成功不证明元数据分类正确，依赖与转换的独立检查见 [RDG 执行](03-rdg-execution-and-state.md)。
 
 ## LocalVertexFactory 的基础几何组合
@@ -32,7 +34,7 @@ LocalVertexFactory::SetData 根据实际顶点流设置 TexCoord、Normal、Tang
 | DirectX12 | HLSL → DXC DXIL → D3D 反射 | DXIL 与 shader stage/entry/hash |
 | OpenGL | HLSL → SPIR-V → SPIRV-Cross GLSL | GLSL、UBO、storage、采样器组合映射 |
 
-CompileToMetal 当前是未实现分支，不能把枚举存在当成 Metal 后端。GL 编译时有按阶段的 binding offset（stage 区段宽度 500）及 combined image sampler 映射，原始 HLSL tN/sN 不能直接当 GLSL 最终槽。
+CompileToMetal 当前是未实现分支，不能把枚举存在当成 Metal 后端。GL 编译路径计算按阶段的 binding offset（区段宽度 500），但相关 DXC shift 参数目前被注释，不能据此假设不同阶段的 UBO 已自动隔离。combined image sampler 还经过映射，原始 HLSL tN/sN 不能直接当 GLSL 最终槽。Surface Cache 的 VS/PS 共享同一份 Card 视图参数；更一般的阶段绑定隔离问题另记 [优化项](../../dev/optimize/优化点-2026-11-17.md)。
 
 GenerateOrGetShaderPrameterMetaDataSF 必须在需要的生成头被 include 前注册内容。已有测试出现“生成头不存在”，属于注册/编译时序问题，不能通过虚构空头或删除 Shader 参数绕过。
 

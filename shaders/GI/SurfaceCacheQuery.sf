@@ -1,0 +1,126 @@
+#include "/Generated/ShaderParameters/SurfaceCacheQueryParameters.sf"
+#include "/Generated/ShaderParameters/SurfaceCacheMaterialParameters.sf"
+#include "/GI/SurfaceCacheLookup.sf"
+
+float SampleMeshSDF(SurfaceCacheInstance instance, float3 local)
+{
+    float3 grid = (local - instance.SDFMin.xyz) / (instance.SDFMax.xyz - instance.SDFMin.xyz) * instance.SDFResolution.xyz;
+    grid = clamp(grid, 0, instance.SDFResolution.xyz - 1);
+    float3 uv = (instance.SDFAllocation.xyz + grid + 0.5) / SDFAtlasSize;
+    return MeshSDFAtlas.SampleLevel(SDFSampler, uv, 0).r;
+}
+
+bool RayBox(float3 origin, float3 direction, float3 minimum, float3 maximum, inout float nearT, inout float farT)
+{
+    for (uint axis = 0; axis < 3; ++axis)
+    {
+        if (abs(direction[axis]) < 1e-10)
+        {
+            if (origin[axis] < minimum[axis] || origin[axis] > maximum[axis])
+            {
+                return false;
+            }
+        }
+        else
+        {
+            float a = (minimum[axis] - origin[axis]) / direction[axis];
+            float b = (maximum[axis] - origin[axis]) / direction[axis];
+            nearT = max(nearT, min(a, b));
+            farT = min(farT, max(a, b));
+        }
+    }
+    return nearT <= farT;
+}
+
+[numthreads(64, 1, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint queryIndex = thread.x;
+    if (queryIndex >= QueryCount)
+    {
+        return;
+    }
+    SurfaceCacheQuery query = Queries[queryIndex];
+    SurfaceCacheQueryResult result = (SurfaceCacheQueryResult)0;
+    result.Status.xy = 0xffffffffu;
+    float3 origin = query.OriginDistance.xyz;
+    float3 direction = normalize(query.Direction.xyz);
+    float3 position = origin, normal = direction;
+    float distance = query.OriginDistance.w;
+    uint owner = query.Control.x;
+    float tolerance = HitTolerance;
+    bool hit = query.Control.y == 0;
+    if (query.Control.y == 1)
+    {
+        hit = false;
+        for (uint index = 0; index < InstanceCount; ++index)
+        {
+            SurfaceCacheInstance instance = Instances[index];
+            if (instance.Info.w == 0 || (query.Control.x != 0xffffffffu && query.Control.x != instance.Info.x))
+            {
+                continue;
+            }
+            float nearT = 0, farT = distance;
+            if (!RayBox(origin, direction, instance.BoundsMin.xyz, instance.BoundsMax.xyz, nearT, farT))
+            {
+                continue;
+            }
+            float3 localOrigin = mul(instance.WorldToLocal, float4(origin, 1)).xyz;
+            float3 localDirection = mul((float3x3)instance.WorldToLocal, direction);
+            if (!RayBox(localOrigin, localDirection, instance.SDFMin.xyz, instance.SDFMax.xyz, nearT, farT))
+            {
+                continue;
+            }
+            float epsilon = max(HitTolerance, instance.SDFResolution.w);
+            float t = nearT;
+            uint step;
+            for (step = 0; step < MaxSteps && t <= farT; ++step)
+            {
+                result.Status.w += 1u;
+                float3 local = localOrigin + localDirection * t;
+                float field = SampleMeshSDF(instance, local);
+                float worldDistance = abs(field) * instance.SDFAllocation.w;
+                if (worldDistance <= epsilon)
+                {
+                    if (!hit || t < distance)
+                    {
+                        hit = true;
+                        distance = t;
+                        position = origin + direction * t;
+                        float3 h = (instance.SDFMax.xyz - instance.SDFMin.xyz) / instance.SDFResolution.xyz;
+                        float3 gradient;
+                        gradient.x = (SampleMeshSDF(instance, local + float3(h.x, 0, 0)) - SampleMeshSDF(instance, local - float3(h.x, 0, 0))) / h.x;
+                        gradient.y = (SampleMeshSDF(instance, local + float3(0, h.y, 0)) - SampleMeshSDF(instance, local - float3(0, h.y, 0))) / h.y;
+                        gradient.z = (SampleMeshSDF(instance, local + float3(0, 0, h.z)) - SampleMeshSDF(instance, local - float3(0, 0, h.z))) / h.z;
+                        normal = mul((float3x3)instance.NormalToWorld, gradient);
+                        normal = dot(normal, normal) > 1e-12 ? normalize(normal) : -direction;
+                        owner = instance.Info.x;
+                        tolerance = epsilon * 2;
+                    }
+                    break;
+                }
+                // Frobenius inverse norm gives a conservative affine scale; sampled fields
+                // still have discretization/sign limitations, so no exact-distance guarantee.
+                t += max(worldDistance * 0.8, HitTolerance * 0.25);
+            }
+            if (step == MaxSteps && t <= farT)
+            {
+                result.Status.z |= 4u;
+            }
+        }
+    }
+    if (hit)
+    {
+        result.Status.x = owner;
+        result.Status.z |= 1u;
+        result.PositionDistance = float4(position, query.Control.y == 1 ? distance : 0);
+        uint card;
+        if (LookupSurfaceCache(owner, position, normal, tolerance, result.BaseColorMetallic, result.NormalRoughness, card))
+        {
+            result.Status.x = Cards[card].Owner.x;
+            result.Status.y = card;
+            result.Status.z |= 2u;
+        }
+    }
+    Results[queryIndex] = result;
+}

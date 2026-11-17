@@ -1,0 +1,8 @@
+#include "/Generated/VertexFactory.sf"
+#include "/Generated/ShaderParameters/SurfaceCacheCaptureViewParameters.sf"
+// Match the complete stage signature, including the system-position register.
+struct SurfaceCacheCaptureVaryings
+{
+    float4 Position : SV_Position;
+    VertexFactoryVSToPS FactoryInterpolants;
+};

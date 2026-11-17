@@ -1,0 +1,37 @@
+#include "/Generated/ShaderParameters/SurfaceCacheDebugParameters.sf"
+#include "/Generated/ShaderParameters/SurfaceCacheMaterialParameters.sf"
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    if (any(thread.xy >= OutputSize))
+    {
+        return;
+    }
+    uint2 pixel = min(uint2(float2(thread.xy) / float2(OutputSize) * float2(AtlasSize)), AtlasSize - 1);
+    float4 coverage = PositionCoverage.Load(int3(pixel, 0));
+    float4 color = BaseColorMetallic.Load(int3(pixel, 0));
+    float4 normal = NormalRoughness.Load(int3(pixel, 0));
+    float3 value = color.rgb;
+    if (Mode == 1)
+    {
+        value = normal.xyz * 0.5 + 0.5;
+    }
+    if (Mode == 2)
+    {
+        value = float3(0.1, 0.1, 0.1);
+        for (uint index = 0; index < CardCount; ++index)
+        {
+            SurfaceCard card = Cards[index];
+            if (all(pixel >= card.Tile.xy) && all(pixel < card.Tile.xy + card.Tile.zw))
+            {
+                uint hash = (index + 1) * 1664525u + 1013904223u;
+                value = float3(hash & 255u, (hash >> 8) & 255u, (hash >> 16) & 255u) / 255.0;
+            }
+        }
+    }
+    if (Mode == 3 || Mode == 4)
+    {
+        value = (Mode == 3 ? normal.w : color.w).xxx;
+    }
+    Output[thread.xy] = float4(coverage.w > 0.5 ? value : float3(0.8, 0, 0.8), 1);
+}

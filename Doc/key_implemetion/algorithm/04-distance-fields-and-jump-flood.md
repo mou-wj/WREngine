@@ -64,3 +64,5 @@ GlobalDistanceField::Allocate 复用已存在的世界 block，否则分配 Atla
 [GlobalDiffuseLightMap.cpp](../../../src/Framework/Renderer/Private/GI/GlobalDiffuseLightMap.cpp) 及 GI Shader 另有体素光照原型：按 mesh AABB 填体素，使用近似 normal/白 albedo，遮挡函数返回 false、环境函数返回程序化颜色；传播 Shader 按每体素 32 个方向再遍历所有体素，约 O(32V²)，不是已完成的距离场遮挡 GI。
 
 本轮仅整理。应先用简单封闭盒/球验证距离和符号，再检查 Atlas 边界、尺度、初始化和上传，最后才验证全局步进与光照；不能用一张看似正常的场景图替代这些分层检查。
+
+Surface Cache 材质阶段增加了独立的对象级 SDF 查询：复用已有局部 Atlas，逐实例变换射线并保留最近 InstanceID，再查询六向 Card 的有效材质覆盖，不调用上述有历史命中限制的全局 Helper，也不改变距离场生成/合并。公式、近似容差与实际通过范围见 [Surface Card 查询](16-surface-cache-material.md)；局部 SDF 的符号与离散化限制仍然适用，不能由盒场景通过推断任意模型追踪正确。

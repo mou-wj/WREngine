@@ -1,0 +1,24 @@
+#include "/GI/SurfaceCacheCaptureCommon.sf"
+#include "/Generated/ShaderParameters/SurfaceCacheCapturePSParameters.sf"
+#include "/core/MaterialParametersHelper.sf"
+struct SurfaceCacheCaptureOutput
+{
+    float4 BaseColorMetallic : SV_Target0;
+    float4 NormalRoughness : SV_Target1;
+    float4 PositionCoverage : SV_Target2;
+};
+SurfaceCacheCaptureOutput MainPS(SurfaceCacheCaptureVaryings input)
+{
+    ShadingContext context;
+    VertexFactoryFillShadingContext(input.FactoryInterpolants, context);
+    // A back-facing nearest layer blocks deeper layers but is not a valid material sample.
+    // Explicit coverage avoids requiring optional Vulkan fragment-demotion capabilities.
+    float coverage = dot(normalize(context.WorldNormal), CaptureNormal) > 0.05 ? 1 : 0;
+    MaterialData material = BuildMaterialData(context.UV0);
+    float3 normal = normalize(mul(material.NormalTS, context.TangentToWorld));
+    SurfaceCacheCaptureOutput output;
+    output.BaseColorMetallic = float4(material.BaseColor, material.Metallic);
+    output.NormalRoughness = float4(normal, material.Roughness);
+    output.PositionCoverage = float4(context.WorldPosition, coverage);
+    return output;
+}

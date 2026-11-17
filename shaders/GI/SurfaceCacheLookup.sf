@@ -1,0 +1,51 @@
+// Shared material-only lookup, independent of the tracing implementation.
+// The including shader supplies SurfaceCacheMaterialParameters through its root metadata.
+bool LookupSurfaceCache(uint instanceID, float3 position, float3 geometricNormal, float tolerance,
+                        out float4 baseColorMetallic, out float4 normalRoughness, out uint cardID)
+{
+    baseColorMetallic = normalRoughness = 0;
+    cardID = 0xffffffffu;
+    float best = -1e20;
+    for (uint index = 0; index < CardCount; ++index)
+    {
+        SurfaceCard card = Cards[index];
+        if (instanceID != 0xffffffffu && card.Owner.x != instanceID)
+        {
+            continue;
+        }
+        float alignment = dot(geometricNormal, card.AxisN.xyz);
+        float3 offset = position - card.Center.xyz;
+        float3 projected = float3(dot(offset, card.AxisU.xyz), dot(offset, card.AxisV.xyz), dot(offset, card.AxisN.xyz));
+        if (alignment <= 0.2 || any(abs(projected) > card.Extent.xyz + tolerance))
+        {
+            continue;
+        }
+        float2 uv = float2(projected.x / card.Extent.x, projected.y / card.Extent.y * ScreenYSign) * 0.5 + 0.5;
+        int2 coordinate = int2(floor(uv * float2(card.Tile.zw)));
+        float allowed = max(tolerance, card.Extent.w * 2);
+        // Point loads and tile-clamped neighbors prevent cross-Card filtering/atlas bleed.
+        for (int y = -1; y <= 1; ++y)
+        {
+            for (int x = -1; x <= 1; ++x)
+            {
+                int2 local = coordinate + int2(x, y);
+                if (any(local < 0) || any(local >= int2(card.Tile.zw)))
+                {
+                    continue;
+                }
+                int2 pixel = int2(card.Tile.xy) + local;
+                float4 captured = PositionCoverage.Load(int3(pixel, 0));
+                float error = length(captured.xyz - position);
+                float score = alignment - error / allowed * 0.25;
+                if (captured.w > 0.5 && error <= allowed && score > best)
+                {
+                    best = score;
+                    baseColorMetallic = BaseColorMetallic.Load(int3(pixel, 0));
+                    normalRoughness = NormalRoughness.Load(int3(pixel, 0));
+                    cardID = index;
+                }
+            }
+        }
+    }
+    return cardID != 0xffffffffu;
+}

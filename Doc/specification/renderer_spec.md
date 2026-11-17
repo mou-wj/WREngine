@@ -57,3 +57,15 @@ MaterialParametersHelper 现支持显式 UV 梯度，Compute 使用 SampleGrad�
 ## VirtualGeometryViewer 消费方式
 
 [VirtualGeometryViewer](virtualgeometryviewer_spec.md) 直接提供独立实例，调用选择、Raster、Resolve 和 AddVirtualGeometryDeferredShadingPass，不注册到主 Scene。默认 GPU Dynamic LOD，提供 CPU 参考切换、视锥开关和按需 GPU Capture 对比；关闭 Dynamic LOD 才按 MipLevel 检查生成层，界面明确标记其不是完整 Cut。线框同样由 GPU 选择参数驱动。光照封装复用 SceneRenderer 的阴影访问表和级联参数准备，再运行既有 DeferredShadingCS；无 IBL 时不绑定环境参数。主 RenderModule 与 DefferedSceneRenderer 的流程没有改变。
+
+## Surface Cache Material 调用约定
+
+[SurfaceCacheMaterial](../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h) 是 Private/GI 下可由 Renderer 消费者显式调用的材质缓存基础。Initialize 接收实例快照，或用 GatherSceneInstances 在 Scene Flush 后收集，不按主视图剔除；LOD0、材质和局部 SDF 仍由原有 Engine 路径创建。它不自动加入主场景、修改灯光或创建编辑器 UI。
+
+首次调用 AddCapturePasses(builder) 捕获六向 Card，返回当前图的 SurfaceCacheMaterialParameters；之后可继续 AddSurfaceCacheQueryPass 和两个 Debug Pass。后续图调用 Register(builder) 读取持久 Atlas，不必重新捕获。图内参数/引用不能跨图保存；捕获失败须放弃图及其部分内容，调用方在退休实际 GPU 使用后重建/释放缓存。
+
+SurfaceCacheQuery.Control.x 为 InstanceID 或 UINT32_MAX，Control.y 为模式：0 表示 OriginDistance.xyz 是已有命中点、Direction.xyz 是世界几何法线；1 表示世界射线，OriginDistance.w 是最大距离。模式 1 通过原局部 SDF Atlas 识别最近实例，未带有效 SDF 的对象不参与；模式 0 可以直接消费其他追踪器的已知命中。结果的 hit 与 material-valid 状态分开，不能把无覆盖结果当作黑色材质。
+
+AddSurfaceCacheDebugPass 支持 BaseColor、世界法线、Card 覆盖、Roughness 和 Metallic；AddSurfaceCacheQueryDebugPass 显示查询材质、法线或 Card ID，黑色为 miss，紫色为命中无缓存，未命中且迭代耗尽显示橙色。输出目标须为 RGBA32F、带 UAV 用途的 RDG 纹理，由消费者显示或读回；本阶段没有增加 GUI 菜单。
+
+材质/几何/变换变化、实例 ID 更新和来源 SDF 释放后，调用方须显式失效并重捕获。支持现有不透明材质，不提供复杂凹面完整覆盖、自适应 Card、动态 Atlas 淘汰或任何光照缓存。资源所有权、调用示例和完成点见 [工程专题](../key_implemetion/performance/12-surface-cache-material.md)，投影、坐标、状态和验证见 [算法专题](../key_implemetion/algorithm/16-surface-cache-material.md)。

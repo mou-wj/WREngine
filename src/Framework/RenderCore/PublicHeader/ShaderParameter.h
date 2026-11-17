@@ -568,6 +568,20 @@ struct ShaderParameterTypeInfo<Core::UInt3>
 };
 
 template<>
+struct ShaderParameterTypeInfo<Core::UInt2> : ShaderParameterTypeInfo<Core::UInt3>
+{
+    static constexpr uint32_t NumColumns = 2;
+    using TAlignedType = Core::UInt2;
+};
+
+template<>
+struct ShaderParameterTypeInfo<Core::UInt4> : ShaderParameterTypeInfo<Core::UInt3>
+{
+    static constexpr uint32_t NumColumns = 4;
+    using TAlignedType = Core::UInt4;
+};
+
+template<>
 struct ShaderParameterTypeInfo<float>
 {
     static constexpr RHI::ERHIResourceAccess RHIResourceAccess = RHI::ERHIResourceAccess::Unknown;
