@@ -1,0 +1,33 @@
+#include "/Generated/ShaderParameters/SurfaceCacheLightingLookupParameters.sf"
+#include "/Generated/ShaderParameters/SurfaceCacheMaterialParameters.sf"
+#include "/Generated/ShaderParameters/SurfaceCacheLightingParameters.sf"
+
+[numthreads(64, 1, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    if (thread.x >= QueryCount)
+    {
+        return;
+    }
+    SurfaceCacheQueryResult hit = MaterialResults[thread.x];
+    SurfaceCacheLightingQueryResult result = (SurfaceCacheLightingQueryResult)0;
+    result.Status = hit.Status;
+    result.PositionDistance = hit.PositionDistance;
+    result.Status.z &= ~2u;
+    uint2 pixel = hit.SampleCoordinate.xy;
+    if ((hit.Status.z & 2u) != 0 && hit.Status.y < CardCount && all(pixel < AtlasSize))
+    {
+        SurfaceCard card = Cards[hit.Status.y];
+        if (card.Owner.x == hit.Status.x && all(pixel >= card.Tile.xy) && all(pixel < card.Tile.xy + card.Tile.zw) &&
+            PositionCoverage.Load(int3(pixel, 0)).w > 0.5)
+        {
+            float4 lighting = DirectRadiance.Load(int3(pixel, 0));
+            if (lighting.a > 0.5)
+            {
+                result.Radiance = lighting;
+                result.Status.z |= 2u;
+            }
+        }
+    }
+    Results[thread.x] = result;
+}

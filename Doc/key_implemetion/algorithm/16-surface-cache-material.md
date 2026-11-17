@@ -1,6 +1,6 @@
-# Surface Card 材质捕获与 SDF 命中查询
+# Surface Card 材质捕获、直接光照与 SDF 命中查询
 
-入口为 Renderer/Private/GI 的 [SurfaceCacheMaterial.h](../../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h) 与 [cpp](../../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.cpp)。本阶段只缓存 BaseColor、世界法线、Metallic、Roughness，不缓存直接/间接光照或 Emissive，也不实现 Screen Probe、Radiance Cache、Radiosity 和反射。模块职责见 [Renderer 架构](../../architecture/render/renderer.md)，调用、所有权及完成点见 [工程专题](../performance/12-surface-cache-material.md)。
+入口为 Renderer/Private/GI 的 [SurfaceCacheMaterial.h](../../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h) 与 [cpp](../../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.cpp)。材质 Atlas 缓存 BaseColor、世界法线、Metallic、Roughness；独立的 [SurfaceCacheDirectLighting](../../../src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.h) 缓存漫反射直接出射 Radiance。未实现间接光照、Emissive、Screen Probe、Radiance Cache、Radiosity 和反射。模块职责见 [Renderer 架构](../../architecture/render/renderer.md)，调用、所有权及完成点见 [工程专题](../performance/12-surface-cache-material.md)。
 
 ## 输入、坐标与 Card 生成
 
@@ -51,7 +51,7 @@ PS 通过现有 MaterialParametersHelper 的 BuildMaterialData 求值，保留�
 2. 计算 `uv = (dot(P-C,U)/a, dot(P-C,V)/b * ScreenYSign) * 0.5 + 0.5`。ScreenYSign 在 Vulkan/D3D12 为 -1、OpenGL 为 +1，已用非中心 UV 渐变读回核对。
 3. 对像素周围 3×3 做 Tile 内受限的点读取，不跨 Tile 采样，避免 Atlas 边框和相邻实例的材质渗漏。
 4. 只有 Coverage 有效，且捕获位置与输入点距离不大于 `max(查询容差, 2*Extent.w)` 的样点才参与。以 `法线方向匹配度 - 0.25*位置误差/允许误差` 排序，选最优样点。
-5. 成功返回材质及 CardID；失败返回无覆盖，不能将同一个投影坐标的另一个深度层当作命中材质。
+5. LookupSurfaceCacheSample 成功返回材质、CardID 及实际采样像素；原 LookupSurfaceCache 保留原接口包装。失败返回无覆盖，不能将同一个投影坐标的另一个深度层当作命中材质。
 
 位置容差是离散采样的近似接受范围，不是严格的最近表面证明；过近的双层薄表面仍可能歧义。六向不能覆盖的内壁会明确显示无缓存。这一版没有多层深度、自适应 Card、跨 Card 连续过滤或误差上界保证。
 
@@ -70,7 +70,50 @@ PS 通过现有 MaterialParametersHelper 的 BuildMaterialData 求值，保留�
 
 令 A 为 LocalToWorld 的线性部分，局部距离为 φ。使用 `s=1/||A^-1||F`，将 `abs(φ)*s` 用于距离步进，再乘 0.8；这在连续精确 SDF 条件下给出保守尺度，但现有离散场与符号近似不自动继承严格保证。命中容差为用户容差和 `1.5*max(localVoxelSize)*||A||F` 的较大值。局部中心差分梯度乘逆转置得到世界几何法线；梯度接近零时退回射线反方向。容差、最大距离和迭代数均有限，超出迭代数有独立状态位。
 
-最终对最近 SDF 命中执行同一个 Lookup。结果含实际位置/距离、InstanceID、CardID、材质、迭代数和状态：bit0=有 SDF/已提供命中，bit1=有缓存材质，bit2=至少一个候选追踪达到迭代上限。未驻局部 SDF 的实例不参与 Mode=1，不能将缓存捕获成功等同于其距离场可用。
+最终对最近 SDF 命中执行同一个 Lookup。SurfaceCacheQueryResult 为 80 字节，新增 SampleCoordinate.xy 保存实际采样像素，未命中时为 UINT_MAX；其余字段语义不变。结果含实际位置/距离、InstanceID、CardID、材质、迭代数和状态：bit0=有 SDF/已提供命中，bit1=有缓存材质，bit2=至少一个候选追踪达到迭代上限。未驻局部 SDF 的实例不参与 Mode=1，不能将缓存捕获成功等同于其距离场可用。
+
+## 漫反射直接光照的语义与计算
+
+[SurfaceCacheDirect.sf](../../../shaders/GI/SurfaceCacheDirect.sf) 对 Material Atlas 的有效像素计算独立 RGBA32F Lighting Atlas。RGB 是世界表面向外的、与观察方向无关的 **Lambertian 漫反射直接出射 Radiance**；A=1 表示已计算且有 Card 覆盖。A=0 为无效，不能把黑色但 A=1 的阴影/背光表面当成缺失缓存。
+
+设 `c=BaseColor`、`m=Metallic`、N 为已捕获的世界着色法线。每光源方向 L 指向灯，颜色乘强度为 `Li`，距离/锥角衰减为 a，阴影为 v：
+
+```text
+fd = c * (1-saturate(m)) / pi
+Lo_diffuse = sum(fd * Li * a * max(dot(N,L),0) * v)
+```
+
+不保存 Irradiance，也不在 Lookup 后再乘一次 BaseColor；后续 GI 收集的是这个表面的出射值，接收表面的反射另行计算。材质缓存仍独立保存 Roughness，但当前引擎的 Lambert + GGX 模型中 Roughness 作用于镜面项；本阶段没有使用一个假定视线生成镜面，也没有将粗糙度误用为漫反射强度。没有缓存 view-dependent GGX、AO、Emission 或环境光。此处明确采用 Lambert 漫反射系数，不包含原完整 PBR 中依赖视线的 Fresnel `KD=(1-F)*(1-metallic)`，因此并非完整 Deferred 像素颜色的逐值副本。
+
+复用 [ShadingCommon.sf](../../../shaders/core/ShadingCommon.sf) 的 LambertDiffuse、LocalLightAttenuation 和 SpotLightAttenuation。原 ShadePoint/Spot 也使用抽出的同一衰减函数，公式保持一致：
+
+- Directional：`L=normalize(-Direction)`，a=1。
+- Point：`L=(LightPosition-P)/distance`，`a=saturate(1-distance/radius)^2`；半径外及距离近零不贡献，避免除零。
+- Spot：在 Point 衰减上乘 `smoothstep(outerCos,innerCos,dot(-Direction,L))`，内锥为 1、外锥外为 0；角度输入为弧度半角，CPU 归一化 Direction 并取余弦。
+
+颜色/强度须有限且非负，方向非零、半径为正，Spot 半角范围经 CPU 验证。GatherSceneLights 使用 Scene::ForEachLight，沿用 Scene 更新后的 Enabled 过滤；保留各类型强度、颜色、位置、方向、半径、锥角和 CastShadow，不包含 SkyLight。
+
+## 离屏表面的阴影覆盖
+
+现有方向光 CSM 依赖主相机分割深度，且既有 ShadowParametersHelper 存在清空深度额外判定及越界风险，不能把其输出直接用于任意离屏 Card。本实现没有改旧 CSM 或原阴影访问表，而是为缓存生成完整的光源视图：
+
+- Directional：所有快照实例的世界包围范围合并，取中心 C 和外接球半径 r。沿光方向 d 从 `C-2r*d` 看向 C；正交投影 XY 为 ±r，near=0.1r、far=4r。所有快照接收体与遮挡体都在覆盖内，不依赖主视图。
+- Point：从灯位置向 ±X/±Y/±Z 六向做 90° 透视投影；near=0.005*Radius、far=Radius。
+- Spot：从灯位置沿 Direction，FOV=2*OuterConeAngle，近远面同 Point。接收点在近面内时投影无覆盖，保守返回遮挡，不伪造无阴影结果。
+
+资源申请复用 [ShadowMapAllocator](../../../src/Framework/Renderer/Private/ShadowMapAllocator.h) 的 2D Atlas 分配；所有投影视图使用 AllocateSpotShadow 的方形块，Point 六面也展开为六个二维块，不使用相机级联或原生 Cube 采样。每块留一像素边框。绘制复用现有 PositionOnlyVS、GetVertexOnlyState 和 [DepthShadowPassPS](../../../shaders/tools/DepthShadowPassPS.sf) 的 clip-depth 模式。新的 SurfaceCacheShadowPS 仅注册该已有文件的固定模式，避免依赖原 DepthShadowPassPS 全局类型中面向 mesh 的变体判断。所有快照 LOD0/Section 都参与遮挡，包括主相机不可见对象；传统 SceneRenderer 不变。
+
+整张 Atlas/临时 D32 清空一次，块内各网格 Load_Store，使用无面剔除、Depth Less，BeginRenderPass 后设置矩形 viewport/scissor。阴影格式沿用分配器 RG16F，保存 clip z/w 及其平方，当前只读第一分量。Point 按 `P-LightPosition` 的绝对值最大轴选择对应面。
+
+查找以同一 VP 投影世界点，ScreenYSign 对应各后端，执行受块边界约束的 3×3 PCF。比较 `receiverClipDepth-0.001 <= storedDepth`；清空值 1 正确表示没有遮挡。没有有效投影返回 0，不能在未覆盖区产生光漏。RG16F、固定 clip bias、单张场景正交图和 Point 面边缘夹紧仍有限制；这不是任意尺度下无误差的阴影保证，改进与验收记入 [优化项](../../dev/optimize/优化点-2026-11-17.md)。
+
+## Lighting Lookup 与调试
+
+[SurfaceCacheLightingLookup.sf](../../../shaders/GI/SurfaceCacheLightingLookup.sf) 消费第一阶段直接/SDF 查询的 SurfaceCacheQueryResult。先检查 material-valid、InstanceID、CardID、SampleCoordinate 是否在该 Card Tile 和 Atlas 内，再检查当前 PositionCoverage 与 Lighting A。读取**第一次材质查询实际选择的同一像素**，不使用已被 normal map 改变的着色法线再次选择另一张 Card。
+
+结果 SurfaceCacheLightingQueryResult 为 48 字节：Radiance(float4)、PositionDistance(float4)、Status(uint4)。沿用 InstanceID、CardID、hit/iteration-limit；bit1 表示 Lighting 有效。命中无 Card 或没有有效光照时 A=0，不能将其视为有效黑色 Radiance。相应 CPU 参数必须由匹配快照的 Register/AddUpdatePasses 获得，失效检查及跨图约束见 [生命周期](../performance/12-surface-cache-material.md)。
+
+AddSurfaceCacheLightingDebugPass 可单独显示整个光照 Atlas，或将查询输出为 32×32 色块。仅调试显示执行 `max(Lo*Exposure,0)/(1+max(Lo*Exposure,0))`，Atlas 原数据始终线性 HDR；命中无覆盖显示紫色，miss 黑色。
 
 ## 复杂度与验证边界
 
@@ -79,3 +122,5 @@ PS 通过现有 MaterialParametersHelper 的 BuildMaterialData 求值，保留�
 [SurfaceCacheMaterialTest](../../../src/Tests/SurfaceCacheMaterialTest.cpp) 使用真实 DistanceFieldManager 生成/上传两个盒网格，三个实例（其中两个共享资源）、18 Card、多 Section、UV 渐变纹理及法线贴图，覆盖镜像、旋转、非均匀缩放。每帧 41 个查询：18 个已知世界命中、18 个指定实例的 SDF 射线、3 个不带 ID 的射线、一条 miss、一个投影内但无有效表面覆盖的点。第二帧不重新捕获，继续查询持久缓存。
 
 最终三后端每项两帧通过，材质与 UV 误差、世界法线、PBR 数值、Instance/Card ID、全部 Card 中心及无效边框有实际 GPU 读回断言；Atlas 与查询 Debug 有图像读回。命令、过程中故障、原测试回归及 Launcher 的范围见 [开发记录](../../dev/bugfix/故障与修复记录-2026-11-17.md)。该盒场景不构成开放/自交/薄壳/深凹模型的 SDF 和覆盖鲁棒性证明。
+
+直接光照新增工作量：有效 Atlas 像素 T、灯光 L、阴影视图 H（Point 为六个）时，计算 O(TL)，每次遮挡最多 9 点读取，阴影绘制约 H*S 次 Section Draw。没有针对光源或遮挡体做空间剔除，也没有 GPU 阶段计时基线。[SurfaceCacheDirectLightingTest](../../../src/Tests/SurfaceCacheDirectLightingTest.cpp) 在三后端各运行 17 组、每组 8 查询，覆盖三类灯光/遮挡、聚光外锥及过渡、Point 两相反面、禁用、强度/颜色、多灯相加、持久注册、材质/粗糙度变化、物体变换、离屏背面及无覆盖拒绝；Radiance 与 CPU 解析参考的 RGB 向量误差小于 0.012。盒几何与有限灯位不证明所有 Cube 面接缝、极端尺度及复杂材质均无误差。

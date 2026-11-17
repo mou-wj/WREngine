@@ -68,4 +68,14 @@ SurfaceCacheQuery.Control.x 为 InstanceID 或 UINT32_MAX，Control.y 为模式�
 
 AddSurfaceCacheDebugPass 支持 BaseColor、世界法线、Card 覆盖、Roughness 和 Metallic；AddSurfaceCacheQueryDebugPass 显示查询材质、法线或 Card ID，黑色为 miss，紫色为命中无缓存，未命中且迭代耗尽显示橙色。输出目标须为 RGBA32F、带 UAV 用途的 RDG 纹理，由消费者显示或读回；本阶段没有增加 GUI 菜单。
 
-材质/几何/变换变化、实例 ID 更新和来源 SDF 释放后，调用方须显式失效并重捕获。支持现有不透明材质，不提供复杂凹面完整覆盖、自适应 Card、动态 Atlas 淘汰或任何光照缓存。资源所有权、调用示例和完成点见 [工程专题](../key_implemetion/performance/12-surface-cache-material.md)，投影、坐标、状态和验证见 [算法专题](../key_implemetion/algorithm/16-surface-cache-material.md)。
+材质/几何/变换变化、实例 ID 更新和来源 SDF 释放后，调用方须显式失效并重捕获。支持现有不透明材质，不提供复杂凹面完整覆盖、自适应 Card、动态 Atlas 淘汰；直接光照由下文独立缓存负责。资源所有权、调用示例和完成点见 [工程专题](../key_implemetion/performance/12-surface-cache-material.md)，投影、坐标、状态和验证见 [算法专题](../key_implemetion/algorithm/16-surface-cache-material.md)。
+
+## Surface Cache Direct Lighting 调用约定
+
+[SurfaceCacheDirectLighting](../../src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.h) 接收已捕获的 SurfaceCacheMaterial 与灯快照，AddUpdatePasses 在同一个 Builder 内添加缓存阴影与直接光照 Compute，返回独立 Lighting 参数。支持 Directional、Point、Spot；Scene 灯光可用 GatherSceneLights 收集，须先完成场景更新。不会替主相机更换 CSM、改变主延迟绘制或自动开启 GI。
+
+缓存为 Lambertian 漫反射出射 Radiance，未包含 view-dependent 镜面、环境光、Emission、AO、多次反弹或反射；Lookup 后不能重复乘源表面的 BaseColor。AddSurfaceCacheLightingLookupPass 接收第一阶段的查询结果，因此世界命中和 SDF 射线共用同一 Instance/Card/实际像素。未覆盖和未命中返回无效，已计算的全黑阴影仍是有效数据。
+
+灯变化后调用全量 AddUpdatePasses；材质/物体变化先按原约定重建实例快照和捕获，再重算 Lighting。Register 检查匹配的材质 Revision；Invalidate 标记不可查询。只有调用方确认所有 GPU 用户退休后才可重建或 Release，不引入内部等待。完整调用顺序、内存、容量、失败和 Fence 条件见 [工程专题](../key_implemetion/performance/12-surface-cache-material.md#独立直接光照缓存与全量更新)，光照语义、离屏阴影、Lookup 和验证见 [算法专题](../key_implemetion/algorithm/16-surface-cache-material.md#漫反射直接光照的语义与计算)。
+
+AddSurfaceCacheLightingDebugPass 不传 queryResults 时输出 Atlas；传入 Lighting 查询结果时输出 32×32 色块。输出须为有 UAV 用途的 RGBA32F RDG Texture，可传 exposure 控制调试映射，不改变缓存的线性数值。调用示例和专项入口为 Tests.exe -test=SurfaceCacheDirectLightingTest -rhi=Vulkan（也可 DirectX12、OpenGL）。目前未增加编辑器 UI 或主场景自动更新。

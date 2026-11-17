@@ -45,6 +45,30 @@ struct SpotLight
 
 static const float PI = 3.14159265359;
 
+float3 LambertDiffuse(float3 baseColor)
+{
+    return baseColor / PI;
+}
+
+float LocalLightAttenuation(float distanceToLight, float radius)
+{
+    float attenuation = saturate(1.0 - distanceToLight / radius);
+    return attenuation * attenuation;
+}
+
+float SpotLightAttenuation(float cone, float innerCos, float outerCos)
+{
+    if (cone < outerCos)
+    {
+        return 0;
+    }
+    if (cone >= innerCos)
+    {
+        return 1;
+    }
+    return smoothstep(outerCos, innerCos, cone);
+}
+
 
 
 // ============================================================================
@@ -209,9 +233,7 @@ float3 EvaluatePBRLighting(
         (1.0 - Material.Metallic);
 
     float3 Diffuse =
-        KD *
-        Material.BaseColor /
-        PI;
+        KD * LambertDiffuse(Material.BaseColor);
 
     float3 Radiance =
         LightColor *
@@ -279,13 +301,7 @@ float3 ShadePointLight(
     float3 L =
         ToLight / Distance;
 
-    float Attenuation =
-        saturate(
-            1.0 -
-            Distance /
-            Light.Radius);
-
-    Attenuation *= Attenuation;
+    float Attenuation = LocalLightAttenuation(Distance, Light.Radius);
 
     return
         EvaluatePBRLighting(
@@ -328,30 +344,12 @@ float3 ShadeSpotLight(
         dot(
             normalize(-Light.Direction),
             L);
-    float SpotFactor = 0;
     if (Cone < Light.OuterConeCos)
     {
         return 0.0;
-    }else if(Cone > Light.InnerConeCos){
-        SpotFactor = 1;
-    }else {
-        SpotFactor =
-        smoothstep(
-            Light.OuterConeCos,
-            Light.InnerConeCos,
-            Cone);
     }
-
-
-
-    float Attenuation =
-        saturate(
-            1.0 -
-            Distance /
-            Light.Radius);
-
-    Attenuation *= Attenuation;
-    Attenuation *= SpotFactor;
+    float Attenuation = LocalLightAttenuation(Distance, Light.Radius) *
+        SpotLightAttenuation(Cone, Light.InnerConeCos, Light.OuterConeCos);
 
     return
         EvaluatePBRLighting(

@@ -1,8 +1,9 @@
 // Shared material-only lookup, independent of the tracing implementation.
 // The including shader supplies SurfaceCacheMaterialParameters through its root metadata.
-bool LookupSurfaceCache(uint instanceID, float3 position, float3 geometricNormal, float tolerance,
-                        out float4 baseColorMetallic, out float4 normalRoughness, out uint cardID)
+bool LookupSurfaceCacheSample(uint instanceID, float3 position, float3 geometricNormal, float tolerance,
+                        out float4 baseColorMetallic, out float4 normalRoughness, out uint cardID, out uint2 sampleCoordinate)
 {
+    sampleCoordinate = 0xffffffffu;
     baseColorMetallic = normalRoughness = 0;
     cardID = 0xffffffffu;
     float best = -1e20;
@@ -43,9 +44,18 @@ bool LookupSurfaceCache(uint instanceID, float3 position, float3 geometricNormal
                     baseColorMetallic = BaseColorMetallic.Load(int3(pixel, 0));
                     normalRoughness = NormalRoughness.Load(int3(pixel, 0));
                     cardID = index;
+                    sampleCoordinate = uint2(pixel);
                 }
             }
         }
     }
     return cardID != 0xffffffffu;
+}
+
+bool LookupSurfaceCache(uint instanceID, float3 position, float3 geometricNormal, float tolerance,
+                        out float4 baseColorMetallic, out float4 normalRoughness, out uint cardID)
+{
+    uint2 pixel;
+    return LookupSurfaceCacheSample(instanceID, position, geometricNormal, tolerance,
+                                   baseColorMetallic, normalRoughness, cardID, pixel);
 }

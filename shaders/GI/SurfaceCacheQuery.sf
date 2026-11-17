@@ -43,6 +43,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     SurfaceCacheQuery query = Queries[queryIndex];
     SurfaceCacheQueryResult result = (SurfaceCacheQueryResult)0;
     result.Status.xy = 0xffffffffu;
+    result.SampleCoordinate = 0xffffffffu;
     float3 origin = query.OriginDistance.xyz;
     float3 direction = normalize(query.Direction.xyz);
     float3 position = origin, normal = direction;
@@ -115,11 +116,13 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
         result.Status.z |= 1u;
         result.PositionDistance = float4(position, query.Control.y == 1 ? distance : 0);
         uint card;
-        if (LookupSurfaceCache(owner, position, normal, tolerance, result.BaseColorMetallic, result.NormalRoughness, card))
+        uint2 pixel;
+        if (LookupSurfaceCacheSample(owner, position, normal, tolerance, result.BaseColorMetallic, result.NormalRoughness, card, pixel))
         {
             result.Status.x = Cards[card].Owner.x;
             result.Status.y = card;
             result.Status.z |= 2u;
+            result.SampleCoordinate.xy = pixel;
         }
     }
     Results[queryIndex] = result;

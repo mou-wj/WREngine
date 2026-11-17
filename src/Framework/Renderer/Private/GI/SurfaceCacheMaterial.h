@@ -66,6 +66,8 @@ namespace Renderer
         SHADER_PARAMETER(Core::Float4, PositionDistance)
         // InstanceID, CardID, flags (1=SDF/direct hit, 2=cached material, 4=iteration limit), iterations.
         SHADER_PARAMETER(Core::UInt4, Status)
+        // Exact material texel chosen by lookup; avoids a second, potentially different Card search.
+        SHADER_PARAMETER(Core::UInt4, SampleCoordinate)
     END_SHADER_PARAMETER_STRUCT(SurfaceCacheQueryResult)
 
     class RENDERER_API SurfaceCacheMaterial
@@ -80,6 +82,8 @@ namespace Renderer
         SurfaceCacheMaterialParameters AddCapturePasses(RenderCore::RenderGraphBuilder& builder);
         SurfaceCacheMaterialParameters Register(RenderCore::RenderGraphBuilder& builder) const;
         const std::vector<SurfaceCard>& GetCards() const { return m_Cards; }
+        const std::vector<SurfaceCacheMeshInstance>& GetInstances() const { return m_Instances; }
+        uint64_t GetRevision() const { return m_Revision; }
         RenderCore::RenderTexture* GetBaseColorAtlas() const { return m_BaseColor.get(); }
         RenderCore::RenderTexture* GetNormalAtlas() const { return m_Normal.get(); }
         RenderCore::RenderTexture* GetPositionAtlas() const { return m_Position.get(); }
@@ -91,6 +95,7 @@ namespace Renderer
         RenderCore::RenderTextureSP m_BaseColor, m_Normal, m_Position, m_Depth;
         uint32_t m_Size = 0;
         bool m_bCaptureScheduled = false;
+        uint64_t m_Revision = 0;
     };
 
     RENDERER_API RenderCore::RenderGraphBufferRef AddSurfaceCacheQueryPass(RenderCore::RenderGraphBuilder& builder,

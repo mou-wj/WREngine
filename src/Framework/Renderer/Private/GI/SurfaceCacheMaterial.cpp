@@ -382,10 +382,12 @@ namespace Renderer
         m_Depth = std::move(depth);
         m_Size = size;
         m_bCaptureScheduled = false;
+        ++m_Revision;
     }
 
     void SurfaceCacheMaterial::Release()
     {
+        ++m_Revision;
         m_BaseColor.reset();
         m_Normal.reset();
         m_Position.reset();
@@ -417,6 +419,7 @@ namespace Renderer
     SurfaceCacheMaterialParameters SurfaceCacheMaterial::AddCapturePasses(RenderGraphBuilder& builder)
     {
         Require(m_BaseColor != nullptr, "initialize before capture");
+        ++m_Revision;
         m_bCaptureScheduled = true;
         auto cache = Register(builder);
         const auto depth = builder.RegisterExternalTexture("SurfaceCache.Depth." + std::to_string(reinterpret_cast<uintptr_t>(this)), m_Depth.get());

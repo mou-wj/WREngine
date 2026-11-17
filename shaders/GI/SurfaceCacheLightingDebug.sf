@@ -1,0 +1,38 @@
+#include "/Generated/ShaderParameters/SurfaceCacheLightingDebugParameters.sf"
+#include "/Generated/ShaderParameters/SurfaceCacheLightingParameters.sf"
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= OutputSize))
+    {
+        return;
+    }
+    float4 value = 0;
+    if (QueryCount != 0)
+    {
+        uint columns = max(1u, OutputSize.x / 32);
+        uint index = pixel.y / 32 * columns + pixel.x / 32;
+        if (index < QueryCount)
+        {
+            SurfaceCacheLightingQueryResult query = QueryResults[index];
+            value = query.Radiance;
+            if ((query.Status.z & 1u) != 0 && value.a < 0.5)
+            {
+                Output[pixel] = float4(1, 0, 1, 1);
+                return;
+            }
+        }
+    }
+    else
+    {
+        uint width, height;
+        DirectRadiance.GetDimensions(width, height);
+        uint2 coordinate = min(uint2(float2(pixel) / float2(OutputSize) * float2(width, height)), uint2(width - 1, height - 1));
+        value = DirectRadiance.Load(int3(coordinate, 0));
+    }
+    float3 color = max(value.rgb * Exposure, 0);
+    color = color / (1 + color); // Debug display only; cached values remain linear HDR radiance.
+    Output[pixel] = float4(value.a > 0.5 ? color : 0, 1);
+}

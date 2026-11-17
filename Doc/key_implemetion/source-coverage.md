@@ -1,12 +1,12 @@
 # 源码检索与文档覆盖清单
 
-更新日期：2026-11-17；基于 `804f9dd` 及 Surface Cache 材质捕获、局部 SDF 查询和整数向量元数据的工作区实现。首次整理基线为 `04f910d`。本清单来自文件枚举、文本关键词检索及专题调用链核对，本次仅增补相关新增文件和变化记录；不是逐行正确性审计，也不是运行验证。每行列出的专题是阅读入口，不保证已解释该文件的每个辅助函数。
+更新日期：2026-11-17；基于 `218b47c` 及 Surface Cache 直接光照、缓存阴影与精确像素查询的工作区实现。首次整理基线为 `04f910d`。本清单来自文件枚举、文本关键词检索及专题调用链核对，本次仅增补相关新增文件和变化记录；不是逐行正确性审计，也不是运行验证。每行列出的专题是阅读入口，不保证已解释该文件的每个辅助函数。
 
 范围：自有 src、全部 Shader、CMake/BuildDeps、依赖元信息和 VS Code 配置。extern/glad 是外部生成 loader；deps、构建目录、生成文件、二进制资源、validation 产物、temp 实验不逐项展开。外部库的使用边界见工程专题，驱动和第三方算法不冒充自有实现。
 
 检索标记：并发=线程/锁/任务/完成点；内存=分配/回收/临时工作区；算法=几何/数学/空间查询；渲染=Shader/管线/绘制。标记只是命中，不是已确认问题；未命中不代表没有核心语义。
 
-本次清单共 **514 个文件、95639 行**；文件数包含接口、配置和构建声明。原始逐文件内容 hash 与关键词计数仅保存在忽略目录 `out/diagnostics/key-implementation-source-scan.json`，正式阅读以本清单和源码链接为准。
+本次清单共 **520 个文件、96802 行**；文件数包含接口、配置和构建声明。原始逐文件内容 hash 与关键词计数仅保存在忽略目录 `out/diagnostics/key-implementation-source-scan.json`，正式阅读以本清单和源码链接为准。
 
 ## 现有 architecture 的补充关系
 
@@ -59,7 +59,7 @@
 | [config/3rds/tinygltf.json](../../config/3rds/tinygltf.json) | 41 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [config/3rds/vulkan.json](../../config/3rds/vulkan.json) | 39 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## shaders（64 个文件）
+## shaders（67 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -71,7 +71,7 @@
 | [shaders/core/MaterialParametersHelper.sf](../../shaders/core/MaterialParametersHelper.sf) | 187 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) / [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
 | [shaders/core/Sample.sf](../../shaders/core/Sample.sf) | 167 | 算法 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/SceneParametersHelper.sf](../../shaders/core/SceneParametersHelper.sf) | 191 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
-| [shaders/core/ShadingCommon.sf](../../shaders/core/ShadingCommon.sf) | 405 | 算法 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
+| [shaders/core/ShadingCommon.sf](../../shaders/core/ShadingCommon.sf) | 403 | 算法 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/ShadingContext.sf](../../shaders/core/ShadingContext.sf) | 32 | 接口/配置/基础辅助 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/ShadowParametersHelper.sf](../../shaders/core/ShadowParametersHelper.sf) | 276 | 渲染 | [06-shadow-mapping-and-cascades](algorithm/06-shadow-mapping-and-cascades.md) |
 | [shaders/editor/MeshViewer.sf](../../shaders/editor/MeshViewer.sf) | 61 | 算法、渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
@@ -124,9 +124,12 @@
 | [shaders/GI/SurfaceCacheCapturePS.sf](../../shaders/GI/SurfaceCacheCapturePS.sf) | 24 | 算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 | [shaders/GI/SurfaceCacheCaptureVS.sf](../../shaders/GI/SurfaceCacheCaptureVS.sf) | 34 | 算法 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 | [shaders/GI/SurfaceCacheDebug.sf](../../shaders/GI/SurfaceCacheDebug.sf) | 37 | 渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
-| [shaders/GI/SurfaceCacheLookup.sf](../../shaders/GI/SurfaceCacheLookup.sf) | 51 | 算法 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
-| [shaders/GI/SurfaceCacheQuery.sf](../../shaders/GI/SurfaceCacheQuery.sf) | 126 | 内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [shaders/GI/SurfaceCacheLookup.sf](../../shaders/GI/SurfaceCacheLookup.sf) | 61 | 算法 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [shaders/GI/SurfaceCacheQuery.sf](../../shaders/GI/SurfaceCacheQuery.sf) | 129 | 内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 | [shaders/GI/SurfaceCacheQueryDebug.sf](../../shaders/GI/SurfaceCacheQueryDebug.sf) | 34 | 渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [shaders/GI/SurfaceCacheDirect.sf](../../shaders/GI/SurfaceCacheDirect.sf) | 102 | 算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [shaders/GI/SurfaceCacheLightingDebug.sf](../../shaders/GI/SurfaceCacheLightingDebug.sf) | 38 | 渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [shaders/GI/SurfaceCacheLightingLookup.sf](../../shaders/GI/SurfaceCacheLightingLookup.sf) | 33 | 渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 
 ## src/Application（13 个文件）
 
@@ -381,7 +384,7 @@
 | [src/Framework/RenderCore/PublicHeader/ToolShaders.h](../../src/Framework/RenderCore/PublicHeader/ToolShaders.h) | 58 | 渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Framework/RenderCore/PublicHeader/VertexFactory.h](../../src/Framework/RenderCore/PublicHeader/VertexFactory.h) | 195 | 渲染 | [08-mesh-import-and-geometry](algorithm/08-mesh-import-and-geometry.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 
-## src/Framework/Renderer（67 个文件）
+## src/Framework/Renderer（69 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -450,8 +453,10 @@
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometrySoftwareRaster.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometrySoftwareRaster.h) | 40 | 接口/配置/基础辅助 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.cpp) | 591 | 并发/内存/渲染 | [15-virtual-geometry-page-compression](algorithm/15-virtual-geometry-page-compression.md) / [11-virtual-geometry-streaming](performance/11-virtual-geometry-streaming.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.h) | 45 | 接口/配置/基础辅助 | [15-virtual-geometry-page-compression](algorithm/15-virtual-geometry-page-compression.md) / [11-virtual-geometry-streaming](performance/11-virtual-geometry-streaming.md) |
-| [src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.cpp](../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.cpp) | 636 | 内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
-| [src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h](../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h) | 107 | 内存 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.cpp](../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.cpp) | 639 | 内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h](../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h) | 112 | 内存 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.cpp](../../src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.cpp) | 502 | 内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.h](../../src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.h) | 70 | 内存 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 
 ## src/Framework/RHI（24 个文件）
 
@@ -617,7 +622,7 @@
 | [src/Lancher/Loop.h](../../src/Lancher/Loop.h) | 8 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Lancher/main.cpp](../../src/Lancher/main.cpp) | 16 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## src/Tests（23 个文件）
+## src/Tests（24 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -644,6 +649,7 @@
 | [src/Tests/VirtualGeometrySoftwareRasterTest.cpp](../../src/Tests/VirtualGeometrySoftwareRasterTest.cpp) | 596 | 并发/内存/渲染 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 | [src/Tests/VirtualGeometryStreamingTest.cpp](../../src/Tests/VirtualGeometryStreamingTest.cpp) | 548 | 并发/内存/算法/渲染 | [15-virtual-geometry-page-compression](algorithm/15-virtual-geometry-page-compression.md) / [11-virtual-geometry-streaming](performance/11-virtual-geometry-streaming.md) |
 | [src/Tests/SurfaceCacheMaterialTest.cpp](../../src/Tests/SurfaceCacheMaterialTest.cpp) | 406 | 并发/内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [src/Tests/SurfaceCacheDirectLightingTest.cpp](../../src/Tests/SurfaceCacheDirectLightingTest.cpp) | 399 | 并发/内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 
 ## 后续维护
 
