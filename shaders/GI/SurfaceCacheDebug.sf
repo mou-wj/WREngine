@@ -26,6 +26,10 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
             {
                 uint hash = (index + 1) * 1664525u + 1013904223u;
                 value = float3(hash & 255u, (hash >> 8) & 255u, (hash >> 16) & 255u) / 255.0;
+                if (SelectedCardIndex != 0xFFFFFFFFu && index != SelectedCardIndex)
+                {
+                    value *= 0.2;
+                }
             }
         }
     }

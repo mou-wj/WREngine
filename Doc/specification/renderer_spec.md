@@ -66,7 +66,7 @@ MaterialParametersHelper 现支持显式 UV 梯度，Compute 使用 SampleGrad�
 
 SurfaceCacheQuery.Control.x 为 InstanceID 或 UINT32_MAX，Control.y 为模式：0 表示 OriginDistance.xyz 是已有命中点、Direction.xyz 是世界几何法线；1 表示世界射线，OriginDistance.w 是最大距离。模式 1 通过原局部 SDF Atlas 识别最近实例，未带有效 SDF 的对象不参与；模式 0 可以直接消费其他追踪器的已知命中。结果的 hit 与 material-valid 状态分开，不能把无覆盖结果当作黑色材质。
 
-AddSurfaceCacheDebugPass 支持 BaseColor、世界法线、Card 覆盖、Roughness 和 Metallic；AddSurfaceCacheQueryDebugPass 显示查询材质、法线或 Card ID，黑色为 miss，紫色为命中无缓存，未命中且迭代耗尽显示橙色。输出目标须为 RGBA32F、带 UAV 用途的 RDG 纹理，由消费者显示或读回；本阶段没有增加 GUI 菜单。
+AddSurfaceCacheDebugPass 支持 BaseColor、世界法线、Card 覆盖、Roughness 和 Metallic；AddSurfaceCacheQueryDebugPass 显示查询材质、法线或 Card ID，黑色为 miss，紫色为命中无缓存，未命中且迭代耗尽显示橙色。输出目标须为 RGBA32F、带 UAV 用途的 RDG 纹理，由消费者显示或读回；这些 Pass 本身不创建 GUI，独立可视化入口由下文的 Lumen GI Viewer 提供。
 
 材质/几何/变换变化、实例 ID 更新和来源 SDF 释放后，调用方须显式失效并重捕获。支持现有不透明材质，不提供复杂凹面完整覆盖、自适应 Card、动态 Atlas 淘汰；直接光照由下文独立缓存负责。资源所有权、调用示例和完成点见 [工程专题](../key_implemetion/performance/12-surface-cache-material.md)，投影、坐标、状态和验证见 [算法专题](../key_implemetion/algorithm/16-surface-cache-material.md)。
 
@@ -78,4 +78,16 @@ AddSurfaceCacheDebugPass 支持 BaseColor、世界法线、Card 覆盖、Roughne
 
 灯变化后调用全量 AddUpdatePasses；材质/物体变化先按原约定重建实例快照和捕获，再重算 Lighting。Register 检查匹配的材质 Revision；Invalidate 标记不可查询。只有调用方确认所有 GPU 用户退休后才可重建或 Release，不引入内部等待。完整调用顺序、内存、容量、失败和 Fence 条件见 [工程专题](../key_implemetion/performance/12-surface-cache-material.md#独立直接光照缓存与全量更新)，光照语义、离屏阴影、Lookup 和验证见 [算法专题](../key_implemetion/algorithm/16-surface-cache-material.md#漫反射直接光照的语义与计算)。
 
-AddSurfaceCacheLightingDebugPass 不传 queryResults 时输出 Atlas；传入 Lighting 查询结果时输出 32×32 色块。输出须为有 UAV 用途的 RGBA32F RDG Texture，可传 exposure 控制调试映射，不改变缓存的线性数值。调用示例和专项入口为 Tests.exe -test=SurfaceCacheDirectLightingTest -rhi=Vulkan（也可 DirectX12、OpenGL）。目前未增加编辑器 UI 或主场景自动更新。
+AddSurfaceCacheLightingDebugPass 不传 queryResults 时输出 Atlas；传入 Lighting 查询结果时输出 32×32 色块。输出须为有 UAV 用途的 RGBA32F RDG Texture，可传 exposure 控制调试映射，不改变缓存的线性数值。调用示例和专项入口为 Tests.exe -test=SurfaceCacheDirectLightingTest -rhi=Vulkan（也可 DirectX12、OpenGL）。GIViewer 可独立显示 Atlas；缓存仍没有主场景自动更新。
+
+## Lumen GI Viewer
+
+Lumen 的 Surface Cache Material、Direct Lighting 与 Screen Probe Gather 目前只由独立的 [LumenViewerRenderer](../../src/Framework/Renderer/PublicHeader/LumenViewerRenderer.h) 编排，并通过 Editor 的 [GIViewer 模块](../../src/Editor/GIViewer/PublicHeader/EditorGIViewer.h) 从 View 页打开。Viewer 使用当前场景与相机视图创建自己的 RenderGraph 预览目标、深度和 GBuffer，再按所选阶段运行 Surface Cache 捕获/查询、直接光照缓存、Screen Probe Gather 与可视化；这些 Pass 不进入 `RenderModule` 的常规场景构图，也不改写主渲染器的 GBuffer 或颜色附件。
+
+Viewer 默认显示 Scene 预览，不在打开时自动建立 Surface Cache 或运行 Screen Probe。选择 Surface Cache、Direct Lighting 或 Screen Probe 阶段会按需初始化并捕获缓存；`Build/Rebuild Surface Cache` 按钮切换到 Card Coverage 视图并执行重建。这样打开 Viewer 时先呈现当前场景，昂贵的 GI 阶段由用户主动选择。
+
+Scene 视图提供 `Draw Mesh Cards in scene` 和 `Selected Card only` 开关。Mesh Card 列表按 Scene Instance 和六个轴向投影列出 Card；选择 Card 后显示其世界中心、法线、范围和 Atlas Tile。场景叠加把 Card 的世界投影矩形经当前 ViewProjection 投到预览图片上，以轴向颜色区分并以黄色强调选中项。该叠加由 ImGui 绘制，按 X-ray 方式显示，不受场景深度遮挡；它表示空间覆盖范围，不代表捕获到的表面三角形。选中 Card 后可切换并放大查看其 Atlas Tile 的 Base Color、World Normal、Coverage、Roughness 或 Metallic。
+
+Surface Cache 的 Base Color、World Normal、Card Coverage、Roughness、Metallic 和 Direct Lighting Atlas 显示各自缓存图集；Screen Probe 的 Placement、Ray Directions、Hit Ratio、Radiance 和 Indirect Diffuse 显示屏幕空间阶段结果。每个阶段在 Viewer 中附有用途说明。Capture projection plane 示意图表达 Card 的 U/V 投影基与法线方向，不是场景内按世界尺寸绘制的覆盖盒。场景几何、材质、光源变化后，可在 Viewer 中显式重建 Surface Cache。Screen Probe 固定配置、估计公式、资源预算与工程生命周期见 [算法说明](../key_implemetion/algorithm/17-screen-probe-gather.md) 和 [工程说明](../key_implemetion/performance/13-screen-probe-gather.md)。这是一条隔离验证路径，不代表 Lumen 已接入产品主渲染流程；非空场景的各阶段结果与画面仍须实际验证。
+
+常规 `DefferedSceneRenderer` 继续运行原有 ScreenSpaceGI/SSR 路径。该现有效果与 Lumen Screen Probe Gather 是不同实现，Viewer 的阶段输出不会改变它。

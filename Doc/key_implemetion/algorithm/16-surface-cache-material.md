@@ -66,6 +66,8 @@ PS 通过现有 MaterialParametersHelper 的 BuildMaterialData 求值，保留�
 - Mode=0：已有世界命中；OriginDistance.xyz 为位置，Direction.xyz 为几何法线，Control.x 为 InstanceID。未知 ID 时按所有 Card 的覆盖位置匹配，重合对象可能歧义，优先传明确 ID。
 - Mode=1：世界射线；方向在 Shader 中归一化，OriginDistance.w 为最大世界距离，Control.x 为指定实例或 UINT32_MAX。射线参数 t 和结果距离均为世界长度单位。
 
+供 GPU 消费者生成批量查询时，`AddSurfaceCacheQueryPass` 另有接收 RDG StructuredBuffer 与 queryCount 的重载。它直接绑定上游 Pass 产生的同一 `SurfaceCacheQuery` 数据，不先读回 CPU，也不改变 Mode/字段语义；查询结果仍为当前图内的 RDG Buffer，不能跨图保存。
+
 先做世界 AABB、再做变换后的局部体积 slab 测试。局部方向不重新归一化，因此其 t 仍对应世界射线距离。局部 CPU SDF 的采样位置是 `min+i*voxel`，访问纹理时使用 `allocation+i+0.5`，并在单个块内夹紧到 `[0,resolution-1]`，避免跨块插值。
 
 令 A 为 LocalToWorld 的线性部分，局部距离为 φ。使用 `s=1/||A^-1||F`，将 `abs(φ)*s` 用于距离步进，再乘 0.8；这在连续精确 SDF 条件下给出保守尺度，但现有离散场与符号近似不自动继承严格保证。命中容差为用户容差和 `1.5*max(localVoxelSize)*||A||F` 的较大值。局部中心差分梯度乘逆转置得到世界几何法线；梯度接近零时退回射线反方向。容差、最大距离和迭代数均有限，超出迭代数有独立状态位。

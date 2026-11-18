@@ -7,6 +7,7 @@
 #include "EditorMeshViewer.h"
 #include "EditorVirtualGeometryViewer.h"
 #include "EditorTextureViewer.h"
+#include "EditorGIViewer.h"
 #include "Widgets/ImFileDialogWidget.h"
 #include "AssetManager.h"
 #include "StaticMeshAsset.h"
@@ -237,6 +238,11 @@ namespace Editor
         });
         m_TextureViewer=std::make_unique<EditorTextureViewer>([this] { return CollectTextureViewerSources(); });
         m_ViewToolbar->SetOnOpenTextureViewer([this] { m_TextureViewer->Open(); });
+        m_GIViewer = std::make_unique<EditorGIViewer>([this]
+        {
+            return GIViewerSource{m_Scene->GetSceneInterface(), m_Scene->GetCurrentView()};
+        });
+        m_ViewToolbar->SetOnOpenGIViewer([this] { m_GIViewer->Open(); });
         m_ViewToolbar->SetOnOpenMeshViewer([this] {
             std::string selected;
             for (const auto& object:m_Scene->GetObjects())
@@ -279,6 +285,7 @@ namespace Editor
         m_Window->AddWidget(m_MeshViewer.get(),{});
         m_Window->AddWidget(m_VirtualGeometryViewer.get(), {});
         m_Window->AddWidget(m_TextureViewer.get(),{});
+        m_Window->AddWidget(m_GIViewer.get(), {});
         m_Window->Show();
         std::cout << "[Editor] Initialized Scene / Assets / Material panels" << std::endl;
         return true;
@@ -292,6 +299,7 @@ namespace Editor
         m_MeshViewer.reset();
         m_VirtualGeometryViewer.reset();
         m_TextureViewer.reset();
+        m_GIViewer.reset();
         m_ProjectDialog.reset(); m_MenuWidget.reset(); m_NodePanel.reset();
         m_LeftSplitter.reset();
         m_RightSplitter.reset();
@@ -445,6 +453,7 @@ namespace Editor
         m_MeshViewer->Reset();
         m_VirtualGeometryViewer->Reset();
         m_TextureViewer->Reset();
+        m_GIViewer->Reset();
         m_PendingMeshAsset.reset(); m_AssetPanel->SetProjectAssets({});
         m_PendingObject.reset(); m_PendingDeleteObject=-1; m_ScenePanel->SetCreationEnabled(false);
         m_ProjectDialog->Close(); m_DroppedMesh.clear(); m_DroppedMaterial.clear(); m_DroppedMaterialPosition={}; m_PendingProjectAction=ProjectAction::None;

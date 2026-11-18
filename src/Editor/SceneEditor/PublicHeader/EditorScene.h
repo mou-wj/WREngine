@@ -49,6 +49,12 @@ namespace Editor
         Engine::SceneComponent* GetSelected() const;
         Engine::StaticMeshComponent* GetSelectedMesh() const;
         const std::vector<Object>& GetObjects() const { return m_Objects; }
+        Engine::SceneInterface* GetSceneInterface() const { return m_Scene.get(); }
+        const Engine::SceneView* GetCurrentView() const
+        {
+            const auto& views = m_ViewFamily.GetViews();
+            return views.empty() ? nullptr : &views.front();
+        }
         void NotifySelectedChanged();
         void NotifyMaterialsChanged();
         void SetTranslationTarget(Engine::SceneComponent* component);

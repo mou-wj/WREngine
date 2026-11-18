@@ -60,6 +60,10 @@ namespace Editor
     }
     void EditorViewToolbar::SetOnOpenTextureViewer(std::function<void()> callback)
     { m_OnOpenTextureViewer=std::move(callback); }
+    void EditorViewToolbar::SetOnOpenGIViewer(std::function<void()> callback)
+    {
+        m_OnOpenGIViewer = std::move(callback);
+    }
     void EditorViewToolbar::Draw()
     {
         const auto& geometry = GetGeometry();
@@ -119,6 +123,13 @@ namespace Editor
                     if (ImGui::Button("Virtual geometry\nviewer", {130, 44}))
                     {
                         m_OnOpenVirtualGeometryViewer();
+                    }
+                    ImGui::EndDisabled();
+                    ImGui::SameLine();
+                    ImGui::BeginDisabled(!m_OnOpenGIViewer);
+                    if (ImGui::Button("Lumen GI\nviewer", {100, 44}))
+                    {
+                        m_OnOpenGIViewer();
                     }
                     ImGui::EndDisabled();
                     ImGui::TextDisabled("Inspect mesh");

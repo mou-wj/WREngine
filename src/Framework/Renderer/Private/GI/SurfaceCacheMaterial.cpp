@@ -64,8 +64,17 @@ namespace Renderer
         SHADER_PARAMETER_STRUCT_REFERENCE(SurfaceCacheMaterialParameters, Cache)
         SHADER_PARAMETER(Core::UInt2, OutputSize)
         SHADER_PARAMETER(uint32_t, Mode)
+        SHADER_PARAMETER(uint32_t, SelectedCardIndex)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, Output)
     END_SHADER_PARAMETER_STRUCT(SurfaceCacheDebugParameters)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCacheCardDebugParameters)
+        SHADER_PARAMETER_STRUCT_REFERENCE(SurfaceCacheMaterialParameters, Cache)
+        SHADER_PARAMETER(Core::UInt2, OutputSize)
+        SHADER_PARAMETER(uint32_t, CardIndex)
+        SHADER_PARAMETER(uint32_t, Mode)
+        SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, Output)
+    END_SHADER_PARAMETER_STRUCT(SurfaceCacheCardDebugParameters)
 
     BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCacheQueryDebugParameters)
         SHADER_PARAMETER(Core::UInt2, OutputSize)
@@ -124,8 +133,18 @@ namespace Renderer
         static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters&, ShaderCompilerEnvironment&) {}
         static const ShaderParametersMetadata* GetShaderParameterMetadata() { return SurfaceCacheDebugParameters::GetMetaData(); }
     };
+
+    class SurfaceCacheCardDebugCS : public GlobalShader
+    {
+    public:
+        DECLARE_GLOBAL_SHADER_TYPE(SurfaceCacheCardDebugCS)
+        static bool ShouldCompilePermutation(const ShaderPermutationParameters&) { return true; }
+        static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters&, ShaderCompilerEnvironment&) {}
+        static const ShaderParametersMetadata* GetShaderParameterMetadata() { return SurfaceCacheCardDebugParameters::GetMetaData(); }
+    };
     IMPLEMENT_GLOBAL_SHADER_TYPE(SurfaceCacheQueryCS, "SurfaceCacheQueryCS", "/GI/SurfaceCacheQuery.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(SurfaceCacheDebugCS, "SurfaceCacheDebugCS", "/GI/SurfaceCacheDebug.sf", "MainCS", ERHIShaderFrequency::Compute);
+    IMPLEMENT_GLOBAL_SHADER_TYPE(SurfaceCacheCardDebugCS, "SurfaceCacheCardDebugCS", "/GI/SurfaceCacheCardDebug.sf", "MainCS", ERHIShaderFrequency::Compute);
 
     class SurfaceCacheQueryDebugCS : public GlobalShader
     {
@@ -580,13 +599,69 @@ namespace Renderer
         return results;
     }
 
+    RenderGraphBufferRef AddSurfaceCacheQueryPass(RenderGraphBuilder& builder, const SurfaceCacheMaterialParameters& cache,
+        RenderGraphBufferRef queryBuffer, uint32_t queryCount, uint32_t maxSteps, float hitTolerance)
+    {
+        Require(queryBuffer && queryCount > 0 && queryCount <= 65535 * 64 &&
+                queryBuffer->GetDesc().Stride == sizeof(SurfaceCacheQuery) &&
+                uint64_t(queryCount) * sizeof(SurfaceCacheQuery) <= queryBuffer->GetDesc().Size &&
+                maxSteps > 0 && maxSteps <= 4096 && std::isfinite(hitTolerance) && hitTolerance > 0,
+                "invalid GPU query buffer/settings");
+        auto* atlas = GDistanceFieldMgr.GetAtlas().GetAtlasTexture();
+        Require(atlas && atlas->GetRHI(), "query requires initialized Engine distance field atlas");
+
+        auto* params = builder.AllocateParameter<SurfaceCacheQueryParameters>();
+        params->Cache = cache;
+        params->QueryCount = queryCount;
+        params->MaxSteps = maxSteps;
+        params->HitTolerance = hitTolerance;
+        params->MeshSDFAtlas = builder.RegisterExternalTexture("SurfaceCache.MeshSDFAtlas", atlas);
+        const auto& atlasDesc = atlas->GetRHI()->GetDesc();
+        params->SDFAtlasSize = {float(atlasDesc.Width), float(atlasDesc.Height), float(atlasDesc.Depth)};
+        params->SDFSampler = GlobalSampler.get();
+
+        RenderGraphBufferSRVDesc querySRVDesc;
+        querySRVDesc.Buffer = queryBuffer;
+        querySRVDesc.Stride = sizeof(SurfaceCacheQuery);
+        querySRVDesc.NumElements = queryCount;
+        params->Queries = builder.CreateBufferSRV(queryBuffer->GetName() + ".SurfaceCacheQueries", querySRVDesc);
+
+        RenderGraphBufferDesc resultDesc;
+        resultDesc.Size = uint64_t(sizeof(SurfaceCacheQueryResult)) * queryCount;
+        resultDesc.Stride = sizeof(SurfaceCacheQueryResult);
+        resultDesc.Usage = ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::UnorderedAccess |
+            ERHIBufferUsageFlag::ShaderResource | ERHIBufferUsageFlag::TransferSrc;
+        auto results = builder.CreateBuffer("SurfaceCache.GPUQueryResults", resultDesc);
+        RenderGraphBufferUAVDesc resultUAVDesc;
+        resultUAVDesc.Buffer = results;
+        resultUAVDesc.Stride = resultDesc.Stride;
+        resultUAVDesc.NumElements = queryCount;
+        params->Results = builder.CreateBufferUAV(results->GetName() + ".UAV", resultUAVDesc);
+
+        auto shader = GShaderMap.GetShader<SurfaceCacheQueryCS>(0);
+        Require(shader != nullptr, "query shader is unavailable");
+        RHIComputePipelineStateDesc pipelineDesc;
+        pipelineDesc.ComputeShader = static_cast<RHIComputeShader*>(shader->GetRHIShader());
+        auto pipeline = RHIPipelineStateCache::GetOrCreateComputePipelineState(pipelineDesc);
+        builder.AddPass("SurfaceCacheSDFQuery", SurfaceCacheQueryParameters::GetMetaData(), params, EPassFlag::Compute,
+            [=](RHICommandListBase& list)
+        {
+            auto& cmd = static_cast<RHIComputeCommandList&>(list);
+            cmd.SetComputePipelineState(pipeline);
+            SetShaderParameters(cmd, shader, params);
+            cmd.Dispatch((queryCount + 63) / 64, 1, 1);
+        });
+        return results;
+    }
+
     void AddSurfaceCacheDebugPass(RenderGraphBuilder& builder, const SurfaceCacheMaterialParameters& cache,
-        RenderGraphTextureRef output, uint32_t mode)
+        RenderGraphTextureRef output, uint32_t mode, uint32_t selectedCardIndex)
     {
         Require(output && mode <= 4 && output->GetDesc().Format == ERHIFormat::R32G32B32A32_Float, "debug requires float4 UAV target and mode 0..4");
         auto* p = builder.AllocateParameter<SurfaceCacheDebugParameters>();
         p->Cache = cache;
         p->Mode = mode;
+        p->SelectedCardIndex = selectedCardIndex;
         p->OutputSize = {output->GetDesc().Width, output->GetDesc().Height};
         RenderGraphTextureUAVDesc desc;
         desc.Texture = output;
@@ -604,6 +679,38 @@ namespace Renderer
             cmd.SetComputePipelineState(pipeline);
             SetShaderParameters(cmd, shader, p);
             cmd.Dispatch((p->OutputSize.X + 7) / 8, (p->OutputSize.Y + 7) / 8, 1);
+        });
+    }
+
+    void AddSurfaceCacheCardDebugPass(RenderGraphBuilder& builder, const SurfaceCacheMaterialParameters& cache,
+        uint32_t cardIndex, ESurfaceCardAtlasView view, RenderGraphTextureRef output)
+    {
+        Require(cardIndex < cache.CardCount && static_cast<uint32_t>(view) <= 4 && output &&
+                output->GetDesc().Format == ERHIFormat::R32G32B32A32_Float,
+            "card debug requires a valid card and float4 UAV target");
+        auto* parameters = builder.AllocateParameter<SurfaceCacheCardDebugParameters>();
+        parameters->Cache = cache;
+        parameters->OutputSize = {output->GetDesc().Width, output->GetDesc().Height};
+        parameters->CardIndex = cardIndex;
+        parameters->Mode = static_cast<uint32_t>(view);
+
+        RenderGraphTextureUAVDesc outputDesc;
+        outputDesc.Texture = output;
+        outputDesc.Format = output->GetDesc().Format;
+        parameters->Output = builder.CreateTextureUAV(output->GetName() + ".SelectedCardDebug", outputDesc);
+
+        auto* shader = GShaderMap.GetShader<SurfaceCacheCardDebugCS>(0);
+        Require(shader != nullptr, "card debug shader is unavailable");
+        RHIComputePipelineStateDesc pipelineDesc;
+        pipelineDesc.ComputeShader = static_cast<RHIComputeShader*>(shader->GetRHIShader());
+        auto pipeline = RHIPipelineStateCache::GetOrCreateComputePipelineState(pipelineDesc);
+        builder.AddPass("SurfaceCacheSelectedCardDebug", SurfaceCacheCardDebugParameters::GetMetaData(), parameters,
+            EPassFlag::Compute, [=](RHICommandListBase& list)
+        {
+            auto& cmd = static_cast<RHIComputeCommandList&>(list);
+            cmd.SetComputePipelineState(pipeline);
+            SetShaderParameters(cmd, shader, parameters);
+            cmd.Dispatch((parameters->OutputSize.X + 7) / 8, (parameters->OutputSize.Y + 7) / 8, 1);
         });
     }
 

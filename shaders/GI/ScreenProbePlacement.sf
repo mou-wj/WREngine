@@ -1,0 +1,78 @@
+#include "/Generated/ShaderParameters/ScreenProbePlacementParameters.sf"
+#include "/Generated/ShaderParameters/GBufferTextureParameters.sf"
+#include "/core/GBufferParametersHelper.sf"
+
+void BuildBasis(float3 normal, out float3 tangent, out float3 bitangent)
+{
+    float3 up = abs(normal.z) < 0.999 ? float3(0, 0, 1) : float3(0, 1, 0);
+    tangent = normalize(cross(up, normal));
+    bitangent = cross(normal, tangent);
+}
+
+float Hash01(uint value)
+{
+    value ^= value >> 16;
+    value *= 0x7feb352du;
+    value ^= value >> 15;
+    value *= 0x846ca68bu;
+    value ^= value >> 16;
+    return float(value) * (1.0 / 4294967295.0);
+}
+
+float3 ReconstructPosition(float2 uv, float depth)
+{
+    float2 ndc = float2(uv.x * 2.0 - 1.0, (1.0 - uv.y) * 2.0 - 1.0);
+    float4 position = mul(InvViewProj, float4(ndc, depth, 1.0));
+    return position.xyz / position.w;
+}
+
+[numthreads(64, 1, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint probeIndex = thread.x;
+    uint probeCount = ProbeGridSize.x * ProbeGridSize.y;
+    if (probeIndex >= probeCount)
+    {
+        return;
+    }
+
+    uint2 probeCoord = uint2(probeIndex % ProbeGridSize.x, probeIndex / ProbeGridSize.x);
+    uint2 pixel = min(probeCoord * TileSize + TileSize / 2, ScreenSize - 1);
+    float2 uv = (float2(pixel) + 0.5) / float2(ScreenSize);
+    float depth = Depth.SampleLevel(PointSampler, uv, 0).r;
+    float4 gbufferA = GBufferA.SampleLevel(PointSampler, uv, 0);
+    float4 gbufferB = GBufferB.SampleLevel(PointSampler, uv, 0);
+    float4 gbufferC = GBufferC.SampleLevel(PointSampler, uv, 0);
+
+    bool valid = depth < 0.999999 && uint(gbufferC.b * 255.0 + 0.5) == 1u;
+    float3 worldPosition = valid ? ReconstructPosition(uv, depth) : 0.0;
+    float3 normal = valid ? normalize(gbufferB.rgb * 2.0 - 1.0) : float3(0, 1, 0);
+    ScreenProbeRecord probe = (ScreenProbeRecord)0;
+    probe.WorldPositionDepth = float4(worldPosition, valid ? length(worldPosition - CameraPosition) : 0.0);
+    probe.WorldNormal = float4(normal, 0.0);
+    probe.ScreenPosition = float4(pixel, depth, 0.0);
+    probe.Status.x = valid ? 1u : 0u;
+    Probes[probeIndex] = probe;
+
+    float3 tangent;
+    float3 bitangent;
+    BuildBasis(normal, tangent, bitangent);
+    float rotation = Hash01(probeIndex * 747796405u + 2891336453u) * 6.28318530718;
+    [loop]
+    for (uint rayIndex = 0; rayIndex < RayCount; ++rayIndex)
+    {
+        uint queryIndex = probeIndex * RayCount + rayIndex;
+        float u = (rayIndex + 0.5) / RayCount;
+        float v = frac(Hash01(probeIndex * 277803737u + rayIndex * 1013904223u) + rotation);
+        float radius = sqrt(u);
+        float phi = 6.28318530718 * v;
+        float3 localDirection = float3(radius * cos(phi), radius * sin(phi), sqrt(max(0.0, 1.0 - u)));
+        float3 direction = normalize(tangent * localDirection.x + bitangent * localDirection.y + normal * localDirection.z);
+
+        SurfaceCacheQuery query = (SurfaceCacheQuery)0;
+        query.OriginDistance = float4(worldPosition + normal * 0.03, valid ? MaxTraceDistance : 0.0);
+        query.Direction = float4(direction, 0.0);
+        query.Control = uint4(0xffffffffu, valid ? 1u : 2u, 0u, 0u);
+        Queries[queryIndex] = query;
+    }
+}

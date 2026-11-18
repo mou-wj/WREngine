@@ -30,12 +30,14 @@ namespace Editor
         void SetOnOpenMeshViewer(std::function<void()> callback);
         void SetOnOpenVirtualGeometryViewer(std::function<void()> callback);
         void SetOnOpenTextureViewer(std::function<void()> callback);
+        void SetOnOpenGIViewer(std::function<void()> callback);
         void Draw() override;
     private:
         EditorScene& m_Scene;
         std::function<void()> m_OnOpenMeshViewer;
         std::function<void()> m_OnOpenVirtualGeometryViewer;
         std::function<void()> m_OnOpenTextureViewer;
+        std::function<void()> m_OnOpenGIViewer;
     };
 
     class SCENEEDITOR_API EditorScenePanel final : public ImGUISlate::ImPanelWidget

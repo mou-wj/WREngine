@@ -1,0 +1,36 @@
+#include "/Generated/ShaderParameters/ScreenProbeGatherParameters.sf"
+#include "/Generated/ShaderParameters/SceneEvnIBLLightParameters.sf"
+
+[numthreads(64, 1, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint index = thread.x;
+    if (index >= QueryCount)
+    {
+        return;
+    }
+
+    SurfaceCacheQueryResult hit = MaterialResults[index];
+    SurfaceCacheLightingQueryResult lighting = LightingResults[index];
+    ScreenProbeRadianceRecord result = (ScreenProbeRadianceRecord)0;
+
+    bool sdfHit = (hit.Status.z & 1u) != 0;
+    bool materialValid = (hit.Status.z & 2u) != 0;
+    bool lightingValid = (lighting.Status.z & 2u) != 0;
+    if (sdfHit && materialValid && lightingValid)
+    {
+        result.Radiance = float4(max(lighting.Radiance.rgb, 0.0), 1.0);
+        result.Status.x = 1u;
+    }
+    else if (!sdfHit)
+    {
+        float3 direction = normalize(Queries[index].Direction.xyz);
+        float3 sky = bHasEnvironment != 0u
+            ? IBLSpecularMap.SampleLevel(LinearClampIBLSampler, direction, 0).rgb
+            : float3(0.025, 0.035, 0.055);
+        result.Radiance = float4(max(sky, 0.0), 1.0);
+        result.Status.x = 1u;
+    }
+
+    Radiance[index] = result;
+}

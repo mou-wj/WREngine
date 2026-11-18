@@ -35,6 +35,8 @@ builder.Execute();
 
 AddCapturePasses 返回的是当前图的参数绑定；Register 每图注册四张中参与查询的三张外部纹理，并将当前 Card/Instance 元数据上传到 transient StructuredBuffer。不得跨 Builder 保存这些图内引用。CPU vector 对象由图 arena 保存，大载荷仍在 vector 堆存储，通过带 TransferDest 参数的原 RDG Pass 调用 UpdateBuffer，避免原始字节 arena 单页 64 KiB 的限制。
 
+CPU 发起批量查询时，`AddSurfaceCacheQueryPass(builder, cache, queries)` 会创建 Query Buffer 并由 RDG 上传；Screen Probe 这种 GPU 生产者可调用接收 `RenderGraphBufferRef` 和 queryCount 的重载，直接把前序 UAV 输出作为 SRV 输入给同一 Query Shader。两种入口共用 `SurfaceCacheQuery` 布局和结果格式，后者不会读回 CPU；Query/Result 均为图内临时数据，不能跨 Builder 缓存。
+
 本阶段不自动挂入 RenderModule 主场景，也不在每帧隐式全场景捕获；独立消费者显式编排，后续 Lighting/Radiosity 可以复用同一缓存与 Lookup，不需要重新从屏幕恢复材质。捕获编排完成标志只表示已经添加 Pass，不表示 GPU 已执行；图构建/执行失败时必须放弃该图和缓存内容，重新捕获或 Release，不能用部分结果继续查询。
 
 ## 独立直接光照缓存与全量更新

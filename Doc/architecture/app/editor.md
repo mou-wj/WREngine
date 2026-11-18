@@ -2,7 +2,7 @@
 
 ## 模块和边界
 
-`src/Editor/CMakeLists.txt` 纳入 SceneEditor、AssetEditor、MaterialEditor、NodeEditor、MeshViewer、TextureViewer、VirtualGeometryViewer、Editor 八个独立 DLL。Editor 与原 Application 都提供 ApplicationBase 实现，由 Launcher 选择其一；Editor 负责工程生命周期、菜单与应用组装，功能面板由各自模块实现。
+`src/Editor/CMakeLists.txt` 纳入 SceneEditor、AssetEditor、MaterialEditor、NodeEditor、MeshViewer、TextureViewer、VirtualGeometryViewer、GIViewer、Editor 九个独立 DLL。Editor 与原 Application 都提供 ApplicationBase 实现，由 Launcher 选择其一；Editor 负责工程生命周期、菜单与应用组装，功能面板由各自模块实现。
 
 | 实现 | 职责 |
 | --- | --- |
@@ -18,6 +18,7 @@
 | [MeshViewer / EditorMeshViewer](../../../src/Editor/MeshViewer/PublicHeader/EditorMeshViewer.h) | 从场景网格列表选择节点，单网格 Phong/线框预览、法线叠加与 LOD/顶点属性/区域检查 |
 | [VirtualGeometryViewer](../../../src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h) | 独立虚拟几何预览和生成层检查，调用 Renderer 的 Visibility、Resolve 和延迟光照 Pass |
 | [TextureViewer / EditorTextureViewer](../../../src/Editor/TextureViewer/PublicHeader/EditorTextureViewer.h) | 多来源纹理列表、二维画布、Mip/立方体面/数组层检查，来源由宿主回调提供 |
+| [GIViewer / EditorGIViewer](../../../src/Editor/GIViewer/PublicHeader/EditorGIViewer.h) | 独立 Lumen 阶段预览和可视化；通过 Renderer 的 LumenViewerRenderer 构图，不接入主场景绘制 |
 
 ## 依赖和模块协作
 
@@ -43,6 +44,10 @@ flowchart LR
     ImGuiSlate --> VirtualGeometryViewer
     Renderer --> VirtualGeometryViewer
     VirtualGeometryViewer --> Editor
+    Engine --> GIViewer
+    ImGuiSlate --> GIViewer
+    Renderer --> GIViewer
+    GIViewer --> Editor
     Engine --> TextureViewer
     ImGuiSlate --> TextureViewer
     RenderCore --> TextureViewer
@@ -50,13 +55,13 @@ flowchart LR
     SlateRHIRenderer --> Editor
 ```
 
-箭头从被依赖模块指向使用者。六个功能模块的公共接口导出到各自 PublicHeader，按目标名导出跨 DLL 接口。它们不依赖 Editor，也不相互依赖。Engine/ImGUISlate 不反向依赖任何编辑功能模块。NodeEditor 仅依赖 Engine/ImGuiSlate，通过同步查询/变更回调连接场景。MeshViewer 和 TextureViewer 通过宿主回调获取候选资源，使用 Engine 已有的 RenderCore 依赖录制独立预览，不直接依赖 Renderer。
+箭头从被依赖模块指向使用者。功能模块的公共接口导出到各自 PublicHeader，按目标名导出跨 DLL 接口。它们不依赖 Editor，也不相互依赖。Engine/ImGUISlate 不反向依赖任何编辑功能模块。NodeEditor 仅依赖 Engine/ImGuiSlate，通过同步查询/变更回调连接场景。MeshViewer 和 TextureViewer 通过宿主回调获取候选资源，使用 Engine 已有的 RenderCore 依赖录制独立预览，不直接依赖 Renderer。GIViewer 通过宿主回调借用当前场景和视图，独立创建预览 RenderGraph，并依赖 Renderer 执行 Lumen 阶段；其 Surface Cache/Screen Probe 输出不写入主场景渲染目标。
 
 AssetEditor 不再保存 EditorScene 引用：打开网格时调用 SetOnMeshOpened 设置的回调；赋材质时调用 SetOnMaterialAssigned 设置的回调，由宿主决定目标和是否成功。无网格处理回调时明确报错，无赋材质处理回调时禁用该操作。
 
 MaterialEditor 不再引用场景模块或资产面板类型。公共 MaterialEditorCallbacks 只包含查询当前组件、材质、纹理及通知变更的函数；EditorApplication 用 lambda 将这些接口连接到 SceneEditor/AssetEditor。Draw 时查询当前选择，避免额外缓存或固定一帧前的选择状态。函数在 UI 线程同步执行，组件指针只在当前调用中借用；没有异步回调或新资源管理器。
 
-六个功能模块均通过既有 ModuleManager 注册并提供启动/关闭状态。功能模块不全局持有窗口、场景或面板，EditorApplication 显式拥有其实例；先销毁窗口、面板和场景，再关闭功能模块。模块实例存在，不代表应该为它创建新的全局业务单例。
+各功能模块均通过既有 ModuleManager 注册并提供启动/关闭状态。功能模块不全局持有窗口、场景或面板，EditorApplication 显式拥有其实例；先销毁窗口、面板和场景，再关闭功能模块。模块实例存在，不代表应该为它创建新的全局业务单例。
 
 ### 光源节点与场景提示绘制
 
