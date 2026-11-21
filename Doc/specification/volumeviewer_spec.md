@@ -6,4 +6,12 @@
 
 基础预览使用既有的 GBuffer、场景深度、表面光照和颜色 Pass。测试场景及参数由界面模块持有，介质参数的类型由 Renderer 的 Volume 目录定义。 [预览入口](../../src/Editor/VolumeViewer/Private/EditorVolumeViewer.cpp) · [介质参数](../../src/Framework/Renderer/Private/Volume/VolumeRendering.h)
 
+## 体积调试
+
+勾选 **Enable volume** 以显示参与介质，取消勾选可查看原始场景。**Composite** 显示透射衰减后的背景与散射、自发光的合成。**Scattering** 和 **Transmittance** 分别显示积分辐射和 RGB 透射率。**Density** 与 **Froxels** 使用 **Slice** 查看指定深度层。**Medium** 可编辑介质范围、散射、吸收和自发光。 [积分与深度](../key_implemetion/algorithm/23-volume-rendering.md)
+
+## 验证范围
+
 隔离 Debug 构建验证了模块链接、Launcher 启动、首帧提交和 View 栏入口。交互验证停在工具栏，预览窗口的轨道操作、缩放和退出尚未进行界面复验。Launcher 日志仍有已有的 Vulkan Shader 模块诊断。
+
+`Tests.exe -test=VolumeRenderTest -rhi=<Vulkan|DirectX12|OpenGL>` 读回 2 和 10 世界单位深度的透射率分别约为 0.683861、0.138070，天空到 20 单位的透射率约为 0.018686。三个后端正常退出，并通过 RGB 消光、合成、清除密度和零消光自发光检查。

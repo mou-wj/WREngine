@@ -1,0 +1,17 @@
+#include "/Generated/ShaderParameters/VolumeMediumParameters.sf"
+#include "/volume/VolumeGrid.sf"
+
+[numthreads(4, 4, 4)]
+void MainCS(uint3 cell : SV_DispatchThreadID)
+{
+    if (any(cell >= FroxelSize))
+    {
+        return;
+    }
+    float density = max(0.0, MediumAbsorption.w);
+    float3 scattering = density * max(0.0, MediumScattering.rgb);
+    float3 absorption = density * max(0.0, MediumAbsorption.rgb);
+    MediumOutput[VolumeAddress(cell, 0)] = float4(scattering + absorption, density);
+    MediumOutput[VolumeAddress(cell, 1)] = float4(scattering, clamp(MediumScattering.w, -0.95, 0.95));
+    MediumOutput[VolumeAddress(cell, 2)] = float4(density * max(0.0, MediumEmission.rgb), 0);
+}

@@ -1,0 +1,47 @@
+#include "/Generated/ShaderParameters/VolumeIntegrateParameters.sf"
+#include "/volume/VolumeGrid.sf"
+
+float3 SegmentIntegral(float3 extinction, float3 opticalDepth, float3 attenuation, float length)
+{
+    // The linear limit also supports emissive media with zero extinction.
+    float3 exact = (1.0 - attenuation) / max(extinction, 1e-8);
+    return lerp(exact, length * (1.0 - 0.5 * opticalDepth), step(opticalDepth, 1e-3));
+}
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= ScreenSize))
+    {
+        return;
+    }
+    float2 center = float2(pixel) + 0.5;
+    float depth = SceneDepth.Load(int3(pixel, 0));
+    float3 rayDirection = normalize(VolumeWorldPosition(center, 0) - CameraPosition);
+    float zToDistance = rcp(max(dot(rayDirection, CameraForward), 1e-4));
+    float endDepth = depth >= 1.0 ? FarDistance :
+        clamp(dot(VolumeWorldPosition(center, depth) - CameraPosition, CameraForward), NearDistance, FarDistance);
+    uint2 tile = pixel / TileSize;
+    float3 radiance = 0.0;
+    float3 transmittance = 1.0;
+    float front = NearDistance;
+    [loop]
+    for (uint slice = 0; slice < FroxelSize.z && front < endDepth; ++slice)
+    {
+        uint3 cell = uint3(tile, slice);
+        float back = min(VolumeSliceDepth(float(slice + 1)), endDepth);
+        float length = max(0.0, back - front) * zToDistance;
+        float3 extinction = Medium.Load(int3(VolumeAddress(cell, 0), 0)).rgb;
+        float3 scattering = Medium.Load(int3(VolumeAddress(cell, 1), 0)).rgb;
+        float3 emission = Medium.Load(int3(VolumeAddress(cell, 2), 0)).rgb;
+        float3 source = scattering * max(AmbientRadiance, 0.0) + emission;
+        float3 opticalDepth = extinction * length;
+        float3 attenuation = exp(-opticalDepth);
+        radiance += transmittance * source * SegmentIntegral(extinction, opticalDepth, attenuation, length);
+        transmittance *= attenuation;
+        front = back;
+    }
+    ScatteringOutput[pixel] = float4(radiance, 1.0);
+    TransmittanceOutput[pixel] = float4(transmittance, 1.0);
+}

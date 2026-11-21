@@ -1,0 +1,29 @@
+#include "/Generated/ShaderParameters/VolumeGridParameters.sf"
+
+#define FroxelSize FroxelGrid.xyz
+#define TileSize FroxelGrid.w
+#define ScreenSize VolumeFrame.xy
+#define AtlasColumns VolumeFrame.z
+#define CameraPosition VolumeCameraOrigin.xyz
+#define NearDistance VolumeCameraOrigin.w
+#define CameraForward VolumeCameraAxis.xyz
+#define FarDistance VolumeCameraAxis.w
+
+float VolumeSliceDepth(float slice)
+{
+    return NearDistance * pow(FarDistance / NearDistance, slice / FroxelSize.z);
+}
+
+float3 VolumeWorldPosition(float2 pixel, float deviceDepth)
+{
+    float2 uv = pixel / float2(ScreenSize);
+    float2 ndc = uv * float2(2, -2) + float2(-1, 1);
+    float4 world = mul(InverseViewProjection, float4(ndc, deviceDepth, 1));
+    return world.xyz / world.w;
+}
+
+uint2 VolumeAddress(uint3 cell, uint slab)
+{
+    uint slice = cell.z + slab * FroxelSize.z;
+    return cell.xy + uint2(slice % AtlasColumns, slice / AtlasColumns) * FroxelSize.xy;
+}

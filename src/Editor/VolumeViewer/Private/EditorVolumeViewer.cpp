@@ -95,7 +95,8 @@ namespace Editor
                 desc.Height = height;
                 desc.Format = RHI::ERHIFormat::R32G32B32A32_Float;
                 desc.Usage = RHI::ERHITextureCreateFlag::RenderTarget | RHI::ERHITextureCreateFlag::ShaderResource |
-                    RHI::ERHITextureCreateFlag::UAV | RHI::ERHITextureCreateFlag::TransferSrc;
+                    RHI::ERHITextureCreateFlag::UAV | RHI::ERHITextureCreateFlag::TransferSrc |
+                    RHI::ERHITextureCreateFlag::TransferDest;
                 m_Color = std::make_unique<RenderCore::RenderTexture>(desc);
                 m_Color->InitRHIResource();
             }
@@ -115,9 +116,15 @@ namespace Editor
             view.FarClip = m_Camera.GetFarPlane();
             view.ViewMatrix = m_Camera.GetViewMatrix();
             view.ProjectionMatrix = m_Camera.GetProjectionMatrix();
+            view.ViewProjectionMatrix = m_Camera.GetViewProjectionMatrix();
+            view.InvViewProjectionMatrix = m_Camera.GetInverseViewProjectionMatrix();
             view.FrameIndex = m_FrameIndex++;
             view.FrameTimeSeconds = ImGui::GetTime();
             view.Flags = Engine::VF_EnableShadows;
+            view.DrawExtensions.push_back({[settings = Settings](auto& graph, const auto& currentView, auto color, auto depth)
+            {
+                Renderer::AddVolumePasses(graph, currentView, depth, color, settings);
+            }});
             Engine::SceneViewFamily family;
             family.Scene = m_Scene.get();
             family.RenderTarget = this;
@@ -126,7 +133,7 @@ namespace Editor
             Engine::GetRenderModuleInstance()->BeginRender(&family);
         }
 
-        Renderer::VolumeMedium Medium;
+        Renderer::VolumeRenderSettings Settings;
 
     private:
         Core::Float3 OrbitDirection() const
@@ -220,6 +227,32 @@ namespace Editor
             }
             ImGui::SameLine();
             ImGui::TextDisabled("Right drag: orbit   Middle drag: pan   Wheel: zoom");
+            auto& settings = m_Preview->Settings;
+            ImGui::Checkbox("Enable volume", &settings.bEnabled);
+            ImGui::SameLine();
+            const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels"};
+            int mode = static_cast<int>(settings.View);
+            ImGui::SetNextItemWidth(170.0f);
+            if (ImGui::Combo("View", &mode, views, IM_ARRAYSIZE(views)))
+            {
+                settings.View = static_cast<Renderer::EVolumeView>(mode);
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(130.0f);
+            ImGui::SliderFloat("Density", &settings.Medium.Density, 0.0f, 0.4f, "%.3f");
+            if (ImGui::CollapsingHeader("Medium"))
+            {
+                ImGui::ColorEdit3("Scattering coefficient", &settings.Medium.Scattering.X, ImGuiColorEditFlags_Float);
+                ImGui::ColorEdit3("Absorption coefficient", &settings.Medium.Absorption.X, ImGuiColorEditFlags_Float);
+                ImGui::ColorEdit3("Emission per unit", &settings.Medium.Emission.X, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+                ImGui::SliderFloat("Range", &settings.MaxDistance, 2.0f, 100.0f, "%.1f");
+            }
+            if (settings.View == Renderer::EVolumeView::Density || settings.View == Renderer::EVolumeView::Froxels)
+            {
+                int slice = settings.DebugSlice;
+                ImGui::SliderInt("Slice", &slice, 0, 31);
+                settings.DebugSlice = uint32_t(slice);
+            }
             const auto available = ImGui::GetContentRegionAvail();
             if (available.x >= 16.0f && available.y >= 16.0f)
             {

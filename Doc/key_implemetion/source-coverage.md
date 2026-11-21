@@ -59,7 +59,7 @@
 | [config/3rds/tinygltf.json](../../config/3rds/tinygltf.json) | 41 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [config/3rds/vulkan.json](../../config/3rds/vulkan.json) | 39 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## shaders（93 个条目）
+## shaders（97 个条目）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -156,6 +156,10 @@
 | [shaders/GI/SurfaceCacheDirect.sf](../../shaders/GI/SurfaceCacheDirect.sf) | 35 | 算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 | [shaders/GI/SurfaceCacheLightingDebug.sf](../../shaders/GI/SurfaceCacheLightingDebug.sf) | 38 | 渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 | [shaders/GI/SurfaceCacheLightingLookup.sf](../../shaders/GI/SurfaceCacheLightingLookup.sf) | 38 | 渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [shaders/volume/VolumeComposite.sf](../../shaders/volume/VolumeComposite.sf) | 37 | 算法、渲染 | [Volume](algorithm/23-volume-rendering.md) |
+| [shaders/volume/VolumeGrid.sf](../../shaders/volume/VolumeGrid.sf) | 29 | 算法、渲染 | [Volume](algorithm/23-volume-rendering.md) |
+| [shaders/volume/VolumeIntegrate.sf](../../shaders/volume/VolumeIntegrate.sf) | 47 | 算法、渲染 | [Volume](algorithm/23-volume-rendering.md) |
+| [shaders/volume/VolumeMedium.sf](../../shaders/volume/VolumeMedium.sf) | 17 | 算法、渲染 | [Volume](algorithm/23-volume-rendering.md) |
 
 ## src/Application（13 个文件）
 
@@ -181,7 +185,7 @@
 | --- | ---: | --- | --- |
 | [src/CMakeLists.txt](../../src/CMakeLists.txt) | 9 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## src/Editor（50 个文件）
+## src/Editor（54 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -242,6 +246,10 @@
 | [src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.h](../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryPreview.h) | 50 | 内存、接口 | [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Editor/VirtualGeometryViewer/Private/VirtualGeometryViewerModule.cpp](../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryViewerModule.cpp) | 15 | 接口/配置 | [架构：editor](../architecture/app/editor.md) |
 | [src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h](../../src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h) | 59 | 接口/内存 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) |
+| [src/Editor/VolumeViewer/CMakeLists.txt](../../src/Editor/VolumeViewer/CMakeLists.txt) | 9 | 渲染、接口 | [Volume](../specification/volumeviewer_spec.md) |
+| [src/Editor/VolumeViewer/Private/EditorVolumeViewer.cpp](../../src/Editor/VolumeViewer/Private/EditorVolumeViewer.cpp) | 271 | 渲染、接口 | [Volume](../specification/volumeviewer_spec.md) |
+| [src/Editor/VolumeViewer/Private/VolumeViewerModule.cpp](../../src/Editor/VolumeViewer/Private/VolumeViewerModule.cpp) | 17 | 渲染、接口 | [Volume](../specification/volumeviewer_spec.md) |
+| [src/Editor/VolumeViewer/PublicHeader/EditorVolumeViewer.h](../../src/Editor/VolumeViewer/PublicHeader/EditorVolumeViewer.h) | 25 | 渲染、接口 | [Volume](../specification/volumeviewer_spec.md) |
 
 ## src/Framework（1 个文件）
 
@@ -416,7 +424,7 @@
 | [src/Framework/RenderCore/PublicHeader/ToolShaders.h](../../src/Framework/RenderCore/PublicHeader/ToolShaders.h) | 58 | 渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Framework/RenderCore/PublicHeader/VertexFactory.h](../../src/Framework/RenderCore/PublicHeader/VertexFactory.h) | 195 | 渲染 | [08-mesh-import-and-geometry](algorithm/08-mesh-import-and-geometry.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 
-## src/Framework/Renderer（85 个文件）
+## src/Framework/Renderer（87 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -505,6 +513,8 @@
 | [src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h](../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h) | 134 | 内存 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 | [src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.cpp](../../src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.cpp) | 506 | 内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 | [src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.h](../../src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.h) | 98 | 内存 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [src/Framework/Renderer/Private/Volume/VolumeRendering.cpp](../../src/Framework/Renderer/Private/Volume/VolumeRendering.cpp) | 199 | 渲染、缓存 | [Volume](algorithm/23-volume-rendering.md) |
+| [src/Framework/Renderer/Private/Volume/VolumeRendering.h](../../src/Framework/Renderer/Private/Volume/VolumeRendering.h) | 44 | 渲染、缓存 | [Volume](algorithm/23-volume-rendering.md) |
 
 ## src/Framework/RHI（24 个文件）
 
@@ -670,7 +680,7 @@
 | [src/Lancher/Loop.h](../../src/Lancher/Loop.h) | 8 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Lancher/main.cpp](../../src/Lancher/main.cpp) | 16 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## src/Tests（25 个文件）
+## src/Tests（26 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -700,6 +710,7 @@
 | [src/Tests/SurfaceCacheRadiosityTest.cpp](../../src/Tests/SurfaceCacheRadiosityTest.cpp) | 1259 | 测试、GPU 读回 | [Radiosity](algorithm/18-surface-cache-radiosity.md) / [混合反射](algorithm/21-hybrid-reflections.md) / [工程时序](performance/13-screen-probe-gather.md) / [硬件光追资源](performance/07-ray-tracing-as-and-sbt.md#giviewer-场景快照与-rdg) / [体素光照](algorithm/22-voxel-lighting.md) |
 | [src/Tests/ScreenProbeFilterTest.cpp](../../src/Tests/ScreenProbeFilterTest.cpp) | 262 | 测试、GPU 读回 | [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) |
 | [src/Tests/SurfaceCacheDirectLightingTest.cpp](../../src/Tests/SurfaceCacheDirectLightingTest.cpp) | 399 | 并发/内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [src/Tests/VolumeRenderTest.cpp](../../src/Tests/VolumeRenderTest.cpp) | 188 | 测试、GPU 读回 | [Volume](algorithm/23-volume-rendering.md) |
 
 ## 后续维护
 

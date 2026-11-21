@@ -1,6 +1,10 @@
 #pragma once
 
 #include "Math.hpp"
+#include "RenderGraphResource.h"
+
+namespace Engine { class SceneView; }
+namespace RenderCore { class RenderGraphBuilder; }
 
 namespace Renderer
 {
@@ -13,4 +17,28 @@ namespace Renderer
         Core::Float3 Emission{0.0f, 0.0f, 0.0f};
         float Anisotropy = 0.0f;
     };
+
+    enum class EVolumeView : uint32_t
+    {
+        Composite,
+        Scattering,
+        Transmittance,
+        Density,
+        Froxels
+    };
+
+    struct VolumeRenderSettings
+    {
+        VolumeMedium Medium;
+        Core::Float3 AmbientRadiance{0.24f, 0.28f, 0.32f};
+        float MaxDistance = 45.0f;
+        EVolumeView View = EVolumeView::Composite;
+        uint32_t DebugSlice = 16;
+        bool bEnabled = true;
+    };
+
+    // The caller supplies one full-size perspective view and a transferable, linear scene color.
+    RENDERER_API void AddVolumePasses(RenderCore::RenderGraphBuilder& builder, const Engine::SceneView& view,
+        RenderCore::RenderGraphTextureRef sceneDepth, RenderCore::RenderGraphTextureRef sceneColor,
+        const VolumeRenderSettings& settings);
 }
