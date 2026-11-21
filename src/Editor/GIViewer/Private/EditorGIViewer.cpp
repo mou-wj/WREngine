@@ -26,11 +26,12 @@ namespace Editor
             {"Radiosity / Indirect Atlas", Renderer::ELumenViewerMode::RadiosityIndirectAtlas},
             {"Radiosity / Iteration Delta", Renderer::ELumenViewerMode::RadiosityIterationDelta},
             {"World Probes / Radiance Atlas", Renderer::ELumenViewerMode::WorldProbeAtlas},
+            {"Voxel Lighting / Axis Slice", Renderer::ELumenViewerMode::VoxelLightingSlice},
             {"Screen Probes / Placement", Renderer::ELumenViewerMode::ProbePlacement},
             {"Screen Probes / Ray Directions", Renderer::ELumenViewerMode::ProbeRayDirections},
             {"Screen Probes / Hit Ratio", Renderer::ELumenViewerMode::ProbeHitRatio},
             {"Screen Probes / Radiance", Renderer::ELumenViewerMode::ProbeRadiance},
-            {"Screen Probes / World Cache Hits", Renderer::ELumenViewerMode::ProbeWorldCacheHits},
+            {"Screen Probes / Cache Source", Renderer::ELumenViewerMode::ProbeWorldCacheHits},
             {"Screen Probes / Trace Source", Renderer::ELumenViewerMode::ProbeTraceSource},
             {"GI / Raw", Renderer::ELumenViewerMode::ProbeRawDiffuse},
             {"GI / Temporal", Renderer::ELumenViewerMode::ProbeTemporalDiffuse},
@@ -83,6 +84,8 @@ namespace Editor
                 return "Absolute change since the previous bounce, amplified 32x. Darkening indicates convergence.";
             case Renderer::ELumenViewerMode::WorldProbeAtlas:
                 return "Fine and coarse grids, six XZ slices per grid. Yellow borders are updated probes, dim borders are pending. Pink texels are invalid.";
+            case Renderer::ELumenViewerMode::VoxelLightingSlice:
+                return "XZ slice. Columns X, Y, Z. Positive axes above negative axes. Yellow borders mark updates; pink marks rejected lobes.";
             case Renderer::ELumenViewerMode::ProbePlacement:
                 return "Screen-space probe placement, surface normals, and tile boundaries.";
             case Renderer::ELumenViewerMode::ProbeRayDirections:
@@ -94,7 +97,7 @@ namespace Editor
             case Renderer::ELumenViewerMode::IndirectDiffuse:
                 return "Indirect diffuse after temporal accumulation and edge-aware spatial filtering.";
             case Renderer::ELumenViewerMode::ProbeWorldCacheHits:
-                return "Cyan and violet show rays served by the fine or coarse grid. Gray means full tracing or a nearer SDF hit.";
+                return "Gold: voxel lighting. Cyan: fine world probes. Violet: coarse world probes. Gray: geometry trace or environment.";
             case Renderer::ELumenViewerMode::ProbeTraceSource:
                 return "Per-tile geometry hits. Yellow: SDF. Cyan: hardware with a Card. Magenta: hardware without a Card.";
             case Renderer::ELumenViewerMode::ProbeRawDiffuse:
@@ -400,15 +403,27 @@ namespace Editor
                 ImGui::SameLine();
                 ImGui::Text("Iteration %u / %u", m_Preview->GetRadiosityIteration(), m_Radiosity.IterationLimit);
             }
-            if (bScreenProbe || m_Mode == Renderer::ELumenViewerMode::WorldProbeAtlas || bReflections)
+            const bool bVoxelView = m_Mode == Renderer::ELumenViewerMode::VoxelLightingSlice;
+            if (bScreenProbe || m_Mode == Renderer::ELumenViewerMode::WorldProbeAtlas || bVoxelView || bReflections)
             {
-                if (m_Mode != Renderer::ELumenViewerMode::WorldProbeAtlas)
+                if (bScreenProbe || bReflections)
                 {
                     ImGui::Checkbox("Use world cache", &m_WorldCache.bEnabled);
                     ImGui::SameLine();
                 }
                 ImGui::SetNextItemWidth(140.0f);
                 ImGui::SliderInt("World probes per frame", &m_WorldCache.UpdateBudget, 0, 128);
+                if (bScreenProbe)
+                {
+                    ImGui::BeginDisabled(!m_WorldCache.bEnabled);
+                    ImGui::Checkbox("Use voxel lighting", &m_WorldCache.bVoxelEnabled);
+                    ImGui::EndDisabled();
+                }
+                if (bVoxelView)
+                {
+                    ImGui::SetNextItemWidth(140.0f);
+                    ImGui::SliderInt("Y slice", &m_WorldCache.VoxelSlice, 0, 5);
+                }
             }
             if (m_Mode == Renderer::ELumenViewerMode::SurfaceCardAtlas)
             {

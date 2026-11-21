@@ -1,0 +1,39 @@
+#include "/Generated/ShaderParameters/VoxelLightingDebugParameters.sf"
+#include "/Generated/ShaderParameters/WorldRadianceCacheParameters.sf"
+#include "/Generated/ShaderParameters/VoxelLightingParameters.sf"
+#include "/GI/VoxelLightingGrid.sf"
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    if (any(thread.xy >= OutputSize))
+    {
+        return;
+    }
+    uint tileSize = 12u;
+    uint faceSize = VoxelGridSize * tileSize;
+    uint2 pixel = thread.xy * uint2(3u, 2u) * faceSize / OutputSize;
+    uint axis = pixel.x / faceSize;
+    uint face = axis * 2u + pixel.y / faceSize;
+    uint2 local = pixel % faceSize;
+    int3 cell = VoxelOrigin + int3(local.x / tileSize, Slice, local.y / tileSize);
+    uint3 address = VoxelAddress(cell, VoxelGridSize, 0u);
+    uint slot = ((GridSize + address.z) * GridSize + address.y) * GridSize + address.x;
+    WorldRadianceProbeRecord probe = WorldProbes[slot];
+    float4 radiance = VoxelRadiance.Load(int4(VoxelAddress(cell, VoxelGridSize, face), 0));
+    float3 color = radiance.rgb / (1.0 + radiance.rgb);
+    if (radiance.w == 0.0)
+    {
+        color = float3(0.14, 0.04, 0.10);
+    }
+    if (probe.Status.x == 0u)
+    {
+        color = 0.035;
+    }
+    if (any(local % tileSize == 0u))
+    {
+        bool bUpdated = probe.Status.y != 0u || (bVoxelRefreshedAll != 0u && probe.Status.x != 0u);
+        color = bUpdated ? float3(1.0, 0.72, 0.15) : color * 0.3;
+    }
+    DebugOutput[thread.xy] = float4(color, 1.0);
+}

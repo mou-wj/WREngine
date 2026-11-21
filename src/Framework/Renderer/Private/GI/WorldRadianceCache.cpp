@@ -1,4 +1,5 @@
 #include "WorldRadianceCache.h"
+#include "VoxelLighting.h"
 
 #include "GlobalShader.h"
 #include "RHIPipelineStateCache.h"
@@ -43,6 +44,7 @@ namespace Renderer
 
     BEGIN_SHADER_PARAMETER_STRUCT(WorldRadianceRayLookupParameters)
         SHADER_PARAMETER_STRUCT_REFERENCE(WorldRadianceCacheParameters, Cache)
+        SHADER_PARAMETER_STRUCT_REFERENCE(VoxelLightingParameters, Voxels)
         SHADER_PARAMETER(uint32_t, QueryCount)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheQuery, ScreenQueries)
         SHADER_PARAMETER_RDG_RWSTRUCTURED_BUFFER(SurfaceCacheQuery, TraceQueries)
@@ -76,9 +78,16 @@ namespace Renderer
     class WorldRadianceRayLookupCS : public GlobalShader
     {
     public:
+        static constexpr char USE_VOXELS[] = "WORLD_RADIANCE_USE_VOXELS";
+        using PermutationDomain = ShaderPermutationDomain<FPermutationDimensionBool<USE_VOXELS>>;
         DECLARE_GLOBAL_SHADER_TYPE(WorldRadianceRayLookupCS)
         static bool ShouldCompilePermutation(const ShaderPermutationParameters&) { return true; }
-        static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters&, ShaderCompilerEnvironment&) {}
+        static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters& parameters, ShaderCompilerEnvironment& environment)
+        {
+            PermutationDomain domain;
+            domain.SetFromId(parameters.PermutationId);
+            domain.ModifyCompilationEnvironment(environment);
+        }
         static const ShaderParametersMetadata* GetShaderParameterMetadata() { return WorldRadianceRayLookupParameters::GetMetaData(); }
     };
 
@@ -104,9 +113,10 @@ namespace Renderer
         constexpr uint64_t RefreshPeriod = 32;
 
         template<class Shader, class Parameters>
-        void AddCompute(RenderGraphBuilder& builder, const char* name, Parameters* params, uint32_t x, uint32_t y = 1)
+        void AddCompute(RenderGraphBuilder& builder, const char* name, Parameters* params, uint32_t x, uint32_t y = 1,
+            uint32_t permutation = 0)
         {
-            auto shader = GShaderMap.GetShader<Shader>(0);
+            auto shader = GShaderMap.GetShader<Shader>(permutation);
             if (!shader)
             {
                 throw std::runtime_error(std::string("World Radiance Cache: missing shader for ") + name);
@@ -336,7 +346,8 @@ namespace Renderer
     }
 
     WorldRadianceCacheRayOutput WorldRadianceCache::AddRayLookupPass(RenderGraphBuilder& builder,
-        const WorldRadianceCacheParameters& cache, RenderGraphBufferRef queries, uint32_t queryCount)
+        const WorldRadianceCacheParameters& cache, RenderGraphBufferRef queries, uint32_t queryCount,
+        const VoxelLightingParameters* voxels)
     {
         WorldRadianceCacheRayOutput output;
         output.Queries = CreateBuffer(builder, "ScreenProbe.TraceQueries", sizeof(SurfaceCacheQuery), queryCount,
@@ -347,11 +358,16 @@ namespace Renderer
 
         auto* params = builder.AllocateParameter<WorldRadianceRayLookupParameters>();
         params->Cache = cache;
+        if (voxels)
+        {
+            params->Voxels = *voxels;
+        }
         params->QueryCount = queryCount;
         params->ScreenQueries = ReadBuffer(builder, queries);
         params->TraceQueries = WriteBuffer(builder, output.Queries);
         params->CacheCandidates = WriteBuffer(builder, output.Candidates);
-        AddCompute<WorldRadianceRayLookupCS>(builder, "WorldRadianceCacheRayLookup", params, (queryCount + 63) / 64);
+        AddCompute<WorldRadianceRayLookupCS>(builder, "WorldRadianceCacheRayLookup", params, (queryCount + 63) / 64, 1,
+            voxels ? 1u : 0u);
         return output;
     }
 }

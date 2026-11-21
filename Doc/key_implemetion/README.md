@@ -77,6 +77,7 @@
 | [World Space Radiance Cache](algorithm/19-world-radiance-cache.md) | 两级网格如何跨帧复用节点，方向光照怎样表示，何时可截短屏幕射线？ |
 | [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) | 如何用深度法线重投影、识别遮挡失效、抑制历史拖影并保留光照边界？ |
 | [GIViewer 混合反射](algorithm/21-hybrid-reflections.md) | 屏幕深度、Mesh SDF 与 Vulkan 硬件如何提供命中？怎样恢复交点并完成镜面着色？ |
+| [GI Voxel Lighting](algorithm/22-voxel-lighting.md) | 如何将世界探针重采样为六轴辐射，安全地进行远场查询并在必要时回退？ |
 
 ## 如何阅读和核查
 

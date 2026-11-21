@@ -18,7 +18,7 @@
 | [MeshViewer / EditorMeshViewer](../../../src/Editor/MeshViewer/PublicHeader/EditorMeshViewer.h) | 从场景网格列表选择节点，单网格 Phong/线框预览、法线叠加与 LOD/顶点属性/区域检查 |
 | [VirtualGeometryViewer](../../../src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h) | 独立虚拟几何预览和生成层检查，调用 Renderer 的 Visibility、Resolve 和延迟光照 Pass |
 | [TextureViewer / EditorTextureViewer](../../../src/Editor/TextureViewer/PublicHeader/EditorTextureViewer.h) | 多来源纹理列表、二维画布、Mip/立方体面/数组层检查，来源由宿主回调提供 |
-| [GIViewer / EditorGIViewer](../../../src/Editor/GIViewer/PublicHeader/EditorGIViewer.h) | 独立 Lumen 阶段预览和可视化；通过 Renderer 的 LumenViewerRenderer 构图，不接入主场景绘制 |
+| [GIViewer / EditorGIViewer](../../../src/Editor/GIViewer/PublicHeader/EditorGIViewer.h) | 独立 Lumen 阶段预览和可视化；通过 Renderer 的 GIViewerRenderer 构图，不接入主场景绘制 |
 
 ## 依赖和模块协作
 

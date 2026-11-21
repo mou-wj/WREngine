@@ -1,6 +1,10 @@
 #include "/Generated/ShaderParameters/WorldRadianceRayLookupParameters.sf"
 #include "/Generated/ShaderParameters/WorldRadianceCacheParameters.sf"
 #include "/GI/WorldRadianceLookup.sf"
+#if WORLD_RADIANCE_USE_VOXELS
+#include "/Generated/ShaderParameters/VoxelLightingParameters.sf"
+#include "/GI/VoxelLightingLookup.sf"
+#endif
 
 [numthreads(64, 1, 1)]
 void MainCS(uint3 thread : SV_DispatchThreadID)
@@ -18,7 +22,14 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     {
         float3 direction = normalize(query.Direction.xyz);
         float3 position = query.OriginDistance.xyz + prefix * direction;
-        candidate.RadianceLevel = LookupWorldRadiance(position, direction, query.OriginDistance.w - prefix);
+        float remaining = query.OriginDistance.w - prefix;
+#if WORLD_RADIANCE_USE_VOXELS
+        candidate.RadianceLevel = LookupVoxelLighting(position, direction, remaining);
+#endif
+        if (candidate.RadianceLevel.w == 0.0)
+        {
+            candidate.RadianceLevel = LookupWorldRadiance(position, direction, remaining);
+        }
         if (candidate.RadianceLevel.w > 0.0)
         {
             query.OriginDistance.w = prefix;

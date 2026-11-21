@@ -40,7 +40,7 @@ TexID 当前编码借用的 RenderTexture 指针，不是资产 ID。调用方�
 
 WindowRenderer 提交实际 GUI draw 后，对 DrawResources.SampledTextures 写 SRV 状态和该 draw submission 的 Fence；顶点/索引缓冲也在这里更新。这些记录不能搬到未提交 GUI 访问的场景渲染器中，场景完成 Fence 也不能替代 GUI 后续采样的 Fence。
 
-GIViewer 的预览颜色由 `GIViewerPreview` 持有。在同一 UI 线程上，标题栏关闭按钮可以在 `ImGui::Begin` 内将 `m_bOpen` 置为 `false`，同时 `Begin` 仍返回 `true`。`EditorGIViewer::Draw` 因此同时检查这两个状态，关闭帧只结束 ImGui 窗口并调用 `GIViewerPreview::Reset`，不把即将释放的颜色纹理写入本帧 `ImDrawData`。`LumenViewerRenderer::Reset` 沿用颜色纹理 Tracker 中的队列和 Fence，等待已提交的访问完成后释放缓存，然后 `GIViewerPreview` 释放颜色纹理。关闭的等待范围仍由最后一次实际访问决定。源码与复测见 [GIViewer 关闭故障记录](../../dev/bugfix/故障与修复记录-2026-11-20.md)。
+GIViewer 的预览颜色由 `GIViewerPreview` 持有。在同一 UI 线程上，标题栏关闭按钮可以在 `ImGui::Begin` 内将 `m_bOpen` 置为 `false`，同时 `Begin` 仍返回 `true`。`EditorGIViewer::Draw` 因此同时检查这两个状态，关闭帧只结束 ImGui 窗口并调用 `GIViewerPreview::Reset`，不把即将释放的颜色纹理写入本帧 `ImDrawData`。`GIViewerRenderer::Reset` 沿用颜色纹理 Tracker 中的队列和 Fence，等待已提交的访问完成后释放缓存，然后 `GIViewerPreview` 释放颜色纹理。关闭的等待范围仍由最后一次实际访问决定。源码与复测见 [GIViewer 关闭故障记录](../../dev/bugfix/故障与修复记录-2026-11-20.md)。
 
 ## 关闭与边界
 

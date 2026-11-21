@@ -25,6 +25,6 @@ namespace Editor
     private:
         void WaitForLastDraw();
         std::unique_ptr<RenderCore::RenderTexture> m_Color;
-        Renderer::LumenViewerRenderer m_Renderer;
+        Renderer::GIViewerRenderer m_Renderer;
     };
 }

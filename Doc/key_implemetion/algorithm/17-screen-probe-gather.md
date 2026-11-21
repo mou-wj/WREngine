@@ -48,7 +48,7 @@ GI_diffuse = BaseColor * (1-Metallic) * AO * (E_r/π)
 
 ## GIViewer 中的 RenderGraph 顺序
 
-`LumenViewerRenderer::AddPasses` 在 Viewer 自己的 Builder 中建立预览颜色、深度、深度金字塔和 GBuffer，并调用独立 `DefferedSceneRenderer` 生成本预览的场景缓冲。入口持有并注册材质、光照和世界缓存，按显示模式追加调试 Pass 或 `AddScreenProbeGatherPasses`。GI 模式先输出原始屏幕间接光，再由 `ScreenProbeTemporal` 和可选的 `ScreenProbeSpatial` 写 Viewer 预览颜色。其他 Probe 模式直接写调试结果。 [GI 时空滤波](20-gi-temporal-spatial-filter.md) · [RDG 时序](../performance/13-screen-probe-gather.md#单图-rdg-pass-与同步)
+`GIViewerRenderer::AddPasses` 在 Viewer 自己的 Builder 中建立预览颜色、深度、深度金字塔和 GBuffer，并调用独立 `DefferedSceneRenderer` 生成本预览的场景缓冲。入口持有并注册材质、光照和世界缓存，按显示模式追加调试 Pass 或 `AddScreenProbeGatherPasses`。GI 模式先输出原始屏幕间接光，再由 `ScreenProbeTemporal` 和可选的 `ScreenProbeSpatial` 写 Viewer 预览颜色。其他 Probe 模式直接写调试结果。 [GI 时空滤波](20-gi-temporal-spatial-filter.md) · [RDG 时序](../performance/13-screen-probe-gather.md#单图-rdg-pass-与同步)
 
 Pass 之间只传 RDG Texture/Buffer 引用。RDG 元数据声明 GBuffer/Atlas/查询结果 SRV、Probe/Query/Radiance Buffer UAV 与输出 Texture UAV；资源依赖和状态转换由现有 RenderGraph 编排。本实现没有修改 RenderGraphBuilder、RHI 访问意图或资源生命周期接口。ScreenProbe Gather 的可视化与输入附件来自 Viewer 的预览图，不等同于常规主渲染流程中的既有 ScreenSpaceGI/SSR。
 

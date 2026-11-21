@@ -6,6 +6,7 @@
 
 namespace Renderer
 {
+    struct VoxelLightingParameters;
     BEGIN_SHADER_PARAMETER_STRUCT(WorldRadianceProbeRecord)
         SHADER_PARAMETER(Core::Float4, PositionSpacing)
         SHADER_PARAMETER(Core::UInt4, Status)
@@ -47,7 +48,8 @@ namespace Renderer
         static void AddDebugPass(RenderCore::RenderGraphBuilder& builder, const WorldRadianceCacheParameters& cache,
             RenderCore::RenderGraphTextureRef output);
         static WorldRadianceCacheRayOutput AddRayLookupPass(RenderCore::RenderGraphBuilder& builder,
-            const WorldRadianceCacheParameters& cache, RenderCore::RenderGraphBufferRef queries, uint32_t queryCount);
+            const WorldRadianceCacheParameters& cache, RenderCore::RenderGraphBufferRef queries, uint32_t queryCount,
+            const VoxelLightingParameters* voxels = nullptr);
 
     private:
         static constexpr uint32_t GridSize = 6;

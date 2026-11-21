@@ -1,0 +1,15 @@
+uint3 VoxelAddress(int3 cell, uint size, uint slab)
+{
+    int width = int(size);
+    uint3 address = uint3((cell % width + width) % width);
+    address.z += slab * size;
+    return address;
+}
+
+uint VoxelFace(float3 direction)
+{
+    float3 a = abs(direction);
+    float largest = max(a.x, max(a.y, a.z));
+    uint axis = a.x >= largest - 1e-6 ? 0u : (a.y >= largest - 1e-6 ? 1u : 2u);
+    return axis * 2u + (direction[axis] < 0.0 ? 1u : 0u);
+}

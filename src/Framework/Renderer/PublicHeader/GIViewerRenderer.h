@@ -43,7 +43,8 @@ namespace Renderer
         ReflectionRadiance,
         ReflectionContribution,
         ReflectionHitInstance,
-        ProbeTraceSource
+        ProbeTraceSource,
+        VoxelLightingSlice
     };
 
     enum class ELumenViewerCardView : uint32_t
@@ -69,7 +70,7 @@ namespace Renderer
         Core::UInt2 AtlasSize{};
     };
 
-    class LumenViewerRendererState;
+    class GIViewerRendererState;
 
     struct LumenViewerRadiositySettings
     {
@@ -84,6 +85,8 @@ namespace Renderer
     {
         bool bEnabled = true;
         int UpdateBudget = 24;
+        bool bVoxelEnabled = false;
+        int VoxelSlice = 3;
     };
 
     struct LumenViewerRayTracingInfo
@@ -96,13 +99,13 @@ namespace Renderer
     };
 
     // Builds the Lumen stages into a caller-owned preview target and cache lifetime.
-    class RENDERER_API LumenViewerRenderer
+    class RENDERER_API GIViewerRenderer
     {
     public:
-        LumenViewerRenderer();
-        ~LumenViewerRenderer();
-        LumenViewerRenderer(const LumenViewerRenderer&) = delete;
-        LumenViewerRenderer& operator=(const LumenViewerRenderer&) = delete;
+        GIViewerRenderer();
+        ~GIViewerRenderer();
+        GIViewerRenderer(const GIViewerRenderer&) = delete;
+        GIViewerRenderer& operator=(const GIViewerRenderer&) = delete;
 
         bool AddPasses(RenderCore::RenderGraphBuilder& builder, Engine::SceneInterface* scene,
             const Engine::SceneView& view, RenderCore::RenderTexture* output, ELumenViewerMode mode,
@@ -115,6 +118,6 @@ namespace Renderer
         void Reset(RenderCore::RenderTexture* lastOutput = nullptr);
 
     private:
-        std::unique_ptr<LumenViewerRendererState> m_State;
+        std::unique_ptr<GIViewerRendererState> m_State;
     };
 }

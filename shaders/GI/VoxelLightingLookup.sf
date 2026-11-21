@@ -1,0 +1,111 @@
+#include "/GI/VoxelLightingGrid.sf"
+
+// Axis signs select lobes. Squared components of the unit direction provide a partition of unity.
+bool ReadVoxelDirection(int3 cell, float3 direction, out float3 radiance, out float2 depth, out bool bSky)
+{
+    uint dominantFace = VoxelFace(direction);
+    float4 dominant = VoxelRadiance.Load(int4(VoxelAddress(cell, VoxelGridSize, dominantFace), 0));
+    radiance = 0.0;
+    depth = float2(1e30, 0.0);
+    bSky = dominant.w < 0.0;
+    if (dominant.w == 0.0)
+    {
+        return false;
+    }
+    float weightSum = 0.0;
+    [unroll]
+    for (uint axis = 0u; axis < 3u; ++axis)
+    {
+        float weight = direction[axis] * direction[axis];
+        if (weight <= 1e-6)
+        {
+            continue;
+        }
+        uint face = axis * 2u + (direction[axis] < 0.0 ? 1u : 0u);
+        float4 lobe = face == dominantFace ? dominant : VoxelRadiance.Load(int4(VoxelAddress(cell, VoxelGridSize, face), 0));
+        if (lobe.w == 0.0 || bSky != (lobe.w < 0.0))
+        {
+            continue;
+        }
+        weightSum += weight;
+        radiance += lobe.rgb * weight;
+        depth.x = min(depth.x, abs(lobe.w));
+        if (!bSky)
+        {
+            depth.y = max(depth.y, VoxelRadiance.Load(int4(VoxelAddress(cell, VoxelGridSize, 6u + face), 0)).x);
+        }
+    }
+    radiance /= max(weightSum, 1e-8);
+    return weightSum >= 0.85;
+}
+
+bool IsVoxelConnectionClear(int3 cell, float3 separation, float distance)
+{
+    float3 direction = separation / distance;
+    [unroll]
+    for (uint axis = 0u; axis < 3u; ++axis)
+    {
+        if (abs(direction[axis]) <= 0.001)
+        {
+            continue;
+        }
+        uint face = axis * 2u + (direction[axis] < 0.0 ? 1u : 0u);
+        float clearance = VoxelRadiance.Load(int4(VoxelAddress(cell, VoxelGridSize, 6u + face), 0)).y;
+        if (clearance < distance + 0.15 * VoxelSpacing)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+float4 LookupVoxelLighting(float3 position, float3 direction, float remainingDistance)
+{
+    float3 grid = position / VoxelSpacing;
+    int3 base = int3(floor(grid));
+    if (any(base < VoxelOrigin) || any(base + 1 >= VoxelOrigin + int(VoxelGridSize)))
+    {
+        return 0.0;
+    }
+
+    float3 fraction = frac(grid);
+    float3 radianceSum = 0.0;
+    float weightSum = 0.0, skyWeight = 0.0;
+    [loop]
+    for (uint corner = 0u; corner < 8u; ++corner)
+    {
+        uint3 offset = uint3(corner & 1u, (corner >> 1u) & 1u, corner >> 2u);
+        float3 factors = lerp(1.0 - fraction, fraction, float3(offset));
+        float weight = factors.x * factors.y * factors.z;
+        if (weight <= 1e-5)
+        {
+            continue;
+        }
+
+        int3 cell = base + int3(offset);
+        float3 separation = position - float3(cell) * VoxelSpacing;
+        float distance = length(separation);
+        float3 radiance;
+        float2 depth;
+        bool bSky;
+        if (!ReadVoxelDirection(cell, direction, radiance, depth, bSky) || depth.x < distance + 0.15 * VoxelSpacing ||
+            (bSky ? depth.x < remainingDistance + distance : depth.y + distance > remainingDistance) ||
+            (!bSky && depth.y - depth.x > max(VoxelSpacing, 0.35 * depth.x)))
+        {
+            continue;
+        }
+        if (distance > 0.05 && !IsVoxelConnectionClear(cell, separation, distance))
+        {
+            continue;
+        }
+        radianceSum += radiance * weight;
+        weightSum += weight;
+        skyWeight += bSky ? weight : 0.0;
+    }
+    if (weightSum < 0.75 || (skyWeight > 1e-5 && weightSum - skyWeight > 1e-5))
+    {
+        return 0.0;
+    }
+    // Values 1 and 2 are the original World Radiance Cache levels.
+    return float4(radianceSum / weightSum, 3.0);
+}

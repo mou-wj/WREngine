@@ -3,6 +3,7 @@
 #include "../Framework/Renderer/Private/GI/ScreenProbeGather.h"
 #include "../Framework/Renderer/Private/GI/Reflections.h"
 #include "../Framework/Renderer/Private/GI/GIRayTracing.h"
+#include "../Framework/Renderer/Private/GI/VoxelLighting.h"
 #include "DistanceFieldMgr.h"
 #include "GlobalShader.h"
 #include "MaterialCore.h"
@@ -151,7 +152,8 @@ namespace Test
             std::erase_if(globals, [=](const auto& entry)
             {
                 return !entry.first.starts_with("SurfaceCache") && entry.first != "PositionOnlyVS" &&
-                    !(bWorldCache && (entry.first.starts_with("WorldRadiance") || entry.first.starts_with("ScreenProbe"))) &&
+                    !(bWorldCache && (entry.first.starts_with("WorldRadiance") || entry.first.starts_with("ScreenProbe") ||
+                        entry.first.starts_with("VoxelLighting"))) &&
                     !(bReflections && entry.first.starts_with("Reflection")) &&
                     !(bHardwareTracing && entry.first == "GIHardwareResolveCS");
             });
@@ -416,6 +418,7 @@ namespace Test
             direct.Initialize(surface, 64, 6);
             SurfaceCacheRadiosity radiosity;
             WorldRadianceCache cache;
+            VoxelLighting voxelCache;
             SurfaceCacheLight light;
             light.Direction = {0, 0, -1};
             light.Intensity = 3.0f;
@@ -435,7 +438,7 @@ namespace Test
                 uint32_t Directions;
             };
             const auto render = [&](uint32_t budget, const Float3& camera, bool capture, bool iterate, bool useCache, bool reset,
-                float normalZ = 1.0f)
+                float normalZ = 1.0f, bool bVoxels = false)
             {
                 RenderGraphBuilder graph;
                 auto material = capture ? surface.AddCapturePasses(graph) : surface.Register(graph);
@@ -449,8 +452,25 @@ namespace Test
                 input.IndirectDiffuseOutput = graph.RegisterExternalTexture("Test.Marker", &marker);
                 auto world = cache.Update(graph, camera, budget, material, lighting, input.Environment, input.bHasEnvironment);
                 input.WorldCache = useCache ? &world : nullptr;
+                VoxelLightingParameters voxels{};
+                if (bVoxels)
+                {
+                    voxels = voxelCache.Update(graph, world);
+                    input.Voxels = &voxels;
+                }
+                else
+                {
+                    voxelCache.Invalidate();
+                }
                 const auto screen = AddScreenProbeGatherPasses(graph, material, lighting, input);
-                WorldRadianceCache::AddDebugPass(graph, world, screen.DebugVisualization);
+                if (bVoxels)
+                {
+                    VoxelLighting::AddDebugPass(graph, world, voxels, screen.DebugVisualization, 3);
+                }
+                else
+                {
+                    WorldRadianceCache::AddDebugPass(graph, world, screen.DebugVisualization);
+                }
                 void* mappedRadiance = nullptr;
                 void* mappedAtlas = nullptr;
                 const auto map = [&](RHICommandListBase& cmd)
@@ -549,21 +569,48 @@ namespace Test
             Verify(cacheHits > 0 && movedHits > 0 && cachedSteps < traceSteps, "world cache replaces some far SDF marching across frames");
             Verify(reflectedRed > 0.03f && reflectedRed > 4 * reflectedGreen, "world rays see the white wall's red radiosity");
 
+            const auto voxelFrame = render(0, camera, false, false, true, false, 1.0f, true);
+            const auto voxelMoved = render(0, {5.1f, 0, 0}, false, false, true, false, 1.0f, true);
+            uint32_t voxelHits = 0, reusedVoxelHits = 0, voxelSteps = 0;
+            float voxelMaxError = 0.0f;
+            for (uint32_t i = 0; i < voxelFrame.Samples.size(); ++i)
+            {
+                const auto& voxel = voxelFrame.Samples[i];
+                voxelSteps += voxel.Status.Z;
+                if (voxel.Status.Y == 3u)
+                {
+                    ++voxelHits;
+                    const auto& movedVoxel = voxelMoved.Samples[i];
+                    reusedVoxelHits += movedVoxel.Status.Y == 3u && movedVoxel.Radiance == voxel.Radiance ? 1u : 0u;
+                    const auto delta = voxel.Radiance - reference.Samples[i].Radiance;
+                    voxelMaxError = std::max({voxelMaxError, std::abs(delta.X), std::abs(delta.Y), std::abs(delta.Z)});
+                }
+            }
+            std::cout << "VOXEL_LIGHTING hits=" << voxelHits << " reused=" << reusedVoxelHits <<
+                " sdf_steps=" << voxelSteps << " world_steps=" << cachedSteps << " full_steps=" << traceSteps <<
+                " max_rgb_difference_vs_full=" << voxelMaxError << std::endl;
+            Verify(voxelSteps <= cachedSteps && voxelMaxError < 0.15f,
+                "mixed two-wall visibility safely falls back to the world cache or shortens the trace");
+            const auto voxelNear = render(0, camera, false, false, true, false, -1.0f, true);
+
             const auto nearReference = render(0, camera, false, false, false, false, -1.0f);
             const auto nearCached = render(0, camera, false, false, true, false, -1.0f);
             for (uint32_t i = 0; i < nearCached.Samples.size(); i += 8)
             {
                 const auto& referenceRay = nearReference.Samples[i];
                 const auto& cachedRay = nearCached.Samples[i];
+                const auto& voxelRay = voxelNear.Samples[i];
                 Verify(referenceRay.Status.Z > 0 && cachedRay.Status.Y == 0 &&
                     std::abs(cachedRay.Radiance.X - referenceRay.Radiance.X) < 1e-5f &&
                     cachedRay.Radiance.X > 0.5f, "the near wall occludes any cached far radiance");
+                Verify(voxelRay.Status.Y == 0 && std::abs(voxelRay.Radiance.X - referenceRay.Radiance.X) < 1e-5f,
+                    "voxel lighting preserves the near-wall geometry hit");
             }
 
             cache.Invalidate();
             radiosity.Invalidate();
             light.bEnabled = false;
-            const auto reset = render(0, camera, false, false, true, true);
+            const auto reset = render(0, camera, false, false, true, true, 1.0f, true);
             for (const auto& sample : reset.Samples)
             {
                 Verify(sample.Status.Y == 0 && sample.Radiance.X <= 0.0251f, "invalidation suppresses radiance from old lights");
@@ -576,6 +623,228 @@ namespace Test
         }
     };
     REGISTER_RENDER_TEST("WorldRadianceCacheTest", WorldRadianceCacheTest);
+
+    namespace
+    {
+        BEGIN_SHADER_PARAMETER_STRUCT(VoxelTestUpload)
+            RDG_TEXTURE_ACCESS(Atlas, ERHIResourceAccess::TransferDest)
+        END_SHADER_PARAMETER_STRUCT(VoxelTestUpload)
+
+        BEGIN_SHADER_PARAMETER_STRUCT(VoxelTestReadback)
+            RDG_TEXTURE_ACCESS(Debug, ERHIResourceAccess::TransferSrc)
+            RDG_BUFFER_ACCESS(Candidates, ERHIResourceAccess::TransferSrc)
+        END_SHADER_PARAMETER_STRUCT(VoxelTestReadback)
+    }
+
+    class VoxelLightingTest final : public SurfaceCacheGITest
+    {
+    public:
+        void Setup() override { InitializeGI(true); }
+
+        void Run() override
+        {
+            constexpr int size = 6, directions = 36, coarseSlots = size * size * size;
+            constexpr size_t rayCount = 5;
+            constexpr uint32_t debugWidth = 216, debugHeight = 144;
+            const std::array<Float3, 6> axisColors = {{
+                {0.8f, 0.05f, 0.05f}, {0.05f, 0.05f, 0.8f}, {0.05f, 0.8f, 0.05f},
+                {0.4f, 0.2f, 0.05f}, {0.2f, 0.4f, 0.6f}, {0.05f, 0.3f, 0.2f}
+            }};
+            const auto getFace = [](int index)
+            {
+                float x = float(2 * (index % size) + 1 - size) / size;
+                float y = float(2 * (index / size) + 1 - size) / size;
+                const float z = 1.0f - std::abs(x) - std::abs(y);
+                if (z < 0)
+                {
+                    const float foldedX = std::copysign(1.0f - std::abs(y), x);
+                    y = std::copysign(1.0f - std::abs(x), y);
+                    x = foldedX;
+                }
+                const auto ax = std::abs(x), ay = std::abs(y), az = std::abs(z);
+                if (ax + 1e-6f >= std::max(ay, az))
+                {
+                    return x >= 0 ? 0 : 1;
+                }
+                if (ay + 1e-6f >= az)
+                {
+                    return y >= 0 ? 2 : 3;
+                }
+                return z >= 0 ? 4 : 5;
+            };
+            const auto wrap = [](int x) { return (x % size + size) % size; };
+            const auto expectedColor = [&](int face, float worldX, float scale)
+            {
+                return (axisColors[face] + Float3(0, worldX * 0.01f + 0.15f, 0)) * scale;
+            };
+            struct Frame
+            {
+                std::array<WorldRadianceCandidate, rayCount> Candidates;
+                Float4 DebugCenter;
+            };
+            RHITextureDesc debugDesc{};
+            debugDesc.Width = debugWidth;
+            debugDesc.Height = debugHeight;
+            debugDesc.Format = ERHIFormat::R32G32B32A32_Float;
+            debugDesc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::UAV | ERHITextureCreateFlag::TransferSrc;
+            RenderTexture debug(debugDesc);
+            debug.InitRHIResource();
+            VoxelLighting voxels;
+
+            const auto render = [&](int originX, float scale, bool bUpdated, bool bValid, bool bBlocker, bool bVoxels)
+            {
+                std::array<WorldRadianceProbeRecord, 2 * coarseSlots> probes{};
+                std::vector<Float4> colors(2 * coarseSlots * directions);
+                for (int z = -3; z < 3; ++z)
+                {
+                    for (int y = -3; y < 3; ++y)
+                    {
+                        for (int x = originX; x < originX + size; ++x)
+                        {
+                            const int slot = ((size + wrap(z)) * size + wrap(y)) * size + wrap(x);
+                            const bool valid = bValid && x < 3;
+                            probes[slot].PositionSpacing = {float(x * 5), float(y * 5), float(z * 5), 5.0f};
+                            probes[slot].Status = {valid ? 1u : 0u, bUpdated && valid ? 1u : 0u, 0u, 1u};
+                            for (int ray = 0; ray < directions; ++ray)
+                            {
+                                const int face = getFace(ray);
+                                const float distance = bBlocker && ((x == 0 && face == 0) || (x == 1 && face == 1)) ? 0.5f : 12.0f;
+                                const auto color = expectedColor(face, float(x * 5), scale);
+                                colors[slot * directions + ray] = {color.X, color.Y, color.Z, distance};
+                            }
+                        }
+                    }
+                }
+
+                RenderGraphBuilder graph;
+                WorldRadianceCacheParameters source{};
+                source.LevelOrigin0 = {-3, -3, -3};
+                source.LevelOrigin1 = {originX, -3, -3};
+                source.GridSize = source.DirectionSize = size;
+                source.CellSize = {2, 5};
+                source.TraceDistance = 100;
+                RenderGraphTextureDesc atlasDesc{};
+                atlasDesc.Width = directions;
+                atlasDesc.Height = 2 * coarseSlots;
+                atlasDesc.Format = ERHIFormat::R32G32B32A32_Float;
+                atlasDesc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest;
+                auto* upload = graph.AllocateParameter<VoxelTestUpload>();
+                source.WorldRadianceAtlas = upload->Atlas = graph.CreateTexture("VoxelTest.Source", atlasDesc);
+                graph.AddPass("VoxelTestSource", VoxelTestUpload::GetMetaData(), upload, EPassFlag::Graphic, [&](RHICommandListBase& cmd)
+                {
+                    GRHIApi->UpdateTexture(cmd, upload->Atlas->GetRHITexture(), colors.data(),
+                        RHIUpdateTextureRegion::Create2DRegion(directions, 2 * coarseSlots));
+                });
+
+                RenderGraphBufferDesc desc{};
+                desc.Stride = sizeof(WorldRadianceProbeRecord);
+                desc.Size = sizeof(probes);
+                desc.Usage = ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::ShaderResource | ERHIBufferUsageFlag::TransferDst;
+                auto probeBuffer = graph.CreateBuffer("VoxelTest.Probes", desc);
+                graph.AddUploadBuffer(probeBuffer, probes.data(), sizeof(probes));
+                RenderGraphBufferSRVDesc view{};
+                view.Buffer = probeBuffer;
+                view.Stride = desc.Stride;
+                view.NumElements = uint32_t(probes.size());
+                source.WorldProbes = graph.CreateBufferSRV("VoxelTest.ProbesSRV", view);
+
+                const std::array<Float3, rayCount> rayDirections = {{
+                    {1, 0, 0}, {-1, 0, 0}, Normalize(Float3(1, 1, 0)), {0, 0, 1}, {0, 0, 1}
+                }};
+                const float positions[] = {0, 0, 0, 2.5f, 12.5f};
+                std::array<SurfaceCacheQuery, rayCount> rays{};
+                for (size_t i = 0; i < rayCount; ++i)
+                {
+                    const auto start = Float3(positions[i], 0, 0) - rayDirections[i] * 4.0f;
+                    rays[i].OriginDistance = {start.X, start.Y, start.Z, 25};
+                    rays[i].Direction = {rayDirections[i].X, rayDirections[i].Y, rayDirections[i].Z, 0};
+                    rays[i].Control = {UINT32_MAX, 1, UINT32_MAX, 0};
+                }
+                desc.Stride = sizeof(SurfaceCacheQuery);
+                desc.Size = sizeof(rays);
+                auto rayBuffer = graph.CreateBuffer("VoxelTest.Queries", desc);
+                graph.AddUploadBuffer(rayBuffer, rays.data(), sizeof(rays));
+
+                const auto voxel = voxels.Update(graph, source);
+                auto lookup = WorldRadianceCache::AddRayLookupPass(graph, source, rayBuffer, uint32_t(rays.size()),
+                    bVoxels ? &voxel : nullptr);
+                auto* read = graph.AllocateParameter<VoxelTestReadback>();
+                read->Candidates = lookup.Candidates;
+                read->Debug = graph.RegisterExternalTexture("VoxelTest.Debug", &debug);
+                VoxelLighting::AddDebugPass(graph, source, voxel, read->Debug, 3);
+
+                void* mapped = nullptr;
+                void* mappedDebug = nullptr;
+                const auto map = [&](RHICommandListBase& cmd)
+                {
+                    mapped = GRHIApi->MapReadBuffer(cmd, read->Candidates->GetRHIBuffer(), {});
+                    mappedDebug = GRHIApi->MapReadTexture(cmd, read->Debug->GetRHITexture(), {});
+                };
+                const bool bGL = GShaderPlatform == ERHIShaderPlatform::OpenGL;
+                graph.AddPass("VoxelTestReadback", VoxelTestReadback::GetMetaData(), read, EPassFlag::Graphic, [&](RHICommandListBase& cmd)
+                {
+                    if (!bGL)
+                    {
+                        map(cmd);
+                    }
+                });
+                graph.Execute();
+                const auto fence = debug.GetTracker().GetLastAccessFence();
+                auto* queue = GRHIApi->GetQueue(fence.QueueType);
+                queue->WaitValue(fence.Value);
+                if (bGL)
+                {
+                    auto* context = queue->AcquireCommandContext();
+                    RHICommandListBase cmd(context);
+                    cmd.SetImmediate(true);
+                    cmd.Begin();
+                    map(cmd);
+                    cmd.End();
+                    queue->WaitValue(queue->ExecuteContext(context));
+                }
+                Verify(mapped && mappedDebug, "voxel candidate and debug readbacks exist");
+                Frame frame{};
+                std::copy_n(static_cast<const WorldRadianceCandidate*>(mapped), rayCount, frame.Candidates.begin());
+                frame.DebugCenter = static_cast<const Float4*>(mappedDebug)[(3 * 12 + 6) * debugWidth + (3 - (originX + 3)) * 12 + 6];
+                GRHIApi->Unmap(mapped);
+                GRHIApi->Unmap(mappedDebug);
+                return frame;
+            };
+            const auto check = [](const WorldRadianceCandidate& sample, const Float3& expected)
+            {
+                const auto& value = sample.RadianceLevel;
+                return value.W == 3.0f && std::abs(value.X - expected.X) < 1e-4f &&
+                    std::abs(value.Y - expected.Y) < 1e-4f && std::abs(value.Z - expected.Z) < 1e-4f;
+            };
+            const auto initial = render(-3, 1, true, true, false, true);
+            const bool directional = check(initial.Candidates[0], expectedColor(0, 0, 1)) &&
+                check(initial.Candidates[1], expectedColor(1, 0, 1)) &&
+                check(initial.Candidates[2], (expectedColor(0, 0, 1) + expectedColor(2, 0, 1)) * 0.5f);
+            const auto midpoint = expectedColor(4, 2.5f, 1);
+            std::cout << "VOXEL_DIRECTION values=" << initial.Candidates[0].RadianceLevel.X << "," <<
+                initial.Candidates[1].RadianceLevel.Z << "," << initial.Candidates[2].RadianceLevel.X <<
+                " source=" << initial.Candidates[2].RadianceLevel.W << " interpolated_y=" << initial.Candidates[3].RadianceLevel.Y <<
+                " debug=" << initial.DebugCenter.X << std::endl;
+            Verify(directional && check(initial.Candidates[3], midpoint), "axis signs, angular blend, and trilinear interpolation");
+            Verify(std::abs(initial.DebugCenter.X - 0.8f / 1.8f) < 1e-4f, "debug view shows the +X lobe");
+
+            const auto worldOnly = render(-3, 1, false, true, false, false);
+            Verify(worldOnly.Candidates[0].RadianceLevel.W == 2.0f && std::abs(worldOnly.Candidates[0].RadianceLevel.X -
+                initial.Candidates[0].RadianceLevel.X) < 1e-4f, "homogeneous axis matches the finer direction source");
+            const auto moved = render(-2, 1, false, true, false, true);
+            Verify(check(moved.Candidates[3], midpoint) && moved.Candidates[4].RadianceLevel.W == 0.0f,
+                "overlapping slots persist across scrolling and entering cells reject stale data");
+            const auto blocked = render(-2, 1, true, true, true, true);
+            Verify(blocked.Candidates[3].RadianceLevel.W != 3.0f, "short clearance rejects cross-wall interpolation");
+            const auto invalid = render(-2, 0.5f, false, false, false, true);
+            Verify(invalid.Candidates[0].RadianceLevel.W == 0.0f, "invalid probe data suppresses obsolete voxel light");
+            const auto refreshed = render(-2, 0.5f, true, true, false, true);
+            Verify(check(refreshed.Candidates[0], expectedColor(0, 0, 0.5f)), "refresh injects the new lighting values");
+            std::cout << "VOXEL_LIGHTING_TEST_OK" << std::endl;
+        }
+    };
+
+    REGISTER_RENDER_TEST("VoxelLightingTest", VoxelLightingTest);
 
     namespace
     {

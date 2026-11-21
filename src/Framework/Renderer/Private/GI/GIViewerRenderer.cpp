@@ -1,4 +1,4 @@
-#include "LumenViewerRenderer.h"
+#include "GIViewerRenderer.h"
 
 #include "DefferedSceneRenderer.h"
 #include "SceneRenderer.h"
@@ -15,6 +15,7 @@
 #include "GI/SurfaceCacheDirectLighting.h"
 #include "GI/SurfaceCacheRadiosity.h"
 #include "GI/WorldRadianceCache.h"
+#include "GI/VoxelLighting.h"
 #include "RHIApi.h"
 #include "DrawSkyPass.h"
 
@@ -24,13 +25,14 @@
 
 namespace Renderer
 {
-    class LumenViewerRendererState
+    class GIViewerRendererState
     {
     public:
         std::unique_ptr<SurfaceCacheMaterial> Material;
         std::unique_ptr<SurfaceCacheDirectLighting> Lighting;
         std::unique_ptr<SurfaceCacheRadiosity> Radiosity;
         std::unique_ptr<WorldRadianceCache> WorldCache;
+        std::unique_ptr<VoxelLighting> Voxels;
         std::unique_ptr<ScreenProbeFilter> ProbeFilter;
         std::unique_ptr<GIRayTracingScene> HardwareScene;
         bool bHardwareActive = false;
@@ -38,6 +40,7 @@ namespace Renderer
         RenderCore::RenderTexture* HistoryEnvironment = nullptr;
         bool bHistoryUsesRadiosity = false;
         bool bHistoryUsesWorldCache = false;
+        bool bHistoryUsesVoxels = false;
         RenderCore::RenderTexture* Environment = nullptr;
         bool bWorldCacheUsesRadiosity = false;
         std::vector<SurfaceCacheLight> Lights;
@@ -119,17 +122,17 @@ namespace Renderer
         }
     }
 
-    LumenViewerRenderer::LumenViewerRenderer()
-        : m_State(std::make_unique<LumenViewerRendererState>())
+    GIViewerRenderer::GIViewerRenderer()
+        : m_State(std::make_unique<GIViewerRendererState>())
     {
     }
 
-    LumenViewerRenderer::~LumenViewerRenderer()
+    GIViewerRenderer::~GIViewerRenderer()
     {
         Reset(m_State ? m_State->LastOutput : nullptr);
     }
 
-    void LumenViewerRenderer::Reset(RenderCore::RenderTexture* lastOutput)
+    void GIViewerRenderer::Reset(RenderCore::RenderTexture* lastOutput)
     {
         if (!m_State)
         {
@@ -142,6 +145,7 @@ namespace Renderer
         m_State->ProbeFilter.reset();
         m_State->HistoryEnvironment = nullptr;
         m_State->WorldCache.reset();
+        m_State->Voxels.reset();
         m_State->Environment = nullptr;
         m_State->Radiosity.reset();
         m_State->Lights.clear();
@@ -162,7 +166,7 @@ namespace Renderer
         m_State->bCaptureScheduled = false;
     }
 
-    bool LumenViewerRenderer::AddPasses(RenderCore::RenderGraphBuilder& builder, Engine::SceneInterface* sceneInterface,
+    bool GIViewerRenderer::AddPasses(RenderCore::RenderGraphBuilder& builder, Engine::SceneInterface* sceneInterface,
         const Engine::SceneView& sourceView, RenderCore::RenderTexture* output, ELumenViewerMode mode,
         uint32_t selectedCardIndex, ELumenViewerCardView cardView, const LumenViewerRadiositySettings& radiositySettings,
         const LumenViewerWorldCacheSettings& worldCacheSettings, bool bUseHardwareTracing)
@@ -336,10 +340,11 @@ namespace Renderer
         }
         const bool bRadiosityView = IsRadiosityView(mode);
         const bool bWorldCacheView = mode == ELumenViewerMode::WorldProbeAtlas;
+        const bool bVoxelView = mode == ELumenViewerMode::VoxelLightingSlice;
         const bool bTraceReflectionHardware = bReflections && m_State->bHardwareActive;
         SurfaceCachePunctualLightParameters hardwareLights{};
         bool bLightingChanged = false;
-        if (bScreenProbe || bRadiosityView || bWorldCacheView || bReflections || mode == ELumenViewerMode::DirectLightingAtlas)
+        if (bScreenProbe || bRadiosityView || bWorldCacheView || bVoxelView || bReflections || mode == ELumenViewerMode::DirectLightingAtlas)
         {
             const auto lights = SurfaceCacheDirectLighting::GatherSceneLights(*scene);
             if (!m_State->Lighting->IsValidFor(*m_State->Material) || lights != m_State->Lights)
@@ -394,7 +399,7 @@ namespace Renderer
             return true;
         }
 
-        if (!bScreenProbe && !bRadiosityView && !bWorldCacheView && !bReflections)
+        if (!bScreenProbe && !bRadiosityView && !bWorldCacheView && !bVoxelView && !bReflections)
         {
             return true;
         }
@@ -431,7 +436,9 @@ namespace Renderer
         probeInput.bHasEnvironment = environment != nullptr;
         const auto lighting = bUseRadiosity ? m_State->Radiosity->Register(builder, direct) : direct;
         WorldRadianceCacheParameters worldCache{};
-        if (bWorldCacheView || worldCacheSettings.bEnabled)
+        VoxelLightingParameters voxels{};
+        const bool bUseVoxels = bScreenProbe && worldCacheSettings.bEnabled && worldCacheSettings.bVoxelEnabled;
+        if (bWorldCacheView || bVoxelView || worldCacheSettings.bEnabled)
         {
             if (!m_State->WorldCache)
             {
@@ -446,6 +453,25 @@ namespace Renderer
             worldCache = m_State->WorldCache->Update(builder, probeInput.CameraPosition,
                 uint32_t(std::clamp(worldCacheSettings.UpdateBudget, 0, 128)), material, lighting,
                 probeInput.Environment, probeInput.bHasEnvironment);
+            if (bVoxelView || bUseVoxels)
+            {
+                if (!m_State->Voxels)
+                {
+                    m_State->Voxels = std::make_unique<VoxelLighting>();
+                }
+                voxels = m_State->Voxels->Update(builder, worldCache);
+                if (bVoxelView)
+                {
+                    VoxelLighting::AddDebugPass(builder, worldCache, voxels, color, uint32_t(std::max(0, worldCacheSettings.VoxelSlice)));
+                    return true;
+                }
+                probeInput.Voxels = &voxels;
+            }
+            else if (m_State->Voxels)
+            {
+                // The source continues to scroll and refresh in modes that don't consume voxels.
+                m_State->Voxels->Invalidate();
+            }
             if (bWorldCacheView)
             {
                 WorldRadianceCache::AddDebugPass(builder, worldCache, color);
@@ -495,13 +521,14 @@ namespace Renderer
             }
             if (bLightingChanged || radiositySettings.bRestart || m_State->HistoryEnvironment != environment ||
                 m_State->bHistoryUsesRadiosity != bUseRadiosity || m_State->bHistoryUsesWorldCache != worldCacheSettings.bEnabled ||
-                m_State->bHistoryUsesHardware != m_State->bHardwareActive)
+                m_State->bHistoryUsesHardware != m_State->bHardwareActive || m_State->bHistoryUsesVoxels != bUseVoxels)
             {
                 m_State->ProbeFilter->Invalidate();
                 m_State->HistoryEnvironment = environment;
                 m_State->bHistoryUsesRadiosity = bUseRadiosity;
                 m_State->bHistoryUsesWorldCache = worldCacheSettings.bEnabled;
                 m_State->bHistoryUsesHardware = m_State->bHardwareActive;
+                m_State->bHistoryUsesVoxels = bUseVoxels;
             }
             probeInput.SamplePhase = m_State->ProbeFilter->GetSamplePhase();
             auto probes = AddScreenProbeGatherPasses(builder, material, lighting, probeInput);
@@ -558,19 +585,19 @@ namespace Renderer
         return true;
     }
 
-    const std::vector<LumenViewerCardInfo>& LumenViewerRenderer::GetSurfaceCards() const
+    const std::vector<LumenViewerCardInfo>& GIViewerRenderer::GetSurfaceCards() const
     {
         return m_State->Cards;
     }
 
-    LumenViewerRayTracingInfo LumenViewerRenderer::GetRayTracingInfo() const
+    LumenViewerRayTracingInfo GIViewerRenderer::GetRayTracingInfo() const
     {
         const auto* scene = m_State->HardwareScene.get();
         return {scene ? scene->GetBLASCount() : 0u, scene ? scene->GetInstanceCount() : 0u,
             scene ? scene->GetTLASRevision() : 0u, GIRayTracingScene::IsSupported(), m_State->bHardwareActive};
     }
 
-    uint32_t LumenViewerRenderer::GetRadiosityIteration() const
+    uint32_t GIViewerRenderer::GetRadiosityIteration() const
     {
         return m_State->Radiosity ? m_State->Radiosity->GetIteration() : 0;
     }

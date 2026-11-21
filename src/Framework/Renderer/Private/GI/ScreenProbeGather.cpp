@@ -175,7 +175,7 @@ namespace Renderer
             uint32_t((probeCount + 63) / 64));
 
         const auto world = input.WorldCache ? WorldRadianceCache::AddRayLookupPass(builder, *input.WorldCache,
-            output.Queries, uint32_t(queryCount)) : WorldRadianceCacheRayOutput{};
+            output.Queries, uint32_t(queryCount), input.Voxels) : WorldRadianceCacheRayOutput{};
         auto queryResults = AddGITracePasses(builder, material, world.Queries ? world.Queries : output.Queries,
             uint32_t(queryCount), input.HardwareScene);
         auto lightingResults = AddSurfaceCacheLightingLookupPass(builder, material, lighting, queryResults, uint32_t(queryCount));

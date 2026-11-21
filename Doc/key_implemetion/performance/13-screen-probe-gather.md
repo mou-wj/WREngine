@@ -4,15 +4,15 @@ Screen Probe 的算法与估计公式见 [算法专题](../algorithm/17-screen-p
 
 ## 调用链与 Cache 所有权
 
-Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从宿主回调借用当前 `SceneInterface` 和 `SceneView`，由 `GIViewerPreview::Render` 创建新的 `RenderGraphBuilder`，调用 `LumenViewerRenderer::AddPasses` 并执行该 Builder。预览有独立的持久颜色目标、深度、深度金字塔和 GBuffer；输入 Scene/View 仅在当前 UI 绘制和构图中借用，不转移所有权。
+Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从宿主回调借用当前 `SceneInterface` 和 `SceneView`，由 `GIViewerPreview::Render` 创建新的 `RenderGraphBuilder`，调用 `GIViewerRenderer::AddPasses` 并执行该 Builder。预览有独立的持久颜色目标、深度、深度金字塔和 GBuffer；输入 Scene/View 仅在当前 UI 绘制和构图中借用，不转移所有权。
 
-`LumenViewerRendererState` 持有材质、直接光照、间接光照、世界探针缓存、屏幕历史和当前 `Scene*`。首次在非空场景选择 Cache 模式时，入口收集静态网格实例快照并捕获材质。需要光照时建立或更新直接图集。之后预览图用 `Register` 绑定持久 Cache，并按 Viewer 所选模式添加对应 Pass。图内 Probe、Query、Radiance 等结构化缓冲和预览用 GBuffer/depth 均由当前 Builder 创建，缓存的 Atlas 与预览颜色目标分别由 Renderer 和 Preview 持有。
+`GIViewerRendererState` 持有材质、直接光照、间接光照、世界探针缓存、屏幕历史和当前 `Scene*`。首次在非空场景选择 Cache 模式时，入口收集静态网格实例快照并捕获材质。需要光照时建立或更新直接图集。之后预览图用 `Register` 绑定持久 Cache，并按 Viewer 所选模式添加对应 Pass。图内 Probe、Query、Radiance 等结构化缓冲和预览用 GBuffer/depth 均由当前 Builder 创建，缓存的 Atlas 与预览颜色目标分别由 Renderer 和 Preview 持有。
 
 切换场景、关闭 Viewer 或工程时，Renderer Reset 沿用预览颜色目标最后访问的 Fence 后释放缓存。调整预览尺寸时，Preview 等待后只替换颜色目标。输出完成点代表与之存在图依赖的访问，新增异步路径时需重新核对完成点。
 
 ## Radiosity 迭代与缓存失效
 
-[LumenViewerRenderer](../../../src/Framework/Renderer/Private/GI/LumenViewerRenderer.cpp) 在需要 Surface Cache 的模式下，以 InstanceID 对当前可见静态网格排序，对比标识、变换、RenderData 与不可变材质代理。任何一项变化都会退休旧图集并全量重捕获。需要光照时对比场景灯光快照，重新计算直接图集并将间接迭代数归零。重置按钮可单独清除间接历史，重建按钮可显式重捕获。相机移动与预览尺寸变化不改变世界空间 Card 的采样。
+[GIViewerRenderer](../../../src/Framework/Renderer/Private/GI/GIViewerRenderer.cpp) 在需要 Surface Cache 的模式下，以 InstanceID 对当前可见静态网格排序，对比标识、变换、RenderData 与不可变材质代理。任何一项变化都会退休旧图集并全量重捕获。需要光照时对比场景灯光快照，重新计算直接图集并将间接迭代数归零。重置按钮可单独清除间接历史，重建按钮可显式重捕获。相机移动与预览尺寸变化不改变世界空间 Card 的采样。
 
 每个 Viewer 独占 [SurfaceCacheRadiosity](../../../src/Framework/Renderer/Private/GI/SurfaceCacheRadiosity.h) 的两张间接图集。首次迭代分配图集。每帧最多安排一次迭代，读上一轮的外部 SRV 并写另一张外部 UAV，根据当前迭代数公布写入的图集。第零轮返回直接光照。失效只清零迭代数，第一次重新写入完整图集，旧内容不会被采样。预览图在控制线程串行构建和提交，图集替换前沿用上一输出纹理的最后访问 Fence。材质采样、SDF 查询、积分和 Viewer 输出通过 RDG 传递依赖，覆盖该阶段图集的使用。旧灯光只触发重新构图，现有 RDG 跟踪持久图集写入的前序访问。
 
@@ -30,12 +30,20 @@ Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从
 
 持久 GPU 图集逻辑占用约 243 KiB。状态上传每帧约 13.5 KiB，预算为 `B` 时刷新 `36 × B` 条世界射线。启用缓存的屏幕路径额外存放逐射线的范围修改副本（48 字节）与候选（16 字节）。 [算法说明](../algorithm/19-world-radiance-cache.md)
 
+## 体素光照缓存
+
+`GIViewerRenderer` 按需持有 `VoxelLighting`，后者分配一张持久 `RGBA32F` 3D 纹理。逻辑空间为 `6 × 6 × 6 × 12 × 16 = 41,472` 字节（40.5 KiB），包含六组 Radiance 和六组深度/净空数据。`RegisterExternalTexture` 继承上一图对纹理的访问状态和 Fence，沿用 GIViewer 的预览输出 Fence 释放或退休资源。该路径无独立队列、阻塞等待或每帧 CPU 读回。 [资源实现](../../../src/Framework/Renderer/Private/GI/VoxelLighting.cpp) · [预览接入](../../../src/Framework/Renderer/Private/GI/GIViewerRenderer.cpp)
+
+`VoxelLightingInject` 在 World Atlas Store 后读取其 SRV 和节点状态并写 Volume UAV。它遍历粗层槽位，仅重算本帧刷新的有效节点，已更新的重叠槽保持原内容。无效节点同帧清空，可防止移动或失效以后查询旧世界坐标的数据。初次使用和暂停消费后重新启用时，从全部有效世界槽重注入。几何、灯光、环境或 Radiosity 来源变化沿用上游的失效和预算。常规 Radiosity 反弹变化随世界节点周期刷新逐步传递。
+
+注入后 `WorldRadianceCacheRayLookup` 或 `VoxelLightingDebug` 从同一纹理的 SRV 读取结果。Screen Probe 的原始查询到 Trace/Gather 的顺序依赖不变，缓存候选沿用原有缓冲。只有启用体素时才绑定对应的 Shader 排列。时域滤波在来源开关变化后重置历史。每刷新一个粗层格点读 36 个方向、写 12 个 texel。首次刷新最多读取 7,776 个方向样本，平常由粗层预算决定。 [方向及遮挡算法](../algorithm/22-voxel-lighting.md)
+
 ## 单图 RDG Pass 与同步
 
-`LumenViewerRenderer::AddPasses` 每次为当前输出尺寸创建场景深度、深度金字塔及 GBuffer，再通过独立 `DefferedSceneRenderer` 构建预览场景颜色和几何。随后按 Viewer 模式安排 Surface Cache 捕获/注册、Lighting 更新/注册以及调试 Pass 或 `AddScreenProbeGatherPasses`。Screen Probe 阶段的 Pass 顺序为：
+`GIViewerRenderer::AddPasses` 每次为当前输出尺寸创建场景深度、深度金字塔及 GBuffer，再通过独立 `DefferedSceneRenderer` 构建预览场景颜色和几何。随后按 Viewer 模式安排 Surface Cache 捕获/注册、Lighting 更新/注册以及调试 Pass 或 `AddScreenProbeGatherPasses`。Screen Probe 阶段的 Pass 顺序为：
 
 1. Placement/Ray Generation 写 Probe 与 SurfaceCacheQuery。
-2. 启用时 `WorldRadianceCacheRayLookup` 读取 Atlas 和 Probe 状态，为有候选的射线缩短追踪范围。
+2. 启用时 `WorldRadianceCacheRayLookup` 按体素、细层世界探针、粗层世界探针的顺序尝试远场查询，为有效候选缩短追踪范围。体素查表需要勾选对应选项。
 3. Surface Cache Query Compute 按当前 Query 范围写命中结果。
 4. Lighting Lookup 读取材质命中与直接光照 Atlas，加上启用时最新的间接图集，再写出射光查询结果。
 5. Gather 读取 Query、Material Result、Lighting Result 和可选世界探针候选，写 Probe Radiance。
@@ -49,7 +57,7 @@ Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从
 
 [ScreenProbeFilter](../../../src/Framework/Renderer/Private/GI/ScreenProbeFilter.cpp) 由预览 Renderer 按需持有，每个 Viewer 独立。两组 Ping-Pong 槽各有 `Lighting` 和 `Geometry` 两张 RGBA32F `RenderTexture`。`Lighting` 保存线性漫反射间接光 RGB 和历史长度，`Geometry` 保存世界法线 RGB 和设备深度，负深度表示无效。CPU 保留前一帧的 VP、逆 VP、相机位置及读写槽状态。图在预览控制线程串行构建并提交；历史通过 `RegisterExternalTexture` 让 RDG 接续上次访问 Fence 和资源状态。同一帧读上一槽，写当前槽，空间 Pass 等待当前槽 UAV 并以 SRV 读取。预览输出的完成点覆盖这一依赖链。
 
-分辨率变化时，Preview 沿用上一输出的完成点替换颜色目标，下一次滤波按新尺寸重新分配历史。关闭 Viewer、工程或替换缓存实例时，`LumenViewerRenderer::Reset` 沿用预览输出 Fence 退休历史。失效只标记旧历史不可读，首帧绑定已有白纹理作为未访问占位，并完整覆盖当前槽。未完成滤波构图时不提交新槽状态。
+分辨率变化时，Preview 沿用上一输出的完成点替换颜色目标，下一次滤波按新尺寸重新分配历史。关闭 Viewer、工程或替换缓存实例时，`GIViewerRenderer::Reset` 沿用预览输出 Fence 退休历史。失效只标记旧历史不可读，首帧绑定已有白纹理作为未访问占位，并完整覆盖当前槽。未完成滤波构图时不提交新槽状态。
 
 场景实例或材质代理快照变化、灯光快照变化、环境贴图对象变化、重建 Surface Cache、Radiosity 重启及来源开关变化会重置历史。跳过滤波模式、预览尺寸变化以及帧间相机位置变化超过 8 个世界单位也会使上一结果失效。普通 Radiosity 更新和当帧有预算的世界探针刷新降低权重上限，几何与亮度条件继续逐像素生效。未单独为屏幕历史增加 GPU 等待或回收接口。 [重投影算法](../algorithm/20-gi-temporal-spatial-filter.md)
 

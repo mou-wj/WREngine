@@ -2,7 +2,7 @@
 
 #include "ImWidget.h"
 #include "Math.hpp"
-#include "LumenViewerRenderer.h"
+#include "GIViewerRenderer.h"
 #include <functional>
 #include <memory>
 

@@ -1,0 +1,64 @@
+#include "/Generated/ShaderParameters/VoxelLightingInjectParameters.sf"
+#include "/Generated/ShaderParameters/WorldRadianceCacheParameters.sf"
+#include "/GI/WorldRadianceLookup.sf"
+#include "/GI/VoxelLightingGrid.sf"
+
+[numthreads(4, 4, 4)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    if (any(thread >= GridSize))
+    {
+        return;
+    }
+    int3 cell = LevelOrigin1 + int3(thread);
+    uint slot = WorldRadianceSlot(cell, 1u);
+    WorldRadianceProbeRecord probe = WorldProbes[slot];
+    if (probe.Status.x != 0u && probe.Status.y == 0u && bRefreshAll == 0u)
+    {
+        return;
+    }
+
+    float3 radiance[6];
+    float weight[6], nearDepth[6], farDepth[6];
+    // One bit each for missing, geometry, and sky. A mixed lobe cannot safely shorten a ray.
+    uint kinds[6];
+    [unroll]
+    for (uint face = 0u; face < 6u; ++face)
+    {
+        radiance[face] = 0.0;
+        weight[face] = 0.0;
+        nearDepth[face] = TraceDistance;
+        farDepth[face] = 0.0;
+        kinds[face] = 0u;
+    }
+    if (probe.Status.x != 0u)
+    {
+        for (uint sampleIndex = 0u; sampleIndex < DirectionSize * DirectionSize; ++sampleIndex)
+        {
+            uint2 coordinate = uint2(sampleIndex % DirectionSize, sampleIndex / DirectionSize);
+            float3 direction = DecodeWorldRadianceDirection((float2(coordinate) + 0.5) / DirectionSize);
+            uint face = VoxelFace(direction);
+            float4 source = WorldRadianceAtlas.Load(int3(sampleIndex, slot, 0));
+            kinds[face] |= source.w == 0.0 ? 1u : (source.w > 0.0 ? 2u : 4u);
+            if (source.w != 0.0)
+            {
+                // Octahedral map texel centers have unequal solid angles.
+                float l1 = dot(abs(direction), 1.0);
+                float solidAngleWeight = l1 * l1 * l1;
+                radiance[face] += source.rgb * solidAngleWeight;
+                weight[face] += solidAngleWeight;
+                nearDepth[face] = min(nearDepth[face], abs(source.w));
+                farDepth[face] = max(farDepth[face], abs(source.w));
+            }
+        }
+    }
+    [unroll]
+    for (uint face = 0u; face < 6u; ++face)
+    {
+        bool valid = kinds[face] == 2u || kinds[face] == 4u;
+        float depth = valid ? nearDepth[face] * (kinds[face] == 2u ? 1.0 : -1.0) : 0.0;
+        float clearance = weight[face] > 0.0 && (kinds[face] & 1u) == 0u ? nearDepth[face] : 0.0;
+        VoxelOutput[VoxelAddress(cell, GridSize, face)] = float4(radiance[face] / max(weight[face], 1e-8), depth);
+        VoxelOutput[VoxelAddress(cell, GridSize, 6u + face)] = float4(farDepth[face], clearance, 0.0, 0.0);
+    }
+}

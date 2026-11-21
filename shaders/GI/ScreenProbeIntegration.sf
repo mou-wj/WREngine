@@ -190,15 +190,16 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     }
     else if (DebugMode == 5u)
     {
-        float2 cacheHits = 0.0;
+        float3 cacheHits = 0.0;
         for (uint ray = 0; ray < RayCount; ++ray)
         {
             uint level = Radiance[probeIndex * RayCount + ray].Status.y;
-            cacheHits += float2(level == 1u ? 1.0 : 0.0, level == 2u ? 1.0 : 0.0);
+            cacheHits += float3(level == 1u ? 1.0 : 0.0, level == 2u ? 1.0 : 0.0, level == 3u ? 1.0 : 0.0);
         }
-        float2 ratio = cacheHits / float(RayCount);
-        debugColor = float4(0.16 * (1.0 - ratio.x - ratio.y) +
-            float3(0.08, 0.74, 0.98) * ratio.x + float3(0.72, 0.32, 1.0) * ratio.y, 1.0);
+        float3 ratio = cacheHits / float(RayCount);
+        debugColor = float4(0.16 * (1.0 - ratio.x - ratio.y - ratio.z) +
+            float3(0.08, 0.74, 0.98) * ratio.x + float3(0.72, 0.32, 1.0) * ratio.y +
+            float3(0.95, 0.63, 0.10) * ratio.z, 1.0);
         if (probe.Status.x == 0u)
         {
             debugColor.rgb = 0.0;

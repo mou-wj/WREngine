@@ -82,7 +82,7 @@ AddSurfaceCacheLightingDebugPass 不传 queryResults 时输出 Atlas；传入 Li
 
 ## Lumen GI Viewer
 
-Lumen 的 Surface Cache Material、Direct Lighting、Radiosity 与 Screen Probe Gather 由独立的 [LumenViewerRenderer](../../src/Framework/Renderer/PublicHeader/LumenViewerRenderer.h) 编排。通过 Editor 的 [GIViewer](../../src/Editor/GIViewer/PublicHeader/EditorGIViewer.h) 模块从 View 页打开。Viewer 使用当前场景与相机创建独立 RenderGraph、预览颜色目标、深度和 GBuffer，按所选阶段运行缓存和探针 Pass。
+Lumen 的 Surface Cache Material、Direct Lighting、Radiosity 与 Screen Probe Gather 由独立的 [GIViewerRenderer](../../src/Framework/Renderer/PublicHeader/GIViewerRenderer.h) 编排。通过 Editor 的 [GIViewer](../../src/Editor/GIViewer/PublicHeader/EditorGIViewer.h) 模块从 View 页打开。Viewer 使用当前场景与相机创建独立 RenderGraph、预览颜色目标、深度和 GBuffer，按所选阶段运行缓存和探针 Pass。
 
 Viewer 默认显示 Scene 预览。选择 Surface Cache、Direct Lighting、Radiosity 或 Screen Probe 阶段会按需初始化缓存。`Rebuild Surface Cache` 按钮切换到 Card Coverage 视图并重建。
 
@@ -92,7 +92,9 @@ Surface Cache 的 Base Color、World Normal、Card Coverage、Roughness、Metall
 
 `Radiosity / Indirect Atlas` 显示累计间接出射光，`Radiosity / Iteration Delta` 显示相邻两轮的变化。启用 `Use radiosity in Screen Probes` 时，探针命中会读取直接与间接出射光之和。`Pause` 停止自动迭代，`Step` 暂停并推进一轮，`Restart` 清除间接历史，可配合暂停逐轮查看。实例快照和灯光变化会触发相应缓存重建或重算。具体失效条件见 [工程说明](../key_implemetion/performance/13-screen-probe-gather.md#radiosity-迭代与缓存失效)，反弹算法见 [Radiosity 算法](../key_implemetion/algorithm/18-surface-cache-radiosity.md)。
 
-`World Probes / Radiance Atlas` 左右显示细层和粗层，每层按 3×2 摆放六个 XZ 切片。每个格点包含八面体方向图，黄色边框表示当帧刷新，暗边框表示等待更新，粉色 texel 表示该方向无效。`Screen Probes / World Cache Hits` 按屏幕探针显示缓存命中比例，青色为细层，紫色为粗层，灰色为完整追踪或近场命中。用 `Use world cache` 切换参考路径。`World probes per frame` 调整更新预算，设为 0 可冻结刷新并检查移动后的重叠槽复用。 [世界探针算法](../key_implemetion/algorithm/19-world-radiance-cache.md)
+`World Probes / Radiance Atlas` 左右显示细层和粗层，每层按 3×2 摆放六个 XZ 切片。每个格点包含八面体方向图，黄色边框表示当帧刷新，暗边框表示等待更新，粉色 texel 表示该方向无效。用 `Use world cache` 切换参考路径。`World probes per frame` 同时控制世界探针与体素的更新来源，设为 0 可冻结刷新并检查移动后的重叠槽复用。 [世界探针算法](../key_implemetion/algorithm/19-world-radiance-cache.md)
+
+`Voxel Lighting / Axis Slice` 通过 `Y slice` 选择 XZ 切片。三列依次为 X、Y、Z，上下分别为正向与负向。黄色格边表示本帧更新，粉色格表示该方向不可用，暗灰格表示未填充。Screen Probe 视图中同时勾选 `Use world cache` 和 `Use voxel lighting` 可使用体素查询。`Screen Probes / Cache Source` 显示各探针的射线路径比例，金色为体素，青色与紫色为世界探针细层与粗层，灰色为几何追踪或环境。 [体素光照算法](../key_implemetion/algorithm/22-voxel-lighting.md)
 
 `GI / Raw`、`GI / Temporal` 与 `GI / Spatial Filtered` 分别显示当前探针重建、时域累积和边缘感知空间滤波后的漫反射间接光。`GI / History Validity` 用绿色表示通过重投影检查，红色表示历史被拒绝或重置。`GI / History Weight` 用灰度表示最终历史权重。`GI / Reprojection Error` 的红绿通道显示归一化的几何残差，蓝色显示屏幕运动幅度。六种 GI 视图间切换保留历史，离开这些视图后重新进入会开始新一轮累积。使用宿主视口相机改变视角可观察历史重建。 [滤波与调试含义](../key_implemetion/algorithm/20-gi-temporal-spatial-filter.md)
 

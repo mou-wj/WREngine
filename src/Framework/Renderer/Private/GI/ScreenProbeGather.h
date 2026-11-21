@@ -73,6 +73,7 @@ namespace Renderer
         Core::Float3 CameraPosition = {0, 0, 0};
         SceneEvnIBLLightParameters Environment{};
         const WorldRadianceCacheParameters* WorldCache = nullptr;
+        const VoxelLightingParameters* Voxels = nullptr;
         GIRayTracingScene* HardwareScene = nullptr;
         RenderCore::RenderGraphTextureRef IndirectDiffuseOutput = nullptr;
         RenderCore::RenderGraphTextureRef DebugOutput = nullptr;
