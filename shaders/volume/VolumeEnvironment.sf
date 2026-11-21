@@ -1,0 +1,21 @@
+#include "/Generated/ShaderParameters/VolumeEnvironmentParameters.sf"
+
+[numthreads(1, 1, 1)]
+void MainCS()
+{
+    float3 ambient = max(AmbientFallback.rgb, 0.0);
+    if (SkySettings.x > 0.0)
+    {
+        float3 total = 0.0;
+        [unroll]
+        for (uint axis = 0; axis < 3; ++axis)
+        {
+            float3 direction = 0.0;
+            direction[axis] = 1.0;
+            total += VolumeSky.SampleLevel(VolumeSkySampler, direction, SkySettings.z).rgb;
+            total += VolumeSky.SampleLevel(VolumeSkySampler, -direction, SkySettings.z).rgb;
+        }
+        ambient = max(0.0, total * (SkySettings.y / 6.0));
+    }
+    AmbientOutput[uint2(0, 0)] = float4(ambient, 1);
+}

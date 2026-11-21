@@ -2,12 +2,19 @@
 #include "../Framework/Renderer/Private/Volume/VolumeRendering.h"
 #include "../Framework/Renderer/Private/Scene.h"
 #include "Camera.h"
+#include "DistanceFieldMgr.h"
+#include "EnvironmentLightResourceManager.h"
 #include "GlobalShader.h"
 #include "LightComponent.h"
 #include "LightSceneProxy.h"
 #include "RenderGraphBuilder.h"
+#include "RenderModule.h"
 #include "RHIPipelineStateCache.h"
 #include "SceneView.h"
+#include "Shape.h"
+#include "StaticMeshAsset.h"
+#include "StaticMeshComponent.h"
+#include "Viewport.h"
 #include <array>
 #include <cmath>
 #include <iostream>
@@ -44,6 +51,44 @@ namespace Test
             }
         }
 
+        Pixels ExecuteAndRead(RenderGraphBuilder& graph, RenderGraphTextureRef target, RenderTexture& color)
+        {
+            auto* read = graph.AllocateParameter<VolumeTestRead>();
+            read->Color = target;
+            void* mapped = nullptr;
+            const bool bOpenGL = GShaderPlatform == ERHIShaderPlatform::OpenGL;
+            const auto map = [&](RHICommandListBase& cmd) { mapped = GRHIApi->MapReadTexture(cmd, color.GetRHI(), {}); };
+            graph.AddPass("VolumeTestRead", VolumeTestRead::GetMetaData(), read, EPassFlag::Graphic, [&](RHICommandListBase& cmd)
+            {
+                if (!bOpenGL)
+                {
+                    map(cmd);
+                }
+            });
+            graph.Execute();
+            const auto fence = color.GetTracker().GetLastAccessFence();
+            auto* queue = GRHIApi->GetQueue(fence.QueueType);
+            queue->WaitValue(fence.Value);
+            if (bOpenGL)
+            {
+                auto* context = queue->AcquireCommandContext();
+                RHICommandListBase cmd(context);
+                cmd.SetImmediate(true);
+                cmd.Begin();
+                map(cmd);
+                cmd.End();
+                queue->WaitValue(queue->ExecuteContext(context));
+            }
+            if (!mapped)
+            {
+                throw std::runtime_error("Volume output readback failed.");
+            }
+            Pixels pixels;
+            std::copy_n(static_cast<const Core::Float4*>(mapped), pixels.size(), pixels.begin());
+            GRHIApi->Unmap(mapped);
+            return pixels;
+        }
+
         Pixels Render(const VolumeRenderSettings& settings, float surfaceDistance, Engine::SceneInterface* scene = nullptr)
         {
             Engine::Camera camera;
@@ -53,6 +98,7 @@ namespace Test
             camera.SetPerspective(Core::DegToRad(45.0f), float(Width) / Height, 0.1f, 100.0f);
             Engine::SceneView view;
             view.ViewMatrix = camera.GetViewMatrix();
+            view.ProjectionMatrix = camera.GetProjectionMatrix();
             view.InvViewProjectionMatrix = camera.GetInverseViewProjectionMatrix();
             view.NearClip = camera.GetNearPlane();
             view.FarClip = camera.GetFarPlane();
@@ -91,40 +137,7 @@ namespace Test
             });
             AddVolumePasses(graph, view, upload->Depth, upload->Color, settings, scene);
 
-            auto* read = graph.AllocateParameter<VolumeTestRead>();
-            read->Color = upload->Color;
-            void* mapped = nullptr;
-            const bool bOpenGL = GShaderPlatform == ERHIShaderPlatform::OpenGL;
-            const auto map = [&](RHICommandListBase& cmd) { mapped = GRHIApi->MapReadTexture(cmd, color.GetRHI(), {}); };
-            graph.AddPass("VolumeTestRead", VolumeTestRead::GetMetaData(), read, EPassFlag::Graphic, [&](RHICommandListBase& cmd)
-            {
-                if (!bOpenGL)
-                {
-                    map(cmd);
-                }
-            });
-            graph.Execute();
-            const auto fence = color.GetTracker().GetLastAccessFence();
-            auto* queue = GRHIApi->GetQueue(fence.QueueType);
-            queue->WaitValue(fence.Value);
-            if (bOpenGL)
-            {
-                auto* context = queue->AcquireCommandContext();
-                RHICommandListBase cmd(context);
-                cmd.SetImmediate(true);
-                cmd.Begin();
-                map(cmd);
-                cmd.End();
-                queue->WaitValue(queue->ExecuteContext(context));
-            }
-            if (!mapped)
-            {
-                throw std::runtime_error("Volume output readback failed.");
-            }
-            Pixels pixels;
-            std::copy_n(static_cast<const Core::Float4*>(mapped), pixels.size(), pixels.begin());
-            GRHIApi->Unmap(mapped);
-            return pixels;
+            return ExecuteAndRead(graph, upload->Color, color);
         }
 
         std::unique_ptr<RenderTexture> MakeShadowTexture(ERHITextureType type, uint32_t layers,
@@ -377,4 +390,150 @@ namespace Test
     };
 
     REGISTER_RENDER_TEST("VolumeRenderTest", VolumeRenderTest);
+
+    class VolumePipelineTest final : public TestBase
+    {
+    public:
+        void Setup() override
+        {
+            GRHIApi = CreateTestRHIApi();
+            GRHIApi->Init();
+            Engine::GDistanceFieldMgr.Initialize();
+            m_Renderer = std::dynamic_pointer_cast<Renderer::RenderModule>(Core::ModuleManager::Get().GetModule("Renderer"));
+            if (!m_Renderer)
+            {
+                throw std::runtime_error("Volume preview test requires the Renderer module.");
+            }
+            m_Renderer->StartupModule();
+        }
+
+        void Teardown() override
+        {
+            m_Renderer->ShutdownModule();
+            RHIPipelineStateCache::ClearAll();
+            Engine::GDistanceFieldMgr.Release();
+            GRHIApi->Shutdown();
+            delete GRHIApi;
+            GRHIApi = nullptr;
+        }
+
+        void Run() override
+        {
+            class PreviewTarget final : public Engine::RenderTarget
+            {
+            public:
+                explicit PreviewTarget(const RHITextureDesc& desc) : Color(desc) { Color.InitRHIResource(); }
+                RenderTexture* GetRenderTarget() override { return &Color; }
+                RenderTexture Color;
+            };
+            RHITextureDesc desc{};
+            desc.Width = Width;
+            desc.Height = Height;
+            desc.Format = ERHIFormat::R32G32B32A32_Float;
+            desc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::RenderTarget |
+                ERHITextureCreateFlag::UAV | ERHITextureCreateFlag::TransferDest | ERHITextureCreateFlag::TransferSrc;
+            PreviewTarget target(desc);
+            auto cube = Engine::StaticMeshAsset::CreateShape(Engine::EBasicMeshShape::Cube);
+            Engine::StaticMeshComponent mesh;
+            mesh.SetStaticMesh(cube->GetMesh());
+            Engine::DirectionalLightComponent directional;
+            directional.SetDirection({0.4f, -1.0f, -0.6f});
+            directional.SetIntensity(2);
+            Engine::PointLightComponent point;
+            point.SetWorldLocation({1, 2, 1.5f});
+            point.SetAttenuationRadius(8);
+            Engine::SpotLightComponent spot;
+            spot.SetWorldLocation({-2, 3, 2});
+            spot.SetDirection({0.45f, -1, -0.4f});
+            spot.SetAttenuationRadius(10);
+            spot.SetInnerConeAngle(15);
+            spot.SetOuterConeAngle(30);
+            Engine::SkyLightComponent sky;
+            auto& environments = Engine::EnvironmentLightResourceManager::Get();
+            environments.ApplyEnvironment(sky, environments.GetDefaultEnvironment());
+            std::unique_ptr<Engine::SceneInterface> scene(m_Renderer->AllocateScene());
+            scene->AddPrimitive(&mesh);
+            scene->AddLight(&directional);
+            scene->AddLight(&point);
+            scene->AddLight(&spot);
+            scene->AddLight(&sky);
+            scene->FlushPendingUpdates();
+
+            Engine::Camera camera;
+            camera.SetPosition({0, 0, 5});
+            camera.SetTarget({0, 0, 0});
+            camera.SetUp({0, 1, 0});
+            camera.SetPerspective(Core::DegToRad(45.0f), float(Width) / Height, 0.1f, 60.0f);
+            Engine::SceneView view;
+            view.Viewport = {0, 0, Width, Height};
+            view.CameraWorldPos = camera.GetPosition();
+            view.CameraWorldDir = {0, 0, -1};
+            view.NearClip = camera.GetNearPlane();
+            view.FarClip = camera.GetFarPlane();
+            view.RenderTargetWidth = float(Width);
+            view.RenderTargetHeight = float(Height);
+            view.ViewMatrix = camera.GetViewMatrix();
+            view.ProjectionMatrix = camera.GetProjectionMatrix();
+            view.ViewProjectionMatrix = camera.GetViewProjectionMatrix();
+            view.InvViewProjectionMatrix = camera.GetInverseViewProjectionMatrix();
+            view.Flags = Engine::VF_EnableShadows;
+
+            const auto render = [&](const VolumeRenderSettings* settings)
+            {
+                auto drawView = view;
+                if (settings)
+                {
+                    drawView.DrawExtensions.push_back(MakeVolumeDrawExtension(*settings, scene.get()));
+                }
+                Engine::SceneViewFamily family;
+                family.Scene = scene.get();
+                family.RenderTarget = &target;
+                family.AddView(std::move(drawView));
+                family.BuildAllViews();
+                m_Renderer->BeginRender(&family);
+                RenderGraphBuilder readback;
+                const auto color = readback.RegisterExternalTexture("VolumePipeline.Output", &target.Color);
+                return ExecuteAndRead(readback, color, target.Color);
+            };
+
+            const auto base = render(nullptr);
+            VolumeRenderSettings settings;
+            settings.Medium.Density = 0.42f;
+            settings.Medium.Scattering = {0.5f, 0.6f, 0.8f};
+            settings.AmbientRadiance = {};
+            settings.LocalVolumes.emplace_back();
+            settings.LocalVolumes.back().HalfExtent = {2, 2, 2};
+            const auto composite = render(&settings);
+            settings.View = EVolumeView::Transmittance;
+            const auto transmittance = render(&settings);
+            settings.View = EVolumeView::IndirectLighting;
+            const auto indirect = render(&settings);
+            settings.bUseSkyEnvironment = false;
+            const auto withoutIBL = render(&settings);
+            if (!std::isfinite(composite[Center].X) || std::abs(composite[Center].X - base[Center].X) < 0.02f ||
+                transmittance[Center].X <= transmittance[0].X + 0.05f || indirect[Center].X <= 0.02f)
+            {
+                throw std::runtime_error("Deferred volume preview did not compose, stop at geometry or receive the sky.");
+            }
+            RequireNear(withoutIBL[Center].X, 0.0f, "disabling sky input with zero ambient removes indirect fog light");
+            RequireNear(render(nullptr)[Center].X, base[Center].X, "view without an extension preserves the original render");
+            std::cout << "VOLUME_PIPELINE_TEST_OK baseline=" << base[Center].X << " composite=" << composite[Center].X <<
+                " foregroundT=" << transmittance[Center].X << " skyT=" << transmittance[0].X <<
+                " indirect=" << indirect[Center].X << std::endl;
+
+            scene->RemovePrimitive(&mesh);
+            scene->RemoveLight(&directional);
+            scene->RemoveLight(&point);
+            scene->RemoveLight(&spot);
+            scene->RemoveLight(&sky);
+            scene->FlushPendingUpdates();
+            environments.ApplyEnvironment(sky, {});
+            environments.ReleaseUnused();
+        }
+
+    private:
+        std::shared_ptr<Renderer::RenderModule> m_Renderer;
+    };
+
+    REGISTER_RENDER_TEST("VolumePipelineTest", VolumePipelineTest);
 }

@@ -4,7 +4,7 @@
 #include "RenderGraphResource.h"
 #include <vector>
 
-namespace Engine { class SceneView; class SceneInterface; }
+namespace Engine { class SceneView; class SceneInterface; struct SceneViewDrawExtension; }
 namespace RenderCore { class RenderGraphBuilder; }
 
 namespace Renderer
@@ -39,7 +39,8 @@ namespace Renderer
         Froxels,
         DirectLighting,
         LightVisibility,
-        LocalOverlap
+        LocalOverlap,
+        IndirectLighting
     };
 
     struct VolumeRenderSettings
@@ -48,15 +49,20 @@ namespace Renderer
         std::vector<LocalVolume> LocalVolumes;
         Core::Float3 AmbientRadiance{0.24f, 0.28f, 0.32f};
         float MaxDistance = 45.0f;
+        float EnvironmentIntensity = 1.0f;
         EVolumeView View = EVolumeView::Composite;
         uint32_t DebugSlice = 16;
         uint32_t LightMask = 7; // Directional, Point, Spot in bits 0 through 2.
         bool bEnabled = true;
         bool bShadows = true;
+        bool bUseSkyEnvironment = true;
     };
 
     // The caller supplies one full-size perspective view and a transferable, linear scene color.
     RENDERER_API void AddVolumePasses(RenderCore::RenderGraphBuilder& builder, const Engine::SceneView& view,
         RenderCore::RenderGraphTextureRef sceneDepth, RenderCore::RenderGraphTextureRef sceneColor,
         const VolumeRenderSettings& settings, Engine::SceneInterface* scene = nullptr);
+
+    // Optional attachment for a caller which owns the scene and its perspective view.
+    RENDERER_API Engine::SceneViewDrawExtension MakeVolumeDrawExtension(VolumeRenderSettings settings, Engine::SceneInterface* scene);
 }

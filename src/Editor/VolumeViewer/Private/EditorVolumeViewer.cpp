@@ -2,6 +2,7 @@
 #include "../../../Framework/Renderer/Private/Volume/VolumeRendering.h"
 #include "Camera.h"
 #include "EngineGlobal.h"
+#include "EnvironmentLightResourceManager.h"
 #include "LightComponent.h"
 #include "RHIApi.h"
 #include "SceneInterface.h"
@@ -65,13 +66,16 @@ namespace Editor
                 m_Scene->RemoveLight(m_Directional.get());
                 m_Scene->RemoveLight(m_Point.get());
                 m_Scene->RemoveLight(m_Spot.get());
+                m_Scene->RemoveLight(m_Sky.get());
                 m_Scene->FlushPendingUpdates();
                 m_Meshes.clear();
                 m_Assets.clear();
                 m_Directional.reset();
                 m_Point.reset();
                 m_Spot.reset();
+                m_Sky.reset();
                 m_Scene.reset();
+                Engine::EnvironmentLightResourceManager::Get().ReleaseUnused();
             }
         }
 
@@ -162,10 +166,7 @@ namespace Editor
             view.FrameIndex = m_FrameIndex++;
             view.FrameTimeSeconds = ImGui::GetTime();
             view.Flags = Engine::VF_EnableShadows;
-            view.DrawExtensions.push_back({[settings = Settings, scene = m_Scene.get()](auto& graph, const auto& currentView, auto color, auto depth)
-            {
-                Renderer::AddVolumePasses(graph, currentView, depth, color, settings, scene);
-            }});
+            view.DrawExtensions.push_back(Renderer::MakeVolumeDrawExtension(Settings, m_Scene.get()));
             Engine::SceneViewFamily family;
             family.Scene = m_Scene.get();
             family.RenderTarget = this;
@@ -239,6 +240,10 @@ namespace Editor
             m_Spot->SetOuterConeAngle(22.0f);
             m_Spot->SetCastShadow(true);
             m_Scene->AddLight(m_Spot.get());
+            m_Sky = std::make_unique<Engine::SkyLightComponent>();
+            auto& environments = Engine::EnvironmentLightResourceManager::Get();
+            environments.ApplyEnvironment(*m_Sky, environments.GetDefaultEnvironment());
+            m_Scene->AddLight(m_Sky.get());
             m_Scene->FlushPendingUpdates();
             ResetCamera();
         }
@@ -249,6 +254,7 @@ namespace Editor
         std::unique_ptr<Engine::DirectionalLightComponent> m_Directional;
         std::unique_ptr<Engine::PointLightComponent> m_Point;
         std::unique_ptr<Engine::SpotLightComponent> m_Spot;
+        std::unique_ptr<Engine::SkyLightComponent> m_Sky;
         std::unique_ptr<RenderCore::RenderTexture> m_Color;
         Engine::Camera m_Camera;
         Core::Float3 m_Focus{0, 0.8f, 0};
@@ -294,7 +300,7 @@ namespace Editor
             ImGui::Checkbox("Enable volume", &settings.bEnabled);
             ImGui::SameLine();
             const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels", "Direct lighting",
-                "Light visibility", "Local overlap"};
+                "Light visibility", "Local overlap", "Indirect lighting"};
             int mode = static_cast<int>(settings.View);
             ImGui::SetNextItemWidth(170.0f);
             if (ImGui::Combo("View", &mode, views, IM_ARRAYSIZE(views)))
@@ -312,6 +318,8 @@ namespace Editor
             if (ImGui::CollapsingHeader("Lights"))
             {
                 ImGui::Checkbox("Volume shadows", &settings.bShadows);
+                ImGui::Checkbox("Use sky environment", &settings.bUseSkyEnvironment);
+                ImGui::SliderFloat("Sky intensity", &settings.EnvironmentIntensity, 0.0f, 5.0f);
                 ImGui::CheckboxFlags("Directional contribution", &settings.LightMask, 1u);
                 ImGui::SameLine();
                 ImGui::CheckboxFlags("Point contribution", &settings.LightMask, 2u);

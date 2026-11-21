@@ -25,6 +25,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     uint2 tile = pixel / TileSize;
     float3 radiance = 0.0;
     float3 transmittance = 1.0;
+    float3 ambient = IndirectVolumeLighting.Load(int3(0, 0, 0)).rgb;
     float front = NearDistance;
     [loop]
     for (uint slice = 0; slice < FroxelSize.z && front < endDepth; ++slice)
@@ -36,7 +37,15 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
         float3 scattering = Medium.Load(int3(VolumeAddress(cell, 1), 0)).rgb;
         float3 emission = Medium.Load(int3(VolumeAddress(cell, 2), 0)).rgb;
         float3 direct = DirectVolumeLighting.Load(int3(VolumeAddress(cell, 0), 0)).rgb;
-        float3 source = IntegrationMode == 5u ? scattering * direct : scattering * (direct + max(AmbientRadiance, 0.0)) + emission;
+        float3 source = scattering * (direct + ambient) + emission;
+        if (IntegrationMode == 5u)
+        {
+            source = scattering * direct;
+        }
+        else if (IntegrationMode == 8u)
+        {
+            source = scattering * ambient;
+        }
         float3 opticalDepth = extinction * length;
         float3 attenuation = exp(-opticalDepth);
         radiance += transmittance * source * SegmentIntegral(extinction, opticalDepth, attenuation, length);

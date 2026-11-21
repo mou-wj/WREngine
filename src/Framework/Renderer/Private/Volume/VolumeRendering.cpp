@@ -64,17 +64,25 @@ namespace Renderer
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, LightingOutput)
     END_SHADER_PARAMETER_STRUCT(VolumeLightingParameters)
 
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeEnvironmentParameters)
+        SHADER_PARAMETER(Core::Float4, AmbientFallback)
+        SHADER_PARAMETER(Core::Float4, SkySettings)
+        SHADER_PARAMETER_SAMPLER(VolumeSkySampler)
+        SHADER_PARAMETER_RDG_TEXTURE(TextureCube<float4>, VolumeSky)
+        SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, AmbientOutput)
+    END_SHADER_PARAMETER_STRUCT(VolumeEnvironmentParameters)
+
     BEGIN_SHADER_PARAMETER_STRUCT(VolumeBufferUpload)
         RDG_BUFFER_ACCESS(Buffer, ERHIResourceAccess::TransferDest)
     END_SHADER_PARAMETER_STRUCT(VolumeBufferUpload)
 
     BEGIN_SHADER_PARAMETER_STRUCT(VolumeIntegrateParameters)
         SHADER_PARAMETER_STRUCT_REFERENCE(VolumeGridParameters, Grid)
-        SHADER_PARAMETER(Core::Float3, AmbientRadiance)
         SHADER_PARAMETER(uint32_t, IntegrationMode)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float>, SceneDepth)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, Medium)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, DirectVolumeLighting)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, IndirectVolumeLighting)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, ScatteringOutput)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, TransmittanceOutput)
     END_SHADER_PARAMETER_STRUCT(VolumeIntegrateParameters)
@@ -117,6 +125,13 @@ namespace Renderer
         static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VolumeLightingParameters::GetMetaData(); }
     };
 
+    class VolumeEnvironmentCS : public GlobalShader
+    {
+    public:
+        DECLARE_GLOBAL_SHADER_TYPE(VolumeEnvironmentCS)
+        static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VolumeEnvironmentParameters::GetMetaData(); }
+    };
+
     class VolumeCompositeCS : public GlobalShader
     {
     public:
@@ -127,6 +142,7 @@ namespace Renderer
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeMediumCS, "VolumeMediumCS", "/volume/VolumeMedium.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeIntegrateCS, "VolumeIntegrateCS", "/volume/VolumeIntegrate.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeLightingCS, "VolumeLightingCS", "/volume/VolumeLighting.sf", "MainCS", ERHIShaderFrequency::Compute);
+    IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeEnvironmentCS, "VolumeEnvironmentCS", "/volume/VolumeEnvironment.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeCompositeCS, "VolumeCompositeCS", "/volume/VolumeComposite.sf", "MainCS", ERHIShaderFrequency::Compute);
 
     namespace
@@ -320,12 +336,20 @@ namespace Renderer
         {
             return;
         }
-        const auto& colorDesc = sceneColor->GetDesc();
-        const float farDistance = std::min(settings.MaxDistance, view.FarClip);
-        if (farDistance <= view.NearClip || colorDesc.Format != ERHIFormat::R32G32B32A32_Float ||
-            !EnumHasAnyFlags(colorDesc.Usage, ERHITextureCreateFlag::TransferDest))
+        if (!sceneColor || !sceneDepth)
         {
-            throw std::invalid_argument("Volume requires linear RGBA32F scene color with TransferDest usage and valid clip distances.");
+            throw std::invalid_argument("Volume requires both scene color and opaque depth.");
+        }
+        const auto& colorDesc = sceneColor->GetDesc();
+        const auto& depthDesc = sceneDepth->GetDesc();
+        const float farDistance = std::min(settings.MaxDistance, view.FarClip);
+        if (view.NearClip <= 0.0f || farDistance <= view.NearClip || colorDesc.Format != ERHIFormat::R32G32B32A32_Float ||
+            !EnumHasAnyFlags(colorDesc.Usage, ERHITextureCreateFlag::TransferDest) || depthDesc.Width != colorDesc.Width ||
+            depthDesc.Height != colorDesc.Height || view.Viewport.X != 0 || view.Viewport.Y != 0 ||
+            view.Viewport.Width != int(colorDesc.Width) || view.Viewport.Height != int(colorDesc.Height) ||
+            !view.bDepthRangeZeroToOne || view.ProjectionMatrix(3, 2) != -1.0f)
+        {
+            throw std::invalid_argument("Volume requires a full-size perspective view, matching zero-to-one depth, and linear RGBA32F color with TransferDest.");
         }
 
         constexpr uint32_t tileSize = 8, atlasColumns = 8;
@@ -382,10 +406,25 @@ namespace Renderer
         const auto directLighting = builder.CreateTexture("Volume.DirectLighting", desc);
         auto* lightingParams = builder.AllocateParameter<VolumeLightingParameters>();
         lightingParams->Grid = grid;
-        BindVolumeLights(builder, view, dynamic_cast<Scene*>(sceneInterface), settings, *lightingParams);
+        auto* scene = dynamic_cast<Scene*>(sceneInterface);
+        BindVolumeLights(builder, view, scene, settings, *lightingParams);
         lightingParams->Medium = medium;
         lightingParams->LightingOutput = MakeUAV(builder, directLighting);
         AddCompute<VolumeLightingCS>(builder, "VolumeInjectLighting", lightingParams, volumeGroups);
+
+        const auto* resources = scene ? &scene->GetGPUResourceInfo().LightResourceInfo : nullptr;
+        auto* environment = settings.bUseSkyEnvironment && resources ? resources->IBLSpecularTexture : nullptr;
+        desc.Width = desc.Height = 1;
+        const auto indirectLighting = builder.CreateTexture("Volume.IndirectLighting", desc);
+        auto* ambientParams = builder.AllocateParameter<VolumeEnvironmentParameters>();
+        ambientParams->AmbientFallback = Pack(settings.AmbientRadiance, 0);
+        ambientParams->SkySettings = {environment ? 1.0f : 0.0f, std::max(0.0f, settings.EnvironmentIntensity),
+            environment ? float(environment->GetRHI()->GetDesc().MipLevels - 1u) : 0.0f, 0.0f};
+        ambientParams->VolumeSkySampler = GlobalSampler.get();
+        ambientParams->VolumeSky = builder.RegisterExternalTexture("Volume.Environment",
+            environment ? environment : GlobalEmptyCubeTexture.get());
+        ambientParams->AmbientOutput = MakeUAV(builder, indirectLighting);
+        AddCompute<VolumeEnvironmentCS>(builder, "VolumeGatherEnvironment", ambientParams, {1, 1, 1});
 
         desc.Width = colorDesc.Width;
         desc.Height = colorDesc.Height;
@@ -393,11 +432,11 @@ namespace Renderer
         const auto transmittance = builder.CreateTexture("Volume.Transmittance", desc);
         auto* integrate = builder.AllocateParameter<VolumeIntegrateParameters>();
         integrate->Grid = grid;
-        integrate->AmbientRadiance = settings.AmbientRadiance;
         integrate->IntegrationMode = static_cast<uint32_t>(settings.View);
         integrate->SceneDepth = sceneDepth;
         integrate->Medium = medium;
         integrate->DirectVolumeLighting = directLighting;
+        integrate->IndirectVolumeLighting = indirectLighting;
         integrate->ScatteringOutput = MakeUAV(builder, scattering);
         integrate->TransmittanceOutput = MakeUAV(builder, transmittance);
         AddCompute<VolumeIntegrateCS>(builder, "VolumeIntegrate", integrate, screenGroups);
@@ -426,5 +465,14 @@ namespace Renderer
                 region.SrcRegion = region.DstRegion = {0, 0, 0, width, height, 1};
                 cmd.CopyTexture(copy->Source->GetRHITexture(), copy->Dest->GetRHITexture(), region);
             });
+    }
+
+    Engine::SceneViewDrawExtension MakeVolumeDrawExtension(VolumeRenderSettings settings, Engine::SceneInterface* scene)
+    {
+        return {[settings = std::move(settings), scene](RenderGraphBuilder& graph, const Engine::SceneView& view,
+            RenderGraphTextureRef color, RenderGraphTextureRef depth)
+        {
+            AddVolumePasses(graph, view, depth, color, settings, scene);
+        }};
     }
 }

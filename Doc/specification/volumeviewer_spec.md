@@ -16,6 +16,8 @@
 
 **Local volumes** 初始包含一个盒体和一个椭球，可新增、删除及编辑变换与介质。**Local overlap** 按覆盖数量着色，白线标记该切片中数量变化的边界。**Density** 显示局部与全局密度之和。 [覆盖与叠加规则](../key_implemetion/algorithm/23-volume-rendering.md#局部介质)
 
+**Indirect lighting** 显示体积中的低频环境散射。可切换 **Use sky environment** 和 **Sky intensity**，天空输入来自预览场景的现有 IBL 环境。主场景需要显式将 `MakeVolumeDrawExtension` 注册到符合输入要求的 SceneView。 [合成约定](../key_implemetion/algorithm/23-volume-rendering.md#天空环境与合成位置)
+
 ## 验证范围
 
 隔离 Debug 构建验证了模块链接、Launcher 启动、首帧提交和 View 栏入口。交互验证停在工具栏，预览窗口的轨道操作、缩放和退出尚未进行界面复验。Launcher 日志仍有已有的 Vulkan Shader 模块诊断。
@@ -27,3 +29,5 @@
 阴影用例注入已知深度的 CSM 数组层、点光 Cube 和聚光 Atlas。三后端均在三类光源同时存在时读回 RGB `(0, 0, 0)`，并验证关闭阴影恢复原光照以及消光保持一致。
 
 局部介质用例的盒体、椭球与全局雾叠加透射率为 0.094419。三后端均验证重叠计数、局部直接光和阴影响应、删除椭球及将盒体移出视野。
+
+`VolumePipelineTest -rhi=Vulkan` 使用真实延迟渲染、基础网格、三种灯光、场景阴影和天空，进行离屏读回。前景透射率约 0.307868，天空约 5.34×10⁻⁸，间接散射红通道为 0.256215，关闭 IBL 后为零。未注册扩展时的前景读回保持一致。测试正常退出，完整 Renderer 初始化仍输出已有的 SPIR-V 校验及旧 Shader 编译诊断。
