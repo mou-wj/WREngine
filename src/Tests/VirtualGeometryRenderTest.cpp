@@ -1,5 +1,5 @@
 #include "TestBase.h"
-#include "../Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.h"
+#include "../Framework/Renderer/Private/VirtualGeometry/VirtualGeomtryRender.h"
 #include "../Framework/Renderer/Private/Scene.h"
 #include "GlobalShader.h"
 #include "MaterialCore.h"

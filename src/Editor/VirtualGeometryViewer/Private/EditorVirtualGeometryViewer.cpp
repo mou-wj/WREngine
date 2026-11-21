@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include "../../../Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.h"
+#include "../../../Framework/Renderer/Private/VirtualGeometry/VirtualGeometryStreaming.h"
 
 namespace Editor
 {

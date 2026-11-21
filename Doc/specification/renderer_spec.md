@@ -4,7 +4,7 @@
 
 ### 入口与职责
 
-[VirtualGeomtryRender.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeomtryRender.h) 声明 `Renderer::AddVirtualGeometryRender`，实现在同目录 cpp。该文件同时承担实例整理和 Pass 编排，没有额外的 Process 类、全局批次缓存或资源管理器。
+[VirtualGeomtryRender.h](../../src/Framework/Renderer/Private/VirtualGeometry/VirtualGeomtryRender.h) 声明 `Renderer::AddVirtualGeometryRender`，实现在同目录 cpp。该文件同时承担实例整理和 Pass 编排，没有额外的 Process 类、全局批次缓存或资源管理器。
 
 ```cpp
 auto visibility = Renderer::AddVirtualGeometryRender(

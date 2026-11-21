@@ -1,5 +1,5 @@
 #include "TestBase.h"
-#include "../Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h"
+#include "../Framework/Renderer/Private/VirtualGeometry/VirtualGeometryRasterPass.h"
 #include "ShaderCompiler.h"
 #include "GlobalShader.h"
 #include "MaterialCore.h"

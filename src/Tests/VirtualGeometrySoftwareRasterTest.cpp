@@ -1,6 +1,6 @@
 #include "TestBase.h"
-#include "../Framework/Renderer/VirtualGeometry/VirtualGeometryMaterialResolvePass.h"
-#include "../Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.h"
+#include "../Framework/Renderer/Private/VirtualGeometry/VirtualGeometryMaterialResolvePass.h"
+#include "../Framework/Renderer/Private/VirtualGeometry/VirtualGeometryLODSelection.h"
 #include "StaticMesh.h"
 #include "MaterialAsset.h"
 #include "TextureAsset.h"

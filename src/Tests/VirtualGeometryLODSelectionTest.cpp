@@ -1,5 +1,5 @@
 #include "TestBase.h"
-#include "../Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.h"
+#include "../Framework/Renderer/Private/VirtualGeometry/VirtualGeometryLODSelection.h"
 #include "StaticMesh.h"
 #include "Transform.hpp"
 #include "RHIApi.h"

@@ -1,8 +1,8 @@
 # Virtual Geometry CPU / GPU 动态 LOD 与合法 DAG Cut
 
-入口为 [SelectVirtualGeometryClusters](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.h)，实现在[同目录 cpp](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryLODSelection.cpp)。它消费 [CPU Build](10-virtual-geometry-cpu-build.md) 的原有数组，不改变 Engine 资源结构。Renderer 总体职责见[架构文档](../../architecture/render/renderer.md)，调用配置见 [Renderer 使用约定](../../specification/renderer_spec.md)。
+入口为 [SelectVirtualGeometryClusters](../../../src/Framework/Renderer/Private/VirtualGeometry/VirtualGeometryLODSelection.h)，实现在[同目录 cpp](../../../src/Framework/Renderer/Private/VirtualGeometry/VirtualGeometryLODSelection.cpp)。它消费 [CPU Build](10-virtual-geometry-cpu-build.md) 的原有数组，不改变 Engine 资源结构。Renderer 总体职责见[架构文档](../../architecture/render/renderer.md)，调用配置见 [Renderer 使用约定](../../specification/renderer_spec.md)。
 
-GPU 入口为 [AddVirtualGeometryGPUSelectionPass](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryGPUSelection.cpp)，计算程序为 [GPUSelection.sf](../../../shaders/virtualgeometry/GPUSelection.sf)。下文先解释 CPU 参考算法和共同投影公式，再说明 GPU 的依赖求值、视锥剔除及间接绘制。两条路径消费相同的 Build 数组。
+GPU 入口为 [AddVirtualGeometryGPUSelectionPass](../../../src/Framework/Renderer/Private/VirtualGeometry/VirtualGeometryGPUSelection.cpp)，计算程序为 [GPUSelection.sf](../../../shaders/virtualgeometry/GPUSelection.sf)。下文先解释 CPU 参考算法和共同投影公式，再说明 GPU 的依赖求值、视锥剔除及间接绘制。两条路径消费相同的 Build 数组。
 
 ## CPU 输入、输出与适用范围
 
@@ -128,7 +128,7 @@ Build 的 TryCollapse 比较折叠前后有向几何外边界边的多重集合�
 
 ## Raster、Metadata 与 Resolve
 
-[Raster](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.cpp) 在构图时按实例调用选择器，将列表保存在本次 RasterInstance。CPU Draw Metadata 和录制 lambda 均遍历同一列表，保证 DrawID 与 ClusterID 对齐；绘制时不重新选择或按 MipLevel 二次过滤。列表及实例快照按值保留到本次图录制结束。
+[Raster](../../../src/Framework/Renderer/Private/VirtualGeometry/VirtualGeometryRasterPass.cpp) 在构图时按实例调用选择器，将列表保存在本次 RasterInstance。CPU Draw Metadata 和录制 lambda 均遍历同一列表，保证 DrawID 与 ClusterID 对齐；绘制时不重新选择或按 MipLevel 二次过滤。列表及实例快照按值保留到本次图录制结束。
 
 VertexFactory 不承担选择职责；仍绑定完整 PositionBuffer，每个选中 Cluster 使用自己的 VertexOffset、IndexOffset、TriangleCount。Visibility 保留 DrawID/PrimitiveID。[Material Resolve](12-virtual-geometry-material-resolve.md) 通过本次 Metadata 查找对应层的 Cluster，再使用局部索引和属性缓冲恢复三角形；材质仍取 Cluster.MaterialIndex 和实例快照。该链路不需要改变 Shader、GBuffer 编码、资源状态或 RHI 后端。
 

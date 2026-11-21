@@ -1,5 +1,5 @@
 #include "TestBase.h"
-#include "../Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h"
+#include "../Framework/Renderer/Private/VirtualGeometry/VirtualGeometryRasterPass.h"
 #include "GlobalShader.h"
 #include "MeshMaterialShader.h"
 #include "RHIPipelineStateCache.h"

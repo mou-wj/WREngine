@@ -1,6 +1,6 @@
 # Virtual Geometry GPU Page Cache 与异步流送
 
-入口是 Renderer 的 [VirtualGeometryStreaming](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.h)，实现在同目录 cpp。压缩文件与分页属于 Engine 的 [VirtualGeometryPageStorage](../../../src/Framework/Engine/PublicHeader/VirtualGeometryPages.h)，位编码见 [算法专题](../algorithm/15-virtual-geometry-page-compression.md)。它们沿既有 Engine → RenderCore/RHI、Renderer → Engine 的依赖方向工作，不增加模块、全局流送管理器、队列或 RenderGraph 接口。
+入口是 Renderer 的 [VirtualGeometryStreaming](../../../src/Framework/Renderer/Private/VirtualGeometry/VirtualGeometryStreaming.h)，实现在同目录 cpp。压缩文件与分页属于 Engine 的 [VirtualGeometryPageStorage](../../../src/Framework/Engine/PublicHeader/VirtualGeometryPages.h)，位编码见 [算法专题](../algorithm/15-virtual-geometry-page-compression.md)。它们沿既有 Engine → RenderCore/RHI、Renderer → Engine 的依赖方向工作，不增加模块、全局流送管理器、队列或 RenderGraph 接口。
 
 ## 所有者与公开调用
 

@@ -6,16 +6,16 @@
 #include "Transform.hpp"
 #include "GlobalShader.h"
 #include "RHIPipelineStateCache.h"
-#include "../../../Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h"
-#include "../../../Framework/Renderer/VirtualGeometry/VirtualGeometryMaterialResolvePass.h"
-#include "../../../Framework/Renderer/VirtualGeometry/VirtualGeometryVertexFactory.h"
+#include "../../../Framework/Renderer/Private/VirtualGeometry/VirtualGeometryRasterPass.h"
+#include "../../../Framework/Renderer/Private/VirtualGeometry/VirtualGeometryMaterialResolvePass.h"
+#include "../../../Framework/Renderer/Private/VirtualGeometry/VirtualGeometryVertexFactory.h"
 #include "../../../Framework/Renderer/Private/Scene.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <stdexcept>
 #include <chrono>
-#include "../../../Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.h"
+#include "../../../Framework/Renderer/Private/VirtualGeometry/VirtualGeometryStreaming.h"
 
 namespace Editor
 {

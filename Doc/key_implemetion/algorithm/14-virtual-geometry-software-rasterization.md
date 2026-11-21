@@ -1,6 +1,6 @@
 # Virtual Geometry GPU 软件光栅化
 
-本专题说明项目第一版 Compute 软件光栅化。入口是 [VirtualGeometryRasterPass](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.cpp)，内部编排在 [VirtualGeometrySoftwareRaster](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometrySoftwareRaster.cpp)，使用方式见 [Viewer](../../specification/virtualgeometryviewer_spec.md)。它消费既有 [GPU DAG 选择](13-virtual-geometry-lod-selection.md)，不改变 Engine 的构建数据、合法 Cut 或原主场景延迟流程。
+本专题说明项目第一版 Compute 软件光栅化。入口是 [VirtualGeometryRasterPass](../../../src/Framework/Renderer/Private/VirtualGeometry/VirtualGeometryRasterPass.cpp)，内部编排在 [VirtualGeometrySoftwareRaster](../../../src/Framework/Renderer/Private/VirtualGeometry/VirtualGeometrySoftwareRaster.cpp)，使用方式见 [Viewer](../../specification/virtualgeometryviewer_spec.md)。它消费既有 [GPU DAG 选择](13-virtual-geometry-lod-selection.md)，不改变 Engine 的构建数据、合法 Cut 或原主场景延迟流程。
 
 ## 输入、输出与执行顺序
 

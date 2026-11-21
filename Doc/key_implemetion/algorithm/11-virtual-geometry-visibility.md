@@ -1,6 +1,6 @@
 # Virtual Geometry VertexFactory 与 Visibility Raster
 
-实现位于 [VirtualGeometryVertexFactory](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryVertexFactory.h) 和 [VirtualGeometryRasterPass](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryRasterPass.h)。CPU 分簇与 DAG 的输入约定见 [虚拟几何构建](10-virtual-geometry-cpu-build.md)，Renderer 总体组织见 [Renderer 架构](../../architecture/render/renderer.md)。
+实现位于 [VirtualGeometryVertexFactory](../../../src/Framework/Renderer/Private/VirtualGeometry/VirtualGeometryVertexFactory.h) 和 [VirtualGeometryRasterPass](../../../src/Framework/Renderer/Private/VirtualGeometry/VirtualGeometryRasterPass.h)。CPU 分簇与 DAG 的输入约定见 [虚拟几何构建](10-virtual-geometry-cpu-build.md)，Renderer 总体组织见 [Renderer 架构](../../architecture/render/renderer.md)。
 
 ## 输入与启用
 

@@ -1,5 +1,5 @@
 #include "TestBase.h"
-#include "../Framework/Renderer/VirtualGeometry/VirtualGeometryMaterialResolvePass.h"
+#include "../Framework/Renderer/Private/VirtualGeometry/VirtualGeometryMaterialResolvePass.h"
 #include "ShaderCompiler.h"
 #include "GlobalShader.h"
 #include "MaterialCore.h"

@@ -1,6 +1,6 @@
 # Virtual Geometry Material Resolve
 
-实现入口为 [VirtualGeometryMaterialResolvePass](../../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryMaterialResolvePass.cpp)。前序输入见 [Visibility Raster](11-virtual-geometry-visibility.md)。
+实现入口为 [VirtualGeometryMaterialResolvePass](../../../src/Framework/Renderer/Private/VirtualGeometry/VirtualGeometryMaterialResolvePass.cpp)。前序输入见 [Visibility Raster](11-virtual-geometry-visibility.md)。
 
 独立 Pass 和测试代码继续保留，不由主场景调用。2026-11-13 回退过公共采样 Helper；2026-11-14 经确认，以显式梯度参数重新适配 Compute，并由独立 VirtualGeometryViewer 验证，不恢复主场景集成。
 
