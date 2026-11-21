@@ -23,6 +23,10 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
             PositionCoverage.Load(int3(pixel, 0)).w > 0.5)
         {
             float4 lighting = LoadSurfaceCacheOutgoing(card, pixel);
+            if (bIndirectOnly != 0u)
+            {
+                lighting.rgb = max(lighting.rgb - DirectRadiance.Load(int3(pixel, 0)).rgb, 0.0);
+            }
             if (lighting.a > 0.5)
             {
                 result.Radiance = lighting;

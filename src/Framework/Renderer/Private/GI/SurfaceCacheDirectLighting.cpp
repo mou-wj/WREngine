@@ -15,25 +15,9 @@ using namespace RHI;
 
 namespace Renderer
 {
-    BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCacheLightData)
-        SHADER_PARAMETER(Core::Float4, ColorIntensity)
-        SHADER_PARAMETER(Core::Float4, PositionRadius)
-        SHADER_PARAMETER(Core::Float4, DirectionInnerCos)
-        SHADER_PARAMETER(Core::Float4, ConeBias)
-        SHADER_PARAMETER(Core::UInt4, Info) // Type, first slice, slice count, reserved.
-    END_SHADER_PARAMETER_STRUCT(SurfaceCacheLightData)
-
-    BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCacheShadowSlice)
-        SHADER_PARAMETER(Core::Mat4, ViewProjection)
-        SHADER_PARAMETER(Core::UInt4, Rect)
-    END_SHADER_PARAMETER_STRUCT(SurfaceCacheShadowSlice)
-
     BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCacheDirectParameters)
         SHADER_PARAMETER_STRUCT_REFERENCE(SurfaceCacheMaterialParameters, Cache)
-        SHADER_PARAMETER(uint32_t, LightCount)
-        SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheLightData, Lights)
-        SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheShadowSlice, Shadows)
-        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, ShadowAtlas)
+        SHADER_PARAMETER_STRUCT_REFERENCE(SurfaceCachePunctualLightParameters, Punctual)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, Output)
     END_SHADER_PARAMETER_STRUCT(SurfaceCacheDirectParameters)
 
@@ -52,6 +36,7 @@ namespace Renderer
         SHADER_PARAMETER_STRUCT_REFERENCE(SurfaceCacheMaterialParameters, Cache)
         SHADER_PARAMETER_STRUCT_REFERENCE(SurfaceCacheLightingParameters, Lighting)
         SHADER_PARAMETER(uint32_t, QueryCount)
+        SHADER_PARAMETER(uint32_t, bIndirectOnly)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheQueryResult, MaterialResults)
         SHADER_PARAMETER_RDG_RWSTRUCTURED_BUFFER(SurfaceCacheLightingQueryResult, Results)
     END_SHADER_PARAMETER_STRUCT(SurfaceCacheLightingLookupParameters)
@@ -261,6 +246,8 @@ namespace Renderer
         m_Radiance.reset();
         m_ShadowAllocator.reset();
         m_ShadowSlots.clear();
+        m_LightData.clear();
+        m_ShadowData.clear();
         m_Material = nullptr;
     }
 
@@ -275,7 +262,7 @@ namespace Renderer
     }
 
     SurfaceCacheLightingParameters SurfaceCacheDirectLighting::AddUpdatePasses(RenderGraphBuilder& builder,
-        const SurfaceCacheMaterial& material, const std::vector<SurfaceCacheLight>& lights)
+        const SurfaceCacheMaterial& material, const std::vector<SurfaceCacheLight>& lights, SurfaceCachePunctualLightParameters* punctual)
     {
         m_bValid = false;
         Check(m_Radiance && m_Material == &material && material.GetBaseColorAtlas(), "initialize against this material cache first");
@@ -445,10 +432,13 @@ namespace Renderer
         auto radiance = builder.RegisterExternalTexture("SurfaceCache.Lighting." + std::to_string(reinterpret_cast<uintptr_t>(this)), m_Radiance.get());
         auto* p = builder.AllocateParameter<SurfaceCacheDirectParameters>();
         p->Cache = cache;
-        p->LightCount = uint32_t(data.size());
-        p->Lights = ReadBuffer(builder, Upload(builder, data, "SurfaceCache.LightData"));
-        p->Shadows = ReadBuffer(builder, Upload(builder, shadows, "SurfaceCache.ShadowSlices"));
-        p->ShadowAtlas = shadow;
+        m_LightData = std::move(data);
+        m_ShadowData = std::move(shadows);
+        p->Punctual = RegisterPunctualLights(builder);
+        if (punctual)
+        {
+            *punctual = p->Punctual;
+        }
         p->Output = WriteTexture(builder, radiance);
         Compute<SurfaceCacheDirectCS>(builder, "SurfaceCacheDirectLighting", p, (cache.AtlasSize.X + 7) / 8, (cache.AtlasSize.Y + 7) / 8);
         m_MaterialRevision = material.GetRevision();
@@ -456,8 +446,20 @@ namespace Renderer
         return Register(builder, material);
     }
 
+    SurfaceCachePunctualLightParameters SurfaceCacheDirectLighting::RegisterPunctualLights(RenderGraphBuilder& builder) const
+    {
+        const auto suffix = std::to_string(reinterpret_cast<uintptr_t>(this));
+        SurfaceCachePunctualLightParameters parameters{};
+        parameters.LightCount = uint32_t(m_LightData.size());
+        parameters.ShadowScreenYSign = GShaderPlatform == ERHIShaderPlatform::OpenGL ? 1.0f : -1.0f;
+        parameters.Lights = ReadBuffer(builder, Upload(builder, m_LightData, "SurfaceCache.LightData." + suffix));
+        parameters.Shadows = ReadBuffer(builder, Upload(builder, m_ShadowData, "SurfaceCache.ShadowSlices." + suffix));
+        parameters.ShadowAtlas = builder.RegisterExternalTexture("SurfaceCache.Shadows." + suffix, m_ShadowAllocator->GetShadowAtlas());
+        return parameters;
+    }
+
     RenderGraphBufferRef AddSurfaceCacheLightingLookupPass(RenderGraphBuilder& builder, const SurfaceCacheMaterialParameters& material,
-        const SurfaceCacheLightingParameters& lighting, RenderGraphBufferRef materialResults, uint32_t count)
+        const SurfaceCacheLightingParameters& lighting, RenderGraphBufferRef materialResults, uint32_t count, bool bIndirectOnly)
     {
         Check(materialResults && count > 0 && materialResults->GetDesc().Stride == sizeof(SurfaceCacheQueryResult) &&
             uint64_t(count) * sizeof(SurfaceCacheQueryResult) <= materialResults->GetDesc().Size, "invalid material query buffer/count");
@@ -465,6 +467,7 @@ namespace Renderer
         p->Cache = material;
         p->Lighting = lighting;
         p->QueryCount = count;
+        p->bIndirectOnly = bIndirectOnly ? 1u : 0u;
         p->MaterialResults = ReadBuffer(builder, materialResults);
         RenderGraphBufferDesc desc;
         desc.Stride = sizeof(SurfaceCacheLightingQueryResult);

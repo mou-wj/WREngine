@@ -31,6 +31,7 @@ namespace Editor
             {"Screen Probes / Hit Ratio", Renderer::ELumenViewerMode::ProbeHitRatio},
             {"Screen Probes / Radiance", Renderer::ELumenViewerMode::ProbeRadiance},
             {"Screen Probes / World Cache Hits", Renderer::ELumenViewerMode::ProbeWorldCacheHits},
+            {"Screen Probes / Trace Source", Renderer::ELumenViewerMode::ProbeTraceSource},
             {"GI / Raw", Renderer::ELumenViewerMode::ProbeRawDiffuse},
             {"GI / Temporal", Renderer::ELumenViewerMode::ProbeTemporalDiffuse},
             {"GI / Spatial Filtered", Renderer::ELumenViewerMode::IndirectDiffuse},
@@ -40,7 +41,8 @@ namespace Editor
             {"Reflections / Composite", Renderer::ELumenViewerMode::ReflectionComposite},
             {"Reflections / Ray Direction", Renderer::ELumenViewerMode::ReflectionRayDirection},
             {"Reflections / Screen Hit", Renderer::ELumenViewerMode::ReflectionScreenHit},
-            {"Reflections / SDF Hit", Renderer::ELumenViewerMode::ReflectionSDFHit},
+            {"Reflections / Geometry Hit", Renderer::ELumenViewerMode::ReflectionSDFHit},
+            {"Reflections / Hit Instance", Renderer::ELumenViewerMode::ReflectionHitInstance},
             {"Reflections / Source", Renderer::ELumenViewerMode::ReflectionSource},
             {"Reflections / Roughness", Renderer::ELumenViewerMode::ReflectionRoughness},
             {"Reflections / Radiance", Renderer::ELumenViewerMode::ReflectionRadiance},
@@ -93,6 +95,8 @@ namespace Editor
                 return "Indirect diffuse after temporal accumulation and edge-aware spatial filtering.";
             case Renderer::ELumenViewerMode::ProbeWorldCacheHits:
                 return "Cyan and violet show rays served by the fine or coarse grid. Gray means full tracing or a nearer SDF hit.";
+            case Renderer::ELumenViewerMode::ProbeTraceSource:
+                return "Per-tile geometry hits. Yellow: SDF. Cyan: hardware with a Card. Magenta: hardware without a Card.";
             case Renderer::ELumenViewerMode::ProbeRawDiffuse:
                 return "Current indirect diffuse after probe reconstruction, before temporal accumulation.";
             case Renderer::ELumenViewerMode::ProbeTemporalDiffuse:
@@ -110,9 +114,11 @@ namespace Editor
             case Renderer::ELumenViewerMode::ReflectionScreenHit:
                 return "Screen hit UV in red and green, confidence in blue.";
             case Renderer::ELumenViewerMode::ReflectionSDFHit:
-                return "Red marks SDF geometry. Green indicates valid Card lighting, blue indicates hit distance.";
+                return "Geometry trace source colored by distance. Cyan and magenta indicate hardware hits.";
+            case Renderer::ELumenViewerMode::ReflectionHitInstance:
+                return "Each traced scene instance has a stable color. Misses are black.";
             case Renderer::ELumenViewerMode::ReflectionSource:
-                return "Green: screen hit. Yellow: SDF and Card. Orange: unshaded SDF hit. Purple: world probe. Blue: environment.";
+                return "Green: screen. Cyan: shaded hardware. Magenta: unshaded hardware. Yellow/orange: SDF. Purple: world probe. Blue: environment.";
             case Renderer::ELumenViewerMode::ReflectionRoughness:
                 return "Receiver roughness from GBuffer B.";
             case Renderer::ELumenViewerMode::ReflectionRadiance:
@@ -355,7 +361,29 @@ namespace Editor
             ImGui::Text("View: %s", GetModeName(m_Mode));
             ImGui::TextWrapped("%s", GetModeDescription(m_Mode));
             const bool bReflections = m_Mode >= Renderer::ELumenViewerMode::ReflectionComposite &&
-                m_Mode <= Renderer::ELumenViewerMode::ReflectionContribution;
+                m_Mode <= Renderer::ELumenViewerMode::ReflectionHitInstance;
+            const bool bScreenProbe = (m_Mode >= Renderer::ELumenViewerMode::ProbePlacement &&
+                m_Mode <= Renderer::ELumenViewerMode::IndirectDiffuse) ||
+                (m_Mode >= Renderer::ELumenViewerMode::ProbeWorldCacheHits && m_Mode <= Renderer::ELumenViewerMode::ProbeReprojectionError) ||
+                m_Mode == Renderer::ELumenViewerMode::ProbeTraceSource;
+            if (bReflections || bScreenProbe)
+            {
+                const auto tracing = m_Preview->GetRayTracingInfo();
+                ImGui::BeginDisabled(!tracing.bSupported);
+                ImGui::Checkbox("Vulkan hardware tracing", &m_bUseHardwareTracing);
+                ImGui::EndDisabled();
+                if (m_bUseHardwareTracing && tracing.bActive)
+                {
+                    ImGui::Text("Hardware  |  BLAS %u  |  TLAS instances %u  |  Revision %llu", tracing.BLASCount,
+                        tracing.InstanceCount, static_cast<unsigned long long>(tracing.TLASRevision));
+                }
+                else
+                {
+                    const char* label = !tracing.bSupported ? "SDF tracing (hardware unavailable)" :
+                        m_bUseHardwareTracing ? "SDF tracing (hardware scene unavailable)" : "SDF tracing";
+                    ImGui::TextDisabled("%s", label);
+                }
+            }
             if (m_Mode >= Renderer::ELumenViewerMode::ProbePlacement)
             {
                 ImGui::Checkbox(bReflections ? "Use radiosity in reflections" : "Use radiosity in Screen Probes", &m_Radiosity.bEnabled);
@@ -372,9 +400,7 @@ namespace Editor
                 ImGui::SameLine();
                 ImGui::Text("Iteration %u / %u", m_Preview->GetRadiosityIteration(), m_Radiosity.IterationLimit);
             }
-            if ((m_Mode >= Renderer::ELumenViewerMode::ProbePlacement && m_Mode <= Renderer::ELumenViewerMode::IndirectDiffuse) ||
-                m_Mode == Renderer::ELumenViewerMode::WorldProbeAtlas || m_Mode == Renderer::ELumenViewerMode::ProbeWorldCacheHits ||
-                (m_Mode >= Renderer::ELumenViewerMode::ProbeRawDiffuse && m_Mode <= Renderer::ELumenViewerMode::ProbeReprojectionError) || bReflections)
+            if (bScreenProbe || m_Mode == Renderer::ELumenViewerMode::WorldProbeAtlas || bReflections)
             {
                 if (m_Mode != Renderer::ELumenViewerMode::WorldProbeAtlas)
                 {
@@ -412,7 +438,7 @@ namespace Editor
             m_PreviewSize = {std::max(1, static_cast<int>(imageWidth * previewScale)),
                 std::max(1, static_cast<int>(imageHeight * previewScale))};
             m_bHasScene = source.Scene && source.View && m_Preview->Render(source, m_PreviewSize, m_Mode,
-                m_SelectedCardIndex, m_CardView, m_Radiosity, m_WorldCache);
+                m_SelectedCardIndex, m_CardView, m_Radiosity, m_WorldCache, m_bUseHardwareTracing);
             m_Radiosity.bStep = false;
             m_Radiosity.bRestart = false;
             if (auto* texture = m_Preview->GetTexture())

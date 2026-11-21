@@ -2,6 +2,8 @@
 #include <set>
 #include <stdexcept>
 #include <array>
+#include <algorithm>
+#include <cstring>
 #include "VulkanRHIApi.h"
 #include "VulkanQueue.h"
 #include "VulkanMemory.h"
@@ -65,7 +67,7 @@ void VulkanDevice::QueryDeviceProperties()
 {
     // 物理设备的固定限制在初始化时统一查询，供后续创建光追管线和 SBT 复用。
     VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
-    properties.pNext = &m_RayTracingPipelineProperties;
+    properties.pNext = m_bRayTracingSupported ? &m_RayTracingPipelineProperties : nullptr;
     VKFunc::GetPhysicalDeviceProperties2(m_PhysicalDevice, &properties);
     m_RasterSubPixelBits = properties.properties.limits.subPixelPrecisionBits;
 }
@@ -181,8 +183,6 @@ void VulkanDevice::CreateLogicalDevice(VkPhysicalDevice physicalDevice,
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
     createInfo.pQueueCreateInfos = queueCreateInfos.data();
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-    createInfo.ppEnabledExtensionNames = extensions.data();
     createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
     createInfo.ppEnabledLayerNames = layers.data();
     VkPhysicalDeviceFeatures featuresToEnable = {};
@@ -192,34 +192,62 @@ void VulkanDevice::CreateLogicalDevice(VkPhysicalDevice physicalDevice,
     createInfo.pEnabledFeatures = &featuresToEnable;
 
 
-	VkPhysicalDeviceFeatures2 features2{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
-    
     if (m_TimelineSemaphoreFeatures.timelineSemaphore) {
 		createInfo.pNext = &m_TimelineSemaphoreFeatures;
     }
-	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelStructFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
-    accelStructFeatures.accelerationStructure = VK_TRUE;
-	accelStructFeatures.pNext = (void*)createInfo.pNext;
-    createInfo.pNext = &accelStructFeatures;
-    
-	VkPhysicalDeviceBufferDeviceAddressFeaturesKHR bufferDeviceAddressFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR };
-    bufferDeviceAddressFeatures.bufferDeviceAddress = VK_TRUE;
-    bufferDeviceAddressFeatures.pNext = (void*)createInfo.pNext;
-    createInfo.pNext = &bufferDeviceAddressFeatures;
 
-	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR };
-	rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
-	rayTracingPipelineFeatures.pNext = (void*)createInfo.pNext;
-	createInfo.pNext = &rayTracingPipelineFeatures;
-
+    VkPhysicalDeviceBufferDeviceAddressFeaturesKHR bufferDeviceAddressFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR };
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR pipelineFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR };
     VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
-    VkPhysicalDeviceFeatures2 rayQuerySupport{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
-    rayQuerySupport.pNext = &rayQueryFeatures;
-    VKFunc::GetPhysicalDeviceFeatures2(physicalDevice, &rayQuerySupport);
-    if (!rayQueryFeatures.rayQuery)
-        throw std::runtime_error("The selected Vulkan device does not support rayQuery");
-    rayQueryFeatures.pNext = const_cast<void*>(createInfo.pNext);
-    createInfo.pNext = &rayQueryFeatures;
+    VkPhysicalDeviceFeatures2 rayTracingSupport{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    rayTracingSupport.pNext = &bufferDeviceAddressFeatures;
+    bufferDeviceAddressFeatures.pNext = &accelerationFeatures;
+    accelerationFeatures.pNext = &pipelineFeatures;
+    pipelineFeatures.pNext = &rayQueryFeatures;
+    VKFunc::GetPhysicalDeviceFeatures2(physicalDevice, &rayTracingSupport);
+
+    auto hasExtension = [&](const char* name)
+    {
+        return std::ranges::any_of(extensions, [&](const char* extension) { return std::strcmp(name, extension) == 0; });
+    };
+    const bool acceleration = bufferDeviceAddressFeatures.bufferDeviceAddress && accelerationFeatures.accelerationStructure &&
+        hasExtension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) && hasExtension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+    m_bRayTracingSupported = acceleration && pipelineFeatures.rayTracingPipeline && hasExtension(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+    const bool rayQuery = acceleration && rayQueryFeatures.rayQuery && hasExtension(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+    const bool enableAcceleration = m_bRayTracingSupported || rayQuery;
+
+    std::vector<const char*> deviceExtensions = extensions;
+    std::erase_if(deviceExtensions, [&](const char* name)
+    {
+        return (!enableAcceleration && std::strcmp(name, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0) ||
+            (!m_bRayTracingSupported && std::strcmp(name, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) == 0) ||
+            (!rayQuery && std::strcmp(name, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0);
+    });
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+    createInfo.ppEnabledExtensionNames = deviceExtensions.data();
+
+    // Query support and opt only into the features actually consumed by this backend.
+    bufferDeviceAddressFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR,
+        const_cast<void*>(createInfo.pNext), bufferDeviceAddressFeatures.bufferDeviceAddress};
+    createInfo.pNext = &bufferDeviceAddressFeatures;
+    if (enableAcceleration)
+    {
+        accelerationFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
+            const_cast<void*>(createInfo.pNext), VK_TRUE};
+        createInfo.pNext = &accelerationFeatures;
+    }
+    if (m_bRayTracingSupported)
+    {
+        pipelineFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
+            const_cast<void*>(createInfo.pNext), VK_TRUE};
+        createInfo.pNext = &pipelineFeatures;
+    }
+    if (rayQuery)
+    {
+        rayQueryFeatures.pNext = const_cast<void*>(createInfo.pNext);
+        createInfo.pNext = &rayQueryFeatures;
+    }
 
     VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES };
     scalarBlockLayoutFeatures.scalarBlockLayout = VK_TRUE;

@@ -14,15 +14,15 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     SurfaceCacheLightingQueryResult lighting = LightingResults[index];
     ScreenProbeRadianceRecord result = (ScreenProbeRadianceRecord)0;
 
-    bool sdfHit = (hit.Status.z & 1u) != 0;
+    bool geometryHit = (hit.Status.z & 1u) != 0;
     bool materialValid = (hit.Status.z & 2u) != 0;
     bool lightingValid = (lighting.Status.z & 2u) != 0;
-    if (sdfHit && materialValid && lightingValid)
+    if (geometryHit && materialValid && lightingValid)
     {
         result.Radiance = float4(max(lighting.Radiance.rgb, 0.0), 1.0);
         result.Status.x = 1u;
     }
-    else if (!sdfHit && (hit.Status.z & 4u) == 0u && Queries[index].Control.y == 1u)
+    else if (!geometryHit && (hit.Status.z & 4u) == 0u && Queries[index].Control.y == 1u)
     {
         float4 cache = bUseWorldCache != 0u ? WorldCandidates[index].RadianceLevel : 0.0;
         if (cache.w > 0.0)
@@ -42,6 +42,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     }
 
     // Count actual SDF marching steps for cache/reference readback.
-    result.Status.z = hit.Status.w;
+    result.Status.z = (hit.Status.z & 8u) == 0u ? hit.Status.w : 0u;
+    result.Status.w = hit.Status.z & 15u;
     Radiance[index] = result;
 }

@@ -46,7 +46,7 @@
 | [内存、资源池与瞬态资源](performance/04-memory-and-transient-resources.md) | 对齐、切分、复用、回收分别由谁负责？ |
 | [资产、材质与实例数据](performance/05-assets-materials-and-instance-data.md) | 如何合并加载请求、维持文件/基础几何资产所有权、导入工程依赖和更新 GPU 数据？ |
 | [Shader 编译与绑定](performance/06-shader-compilation-and-binding.md) | C++ 参数怎样进入 HLSL、反射和各后端绑定，布局缓存怎样保持 CPU 参数信息一致？ |
-| [光追 AS 与 SBT](performance/07-ray-tracing-as-and-sbt.md) | AS 存储、scratch、group handle 和 SBT 怎样衔接？ |
+| [光追 AS 与 SBT](performance/07-ray-tracing-as-and-sbt.md) | AS、scratch 与 SBT 怎样衔接？GIViewer 如何复用 BLAS、更新 TLAS 和安排追踪？ |
 | [UI 合成与窗口生命周期](performance/08-ui-rendering-and-window-lifetime.md) | 当前鼠标事件怎样分发，ImGui 怎样共用 RHI，纹理与窗口完成点怎样维护？ |
 | [构建与模块启动](performance/09-module-build-and-startup.md) | 依赖准备、DLL 注册、拓扑启动和逆序关闭怎样串起来？ |
 | [工程快照与二进制数据](performance/10-project-snapshots.md) | 如何保存运行时节点、层级及资源，脱离源文件恢复，并保持多文件一致和 GPU 状态？ |
@@ -76,7 +76,7 @@
 | [Surface Cache Radiosity](algorithm/18-surface-cache-radiosity.md) | Card 半球采样如何传播多次漫反射，固定采样与反射率如何影响收敛？ |
 | [World Space Radiance Cache](algorithm/19-world-radiance-cache.md) | 两级网格如何跨帧复用节点，方向光照怎样表示，何时可截短屏幕射线？ |
 | [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) | 如何用深度法线重投影、识别遮挡失效、抑制历史拖影并保留光照边界？ |
-| [GIViewer 混合反射](algorithm/21-hybrid-reflections.md) | 屏幕深度与 Mesh SDF 如何提供反射命中，镜面光如何与延迟光照合成？ |
+| [GIViewer 混合反射](algorithm/21-hybrid-reflections.md) | 屏幕深度、Mesh SDF 与 Vulkan 硬件如何提供命中？怎样恢复交点并完成镜面着色？ |
 
 ## 如何阅读和核查
 

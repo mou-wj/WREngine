@@ -1,0 +1,66 @@
+#include "/Generated/ShaderParameters/GIHardwareResolveParameters.sf"
+#include "/Generated/ShaderParameters/SurfaceCacheMaterialParameters.sf"
+#include "/GI/SurfaceCacheLookup.sf"
+#include "/GI/WorldRadianceOctahedral.sf"
+
+[numthreads(64, 1, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint index = thread.x;
+    if (index >= QueryCount)
+    {
+        return;
+    }
+
+    SurfaceCacheQueryResult result = (SurfaceCacheQueryResult)0;
+    result.Status.xy = 0xffffffffu;
+    result.SampleCoordinate = 0xffffffffu;
+    GIHardwareHit hit = TraceHits[index];
+    if (hit.IDs.w != 0u)
+    {
+        SurfaceCacheQuery query = ResolveQueries[index];
+        GIHardwareInstance instance = TraceInstances[hit.IDs.x];
+        GIHardwareTriangle hitTriangle = TraceTriangles[instance.Info.y + hit.IDs.y];
+        GIHardwareMaterial material = TraceMaterials[instance.Info.z + hitTriangle.Info.x];
+        float3 direction = normalize(query.Direction.xyz);
+        float3 position = query.OriginDistance.xyz + hit.DistanceBarycentric.x * direction;
+        float3 edge1 = mul((float3x3)instance.LocalToWorld, hitTriangle.Edge1.xyz);
+        float3 edge2 = mul((float3x3)instance.LocalToWorld, hitTriangle.Edge2.xyz);
+        float3 geometricNormal = normalize(cross(edge1, edge2));
+        geometricNormal = dot(geometricNormal, direction) <= 0.0 ? geometricNormal : -geometricNormal;
+        float2 barycentric = hit.DistanceBarycentric.yz;
+        float3 normal = hitTriangle.Normal0.xyz * (1.0 - barycentric.x - barycentric.y) +
+            hitTriangle.Normal1.xyz * barycentric.x + hitTriangle.Normal2.xyz * barycentric.y;
+        normal = mul((float3x3)instance.NormalToWorld, normal);
+        normal = dot(normal, normal) > 1e-12 ? normalize(normal) : geometricNormal;
+        normal = dot(geometricNormal, normal) >= 0.0 ? normal : -normal;
+
+        result.PositionDistance = float4(position, hit.DistanceBarycentric.x);
+        result.Status = uint4(instance.Info.x, 0xffffffffu, 1u | 8u, hit.IDs.y);
+        result.SampleCoordinate.zw = asuint(EncodeWorldRadianceDirection(geometricNormal));
+        uint card;
+        uint2 pixel;
+        if (LookupSurfaceCacheSample(instance.Info.x, position, geometricNormal, 0.002,
+            result.BaseColorMetallic, result.NormalRoughness, card, pixel))
+        {
+            result.Status.y = card;
+            result.Status.z |= 2u;
+            result.SampleCoordinate.xy = pixel;
+        }
+        if (material.Flags.x == 0u)
+        {
+            result.BaseColorMetallic = material.BaseMetal;
+            result.NormalRoughness = float4(normal, material.Surface.x);
+            result.Status.z |= 16u;
+        }
+        if (material.Flags.y != 0u)
+        {
+            result.Status.z |= 32u;
+        }
+        if (material.Flags.z == 0u)
+        {
+            result.NormalRoughness.xyz = normal;
+        }
+    }
+    TraceResults[index] = result;
+}

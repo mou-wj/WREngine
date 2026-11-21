@@ -1,0 +1,56 @@
+struct GIHardwareRayPayload
+{
+    float4 DistanceBarycentric;
+    uint4 IDs;
+};
+
+#if GI_RAY_STAGE == 0
+#include "/Generated/ShaderParameters/GIHardwareDispatchParameters.sf"
+
+RaytracingAccelerationStructure HardwareScene;
+
+[shader("raygeneration")]
+void RayGenMain()
+{
+    uint2 pixel = DispatchRaysIndex().xy;
+    uint count, stride;
+    HardwareQueries.GetDimensions(count, stride);
+    uint index = pixel.y * DispatchRaysDimensions().x + pixel.x;
+    if (index >= count)
+    {
+        return;
+    }
+
+    SurfaceCacheQuery query = HardwareQueries[index];
+    GIHardwareRayPayload hit = (GIHardwareRayPayload)0;
+    if (query.Control.y == 1u && query.Control.x == 0xffffffffu &&
+        query.OriginDistance.w > 0.0001 && dot(query.Direction.xyz, query.Direction.xyz) > 0.0)
+    {
+        RayDesc ray;
+        ray.Origin = query.OriginDistance.xyz;
+        ray.Direction = normalize(query.Direction.xyz);
+        ray.TMin = 0.0001;
+        ray.TMax = query.OriginDistance.w;
+        TraceRay(HardwareScene, RAY_FLAG_NONE, 0xff, 0, 0, 0, ray, hit);
+    }
+    GIHardwareHit result;
+    result.DistanceBarycentric = hit.DistanceBarycentric;
+    result.IDs = hit.IDs;
+    HardwareHits[index] = result;
+}
+
+#elif GI_RAY_STAGE == 1
+[shader("miss")]
+void MissMain(inout GIHardwareRayPayload hit)
+{
+    hit.IDs.w = 0u;
+}
+
+#else
+[shader("closesthit")]
+void ClosestHitMain(inout GIHardwareRayPayload hit, BuiltInTriangleIntersectionAttributes attributes)
+{
+    hit.DistanceBarycentric = float4(RayTCurrent(), attributes.barycentrics, 0.0);
+    hit.IDs = uint4(InstanceID(), PrimitiveIndex(), HitKind(), 1u);
+}
+#endif

@@ -1,6 +1,6 @@
 # 源码检索与文档覆盖清单
 
-更新日期：2026-11-21。首次整理基线为 `04f910d`。本轮补充 GIViewer、Screen Probe、Surface Cache 光照、世界探针缓存、GI 时空滤波、混合反射和相关测试。清单源于文件枚举、关键词检索与调用链核对，运行结果查相应开发记录。
+更新日期：2026-11-21。首次整理基线为 `04f910d`。本轮补充 GIViewer、Screen Probe、Surface Cache 光照、世界探针缓存、GI 时空滤波、混合反射、硬件光追和相关测试。清单源于文件枚举、关键词检索与调用链核对，运行结果查相应开发记录。
 
 范围：自有 src、全部 Shader、CMake/BuildDeps、依赖元信息和 VS Code 配置。extern/glad 是外部生成 loader；deps、构建目录、生成文件、二进制资源、validation 产物、temp 实验不逐项展开。外部库的使用边界见工程专题，驱动和第三方算法不冒充自有实现。
 
@@ -59,7 +59,7 @@
 | [config/3rds/tinygltf.json](../../config/3rds/tinygltf.json) | 41 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [config/3rds/vulkan.json](../../config/3rds/vulkan.json) | 39 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## shaders（72 个文件）
+## shaders（89 个条目）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -120,11 +120,13 @@
 | [shaders/virtualgeometry/RasterRouting.sf](../../shaders/virtualgeometry/RasterRouting.sf) | 67 | 渲染 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 | [shaders/virtualgeometry/SoftwareClear.sf](../../shaders/virtualgeometry/SoftwareClear.sf) | 12 | 渲染 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 | [shaders/virtualgeometry/SoftwareRaster.sf](../../shaders/virtualgeometry/SoftwareRaster.sf) | 133 | 渲染 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
-| [shaders/GI/ReflectionResolve.sf](../../shaders/GI/ReflectionResolve.sf) | 111 | 算法、渲染 | [混合反射](algorithm/21-hybrid-reflections.md) |
+| [shaders/GI/GIHardwareResolve.sf](../../shaders/GI/GIHardwareResolve.sf) | 66 | 算法、渲染 | [硬件命中与着色](algorithm/21-hybrid-reflections.md#硬件命中与着色) |
+| [shaders/GI/GIRayTracing.sf](../../shaders/GI/GIRayTracing.sf) | 56 | 算法、渲染 | [硬件命中与着色](algorithm/21-hybrid-reflections.md#硬件命中与着色) |
+| [shaders/GI/ReflectionResolve.sf](../../shaders/GI/ReflectionResolve.sf) | 151 | 算法、渲染 | [混合反射](algorithm/21-hybrid-reflections.md) |
 | [shaders/GI/ReflectionTrace.sf](../../shaders/GI/ReflectionTrace.sf) | 192 | 算法、渲染 | [混合反射](algorithm/21-hybrid-reflections.md) |
-| [shaders/GI/ScreenProbeGather.sf](../../shaders/GI/ScreenProbeGather.sf) | 47 | 算法、渲染 | [Screen Probe](algorithm/17-screen-probe-gather.md) |
+| [shaders/GI/ScreenProbeGather.sf](../../shaders/GI/ScreenProbeGather.sf) | 48 | 算法、渲染 | [Screen Probe](algorithm/17-screen-probe-gather.md) |
 | [shaders/GI/ScreenProbeGeometry.sf](../../shaders/GI/ScreenProbeGeometry.sf) | 19 | 算法、渲染 | [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) |
-| [shaders/GI/ScreenProbeIntegration.sf](../../shaders/GI/ScreenProbeIntegration.sf) | 208 | 算法、渲染 | [Screen Probe](algorithm/17-screen-probe-gather.md) |
+| [shaders/GI/ScreenProbeIntegration.sf](../../shaders/GI/ScreenProbeIntegration.sf) | 233 | 算法、渲染 | [Screen Probe](algorithm/17-screen-probe-gather.md) |
 | [shaders/GI/ScreenProbePlacement.sf](../../shaders/GI/ScreenProbePlacement.sf) | 72 | 算法、渲染 | [Screen Probe](algorithm/17-screen-probe-gather.md) |
 | [shaders/GI/ScreenProbeSpatial.sf](../../shaders/GI/ScreenProbeSpatial.sf) | 64 | 算法、渲染 | [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) |
 | [shaders/GI/ScreenProbeTemporal.sf](../../shaders/GI/ScreenProbeTemporal.sf) | 170 | 算法、渲染 | [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) |
@@ -144,11 +146,12 @@
 | [shaders/GI/SurfaceCacheRadiosityIntegrate.sf](../../shaders/GI/SurfaceCacheRadiosityIntegrate.sf) | 49 | 算法、渲染 | [Radiosity](algorithm/18-surface-cache-radiosity.md) |
 | [shaders/GI/SurfaceCacheRadiosityRays.sf](../../shaders/GI/SurfaceCacheRadiosityRays.sf) | 60 | 算法、渲染 | [Radiosity](algorithm/18-surface-cache-radiosity.md) |
 | [shaders/GI/SurfaceCacheRadiositySample.sf](../../shaders/GI/SurfaceCacheRadiositySample.sf) | 28 | 算法、渲染 | [Radiosity](algorithm/18-surface-cache-radiosity.md) |
+| [shaders/GI/SurfaceCachePunctualLight.sf](../../shaders/GI/SurfaceCachePunctualLight.sf) | 71 | 渲染 | [硬件命中与着色](algorithm/21-hybrid-reflections.md#硬件命中与着色) |
 | [shaders/GI/SurfaceCacheQuery.sf](../../shaders/GI/SurfaceCacheQuery.sf) | 130 | 内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 | [shaders/GI/SurfaceCacheQueryDebug.sf](../../shaders/GI/SurfaceCacheQueryDebug.sf) | 34 | 渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
-| [shaders/GI/SurfaceCacheDirect.sf](../../shaders/GI/SurfaceCacheDirect.sf) | 102 | 算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [shaders/GI/SurfaceCacheDirect.sf](../../shaders/GI/SurfaceCacheDirect.sf) | 35 | 算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 | [shaders/GI/SurfaceCacheLightingDebug.sf](../../shaders/GI/SurfaceCacheLightingDebug.sf) | 38 | 渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
-| [shaders/GI/SurfaceCacheLightingLookup.sf](../../shaders/GI/SurfaceCacheLightingLookup.sf) | 34 | 渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [shaders/GI/SurfaceCacheLightingLookup.sf](../../shaders/GI/SurfaceCacheLightingLookup.sf) | 38 | 渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 
 ## src/Application（13 个文件）
 
@@ -194,11 +197,11 @@
 | [src/Editor/MaterialEditor/PublicHeader/EditorMaterialPanel.h](../../src/Editor/MaterialEditor/PublicHeader/EditorMaterialPanel.h) | 74 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/MaterialEditor/PublicHeader/MaterialLibrary.h](../../src/Editor/MaterialEditor/PublicHeader/MaterialLibrary.h) | 41 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/GIViewer/CMakeLists.txt](../../src/Editor/GIViewer/CMakeLists.txt) | 9 | 接口、资源生命周期 | [工程时序](performance/13-screen-probe-gather.md) |
-| [src/Editor/GIViewer/Private/EditorGIViewer.cpp](../../src/Editor/GIViewer/Private/EditorGIViewer.cpp) | 443 | 接口、资源生命周期 | [工程时序](performance/13-screen-probe-gather.md) |
+| [src/Editor/GIViewer/Private/EditorGIViewer.cpp](../../src/Editor/GIViewer/Private/EditorGIViewer.cpp) | 469 | 接口、资源生命周期 | [工程时序](performance/13-screen-probe-gather.md) |
 | [src/Editor/GIViewer/Private/GIViewerModule.cpp](../../src/Editor/GIViewer/Private/GIViewerModule.cpp) | 28 | 接口、资源生命周期 | [工程时序](performance/13-screen-probe-gather.md) |
-| [src/Editor/GIViewer/Private/GIViewerPreview.cpp](../../src/Editor/GIViewer/Private/GIViewerPreview.cpp) | 67 | 接口、资源生命周期 | [工程时序](performance/13-screen-probe-gather.md) |
-| [src/Editor/GIViewer/Private/GIViewerPreview.h](../../src/Editor/GIViewer/Private/GIViewerPreview.h) | 28 | 接口、资源生命周期 | [工程时序](performance/13-screen-probe-gather.md) |
-| [src/Editor/GIViewer/PublicHeader/EditorGIViewer.h](../../src/Editor/GIViewer/PublicHeader/EditorGIViewer.h) | 51 | 接口、资源生命周期 | [工程时序](performance/13-screen-probe-gather.md) |
+| [src/Editor/GIViewer/Private/GIViewerPreview.cpp](../../src/Editor/GIViewer/Private/GIViewerPreview.cpp) | 68 | 接口、资源生命周期 | [工程时序](performance/13-screen-probe-gather.md) |
+| [src/Editor/GIViewer/Private/GIViewerPreview.h](../../src/Editor/GIViewer/Private/GIViewerPreview.h) | 30 | 接口、资源生命周期 | [工程时序](performance/13-screen-probe-gather.md) |
+| [src/Editor/GIViewer/PublicHeader/EditorGIViewer.h](../../src/Editor/GIViewer/PublicHeader/EditorGIViewer.h) | 52 | 接口、资源生命周期 | [工程时序](performance/13-screen-probe-gather.md) |
 | [src/Editor/MeshViewer/CMakeLists.txt](../../src/Editor/MeshViewer/CMakeLists.txt) | 9 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md)；[架构：editor](../architecture/app/editor.md) |
 | [src/Editor/MeshViewer/Private/EditorMeshViewer.cpp](../../src/Editor/MeshViewer/Private/EditorMeshViewer.cpp) | 184 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) |
 | [src/Editor/MeshViewer/Private/MeshViewerModule.cpp](../../src/Editor/MeshViewer/Private/MeshViewerModule.cpp) | 15 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) |
@@ -409,7 +412,7 @@
 | [src/Framework/RenderCore/PublicHeader/ToolShaders.h](../../src/Framework/RenderCore/PublicHeader/ToolShaders.h) | 58 | 渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Framework/RenderCore/PublicHeader/VertexFactory.h](../../src/Framework/RenderCore/PublicHeader/VertexFactory.h) | 195 | 渲染 | [08-mesh-import-and-geometry](algorithm/08-mesh-import-and-geometry.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 
-## src/Framework/Renderer（73 个文件）
+## src/Framework/Renderer（83 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -478,22 +481,24 @@
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometrySoftwareRaster.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometrySoftwareRaster.h) | 40 | 接口/配置/基础辅助 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.cpp](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.cpp) | 591 | 并发/内存/渲染 | [15-virtual-geometry-page-compression](algorithm/15-virtual-geometry-page-compression.md) / [11-virtual-geometry-streaming](performance/11-virtual-geometry-streaming.md) |
 | [src/Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.h](../../src/Framework/Renderer/VirtualGeometry/VirtualGeometryStreaming.h) | 45 | 接口/配置/基础辅助 | [15-virtual-geometry-page-compression](algorithm/15-virtual-geometry-page-compression.md) / [11-virtual-geometry-streaming](performance/11-virtual-geometry-streaming.md) |
-| [src/Framework/Renderer/Private/GI/LumenViewerRenderer.cpp](../../src/Framework/Renderer/Private/GI/LumenViewerRenderer.cpp) | 535 | 渲染、资源生命周期 | [Radiosity](algorithm/18-surface-cache-radiosity.md) / [工程时序](performance/13-screen-probe-gather.md) |
-| [src/Framework/Renderer/Private/GI/Reflections.cpp](../../src/Framework/Renderer/Private/GI/Reflections.cpp) | 174 | 算法、渲染、资源生命周期 | [混合反射](algorithm/21-hybrid-reflections.md) / [反射资源](performance/13-screen-probe-gather.md#反射图与资源) |
-| [src/Framework/Renderer/Private/GI/Reflections.h](../../src/Framework/Renderer/Private/GI/Reflections.h) | 30 | 接口、渲染 | [混合反射](algorithm/21-hybrid-reflections.md) |
+| [src/Framework/Renderer/Private/GI/GIRayTracing.cpp](../../src/Framework/Renderer/Private/GI/GIRayTracing.cpp) | 599 | 算法、资源、同步 | [硬件光追资源](performance/07-ray-tracing-as-and-sbt.md#giviewer-场景快照与-rdg) |
+| [src/Framework/Renderer/Private/GI/GIRayTracing.h](../../src/Framework/Renderer/Private/GI/GIRayTracing.h) | 31 | 接口、资源 | [硬件光追资源](performance/07-ray-tracing-as-and-sbt.md#giviewer-场景快照与-rdg) |
+| [src/Framework/Renderer/Private/GI/LumenViewerRenderer.cpp](../../src/Framework/Renderer/Private/GI/LumenViewerRenderer.cpp) | 577 | 渲染、资源生命周期 | [Radiosity](algorithm/18-surface-cache-radiosity.md) / [工程时序](performance/13-screen-probe-gather.md) |
+| [src/Framework/Renderer/Private/GI/Reflections.cpp](../../src/Framework/Renderer/Private/GI/Reflections.cpp) | 192 | 算法、渲染、资源生命周期 | [混合反射](algorithm/21-hybrid-reflections.md) / [反射资源](performance/13-screen-probe-gather.md#反射图与资源) |
+| [src/Framework/Renderer/Private/GI/Reflections.h](../../src/Framework/Renderer/Private/GI/Reflections.h) | 33 | 接口、渲染 | [混合反射](algorithm/21-hybrid-reflections.md) |
 | [src/Framework/Renderer/Private/GI/SurfaceCacheRadiosity.cpp](../../src/Framework/Renderer/Private/GI/SurfaceCacheRadiosity.cpp) | 213 | 渲染、资源生命周期 | [Radiosity](algorithm/18-surface-cache-radiosity.md) / [工程时序](performance/13-screen-probe-gather.md) |
 | [src/Framework/Renderer/Private/GI/SurfaceCacheRadiosity.h](../../src/Framework/Renderer/Private/GI/SurfaceCacheRadiosity.h) | 33 | 渲染、资源生命周期 | [Radiosity](algorithm/18-surface-cache-radiosity.md) / [工程时序](performance/13-screen-probe-gather.md) |
 | [src/Framework/Renderer/Private/GI/ScreenProbeFilter.cpp](../../src/Framework/Renderer/Private/GI/ScreenProbeFilter.cpp) | 193 | 渲染、缓存、资源生命周期 | [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) / [屏幕历史](performance/13-screen-probe-gather.md#屏幕历史与失效) |
 | [src/Framework/Renderer/Private/GI/ScreenProbeFilter.h](../../src/Framework/Renderer/Private/GI/ScreenProbeFilter.h) | 53 | 渲染、缓存、资源生命周期 | [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) / [屏幕历史](performance/13-screen-probe-gather.md#屏幕历史与失效) |
-| [src/Framework/Renderer/Private/GI/ScreenProbeGather.cpp](../../src/Framework/Renderer/Private/GI/ScreenProbeGather.cpp) | 227 | 算法、渲染 | [Screen Probe](algorithm/17-screen-probe-gather.md) / [工程时序](performance/13-screen-probe-gather.md) |
-| [src/Framework/Renderer/Private/GI/ScreenProbeGather.h](../../src/Framework/Renderer/Private/GI/ScreenProbeGather.h) | 99 | 算法、渲染 | [Screen Probe](algorithm/17-screen-probe-gather.md) / [工程时序](performance/13-screen-probe-gather.md) |
-| [src/Framework/Renderer/PublicHeader/LumenViewerRenderer.h](../../src/Framework/Renderer/PublicHeader/LumenViewerRenderer.h) | 107 | 接口 | [工程时序](performance/13-screen-probe-gather.md) |
+| [src/Framework/Renderer/Private/GI/ScreenProbeGather.cpp](../../src/Framework/Renderer/Private/GI/ScreenProbeGather.cpp) | 228 | 算法、渲染 | [Screen Probe](algorithm/17-screen-probe-gather.md) / [工程时序](performance/13-screen-probe-gather.md) |
+| [src/Framework/Renderer/Private/GI/ScreenProbeGather.h](../../src/Framework/Renderer/Private/GI/ScreenProbeGather.h) | 101 | 算法、渲染 | [Screen Probe](algorithm/17-screen-probe-gather.md) / [工程时序](performance/13-screen-probe-gather.md) |
+| [src/Framework/Renderer/PublicHeader/LumenViewerRenderer.h](../../src/Framework/Renderer/PublicHeader/LumenViewerRenderer.h) | 120 | 接口 | [工程时序](performance/13-screen-probe-gather.md) |
 | [src/Framework/Renderer/Private/GI/WorldRadianceCache.cpp](../../src/Framework/Renderer/Private/GI/WorldRadianceCache.cpp) | 357 | 算法、渲染、缓存 | [World Space Radiance Cache](algorithm/19-world-radiance-cache.md) / [工程时序](performance/13-screen-probe-gather.md#世界探针缓存) |
 | [src/Framework/Renderer/Private/GI/WorldRadianceCache.h](../../src/Framework/Renderer/Private/GI/WorldRadianceCache.h) | 69 | 算法、渲染、缓存 | [World Space Radiance Cache](algorithm/19-world-radiance-cache.md) / [工程时序](performance/13-screen-probe-gather.md#世界探针缓存) |
 | [src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.cpp](../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.cpp) | 746 | 内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
-| [src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h](../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h) | 133 | 内存 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
-| [src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.cpp](../../src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.cpp) | 503 | 内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
-| [src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.h](../../src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.h) | 73 | 内存 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h](../../src/Framework/Renderer/Private/GI/SurfaceCacheMaterial.h) | 134 | 内存 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.cpp](../../src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.cpp) | 506 | 内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
+| [src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.h](../../src/Framework/Renderer/Private/GI/SurfaceCacheDirectLighting.h) | 98 | 内存 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 
 ## src/Framework/RHI（24 个文件）
 
@@ -582,7 +587,7 @@
 | [src/Framework/RHIVulkan/Private/VulkanCommandBuffer.cpp](../../src/Framework/RHIVulkan/Private/VulkanCommandBuffer.cpp) | 215 | 内存 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/Private/VulkanContex.cpp](../../src/Framework/RHIVulkan/Private/VulkanContex.cpp) | 652 | 内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/Private/VulkanDescriptorSets.cpp](../../src/Framework/RHIVulkan/Private/VulkanDescriptorSets.cpp) | 309 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
-| [src/Framework/RHIVulkan/Private/VulkanDevice.cpp](../../src/Framework/RHIVulkan/Private/VulkanDevice.cpp) | 607 | 并发、内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
+| [src/Framework/RHIVulkan/Private/VulkanDevice.cpp](../../src/Framework/RHIVulkan/Private/VulkanDevice.cpp) | 635 | 并发、内存、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
 | [src/Framework/RHIVulkan/Private/VulkanFuncWrapper.cpp](../../src/Framework/RHIVulkan/Private/VulkanFuncWrapper.cpp) | 1065 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/Private/VulkanMemory.cpp](../../src/Framework/RHIVulkan/Private/VulkanMemory.cpp) | 354 | 并发、内存 | [04-memory-and-transient-resources](performance/04-memory-and-transient-resources.md) |
 | [src/Framework/RHIVulkan/Private/VulkanPendingPipelineState.cpp](../../src/Framework/RHIVulkan/Private/VulkanPendingPipelineState.cpp) | 110 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
@@ -600,10 +605,10 @@
 | [src/Framework/RHIVulkan/PublicHeader/VulkanCommandBuffer.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanCommandBuffer.h) | 118 | 内存 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanCommandContex.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanCommandContex.h) | 256 | 渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanDescriptorSets.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanDescriptorSets.h) | 317 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
-| [src/Framework/RHIVulkan/PublicHeader/VulkanDevice.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanDevice.h) | 195 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
+| [src/Framework/RHIVulkan/PublicHeader/VulkanDevice.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanDevice.h) | 197 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanFuncWrapper.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanFuncWrapper.h) | 200 | 并发、渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanMemory.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanMemory.h) | 140 | 并发、内存 | [04-memory-and-transient-resources](performance/04-memory-and-transient-resources.md) |
-| [src/Framework/RHIVulkan/PublicHeader/VulkanPendingPipelineState.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanPendingPipelineState.h) | 1520 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
+| [src/Framework/RHIVulkan/PublicHeader/VulkanPendingPipelineState.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanPendingPipelineState.h) | 1522 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanPipelineState.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanPipelineState.h) | 309 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[07-ray-tracing-as-and-sbt](performance/07-ray-tracing-as-and-sbt.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanPlatformSurport.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanPlatformSurport.h) | 15 | 渲染 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/RHIVulkan/PublicHeader/VulkanQueue.h](../../src/Framework/RHIVulkan/PublicHeader/VulkanQueue.h) | 91 | 并发、内存 | [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
@@ -686,7 +691,7 @@
 | [src/Tests/VirtualGeometrySoftwareRasterTest.cpp](../../src/Tests/VirtualGeometrySoftwareRasterTest.cpp) | 596 | 并发/内存/渲染 | [14-virtual-geometry-software-rasterization](algorithm/14-virtual-geometry-software-rasterization.md) / [02-rhi-queues-and-sync](performance/02-rhi-queues-and-sync.md) |
 | [src/Tests/VirtualGeometryStreamingTest.cpp](../../src/Tests/VirtualGeometryStreamingTest.cpp) | 548 | 并发/内存/算法/渲染 | [15-virtual-geometry-page-compression](algorithm/15-virtual-geometry-page-compression.md) / [11-virtual-geometry-streaming](performance/11-virtual-geometry-streaming.md) |
 | [src/Tests/SurfaceCacheMaterialTest.cpp](../../src/Tests/SurfaceCacheMaterialTest.cpp) | 406 | 并发/内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
-| [src/Tests/SurfaceCacheRadiosityTest.cpp](../../src/Tests/SurfaceCacheRadiosityTest.cpp) | 825 | 测试、GPU 读回 | [Radiosity](algorithm/18-surface-cache-radiosity.md) / [混合反射](algorithm/21-hybrid-reflections.md) / [工程时序](performance/13-screen-probe-gather.md) |
+| [src/Tests/SurfaceCacheRadiosityTest.cpp](../../src/Tests/SurfaceCacheRadiosityTest.cpp) | 990 | 测试、GPU 读回 | [Radiosity](algorithm/18-surface-cache-radiosity.md) / [混合反射](algorithm/21-hybrid-reflections.md) / [工程时序](performance/13-screen-probe-gather.md) / [硬件光追资源](performance/07-ray-tracing-as-and-sbt.md#giviewer-场景快照与-rdg) |
 | [src/Tests/ScreenProbeFilterTest.cpp](../../src/Tests/ScreenProbeFilterTest.cpp) | 262 | 测试、GPU 读回 | [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) |
 | [src/Tests/SurfaceCacheDirectLightingTest.cpp](../../src/Tests/SurfaceCacheDirectLightingTest.cpp) | 399 | 并发/内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 

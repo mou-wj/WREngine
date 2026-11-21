@@ -74,7 +74,7 @@ class RHIVULKAN_API VulkanRHIApi : public RHIApi
 
 这里可以看出，`VulkanRHIApi` 本身不是一个单独的设备对象，而是整个 Vulkan 后端实现的统一入口对象。
 
-`VulkanDevice::Init()` 在创建逻辑设备后调用 `QueryDeviceProperties()`，一次性查询并缓存 `VkPhysicalDeviceRayTracingPipelinePropertiesKHR`。后续管线通过只读接口 `GetRayTracingPipelineProperties()` 获取设备限制；`VulkanRayTracingPipeline::CreateShaderBindingTable()` 直接使用该缓存计算 SBT 的步长和对齐，不再在每次创建管线时重复查询物理设备属性。
+`VulkanDevice` 创建逻辑设备前检查 Buffer Device Address、Acceleration Structure 和 Ray Tracing Pipeline 的扩展依赖及 Feature 位。只有满足原生光追管线条件才向上层发布 `RHIPlatformInfo::bEnableRayTracing`。Ray Query 按独立能力启用。支持管线光追时，`QueryDeviceProperties()` 一次性缓存 `VkPhysicalDeviceRayTracingPipelinePropertiesKHR`，后续 SBT 创建通过 `GetRayTracingPipelineProperties()` 获取限制。 [光追加速结构与 SBT](../../key_implemetion/performance/07-ray-tracing-as-and-sbt.md)
 
 ---
 

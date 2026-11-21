@@ -10,6 +10,7 @@
 #include "GI/ScreenProbeGather.h"
 #include "GI/ScreenProbeFilter.h"
 #include "GI/Reflections.h"
+#include "GI/GIRayTracing.h"
 #include "GI/SurfaceCacheMaterial.h"
 #include "GI/SurfaceCacheDirectLighting.h"
 #include "GI/SurfaceCacheRadiosity.h"
@@ -31,6 +32,9 @@ namespace Renderer
         std::unique_ptr<SurfaceCacheRadiosity> Radiosity;
         std::unique_ptr<WorldRadianceCache> WorldCache;
         std::unique_ptr<ScreenProbeFilter> ProbeFilter;
+        std::unique_ptr<GIRayTracingScene> HardwareScene;
+        bool bHardwareActive = false;
+        bool bHistoryUsesHardware = false;
         RenderCore::RenderTexture* HistoryEnvironment = nullptr;
         bool bHistoryUsesRadiosity = false;
         bool bHistoryUsesWorldCache = false;
@@ -83,7 +87,7 @@ namespace Renderer
                 mode == ELumenViewerMode::ProbeRayDirections ||
                 mode == ELumenViewerMode::ProbeHitRatio ||
                 mode == ELumenViewerMode::ProbeRadiance ||
-                mode == ELumenViewerMode::ProbeWorldCacheHits;
+                mode == ELumenViewerMode::ProbeWorldCacheHits || mode == ELumenViewerMode::ProbeTraceSource;
         }
 
         bool NeedsProbeFilter(ELumenViewerMode mode)
@@ -133,6 +137,8 @@ namespace Renderer
         }
 
         WaitForTexture(lastOutput ? lastOutput : m_State->LastOutput);
+        m_State->HardwareScene.reset();
+        m_State->bHardwareActive = false;
         m_State->ProbeFilter.reset();
         m_State->HistoryEnvironment = nullptr;
         m_State->WorldCache.reset();
@@ -159,7 +165,7 @@ namespace Renderer
     bool LumenViewerRenderer::AddPasses(RenderCore::RenderGraphBuilder& builder, Engine::SceneInterface* sceneInterface,
         const Engine::SceneView& sourceView, RenderCore::RenderTexture* output, ELumenViewerMode mode,
         uint32_t selectedCardIndex, ELumenViewerCardView cardView, const LumenViewerRadiositySettings& radiositySettings,
-        const LumenViewerWorldCacheSettings& worldCacheSettings)
+        const LumenViewerWorldCacheSettings& worldCacheSettings, bool bUseHardwareTracing)
     {
         if (!sceneInterface || !output || !output->GetRHI())
         {
@@ -184,6 +190,7 @@ namespace Renderer
         }
 
         m_State->LastOutput = output;
+        m_State->bHardwareActive = false;
         const bool bFiltering = NeedsProbeFilter(mode);
         if (!bFiltering && m_State->ProbeFilter)
         {
@@ -206,7 +213,7 @@ namespace Renderer
         views.BuildAllViews();
 
         const auto color = builder.RegisterExternalTexture("LumenViewer.Output", output);
-        const bool bReflectionView = mode >= ELumenViewerMode::ReflectionComposite && mode <= ELumenViewerMode::ReflectionContribution;
+        const bool bReflectionView = mode >= ELumenViewerMode::ReflectionComposite && mode <= ELumenViewerMode::ReflectionHitInstance;
         auto instances = bReflectionView ? SurfaceCacheMaterial::GatherSceneInstances(*scene) : std::vector<SurfaceCacheMeshInstance>{};
         const bool bReflections = bReflectionView && !instances.empty();
         const auto depthUsage = RHI::ERHITextureCreateFlag::DepthStencil | RHI::ERHITextureCreateFlag::ShaderResource;
@@ -268,7 +275,10 @@ namespace Renderer
         std::ranges::sort(instances, {}, &SurfaceCacheMeshInstance::InstanceID);
         if (m_State->Material && !SameInstances(m_State->Material->GetInstances(), instances))
         {
+            // Reset waits for the old preview before invalidating resources. Geometry can keep its BLAS.
+            auto hardwareScene = std::move(m_State->HardwareScene);
             Reset(output);
+            m_State->HardwareScene = std::move(hardwareScene);
             m_State->LastOutput = output;
         }
         if (!m_State->Material)
@@ -316,15 +326,25 @@ namespace Renderer
         }
 
         const bool bScreenProbe = NeedsScreenProbe(mode) || bFiltering;
+        if ((bScreenProbe || bReflections) && bUseHardwareTracing && GIRayTracingScene::IsSupported())
+        {
+            if (!m_State->HardwareScene)
+            {
+                m_State->HardwareScene = std::make_unique<GIRayTracingScene>();
+            }
+            m_State->bHardwareActive = m_State->HardwareScene->Update(instances);
+        }
         const bool bRadiosityView = IsRadiosityView(mode);
         const bool bWorldCacheView = mode == ELumenViewerMode::WorldProbeAtlas;
+        const bool bTraceReflectionHardware = bReflections && m_State->bHardwareActive;
+        SurfaceCachePunctualLightParameters hardwareLights{};
         bool bLightingChanged = false;
         if (bScreenProbe || bRadiosityView || bWorldCacheView || bReflections || mode == ELumenViewerMode::DirectLightingAtlas)
         {
             const auto lights = SurfaceCacheDirectLighting::GatherSceneLights(*scene);
             if (!m_State->Lighting->IsValidFor(*m_State->Material) || lights != m_State->Lights)
             {
-                m_State->Lighting->AddUpdatePasses(builder, *m_State->Material, lights);
+                m_State->Lighting->AddUpdatePasses(builder, *m_State->Material, lights, bTraceReflectionHardware ? &hardwareLights : nullptr);
                 bLightingChanged = true;
                 m_State->Lights = lights;
                 if (m_State->Radiosity)
@@ -398,6 +418,7 @@ namespace Renderer
         }
 
         ScreenProbeGatherPassInput probeInput;
+        probeInput.HardwareScene = m_State->bHardwareActive ? m_State->HardwareScene.get() : nullptr;
         probeInput.GBufferA = gbuffers[0];
         probeInput.GBufferB = gbuffers[1];
         probeInput.GBufferC = gbuffers[2];
@@ -449,6 +470,15 @@ namespace Renderer
             reflections.Environment = probeInput.Environment;
             reflections.bHasEnvironment = probeInput.bHasEnvironment;
             reflections.WorldCache = probeInput.WorldCache;
+            reflections.HardwareScene = probeInput.HardwareScene;
+            if (bTraceReflectionHardware)
+            {
+                if (!bLightingChanged)
+                {
+                    hardwareLights = m_State->Lighting->RegisterPunctualLights(builder);
+                }
+                reflections.HardwareLights = &hardwareLights;
+            }
             reflections.View = static_cast<EReflectionView>(uint32_t(mode) - uint32_t(ELumenViewerMode::ReflectionComposite));
             AddReflectionsPasses(builder, reflections, material, lighting);
             if (reflections.View == EReflectionView::Composite && environment)
@@ -464,12 +494,14 @@ namespace Renderer
                 m_State->ProbeFilter = std::make_unique<ScreenProbeFilter>();
             }
             if (bLightingChanged || radiositySettings.bRestart || m_State->HistoryEnvironment != environment ||
-                m_State->bHistoryUsesRadiosity != bUseRadiosity || m_State->bHistoryUsesWorldCache != worldCacheSettings.bEnabled)
+                m_State->bHistoryUsesRadiosity != bUseRadiosity || m_State->bHistoryUsesWorldCache != worldCacheSettings.bEnabled ||
+                m_State->bHistoryUsesHardware != m_State->bHardwareActive)
             {
                 m_State->ProbeFilter->Invalidate();
                 m_State->HistoryEnvironment = environment;
                 m_State->bHistoryUsesRadiosity = bUseRadiosity;
                 m_State->bHistoryUsesWorldCache = worldCacheSettings.bEnabled;
+                m_State->bHistoryUsesHardware = m_State->bHardwareActive;
             }
             probeInput.SamplePhase = m_State->ProbeFilter->GetSamplePhase();
             auto probes = AddScreenProbeGatherPasses(builder, material, lighting, probeInput);
@@ -513,6 +545,9 @@ namespace Renderer
             case ELumenViewerMode::ProbeWorldCacheHits:
                 probeInput.DebugMode = 5;
                 break;
+            case ELumenViewerMode::ProbeTraceSource:
+                probeInput.DebugMode = 6;
+                break;
             default:
                 probeInput.DebugMode = 4;
                 break;
@@ -526,6 +561,13 @@ namespace Renderer
     const std::vector<LumenViewerCardInfo>& LumenViewerRenderer::GetSurfaceCards() const
     {
         return m_State->Cards;
+    }
+
+    LumenViewerRayTracingInfo LumenViewerRenderer::GetRayTracingInfo() const
+    {
+        const auto* scene = m_State->HardwareScene.get();
+        return {scene ? scene->GetBLASCount() : 0u, scene ? scene->GetInstanceCount() : 0u,
+            scene ? scene->GetTLASRevision() : 0u, GIRayTracingScene::IsSupported(), m_State->bHardwareActive};
     }
 
     uint32_t LumenViewerRenderer::GetRadiosityIteration() const

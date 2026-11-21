@@ -7,14 +7,16 @@
 #include "/core/GBufferParametersHelper.sf"
 #include "/core/EnvIBLParametersHelper.sf"
 #include "/GI/ScreenProbeGeometry.sf"
+#if REFLECTION_HARDWARE_LIGHTS
+#include "/Generated/ShaderParameters/SurfaceCachePunctualLightParameters.sf"
+#include "/GI/SurfaceCachePunctualLight.sf"
+#endif
 
 #if REFLECTION_WORLD_CACHE
 #include "/GI/WorldRadianceLookup.sf"
 #endif
 
-// The cache contains view-independent outgoing diffuse light. It travels to the receiver along the
-// reflected ray. The hit's own view-dependent term is limited to its environment specular lobe.
-float3 ShadeSDFReflection(SurfaceCacheQueryResult hit, SurfaceCacheLightingQueryResult lighting, float3 direction)
+float3 ShadeGeometryReflection(SurfaceCacheQueryResult hit, SurfaceCacheLightingQueryResult lighting, float3 direction)
 {
     MaterialData material = (MaterialData)0;
     material.BaseColor = saturate(hit.BaseColorMetallic.rgb);
@@ -22,7 +24,28 @@ float3 ShadeSDFReflection(SurfaceCacheQueryResult hit, SurfaceCacheLightingQuery
     material.Roughness = saturate(hit.NormalRoughness.w);
     float3 normal = normalize(hit.NormalRoughness.xyz);
     float nDotV = dot(normal, -direction);
-    float3 radiance = lighting.Radiance.rgb;
+    if ((hit.Status.z & 32u) != 0u)
+    {
+        return material.BaseColor;
+    }
+    // With hardware hit lighting the lookup supplies only the indirect diffuse term.
+    float3 radiance = (lighting.Status.z & 2u) != 0u ? lighting.Radiance.rgb : 0.0;
+#if REFLECTION_HARDWARE_LIGHTS
+    if (nDotV > 0.0)
+    {
+        MaterialData punctual = material;
+        punctual.Roughness = max(punctual.Roughness, 0.045);
+        for (uint i = 0; i < LightCount; ++i)
+        {
+            float3 lightDirection;
+            float3 incident = EvaluateSurfaceCacheLight(Lights[i], hit.PositionDistance.xyz, lightDirection);
+            if (dot(normal, lightDirection) > 0.0 && any(incident > 0.0))
+            {
+                radiance += EvaluatePBRLighting(punctual, normal, -direction, lightDirection, incident, 1.0);
+            }
+        }
+    }
+#endif
     if (nDotV > 0.0 && bHasEnvironment != 0u)
     {
         radiance += SampleIBLSpecular(reflect(direction, normal), material.Roughness) * GetIBLSpecularWeight(material, nDotV);
@@ -59,22 +82,27 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     float3 incoming = environment;
     uint pixelIndex = pixel.y * ReflectionSize.x + pixel.x;
     SurfaceCacheQuery query = TraceQueries[pixelIndex];
-    SurfaceCacheQueryResult hit = SDFHits[pixelIndex];
+    SurfaceCacheQueryResult hit = GeometryHits[pixelIndex];
     SurfaceCacheLightingQueryResult lighting = HitLighting[pixelIndex];
     float3 screen = ScreenHit.Load(int3(pixel, 0)).xyz;
-    bool bSDFHit = (hit.Status.z & 1u) != 0u && hit.PositionDistance.w > 0.025;
-    bool bValidSDF = bSDFHit && (hit.Status.z & 2u) != 0u && (lighting.Status.z & 2u) != 0u;
-    // Blue = IBL fallback. Orange = a geometric SDF hit whose surface cannot be shaded.
-    float3 source = bSDFHit ? float3(1.0, 0.30, 0.06) : float3(0.12, 0.32, 1.0);
-    if (bValidSDF)
+    bool bGeometryHit = (hit.Status.z & 1u) != 0u && hit.PositionDistance.w > 0.025;
+    bool bHardwareHit = (hit.Status.z & 8u) != 0u;
+    bool bValidGeometry = bGeometryHit &&
+        ((hit.Status.z & 16u) != 0u || ((hit.Status.z & 2u) != 0u && (lighting.Status.z & 2u) != 0u));
+    float3 source = float3(0.12, 0.32, 1.0);
+    if (bGeometryHit)
     {
-        incoming = max(ShadeSDFReflection(hit, lighting, query.Direction.xyz), 0.0);
-        source = float3(1.0, 0.78, 0.08);
+        source = bHardwareHit ? float3(0.9, 0.15, 0.75) : float3(1.0, 0.30, 0.06);
+    }
+    if (bValidGeometry)
+    {
+        incoming = max(ShadeGeometryReflection(hit, lighting, query.Direction.xyz), 0.0);
+        source = bHardwareHit ? float3(0.0, 0.9, 0.95) : float3(1.0, 0.78, 0.08);
     }
 #if REFLECTION_WORLD_CACHE
-    else if (!bSDFHit && (hit.Status.z & 4u) == 0u && query.Control.y == 1u && material.Roughness > 0.45)
+    else if (!bGeometryHit && (hit.Status.z & 4u) == 0u && query.Control.y == 1u && material.Roughness > 0.45)
     {
-        // Full SDF tracing has already ruled out near blockers. Skip the receiver's unreliable probe cells.
+        // The selected geometry trace has ruled out near blockers. Skip the receiver's unreliable probe cells.
         float prefix = 2.0 * CellSize.x;
         float4 world = LookupWorldRadiance(query.OriginDistance.xyz + prefix * query.Direction.xyz,
             query.Direction.xyz, query.OriginDistance.w - prefix);
@@ -101,11 +129,23 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     {
     case 1u: color = query.Direction.w > 0.0 ? query.Direction.xyz * 0.5 + 0.5 : 0.0; break;
     case 2u: color = float3(screen.xy, 1.0) * screen.z; break;
-    case 3u: color = bSDFHit ? float3(1.0, bValidSDF ? 0.8 : 0.15, saturate(hit.PositionDistance.w / 50.0)) : 0.0; break;
+    case 3u:
+    {
+        float distance = saturate(hit.PositionDistance.w / 50.0);
+        color = bHardwareHit ? source * (0.5 + 0.5 * distance) : float3(1.0, bValidGeometry ? 0.8 : 0.15, distance);
+        color *= bGeometryHit ? 1.0 : 0.0;
+        break;
+    }
     case 4u: color = source; break;
     case 5u: color = material.Roughness; break;
     case 6u: color = incoming; break;
     case 7u: color = reflected; break;
+    case 8u:
+    {
+        uint id = (hit.Status.x + 1u) * 2654435761u;
+        color = bGeometryHit ? float3(id & 255u, (id >> 8) & 255u, (id >> 16) & 255u) / 255.0 : 0.0;
+        break;
+    }
     }
     ReflectionOutput[pixel] = float4(color, 1.0);
 }

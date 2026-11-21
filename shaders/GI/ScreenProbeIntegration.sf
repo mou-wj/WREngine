@@ -204,5 +204,30 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
             debugColor.rgb = 0.0;
         }
     }
+    else if (DebugMode == 6u && probe.Status.x != 0u)
+    {
+        float3 counts = 0.0;
+        for (uint ray = 0; ray < RayCount; ++ray)
+        {
+            uint flags = Radiance[probeIndex * RayCount + ray].Status.w;
+            if ((flags & 1u) != 0u)
+            {
+                if ((flags & 8u) == 0u)
+                {
+                    counts.x += 1.0;
+                }
+                else if ((flags & 2u) != 0u)
+                {
+                    counts.y += 1.0;
+                }
+                else
+                {
+                    counts.z += 1.0;
+                }
+            }
+        }
+        debugColor = float4((counts.x * float3(1.0, 0.67, 0.08) + counts.y * float3(0.0, 0.9, 0.95) +
+            counts.z * float3(0.9, 0.15, 0.75)) / float(RayCount), 1.0);
+    }
     DebugOutput[pixel] = debugColor;
 }

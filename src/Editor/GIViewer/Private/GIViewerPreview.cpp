@@ -37,7 +37,8 @@ namespace Editor
 
     bool GIViewerPreview::Render(const GIViewerSource& source, Core::Int2 size, Renderer::ELumenViewerMode mode,
         uint32_t selectedCardIndex, Renderer::ELumenViewerCardView cardView,
-        const Renderer::LumenViewerRadiositySettings& radiosity, const Renderer::LumenViewerWorldCacheSettings& worldCache)
+        const Renderer::LumenViewerRadiositySettings& radiosity, const Renderer::LumenViewerWorldCacheSettings& worldCache,
+        bool bUseHardwareTracing)
     {
         if (!source.Scene || !source.View || size.X <= 0 || size.Y <= 0)
         {
@@ -60,7 +61,7 @@ namespace Editor
 
         RenderCore::RenderGraphBuilder builder;
         const bool hasCache = m_Renderer.AddPasses(builder, source.Scene, *source.View, m_Color.get(), mode,
-            selectedCardIndex, cardView, radiosity, worldCache);
+            selectedCardIndex, cardView, radiosity, worldCache, bUseHardwareTracing);
         builder.Execute();
         return hasCache;
     }

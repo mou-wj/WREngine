@@ -5,9 +5,10 @@
 
 namespace Renderer
 {
+    class GIRayTracingScene;
     enum class EReflectionView : uint32_t
     {
-        Composite, RayDirection, ScreenHit, SDFHit, Source, Roughness, Radiance, Contribution
+        Composite, RayDirection, ScreenHit, SDFHit, Source, Roughness, Radiance, Contribution, HitInstance
     };
 
     struct ReflectionsInput
@@ -22,6 +23,8 @@ namespace Renderer
         SceneEvnIBLLightParameters Environment{};
         bool bHasEnvironment = false;
         const WorldRadianceCacheParameters* WorldCache = nullptr;
+        GIRayTracingScene* HardwareScene = nullptr;
+        const SurfaceCachePunctualLightParameters* HardwareLights = nullptr;
         EReflectionView View = EReflectionView::Composite;
     };
 

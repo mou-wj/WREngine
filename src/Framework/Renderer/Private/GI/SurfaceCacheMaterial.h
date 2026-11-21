@@ -75,9 +75,10 @@ namespace Renderer
         SHADER_PARAMETER(Core::Float4, BaseColorMetallic)
         SHADER_PARAMETER(Core::Float4, NormalRoughness)
         SHADER_PARAMETER(Core::Float4, PositionDistance)
-        // InstanceID, CardID, flags (1=SDF/direct hit, 2=cached material, 4=iteration limit), iterations.
+        // InstanceID, CardID, flags (1=hit, 2=Card, 4=SDF limit, 8=hardware, 16=constant material, 32=unlit).
+        // W holds SDF steps or the hardware primitive index.
         SHADER_PARAMETER(Core::UInt4, Status)
-        // Exact material texel chosen by lookup; avoids a second, potentially different Card search.
+        // XY holds the exact Card texel; ZW holds the asuint octahedral geometric normal for hardware hits.
         SHADER_PARAMETER(Core::UInt4, SampleCoordinate)
     END_SHADER_PARAMETER_STRUCT(SurfaceCacheQueryResult)
 

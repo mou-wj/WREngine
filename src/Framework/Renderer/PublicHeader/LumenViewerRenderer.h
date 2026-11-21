@@ -41,7 +41,9 @@ namespace Renderer
         ReflectionSource,
         ReflectionRoughness,
         ReflectionRadiance,
-        ReflectionContribution
+        ReflectionContribution,
+        ReflectionHitInstance,
+        ProbeTraceSource
     };
 
     enum class ELumenViewerCardView : uint32_t
@@ -84,6 +86,15 @@ namespace Renderer
         int UpdateBudget = 24;
     };
 
+    struct LumenViewerRayTracingInfo
+    {
+        uint32_t BLASCount = 0;
+        uint32_t InstanceCount = 0;
+        uint64_t TLASRevision = 0;
+        bool bSupported = false;
+        bool bActive = false;
+    };
+
     // Builds the Lumen stages into a caller-owned preview target and cache lifetime.
     class RENDERER_API LumenViewerRenderer
     {
@@ -96,9 +107,11 @@ namespace Renderer
         bool AddPasses(RenderCore::RenderGraphBuilder& builder, Engine::SceneInterface* scene,
             const Engine::SceneView& view, RenderCore::RenderTexture* output, ELumenViewerMode mode,
             uint32_t selectedCardIndex = UINT32_MAX, ELumenViewerCardView cardView = ELumenViewerCardView::BaseColor,
-            const LumenViewerRadiositySettings& radiosity = {}, const LumenViewerWorldCacheSettings& worldCache = {});
+            const LumenViewerRadiositySettings& radiosity = {}, const LumenViewerWorldCacheSettings& worldCache = {},
+            bool bUseHardwareTracing = false);
         const std::vector<LumenViewerCardInfo>& GetSurfaceCards() const;
         uint32_t GetRadiosityIteration() const;
+        LumenViewerRayTracingInfo GetRayTracingInfo() const;
         void Reset(RenderCore::RenderTexture* lastOutput = nullptr);
 
     private:

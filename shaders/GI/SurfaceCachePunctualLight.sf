@@ -1,0 +1,71 @@
+float SliceVisibility(uint index, float3 position, float bias)
+{
+    SurfaceCacheShadowSlice slice = Shadows[index];
+    float4 clip = mul(slice.ViewProjection, float4(position, 1));
+    if (clip.w <= 0)
+    {
+        return 0;
+    }
+    float3 ndc = clip.xyz / clip.w;
+    if (any(abs(ndc.xy) > 1.00001) || ndc.z < 0 || ndc.z > 1)
+    {
+        return 0; // No projected coverage must not become an unshadowed light leak.
+    }
+    float2 uv = ndc.xy * float2(0.5, ShadowScreenYSign * 0.5) + 0.5;
+    int2 local = min(int2(uv * float2(slice.Rect.zw)), int2(slice.Rect.zw) - 1);
+    float visibility = 0;
+    for (int y = -1; y <= 1; ++y)
+    {
+        for (int x = -1; x <= 1; ++x)
+        {
+            int2 pixel = int2(slice.Rect.xy) + clamp(local + int2(x, y), 0, int2(slice.Rect.zw) - 1);
+            // Clear depth 1 is unoccluded. Do not use the camera CSM's clear-depth exclusion.
+            float depth = ShadowAtlas.Load(int3(pixel, 0)).r;
+            visibility += ndc.z - bias <= depth ? 1.0 : 0.0;
+        }
+    }
+    return visibility / 9.0;
+}
+
+uint PointFace(float3 fromLight)
+{
+    float3 a = abs(fromLight);
+    if (a.x >= a.y && a.x >= a.z)
+    {
+        return fromLight.x >= 0 ? 0 : 1;
+    }
+    if (a.y >= a.z)
+    {
+        return fromLight.y >= 0 ? 2 : 3;
+    }
+    return fromLight.z >= 0 ? 4 : 5;
+}
+
+// Includes attenuation and Card coverage semantics shared by atlas lighting and exact hit shading.
+float3 EvaluateSurfaceCacheLight(SurfaceCacheLightData light, float3 position, out float3 direction)
+{
+    direction = -light.DirectionInnerCos.xyz;
+    float attenuation = 1.0;
+    if (light.Info.x != 0u)
+    {
+        float3 delta = light.PositionRadius.xyz - position;
+        float distanceToLight = length(delta);
+        if (distanceToLight < 1e-6 || distanceToLight >= light.PositionRadius.w)
+        {
+            return 0.0;
+        }
+        direction = delta / distanceToLight;
+        attenuation = LocalLightAttenuation(distanceToLight, light.PositionRadius.w);
+        if (light.Info.x == 2u)
+        {
+            attenuation *= SpotLightAttenuation(dot(-light.DirectionInnerCos.xyz, direction),
+                light.DirectionInnerCos.w, light.ConeBias.x);
+        }
+    }
+    if (attenuation > 0.0 && light.Info.z != 0u)
+    {
+        uint face = light.Info.x == 1u ? PointFace(position - light.PositionRadius.xyz) : 0u;
+        attenuation *= SliceVisibility(light.Info.y + face, position, light.ConeBias.y);
+    }
+    return light.ColorIntensity.rgb * light.ColorIntensity.w * attenuation;
+}

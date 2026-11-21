@@ -26,6 +26,27 @@ namespace Renderer
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D, IndirectRadiance)
     END_SHADER_PARAMETER_STRUCT(SurfaceCacheLightingParameters)
 
+    BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCacheLightData)
+        SHADER_PARAMETER(Core::Float4, ColorIntensity)
+        SHADER_PARAMETER(Core::Float4, PositionRadius)
+        SHADER_PARAMETER(Core::Float4, DirectionInnerCos)
+        SHADER_PARAMETER(Core::Float4, ConeBias)
+        SHADER_PARAMETER(Core::UInt4, Info) // Type, first slice, slice count, reserved.
+    END_SHADER_PARAMETER_STRUCT(SurfaceCacheLightData)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCacheShadowSlice)
+        SHADER_PARAMETER(Core::Mat4, ViewProjection)
+        SHADER_PARAMETER(Core::UInt4, Rect)
+    END_SHADER_PARAMETER_STRUCT(SurfaceCacheShadowSlice)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCachePunctualLightParameters)
+        SHADER_PARAMETER(uint32_t, LightCount)
+        SHADER_PARAMETER(float, ShadowScreenYSign)
+        SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheLightData, Lights)
+        SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheShadowSlice, Shadows)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, ShadowAtlas)
+    END_SHADER_PARAMETER_STRUCT(SurfaceCachePunctualLightParameters)
+
     BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCacheLightingQueryResult)
         // RGB = outgoing Lambertian diffuse radiance; A = valid (black can be valid).
         SHADER_PARAMETER(Core::Float4, Radiance)
@@ -48,14 +69,18 @@ namespace Renderer
             return m_bValid && m_Radiance && m_Material == &material && m_MaterialRevision == material.GetRevision();
         }
         SurfaceCacheLightingParameters AddUpdatePasses(RenderCore::RenderGraphBuilder& builder,
-            const SurfaceCacheMaterial& material, const std::vector<SurfaceCacheLight>& lights);
+            const SurfaceCacheMaterial& material, const std::vector<SurfaceCacheLight>& lights,
+            SurfaceCachePunctualLightParameters* punctual = nullptr);
         SurfaceCacheLightingParameters Register(RenderCore::RenderGraphBuilder& builder, const SurfaceCacheMaterial& material) const;
+        SurfaceCachePunctualLightParameters RegisterPunctualLights(RenderCore::RenderGraphBuilder& builder) const;
         RenderCore::RenderTexture* GetAtlas() const { return m_Radiance.get(); }
         static std::vector<SurfaceCacheLight> GatherSceneLights(Scene& scene);
     private:
         RenderCore::RenderTextureSP m_Radiance;
         std::unique_ptr<ShadowMapAllocator> m_ShadowAllocator;
         std::vector<ShadowAllocationSlice> m_ShadowSlots;
+        std::vector<SurfaceCacheLightData> m_LightData;
+        std::vector<SurfaceCacheShadowSlice> m_ShadowData;
         const SurfaceCacheMaterial* m_Material = nullptr; // Explicit caller-owned snapshot; must outlive this cache.
         uint64_t m_MaterialRevision = 0;
         uint32_t m_ShadowSize = 0;
@@ -65,7 +90,7 @@ namespace Renderer
     // Consume exact texel coordinates from AddSurfaceCacheQueryPass (direct or SDF hit).
     RENDERER_API RenderCore::RenderGraphBufferRef AddSurfaceCacheLightingLookupPass(RenderCore::RenderGraphBuilder& builder,
         const SurfaceCacheMaterialParameters& material, const SurfaceCacheLightingParameters& lighting,
-        RenderCore::RenderGraphBufferRef materialResults, uint32_t queryCount);
+        RenderCore::RenderGraphBufferRef materialResults, uint32_t queryCount, bool bIndirectOnly = false);
     // Query results = null displays the atlas; otherwise displays 32x32 swatches of queried radiance.
     RENDERER_API void AddSurfaceCacheLightingDebugPass(RenderCore::RenderGraphBuilder& builder,
         const SurfaceCacheLightingParameters& lighting, RenderCore::RenderGraphTextureRef output,

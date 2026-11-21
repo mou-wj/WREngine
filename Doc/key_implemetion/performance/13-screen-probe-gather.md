@@ -57,9 +57,9 @@ Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从
 
 GIViewer 反射模式调用 [DefferedSceneRenderer::BuildWithDeferredSpecular](../../../src/Framework/Renderer/Private/DefferedSceneRenderer.cpp)。此单视图入口在已有 GBuffer 和直接光计算后，只保留漫反射 IBL 到 `DeferredColor`。后续 Pass 为 `ReflectionScreenTrace`、`SurfaceCacheSDFQuery`、`SurfaceCacheLightingLookup`、`ReflectionResolve`，合成视图最后绘制天空。原有主场景和其他预览模式仍由普通 `Build` 编排。
 
-`ReflectionScreenTrace` 从 GBuffer 采样，写屏幕交点和 `SurfaceCacheQuery`。SDF Pass 读取查询与持久 Mesh SDF Atlas，写命中记录。Lighting Lookup 读取该记录与既有持久 Card 图集，写出射光记录。`ReflectionResolve` 读取其中间产物、延迟底色、环境图及可选世界探针记录，写 Viewer 预览颜色。Surface Cache 与世界图集沿用 Renderer 的所有权和失效规则。GPU 追踪没有 CPU 读回依赖，RDG 参数元数据中的 SRV/UAV 访问建立顺序。Renderer 关闭时沿用 Viewer 颜色的最后访问 Fence；反射本身没有持久历史或额外 CPU 等待。
+`ReflectionScreenTrace` 从 GBuffer 写屏幕交点和 `SurfaceCacheQuery`。剩余射线交给 `AddGITracePasses`，按当前配置走 Mesh SDF 或 Vulkan 硬件命中，再由 Lighting Lookup 读取持久 Card 图集。`ReflectionResolve` 写 Viewer 预览颜色。硬件排列重新计算光源直接 PBR，复用 Surface Cache 阴影图和 Radiosity 间接漫反射。可选世界探针和环境片段沿用原来的回退。追踪、解析与 Resolve 通过 SRV/UAV 跟踪，无 CPU 读回依赖。Viewer 关闭和快照替换沿用预览颜色的最后访问 Fence。 [硬件追踪资源与 Pass](07-ray-tracing-as-and-sbt.md#giviewer-场景快照与-rdg)
 
-每像素的反射中间资源包括 16 字节屏幕交点、48 字节查询、80 字节 SDF 命中和 48 字节光照记录，共 192 字节。1080p 的逻辑总量约 379.7 MiB，另有已有延迟底色和 GBuffer。各缓冲只在自身所需图阶段存活，实际峰值取决于 RDG 分配与驱动对齐。GIViewer 对反射分辨率按比例设 1920×1080 上限，组合后的颜色仍铺满面板。 [反射算法](../algorithm/21-hybrid-reflections.md) · [验证记录](../../dev/bugfix/故障与修复记录-2026-11-21.md#giviewer-反射验证)
+每像素的反射中间资源包括 16 字节屏幕交点、48 字节查询、80 字节通用命中和 48 字节光照记录，共 192 字节。硬件分支的原始命中额外占 32 字节。1080p 的逻辑总量分别约 379.7 MiB 和 443.0 MiB，另有已有延迟底色、GBuffer 和持久资源。实际峰值由 RDG 生命周期及对齐决定。GIViewer 对反射分辨率按比例设 1920×1080 上限。 [反射算法](../algorithm/21-hybrid-reflections.md)
 
 ## 分辨率对应的理论负载
 

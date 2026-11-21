@@ -2,6 +2,7 @@
 #include "../Framework/Renderer/Private/GI/SurfaceCacheRadiosity.h"
 #include "../Framework/Renderer/Private/GI/ScreenProbeGather.h"
 #include "../Framework/Renderer/Private/GI/Reflections.h"
+#include "../Framework/Renderer/Private/GI/GIRayTracing.h"
 #include "DistanceFieldMgr.h"
 #include "GlobalShader.h"
 #include "MaterialCore.h"
@@ -29,7 +30,7 @@ namespace Test
             }
         }
 
-        std::shared_ptr<StaticMeshRenderData> MakeWall(float halfWidth = 2.0f)
+        std::shared_ptr<StaticMeshRenderData> MakeWall(float halfWidth = 2.0f, uint32_t subdivisions = 1)
         {
             auto mesh = std::make_shared<StaticMeshRenderData>();
             mesh->Bounds = BoxSphereBounds(AABB(Float3(-halfWidth, -halfWidth, -0.15f), Float3(halfWidth, halfWidth, 0.15f)));
@@ -45,17 +46,25 @@ namespace Test
             {
                 const auto u = Normalize(Cross(std::abs(n.Y) > 0.5f ? Float3(0, 0, 1) : Float3(0, 1, 0), n));
                 const auto v = Cross(n, u);
-                const uint32_t firstVertex = vertices.PositionBuffer.GetNumVertices();
-                for (const auto& corner : corners)
+                for (uint32_t y = 0; y < subdivisions; ++y)
                 {
-                    const auto p = n + u * corner.X + v * corner.Y;
-                    vertices.PositionBuffer.Vertices.insert(vertices.PositionBuffer.Vertices.end(), {p.X * halfWidth, p.Y * halfWidth, p.Z * 0.15f});
-                    vertices.NormalBuffer.Vertices.insert(vertices.NormalBuffer.Vertices.end(), {n.X, n.Y, n.Z});
-                    vertices.TangentBuffer.Vertices.insert(vertices.TangentBuffer.Vertices.end(), {u.X, u.Y, u.Z, 1});
-                    vertices.UVBuffer.Vertices.insert(vertices.UVBuffer.Vertices.end(), {corner.X * 0.5f + 0.5f, corner.Y * 0.5f + 0.5f});
+                    for (uint32_t x = 0; x < subdivisions; ++x)
+                    {
+                        const uint32_t firstVertex = vertices.PositionBuffer.GetNumVertices();
+                        for (const auto& corner : corners)
+                        {
+                            const float s = (float(x) + corner.X * 0.5f + 0.5f) / float(subdivisions);
+                            const float t = (float(y) + corner.Y * 0.5f + 0.5f) / float(subdivisions);
+                            const auto p = n + u * (2.0f * s - 1.0f) + v * (2.0f * t - 1.0f);
+                            vertices.PositionBuffer.Vertices.insert(vertices.PositionBuffer.Vertices.end(), {p.X * halfWidth, p.Y * halfWidth, p.Z * 0.15f});
+                            vertices.NormalBuffer.Vertices.insert(vertices.NormalBuffer.Vertices.end(), {n.X, n.Y, n.Z});
+                            vertices.TangentBuffer.Vertices.insert(vertices.TangentBuffer.Vertices.end(), {u.X, u.Y, u.Z, 1});
+                            vertices.UVBuffer.Vertices.insert(vertices.UVBuffer.Vertices.end(), {s, t});
+                        }
+                        lod.IndexBuffer.Indices.insert(lod.IndexBuffer.Indices.end(),
+                            {firstVertex, firstVertex + 1, firstVertex + 2, firstVertex, firstVertex + 2, firstVertex + 3});
+                    }
                 }
-                lod.IndexBuffer.Indices.insert(lod.IndexBuffer.Indices.end(),
-                    {firstVertex, firstVertex + 1, firstVertex + 2, firstVertex, firstVertex + 2, firstVertex + 3});
             }
             auto& section = lod.Sections.emplace_back();
             section.NumIndices = static_cast<uint32_t>(lod.IndexBuffer.Indices.size());
@@ -131,7 +140,7 @@ namespace Test
     class SurfaceCacheGITest : public TestBase
     {
     protected:
-        void InitializeGI(bool bWorldCache, bool bReflections = false)
+        void InitializeGI(bool bWorldCache, bool bReflections = false, bool bHardwareTracing = false)
         {
             GRHIApi = CreateTestRHIApi();
             GRHIApi->Init();
@@ -143,7 +152,8 @@ namespace Test
             {
                 return !entry.first.starts_with("SurfaceCache") && entry.first != "PositionOnlyVS" &&
                     !(bWorldCache && (entry.first.starts_with("WorldRadiance") || entry.first.starts_with("ScreenProbe"))) &&
-                    !(bReflections && entry.first.starts_with("Reflection"));
+                    !(bReflections && entry.first.starts_with("Reflection")) &&
+                    !(bHardwareTracing && entry.first == "GIHardwareResolveCS");
             });
             GShaderMap.Initialize();
             globals = registered;
@@ -587,7 +597,7 @@ namespace Test
     class ReflectionsTest final : public SurfaceCacheGITest
     {
     public:
-        void Setup() override { InitializeGI(true, true); }
+        void Setup() override { InitializeGI(true, true, true); }
 
         void Run() override
         {
@@ -610,6 +620,7 @@ namespace Test
             instance.Materials = {red.GetRenderProxyShared()};
             SurfaceCacheMaterial surface;
             surface.Initialize({instance}, 32);
+            GIRayTracingScene hardware;
             SurfaceCacheDirectLighting direct;
             direct.Initialize(surface, 64, 6);
             WorldRadianceCache world;
@@ -635,7 +646,7 @@ namespace Test
 
             bool capture = true;
             const auto render = [&](EReflectionView view, bool bScreenObject, bool bAwayFromWall,
-                float roughness = 0.02f, bool bUseWorld = false, bool bDisableCards = false)
+                float roughness = 0.02f, bool bUseWorld = false, bool bDisableCards = false, bool bHardware = false)
             {
                 Image colors, normals, materials, depths, deferred;
                 colors.fill({0.85f, 0.85f, 0.85f, 0.95f});
@@ -723,6 +734,13 @@ namespace Test
                 input.Environment.IBLLut = lutTexture;
                 input.Environment.LinearClampIBLSampler = GlobalSampler.get();
                 input.bHasEnvironment = true;
+                SurfaceCachePunctualLightParameters punctual{};
+                if (bHardware)
+                {
+                    punctual = direct.RegisterPunctualLights(graph);
+                    input.HardwareLights = &punctual;
+                    input.HardwareScene = &hardware;
+                }
                 WorldRadianceCacheParameters worldParameters{};
                 if (bUseWorld)
                 {
@@ -814,6 +832,19 @@ namespace Test
                 return color.X > 0.75f && color.Z > 0.95f;
             });
             Verify(worldHits > 0, "rough misses use available world radiance probes");
+            if (GIRayTracingScene::IsSupported())
+            {
+                Verify(hardware.Update({instance}), "reflection fixture builds a hardware scene");
+                const auto hardwareSource = render(EReflectionView::Source, false, false, 0.02f, false, true, true)[receiver];
+                const auto hardwareRadiance = render(EReflectionView::Radiance, false, false, 0.02f, false, true, true)[receiver];
+                const auto hardwareMiss = render(EReflectionView::Radiance, false, true, 0.02f, false, false, true)[receiver];
+                std::cout << "REFLECTION_HARDWARE source=" << hardwareSource.X << "," << hardwareSource.Y << "," << hardwareSource.Z
+                    << " direct=" << hardwareRadiance.X << "," << hardwareRadiance.Y << "," << hardwareRadiance.Z << std::endl;
+                Verify(hardwareSource.Y > 0.85f && hardwareSource.Z > 0.9f &&
+                    hardwareRadiance.X > 0.65f && hardwareRadiance.X > 3.0f * hardwareRadiance.Y,
+                    "an offscreen hardware hit shades its red material and light beyond Card coverage");
+                Verify(std::abs(hardwareMiss.Z - sky.Z) < 1e-4f, "hardware miss restores environment");
+            }
             std::cout << "REFLECTIONS_TEST_OK roughDirectionChanges=" << bentRays << " worldHits=" << worldHits << std::endl;
             direct.Release();
             surface.Release();
@@ -822,4 +853,138 @@ namespace Test
         }
     };
     REGISTER_RENDER_TEST("ReflectionsTest", ReflectionsTest);
+
+    class GIHardwareTracingTest final : public SurfaceCacheGITest
+    {
+    public:
+        void Setup() override { InitializeGI(true, false, true); }
+
+        void Run() override
+        {
+            if (!GIRayTracingScene::IsSupported())
+            {
+                std::cout << "GI_HARDWARE_TRACING_SKIPPED backend unavailable" << std::endl;
+                return;
+            }
+
+            // 768 triangles make the hardware metadata upload larger than a 64 KiB graph arena page.
+            auto wall = MakeWall(1.0f, 8);
+            Material red, green;
+            red.SetShadingModel(EShadingModel::Lit);
+            green.SetShadingModel(EShadingModel::Lit);
+            red.SetParameter("BaseColor", std::array<float, 4>{0.85f, 0.04f, 0.03f, 1.0f});
+            green.SetParameter("BaseColor", std::array<float, 4>{0.03f, 0.82f, 0.04f, 1.0f});
+            red.SetParameter("Metallic", 0.0f);
+            green.SetParameter("Metallic", 0.0f);
+            SurfaceCacheMeshInstance nearInstance, farInstance;
+            nearInstance.InstanceID = 47;
+            farInstance.InstanceID = 834;
+            nearInstance.RenderData = farInstance.RenderData = wall;
+            nearInstance.LocalToWorld(2, 3) = 2.0f;
+            farInstance.LocalToWorld(2, 3) = 4.0f;
+            nearInstance.Materials = {red.GetRenderProxyShared()};
+            farInstance.Materials = {green.GetRenderProxyShared()};
+            GIRayTracingScene hardware;
+
+            const auto verifyFrame = [&](const std::vector<SurfaceCacheMeshInstance>& instances, uint32_t expectedOwner,
+                float expectedZ, uint64_t revision, bool bGather)
+            {
+                Verify(hardware.Update(instances), "hardware scene uses Vulkan pipeline and geometry");
+                Verify(hardware.GetBLASCount() == 1 && hardware.GetInstanceCount() == instances.size() &&
+                    hardware.GetTLASRevision() == revision, "instances share one BLAS and rebuild TLAS on changes");
+                SurfaceCacheMaterial surface;
+                surface.Initialize(instances, 32);
+                SurfaceCacheDirectLighting direct;
+                direct.Initialize(surface, 64, 6);
+                RenderGraphBuilder graph;
+                const auto material = surface.AddCapturePasses(graph);
+                SurfaceCacheLight light;
+                light.Direction = {0, 0, 1};
+                light.Intensity = 3;
+                light.bCastShadow = false;
+                const auto lighting = direct.AddUpdatePasses(graph, surface, {light});
+
+                std::array<SurfaceCacheQuery, 3> rays{};
+                for (auto& ray : rays)
+                {
+                    ray.OriginDistance = {0.12f, 0.08f, 0, 12};
+                    ray.Direction = {0, 0, 1, 0};
+                    ray.Control = {UINT32_MAX, 1, UINT32_MAX, 0};
+                }
+                rays[1].OriginDistance.X = -5;
+                rays[2].Control.Y = 2;
+                RenderGraphBufferDesc queryDesc{};
+                queryDesc.Size = sizeof(rays);
+                queryDesc.Stride = sizeof(SurfaceCacheQuery);
+                queryDesc.Usage = ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::ShaderResource | ERHIBufferUsageFlag::TransferDst;
+                auto queryBuffer = graph.CreateBuffer("GIHardwareTest.Queries", queryDesc);
+                graph.AddUploadBuffer(queryBuffer, rays.data(), sizeof(rays));
+                auto hits = hardware.AddTracePasses(graph, material, queryBuffer, uint32_t(rays.size()));
+                RenderGraphBufferRef probeRadiance = nullptr;
+                if (bGather)
+                {
+                    auto input = MakeProbeInput(graph, 1);
+                    input.HardwareScene = &hardware;
+                    input.DebugMode = 6;
+                    probeRadiance = AddScreenProbeGatherPasses(graph, material, lighting, input).Radiance;
+                }
+                void* mapped = nullptr;
+                void* mappedProbes = nullptr;
+                auto* readback = graph.AllocateParameter<RadiosityTestReadback>();
+                readback->Atlas = lighting.DirectRadiance;
+                readback->Hits = hits;
+                readback->Lookup = probeRadiance;
+                graph.AddPass("GIHardwareTestReadback", RadiosityTestReadback::GetMetaData(), readback, EPassFlag::Graphic,
+                    [&](RHICommandListBase& cmd)
+                    {
+                        mapped = GRHIApi->MapReadBuffer(cmd, hits->GetRHIBuffer(), {});
+                        if (probeRadiance)
+                        {
+                            mappedProbes = GRHIApi->MapReadBuffer(cmd, probeRadiance->GetRHIBuffer(), {});
+                        }
+                    });
+                graph.Execute();
+                const auto fence = direct.GetAtlas()->GetTracker().GetLastAccessFence();
+                GRHIApi->GetQueue(fence.QueueType)->WaitValue(fence.Value);
+                Verify(mapped != nullptr, "hardware result readback exists");
+                std::array<SurfaceCacheQueryResult, 3> results;
+                std::copy_n(static_cast<const SurfaceCacheQueryResult*>(mapped), results.size(), results.begin());
+                GRHIApi->Unmap(mapped);
+                const auto& hit = results[0];
+                std::cout << "GI_HARDWARE owner=" << hit.Status.X << " flags=" << hit.Status.Z << " primitive=" << hit.Status.W
+                    << " z=" << hit.PositionDistance.Z << " normal=" << hit.NormalRoughness.Z << " revision=" << revision << std::endl;
+                Verify(hit.Status.X == expectedOwner && (hit.Status.Z & 27u) == 27u &&
+                    std::abs(hit.PositionDistance.Z - expectedZ) < 0.001f && hit.NormalRoughness.Z < -0.999f,
+                    "nearest hit returns exact distance, normal, scene instance and a valid Surface Card");
+                Verify((expectedOwner == 47 ? hit.BaseColorMetallic.X : hit.BaseColorMetallic.Y) > 0.8f,
+                    "hardware hit maps to the material of the correct mesh instance");
+                Verify(results[1].Status.Z == 0 && results[2].Status.Z == 0, "miss and skipped rays do not publish hits");
+                if (bGather)
+                {
+                    Verify(mappedProbes != nullptr, "probe radiance readback exists");
+                    auto* probes = static_cast<const ScreenProbeRadianceRecord*>(mappedProbes);
+                    const auto litHardwareRays = std::count_if(probes, probes + TestRayCount, [](const auto& probe)
+                    {
+                        return (probe.Status.W & 11u) == 11u && probe.Radiance.X > 0.25f;
+                    });
+                    GRHIApi->Unmap(mappedProbes);
+                    std::cout << "GI_HARDWARE_SCREEN_PROBES litRays=" << litHardwareRays << std::endl;
+                    Verify(litHardwareRays > 0, "screen-probe rays receive red Surface Cache light from hardware geometry");
+                }
+                direct.Release();
+                surface.Release();
+            };
+
+            verifyFrame({nearInstance, farInstance}, 47, 1.85f, 1, true);
+            verifyFrame({nearInstance, farInstance}, 47, 1.85f, 1, false);
+            nearInstance.LocalToWorld(0, 3) = 5.0f;
+            verifyFrame({nearInstance, farInstance}, 834, 3.85f, 2, false);
+            verifyFrame({farInstance}, 834, 3.85f, 3, false);
+            std::cout << "GI_HARDWARE_TRACING_TEST_OK" << std::endl;
+            GDistanceFieldMgr.ReleaseMeshDistanceField(*wall);
+            wall->LODResources.front().ReleaseResources();
+        }
+    };
+
+    REGISTER_RENDER_TEST("GIHardwareTracingTest", GIHardwareTracingTest);
 }

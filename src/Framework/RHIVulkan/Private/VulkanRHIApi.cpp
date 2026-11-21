@@ -158,7 +158,7 @@ bool VulkanRHIApi::Init()
 	// 4. 计算总分配大小
 	G_RHITransition_TotalSize = G_RHITransition_PrivateDataOffset + privateSize;
 
-	m_PlatformInfo.bEnableRayTracing = true;
+	m_PlatformInfo.bEnableRayTracing = m_Device->SupportsRayTracing();
 	m_bValidFlag = true;
     return true;
     // 初始化其他Vulkan资源

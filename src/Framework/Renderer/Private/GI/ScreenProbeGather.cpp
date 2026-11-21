@@ -1,4 +1,5 @@
 #include "ScreenProbeGather.h"
+#include "GIRayTracing.h"
 
 #include "GlobalShader.h"
 #include "RHIPipelineStateCache.h"
@@ -131,7 +132,7 @@ namespace Renderer
         Require(input.TileSize >= 4 && input.TileSize <= 64 && input.RaysPerProbe >= 1 && input.RaysPerProbe <= 64,
             "tile size or ray count is outside the supported range");
         Require(std::isfinite(input.MaxTraceDistance) && input.MaxTraceDistance > 0, "invalid trace distance");
-        Require(input.DebugMode <= 5, "debug mode must be between 0 and 5");
+        Require(input.DebugMode <= 6, "debug mode must be between 0 and 6");
 
         const auto& gbufferDesc = input.GBufferA->GetDesc();
         Require(gbufferDesc.Width > 0 && gbufferDesc.Height > 0 &&
@@ -175,8 +176,8 @@ namespace Renderer
 
         const auto world = input.WorldCache ? WorldRadianceCache::AddRayLookupPass(builder, *input.WorldCache,
             output.Queries, uint32_t(queryCount)) : WorldRadianceCacheRayOutput{};
-        auto queryResults = AddSurfaceCacheQueryPass(builder, material, world.Queries ? world.Queries : output.Queries,
-            uint32_t(queryCount));
+        auto queryResults = AddGITracePasses(builder, material, world.Queries ? world.Queries : output.Queries,
+            uint32_t(queryCount), input.HardwareScene);
         auto lightingResults = AddSurfaceCacheLightingLookupPass(builder, material, lighting, queryResults, uint32_t(queryCount));
 
         auto* gather = builder.AllocateParameter<ScreenProbeGatherParameters>();

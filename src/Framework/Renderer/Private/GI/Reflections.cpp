@@ -1,4 +1,5 @@
 #include "Reflections.h"
+#include "GIRayTracing.h"
 
 #include "GlobalShader.h"
 #include "RHIPipelineStateCache.h"
@@ -27,12 +28,13 @@ namespace Renderer
         SHADER_PARAMETER_STRUCT_REFERENCE(ReflectionViewParameters, View)
         SHADER_PARAMETER_STRUCT_REFERENCE(SceneEvnIBLLightParameters, Environment)
         SHADER_PARAMETER_STRUCT_REFERENCE(WorldRadianceCacheParameters, WorldCache)
+        SHADER_PARAMETER_STRUCT_REFERENCE(SurfaceCachePunctualLightParameters, Punctual)
         SHADER_PARAMETER(uint32_t, ReflectionView)
         SHADER_PARAMETER(uint32_t, bHasEnvironment)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D, DeferredColor)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D, ScreenHit)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheQuery, TraceQueries)
-        SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheQueryResult, SDFHits)
+        SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheQueryResult, GeometryHits)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheLightingQueryResult, HitLighting)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, ReflectionOutput)
     END_SHADER_PARAMETER_STRUCT(ReflectionResolveParameters)
@@ -50,9 +52,17 @@ namespace Renderer
     {
     public:
         static constexpr char USE_WORLD_CACHE[] = "REFLECTION_WORLD_CACHE";
-        using PermutationDomain = ShaderPermutationDomain<FPermutationDimensionBool<USE_WORLD_CACHE>>;
+        static constexpr char USE_HARDWARE_LIGHTS[] = "REFLECTION_HARDWARE_LIGHTS";
+        using WorldCacheDimension = FPermutationDimensionBool<USE_WORLD_CACHE>;
+        using HardwareLightsDimension = FPermutationDimensionBool<USE_HARDWARE_LIGHTS>;
+        using PermutationDomain = ShaderPermutationDomain<WorldCacheDimension, HardwareLightsDimension>;
         DECLARE_GLOBAL_SHADER_TYPE(ReflectionResolveCS)
-        static bool ShouldCompilePermutation(const ShaderPermutationParameters&) { return true; }
+        static bool ShouldCompilePermutation(const ShaderPermutationParameters& parameters)
+        {
+            PermutationDomain domain;
+            domain.SetFromId(parameters.PermutationId);
+            return !domain.GetFieldValue<HardwareLightsDimension>() || GIRayTracingScene::IsSupported();
+        }
         static void ModifyShaderCompilerEnvironment(const ShaderPermutationParameters& parameters, ShaderCompilerEnvironment& environment)
         {
             PermutationDomain domain;
@@ -151,8 +161,9 @@ namespace Renderer
         trace->TraceQueries = builder.CreateBufferUAV("Reflections.QueriesUAV", queryUAV);
         AddCompute<ReflectionTraceCS>(builder, "ReflectionScreenTrace", trace, size);
 
-        const auto sdfHits = AddSurfaceCacheQueryPass(builder, material, queries, count);
-        const auto hitLighting = AddSurfaceCacheLightingLookupPass(builder, material, lighting, sdfHits, count);
+        const auto hits = AddGITracePasses(builder, material, queries, count, input.HardwareScene);
+        const bool bUseHardwareLighting = input.HardwareScene && input.HardwareLights;
+        const auto hitLighting = AddSurfaceCacheLightingLookupPass(builder, material, lighting, hits, count, bUseHardwareLighting);
 
         auto* resolve = builder.AllocateParameter<ReflectionResolveParameters>();
         resolve->View = trace->View;
@@ -161,14 +172,21 @@ namespace Renderer
         {
             resolve->WorldCache = *input.WorldCache;
         }
+        if (bUseHardwareLighting)
+        {
+            resolve->Punctual = *input.HardwareLights;
+        }
         resolve->ReflectionView = static_cast<uint32_t>(input.View);
         resolve->bHasEnvironment = input.bHasEnvironment ? 1u : 0u;
         resolve->DeferredColor = input.DeferredColor;
         resolve->ScreenHit = screenHit;
         resolve->TraceQueries = ReadBuffer(builder, queries, count);
-        resolve->SDFHits = ReadBuffer(builder, sdfHits, count);
+        resolve->GeometryHits = ReadBuffer(builder, hits, count);
         resolve->HitLighting = ReadBuffer(builder, hitLighting, count);
         resolve->ReflectionOutput = CreateOutputUAV(builder, input.Output);
-        AddCompute<ReflectionResolveCS>(builder, "ReflectionResolve", resolve, size, input.WorldCache ? 1u : 0u);
+        ReflectionResolveCS::PermutationDomain domain;
+        domain.SetFieldValue<ReflectionResolveCS::WorldCacheDimension>(input.WorldCache != nullptr);
+        domain.SetFieldValue<ReflectionResolveCS::HardwareLightsDimension>(bUseHardwareLighting);
+        AddCompute<ReflectionResolveCS>(builder, "ReflectionResolve", resolve, size, domain.GetPermutationId());
     }
 }

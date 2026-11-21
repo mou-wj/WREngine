@@ -98,6 +98,10 @@ Surface Cache 的 Base Color、World Normal、Card Coverage、Roughness、Metall
 
 ### 反射预览
 
-在 `Reflections / Composite` 查看延迟底色与混合反射的合成。`Ray Direction` 用 RGB 表示世界方向，`Screen Hit` 用 RG 表示屏幕 UV、B 表示置信度。`SDF Hit` 的 R 表示几何命中、G 表示有效 Card 光照、B 表示归一化距离。`Source` 中绿、黄、橙、紫、蓝分别表示屏幕命中、SDF 加 Card、SDF 缺覆盖回退、世界探针、环境。另有 `Roughness`、`Radiance` 和 `Contribution` 视图独立观察接收面材质、入射辐射和 BRDF 加权后的反射项。
+在 `Reflections / Composite` 查看延迟底色与混合反射的合成。`Ray Direction` 用 RGB 表示世界方向，`Screen Hit` 用 RG 表示屏幕 UV、B 表示置信度。`Geometry Hit` 显示硬件或 SDF 几何命中与距离，`Hit Instance` 按场景实例 ID 着色。`Source` 的青色、品红表示有着色数据和缺少着色数据的硬件命中，绿色为屏幕，黄和橙为 SDF，紫色为世界探针，蓝色为环境。另有 `Roughness`、`Radiance` 和 `Contribution` 查看接收面粗糙度、入射辐射与镜面项。
 
 `Use radiosity in reflections` 控制离屏 Card 光照是否加入反弹项，`Use world cache` 控制粗糙反射的世界缓存回退。当前主场景仍使用 `DefferedSceneRenderer` 的常规 ScreenSpaceGI/SSR。预览反射合成复用同一延迟 GBuffer 与直接光，在延迟漫反射 IBL 之后写入镜面项。 [算法与回退](../key_implemetion/algorithm/21-hybrid-reflections.md)
+
+### 硬件追踪预览
+
+在 Screen Probes、GI 或 Reflections 视图勾选 `Vulkan hardware tracing`。默认使用 SDF，未开启 Vulkan 原生光追管线时使用同一 SDF 路径。状态行给出实际路径、BLAS 数、TLAS 实例数与版本。切换追踪后端会使现有 GI 累积历史失效。 `Screen Probes / Trace Source` 按 Tile 显示几何命中比例，黄色为 SDF，青色为有 Card 的硬件命中，品红为硬件命中但缺少 Card。未命中的方向按既有世界查询或环境策略取光。 [实现与验证](../key_implemetion/performance/07-ray-tracing-as-and-sbt.md#giviewer-场景快照与-rdg)

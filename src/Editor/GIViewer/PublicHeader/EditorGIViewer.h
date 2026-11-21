@@ -41,6 +41,7 @@ namespace Editor
         Renderer::ELumenViewerCardView m_CardView = Renderer::ELumenViewerCardView::BaseColor;
         Renderer::LumenViewerRadiositySettings m_Radiosity;
         Renderer::LumenViewerWorldCacheSettings m_WorldCache;
+        bool m_bUseHardwareTracing = false;
         uint32_t m_SelectedCardIndex = UINT32_MAX;
         bool m_bOpen = false;
         bool m_bVisible = false;

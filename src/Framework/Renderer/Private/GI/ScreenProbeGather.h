@@ -7,6 +7,7 @@
 
 namespace Renderer
 {
+    class GIRayTracingScene;
     BEGIN_SHADER_PARAMETER_STRUCT(ScreenProbeRecord)
         SHADER_PARAMETER(Core::Float4, WorldPositionDepth)
         SHADER_PARAMETER(Core::Float4, WorldNormal)
@@ -72,6 +73,7 @@ namespace Renderer
         Core::Float3 CameraPosition = {0, 0, 0};
         SceneEvnIBLLightParameters Environment{};
         const WorldRadianceCacheParameters* WorldCache = nullptr;
+        GIRayTracingScene* HardwareScene = nullptr;
         RenderCore::RenderGraphTextureRef IndirectDiffuseOutput = nullptr;
         RenderCore::RenderGraphTextureRef DebugOutput = nullptr;
         bool bHasEnvironment = false;

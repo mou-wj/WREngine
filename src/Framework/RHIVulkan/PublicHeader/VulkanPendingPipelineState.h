@@ -1220,6 +1220,8 @@ namespace RHIVulkan {
         {
             m_CurrentPipeline = nullptr;
             m_CurrentState = nullptr;
+            // Descriptor bindings belong to the command buffer being recorded.
+            m_States.clear();
             m_RetiredScratchBuffers.clear();
             m_CurrentAccelerationStructure = nullptr;
             m_ScratchBuffer.reset();

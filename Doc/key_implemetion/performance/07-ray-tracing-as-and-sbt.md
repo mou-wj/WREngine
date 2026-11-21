@@ -61,4 +61,20 @@ D3D12 [PipelineState](../../../src/Framework/RHIDirectX12/Private/DirectX12Pipel
 
 上传几何/实例 → build BLAS → 显式依赖 → build TLAS → 显式依赖 → 绑定 pipeline、TLAS、输出 UAV → TraceRays → 输出转 Present。RayGen 发射射线，miss 写背景，hit group 处理交点/命中逻辑。自定义 CPU 射线求交的推导见 [射线算法](../algorithm/01-ray-triangle-and-distance.md)。
 
-RHIRayTracingTest 只覆盖简单三角形、单一实例及基本 shader tables，不是 UPDATE、程序化几何、多 hit-group 索引和 callable 全覆盖。OpenGL 没有此原生路径，明确不支持；既往不支持报错后的异常退出另有记录。本轮未运行新测试。
+RHIRayTracingTest 覆盖简单三角形、单一实例和基本 Shader 表。GIViewer 专项另检验多实例复用、变换和删除、命中映射及 GPU 光照读回。
+
+## GIViewer 场景快照与 RDG
+
+[`GIRayTracingScene`](../../../src/Framework/Renderer/Private/GI/GIRayTracing.cpp) 由一个 Viewer 独占。控制线程按可见静态网格的 LOD0 RenderData 共享 BLAS，持有构建用的 Position 和重排过的 Index RHI Buffer。索引重排按 Section 范围读取 `FirstIndex` 和 `NumIndices`，将 `BaseVertexIndex` 加到每个索引。一个 BLAS 使用现有单三角形 Geometry 描述；三角形表与 BLAS 索引顺序一致，逐三角形存 Section 编号。TLAS 对每个实例存变换及稠密的 24 位 Vulkan 自定义索引，Instance 元数据映射回场景 ID、共享三角形起点和实例材质表起点。场景引用范围与 Surface Cache 的可见静态网格快照一致，摄像机视锥外的对象仍可参与。
+
+摄像机变化复用所有加速结构。场景变换、材质代理和成员变化重建 TLAS 和实例元数据，仍使用已有 BLAS。删除最后一个引用的实例后移除对应 BLAS。Vulkan `SetInstancesDesc` 会重建原生实例数据与 TLAS，所以这一版使用 BUILD 更新实例集。Viewer 替换场景快照或关闭前，沿用预览输出纹理的末次访问 Fence 等待，输出依赖解析命中和 GPU 追踪。两次追踪沿同一 Graphics Queue 顺序提交；加速结构的 CPU 所有者及元数据在录制和提交期间保持不变。帧内调度标记代表已加入图，使用方须执行该图。
+
+| Pass | 资源职责 |
+| --- | --- |
+| `GIHardwareMetadataUpload` | 首次使用当前快照时，按 `TransferDest` 声明上传实例、三角形和材质。数据由快照 vector 持有，录制时直接复制进 RHI staging。 |
+| `GIHardwareBuildAndTrace` | Graphics Pass 读取查询 SRV、写原始命中 UAV。新 BLAS 的构建输入上传后执行 `TransferDest → BVHRead`，BLAS 和 TLAS 各自完成构建后执行 `BVHWrite → BVHRead`，再调用现有 `TraceRays`。AS 当前归本地 Graphics Pass 显式同步，RDG 仍通过命中 UAV 安排同图后续依赖。 |
+| `GIHardwareResolve` | Compute 读取原始命中、持久结构化元数据和 Surface Cards，写回与 SDF 兼容的查询结果 UAV。 |
+
+转换对象由当前图持有到录制与提交完成。原生 Scratch 仍由 Vulkan 图形上下文管理。命令缓冲重录时清理光追描述符状态，确保即使输入完全相同，也在新的命令缓冲绑定描述符集。SBT 使用现有 RayGen、Miss 和单个三角形 ClosestHit Group。
+
+该实现额外上传一份构建顶点和索引。GPU 三角形记录为每个唯一网格的每三角形 96 字节，实例记录 144 字节，材质记录每实例每 Section 48 字节。每个查询的 32 字节原始命中只在追踪和解析之间存在。实例快照重建时重新组装并上传元数据，当前无增量复制和压缩。 [命中重建与着色](../algorithm/21-hybrid-reflections.md#硬件命中与着色) · [专项与故障记录](../../dev/bugfix/故障与修复记录-2026-11-21.md#giviewer-硬件光追验证)

@@ -105,6 +105,7 @@ public:
     VkDevice GetHandle() const { return m_Device; }
     VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
     uint32_t GetRasterSubPixelBits() const { return m_RasterSubPixelBits; }
+    bool SupportsRayTracing() const { return m_bRayTracingSupported; }
     const VkPhysicalDeviceRayTracingPipelinePropertiesKHR& GetRayTracingPipelineProperties() const
     {
         return m_RayTracingPipelineProperties;
@@ -160,6 +161,7 @@ private:
 
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
     VkDevice m_Device{VK_NULL_HANDLE};
+    bool m_bRayTracingSupported = false;
     uint32_t m_RasterSubPixelBits = 0;
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR m_RayTracingPipelineProperties{
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
