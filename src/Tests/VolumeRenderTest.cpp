@@ -4,6 +4,7 @@
 #include "Camera.h"
 #include "GlobalShader.h"
 #include "LightComponent.h"
+#include "LightSceneProxy.h"
 #include "RenderGraphBuilder.h"
 #include "RHIPipelineStateCache.h"
 #include "SceneView.h"
@@ -57,6 +58,7 @@ namespace Test
             view.FarClip = camera.GetFarPlane();
             view.CameraWorldPos = camera.GetPosition();
             view.Viewport = {0, 0, Width, Height};
+            view.BuildSplitDepths();
 
             RHITextureDesc colorDesc{};
             colorDesc.Width = Width;
@@ -123,6 +125,39 @@ namespace Test
             std::copy_n(static_cast<const Core::Float4*>(mapped), pixels.size(), pixels.begin());
             GRHIApi->Unmap(mapped);
             return pixels;
+        }
+
+        std::unique_ptr<RenderTexture> MakeShadowTexture(ERHITextureType type, uint32_t layers,
+            uint32_t blockerLayer, float blockerDepth, float clearDepth)
+        {
+            constexpr uint32_t size = 4;
+            RHITextureDesc desc{};
+            desc.Width = desc.Height = size;
+            desc.ArraySize = layers;
+            desc.Format = ERHIFormat::R32_Float;
+            desc.Type = type;
+            desc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest;
+            auto texture = std::make_unique<RenderTexture>(desc);
+            texture->InitRHIResource();
+            RenderGraphBuilder graph;
+            auto* upload = graph.AllocateParameter<VolumeTestUpload>();
+            upload->Color = graph.RegisterExternalTexture("VolumeTest.Shadow", texture.get());
+            graph.AddPass("VolumeTestShadow", VolumeTestUpload::GetMetaData(), upload, EPassFlag::Graphic,
+                [&](RHICommandListBase& cmd)
+                {
+                    for (uint32_t layer = 0; layer < layers; ++layer)
+                    {
+                        auto region = RHIUpdateTextureRegion::Create2DRegion(size, size);
+                        region.ArraySlice = layer;
+                        std::array<float, size * size> pixels;
+                        pixels.fill(layer == blockerLayer || blockerLayer >= layers ? blockerDepth : clearDepth);
+                        GRHIApi->UpdateTexture(cmd, texture->GetRHI(), pixels.data(), region);
+                    }
+                });
+            graph.Execute();
+            const auto fence = texture->GetTracker().GetLastAccessFence();
+            GRHIApi->GetQueue(fence.QueueType)->WaitValue(fence.Value);
+            return texture;
         }
     }
 
@@ -238,6 +273,66 @@ namespace Test
             RequireNear(radial.X, 0.0f, "point mask ignores directional light");
             RequireNear(cone[Center].Y, 0.0f, "spot mask ignores point light");
             std::cout << "VOLUME_LIGHTING_TEST_OK" << std::endl;
+
+            auto csm = MakeShadowTexture(ERHITextureType::Texture2DArray, 4, 2, 0.1f, 1.0f);
+            auto cube = MakeShadowTexture(ERHITextureType::TextureCube, 6, 6, 0.01f, 3.0f);
+            auto atlas = MakeShadowTexture(ERHITextureType::Texture2D, 1, 0, 0.1f, 1.0f);
+            scene.ForEachLight([&](Engine::LightSceneProxy* proxy)
+            {
+                auto& shadow = scene.GetLightShadowInfo(proxy);
+                auto& allocation = shadow.Allocation;
+                auto projection = Core::Float4x4::Identity();
+                projection(0, 0) = projection(1, 1) = 0.1f;
+                projection(2, 2) = -0.04f;
+                projection(2, 3) = 0.2f;
+                switch (proxy->GetLightType())
+                {
+                case Engine::ELightType::Directional:
+                    allocation.ShadowType = EShadowType::Directional;
+                    allocation.Texture = csm.get();
+                    allocation.Slices.resize(4);
+                    allocation.Slices[0].Layer = 2;
+                    shadow.ShadowMatrices.assign(4, projection);
+                    break;
+                case Engine::ELightType::Point:
+                    allocation.ShadowType = EShadowType::Point;
+                    allocation.Texture = cube.get();
+                    allocation.Slices.resize(6);
+                    break;
+                case Engine::ELightType::Spot:
+                    allocation.ShadowType = EShadowType::Spot;
+                    allocation.Texture = atlas.get();
+                    allocation.Slices.resize(1);
+                    allocation.Slices[0].UVScale = {0.5f, 0.5f};
+                    allocation.Slices[0].UVOffset = {0.5f, 0.5f};
+                    shadow.ShadowMatrices.assign(1, projection);
+                    break;
+                default:
+                    break;
+                }
+            });
+
+            settings.LightMask = 7;
+            const auto blocked = Render(settings, 6, &scene)[Center];
+            std::cout << "VOLUME_SHADOW_READBACK " << blocked.X << ',' << blocked.Y << ',' << blocked.Z << std::endl;
+            RequireNear(blocked.X, 0.0f, "selected CSM array layer blocks the directional light");
+            RequireNear(blocked.Y, 0.0f, "point shadow cube blocks the point light");
+            RequireNear(blocked.Z, 0.0f, "spot atlas blocks the spotlight");
+            settings.View = EVolumeView::LightVisibility;
+            RequireNear(Render(settings, 6, &scene)[Center].X, 0.0f, "visibility slice shows occluded froxels");
+            settings.View = EVolumeView::Transmittance;
+            const auto shadowedT = Render(settings, 6, &scene)[Center];
+            settings.bShadows = false;
+            RequireNear(Render(settings, 6, &scene)[Center].X, shadowedT.X, "shadows leave extinction unchanged");
+            settings.View = EVolumeView::DirectLighting;
+            const auto unblocked = Render(settings, 6, &scene)[Center];
+            RequireNear(unblocked.X, isotropic.X, "shadow toggle restores directional radiance");
+            RequireNear(unblocked.Y, radial.Y, "shadow toggle restores point radiance");
+            RequireNear(unblocked.Z, cone[Center].Z, "shadow toggle restores spot radiance");
+            std::cout << "VOLUME_SHADOW_TEST_OK" << std::endl;
+
+            // The fixture textures are borrowed sampler inputs, outside the scene allocator.
+            scene.ForEachLight([&](Engine::LightSceneProxy* proxy) { scene.GetLightShadowInfo(proxy).Allocation = {}; });
             scene.RemoveLight(&directional);
             scene.RemoveLight(&point);
             scene.RemoveLight(&spot);

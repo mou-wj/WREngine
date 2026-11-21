@@ -4,6 +4,7 @@
 #include "RenderGraphBuilder.h"
 #include "RHIPipelineStateCache.h"
 #include "Scene.h"
+#include "SceneShaderParameters.h"
 #include "SceneView.h"
 #include <algorithm>
 #include <cmath>
@@ -37,17 +38,25 @@ namespace Renderer
         SHADER_PARAMETER(Core::Float4, ConeType)
     END_SHADER_PARAMETER_STRUCT(VolumeLightData)
 
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeShadowSlice)
+        SHADER_PARAMETER(Core::Mat4, ShadowProjection)
+        SHADER_PARAMETER(Core::Float4, UVTransform)
+        SHADER_PARAMETER(Core::Float4, DepthLayerMip)
+    END_SHADER_PARAMETER_STRUCT(VolumeShadowSlice)
+
     BEGIN_SHADER_PARAMETER_STRUCT(VolumeLightingParameters)
         SHADER_PARAMETER_STRUCT_REFERENCE(VolumeGridParameters, Grid)
+        SHADER_PARAMETER_STRUCT_REFERENCE(SceneLightShadowParameters, Shadows)
         SHADER_PARAMETER(uint32_t, LightCount)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(VolumeLightData, SceneLights)
+        SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(VolumeShadowSlice, VolumeShadowSlices)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, Medium)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, LightingOutput)
     END_SHADER_PARAMETER_STRUCT(VolumeLightingParameters)
 
-    BEGIN_SHADER_PARAMETER_STRUCT(VolumeLightUpload)
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeBufferUpload)
         RDG_BUFFER_ACCESS(Buffer, ERHIResourceAccess::TransferDest)
-    END_SHADER_PARAMETER_STRUCT(VolumeLightUpload)
+    END_SHADER_PARAMETER_STRUCT(VolumeBufferUpload)
 
     BEGIN_SHADER_PARAMETER_STRUCT(VolumeIntegrateParameters)
         SHADER_PARAMETER_STRUCT_REFERENCE(VolumeGridParameters, Grid)
@@ -67,6 +76,7 @@ namespace Renderer
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, Medium)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, VolumeScattering)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, VolumeTransmittance)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, VolumeDirect)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, SceneColor)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, CompositeOutput)
     END_SHADER_PARAMETER_STRUCT(VolumeCompositeParameters)
@@ -149,12 +159,107 @@ namespace Renderer
             return {color.X, color.Y, color.Z, alpha};
         }
 
-        void BindVolumeLights(RenderGraphBuilder& builder, Scene* scene, uint32_t mask, VolumeLightingParameters& params)
+        template<class Record>
+        RenderGraphBufferSRVRef UploadVolumeRecords(RenderGraphBuilder& builder, const char* name, std::vector<Record> records)
+        {
+            if (records.empty())
+            {
+                records.emplace_back();
+            }
+            RenderGraphBufferDesc desc{};
+            desc.Stride = sizeof(Record);
+            desc.Size = records.size() * desc.Stride;
+            desc.Usage = ERHIBufferUsageFlag::ShaderResource | ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::TransferDst;
+            auto* upload = builder.AllocateParameter<VolumeBufferUpload>();
+            upload->Buffer = builder.CreateBuffer(name, desc);
+            RenderGraphBufferSRVDesc view{};
+            view.Buffer = upload->Buffer;
+            view.Stride = desc.Stride;
+            view.NumElements = static_cast<uint32_t>(records.size());
+            builder.AddPass(name, VolumeBufferUpload::GetMetaData(), upload, EPassFlag::Graphic,
+                [upload, records = std::move(records)](RHICommandListBase& cmd)
+                {
+                    GRHIApi->UpdateBuffer(cmd, upload->Buffer->GetRHIBuffer(), records.data(),
+                        {0, uint32_t(records.size() * sizeof(Record))});
+                });
+            return builder.CreateBufferSRV(std::string(name) + ".SRV", view);
+        }
+
+        void BindVolumeShadow(RenderGraphBuilder& builder, const Engine::SceneView& view, const LightShadowInfo& shadow,
+            VolumeLightData& light, VolumeLightingParameters& params, std::vector<VolumeShadowSlice>& slices)
+        {
+            const auto& allocation = shadow.Allocation;
+            if (!allocation.IsValid() || !allocation.Texture)
+            {
+                return;
+            }
+            const auto index = allocation.TextureIndex;
+            const auto texture = [&]()
+            {
+                return builder.RegisterExternalTexture("Volume.Shadow." + std::to_string(reinterpret_cast<uintptr_t>(allocation.Texture)),
+                    allocation.Texture);
+            };
+            if (allocation.ShadowType == EShadowType::Point && index < 8)
+            {
+                params.Shadows.PointLightShadows[index] = texture();
+                light.ConeType.Z = 1;
+                light.ConeType.W = float(index);
+                return;
+            }
+            const bool bDirectional = allocation.ShadowType == EShadowType::Directional;
+            const auto count = bDirectional ? Engine::SceneView::CascadeCount : 1u;
+            if ((bDirectional && index >= 4) || shadow.ShadowMatrices.size() < count || allocation.Slices.size() < count)
+            {
+                return;
+            }
+            if (bDirectional)
+            {
+                params.Shadows.ParrallelLightShadows[index] = texture();
+            }
+            else if (allocation.ShadowType == EShadowType::Spot)
+            {
+                params.Shadows.LightShadowAtlas = texture();
+            }
+            else
+            {
+                return;
+            }
+            light.ConeType.Z = float(slices.size() + 1);
+            light.ConeType.W = float(index);
+            for (uint32_t i = 0; i < count; ++i)
+            {
+                const auto& region = allocation.Slices[i];
+                VolumeShadowSlice slice{};
+                slice.ShadowProjection = shadow.ShadowMatrices[i];
+                slice.UVTransform = {region.UVScale.X, region.UVScale.Y, region.UVOffset.X, region.UVOffset.Y};
+                slice.DepthLayerMip = {bDirectional ? view.SplitDepths[i] : 0, bDirectional ? view.SplitDepths[i + 1] : 0,
+                    float(region.Layer), float(region.Mip)};
+                slices.push_back(slice);
+            }
+        }
+
+        void BindVolumeLights(RenderGraphBuilder& builder, const Engine::SceneView& view, Scene* scene,
+            const VolumeRenderSettings& settings, VolumeLightingParameters& params)
         {
             std::vector<VolumeLightData> lights;
+            std::vector<VolumeShadowSlice> slices;
+            params.Shadows.NearestSampler = GlobalNearestSampler.get();
+            const auto emptyCube = builder.RegisterExternalTexture("Volume.EmptyCube", GlobalEmptyCubeTexture.get());
+            const auto emptyArray = builder.RegisterExternalTexture("Volume.EmptyArray", GlobalEmptyTexture2DArray.get());
+            params.Shadows.LightShadowAtlas = builder.RegisterExternalTexture("Volume.EmptyShadowAtlas", GlobalWhiteTexture.get());
+            for (uint32_t index = 0; index < 8; ++index)
+            {
+                params.Shadows.PointLightShadows[index] = emptyCube;
+            }
+            for (uint32_t index = 0; index < 4; ++index)
+            {
+                params.Shadows.ParrallelLightShadows[index] = emptyArray;
+            }
             if (scene)
             {
                 using namespace Engine;
+                const auto& shadows = scene->GetGPUResourceInfo().ShadowResourceInfo.LightShadowInfos;
+                const auto mask = settings.LightMask;
                 scene->ForEachLight([&](LightSceneProxy* proxy)
                 {
                     VolumeLightData light{};
@@ -180,31 +285,20 @@ namespace Renderer
                     {
                         return;
                     }
+                    if (settings.bShadows && proxy->IsCastShadow())
+                    {
+                        const auto shadow = shadows.find(proxy);
+                        if (shadow != shadows.end())
+                        {
+                            BindVolumeShadow(builder, view, shadow->second, light, params, slices);
+                        }
+                    }
                     lights.push_back(light);
                 });
             }
             params.LightCount = static_cast<uint32_t>(lights.size());
-            if (lights.empty())
-            {
-                lights.emplace_back();
-            }
-            RenderGraphBufferDesc desc{};
-            desc.Stride = sizeof(VolumeLightData);
-            desc.Size = lights.size() * desc.Stride;
-            desc.Usage = ERHIBufferUsageFlag::ShaderResource | ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::TransferDst;
-            auto* upload = builder.AllocateParameter<VolumeLightUpload>();
-            upload->Buffer = builder.CreateBuffer("Volume.SceneLights", desc);
-            builder.AddPass("VolumeUploadLights", VolumeLightUpload::GetMetaData(), upload, EPassFlag::Graphic,
-                [upload, lights = std::move(lights)](RHICommandListBase& cmd)
-                {
-                    GRHIApi->UpdateBuffer(cmd, upload->Buffer->GetRHIBuffer(), lights.data(),
-                        {0, uint32_t(lights.size() * sizeof(VolumeLightData))});
-                });
-            RenderGraphBufferSRVDesc view{};
-            view.Buffer = upload->Buffer;
-            view.Stride = desc.Stride;
-            view.NumElements = std::max(1u, params.LightCount);
-            params.SceneLights = builder.CreateBufferSRV("Volume.SceneLights.SRV", view);
+            params.SceneLights = UploadVolumeRecords(builder, "Volume.SceneLights", std::move(lights));
+            params.VolumeShadowSlices = UploadVolumeRecords(builder, "Volume.ShadowSlices", std::move(slices));
         }
     }
 
@@ -254,7 +348,7 @@ namespace Renderer
         const auto directLighting = builder.CreateTexture("Volume.DirectLighting", desc);
         auto* lightingParams = builder.AllocateParameter<VolumeLightingParameters>();
         lightingParams->Grid = grid;
-        BindVolumeLights(builder, dynamic_cast<Scene*>(sceneInterface), settings.LightMask, *lightingParams);
+        BindVolumeLights(builder, view, dynamic_cast<Scene*>(sceneInterface), settings, *lightingParams);
         lightingParams->Medium = medium;
         lightingParams->LightingOutput = MakeUAV(builder, directLighting);
         AddCompute<VolumeLightingCS>(builder, "VolumeInjectLighting", lightingParams, volumeGroups);
@@ -283,6 +377,7 @@ namespace Renderer
         compositeParams->Medium = medium;
         compositeParams->VolumeScattering = scattering;
         compositeParams->VolumeTransmittance = transmittance;
+        compositeParams->VolumeDirect = directLighting;
         compositeParams->SceneColor = sceneColor;
         compositeParams->CompositeOutput = MakeUAV(builder, composite);
         AddCompute<VolumeCompositeCS>(builder, "VolumeComposite", compositeParams, screenGroups);

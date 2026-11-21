@@ -265,7 +265,7 @@ namespace Editor
             auto& settings = m_Preview->Settings;
             ImGui::Checkbox("Enable volume", &settings.bEnabled);
             ImGui::SameLine();
-            const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels", "Direct lighting"};
+            const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels", "Direct lighting", "Light visibility"};
             int mode = static_cast<int>(settings.View);
             ImGui::SetNextItemWidth(170.0f);
             if (ImGui::Combo("View", &mode, views, IM_ARRAYSIZE(views)))
@@ -285,6 +285,7 @@ namespace Editor
             }
             if (ImGui::CollapsingHeader("Lights"))
             {
+                ImGui::Checkbox("Volume shadows", &settings.bShadows);
                 ImGui::CheckboxFlags("Directional contribution", &settings.LightMask, 1u);
                 ImGui::SameLine();
                 ImGui::CheckboxFlags("Point contribution", &settings.LightMask, 2u);
@@ -294,7 +295,8 @@ namespace Editor
                 ImGui::SliderFloat("Point intensity", &m_Preview->LightIntensities.Y, 0.0f, 60.0f);
                 ImGui::SliderFloat("Spot intensity", &m_Preview->LightIntensities.Z, 0.0f, 100.0f);
             }
-            if (settings.View == Renderer::EVolumeView::Density || settings.View == Renderer::EVolumeView::Froxels)
+            if (settings.View == Renderer::EVolumeView::Density || settings.View == Renderer::EVolumeView::Froxels ||
+                settings.View == Renderer::EVolumeView::LightVisibility)
             {
                 int slice = settings.DebugSlice;
                 ImGui::SliderInt("Slice", &slice, 0, 31);

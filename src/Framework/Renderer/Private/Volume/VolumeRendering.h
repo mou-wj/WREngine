@@ -25,7 +25,8 @@ namespace Renderer
         Transmittance,
         Density,
         Froxels,
-        DirectLighting
+        DirectLighting,
+        LightVisibility
     };
 
     struct VolumeRenderSettings
@@ -37,6 +38,7 @@ namespace Renderer
         uint32_t DebugSlice = 16;
         uint32_t LightMask = 7; // Directional, Point, Spot in bits 0 through 2.
         bool bEnabled = true;
+        bool bShadows = true;
     };
 
     // The caller supplies one full-size perspective view and a transferable, linear scene color.

@@ -33,5 +33,9 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
         float sliceDepth = VolumeSliceDepth(float(DebugSlice + 1)) / FarDistance;
         color = border ? float3(0.25, 0.67, 0.92) : float3(0.05, 0.1, 0.2) * (0.4 + 0.6 * sliceDepth);
     }
+    else if (DrawMode == 6)
+    {
+        color = VolumeDirect.Load(int3(VolumeAddress(uint3(pixel / TileSize, DebugSlice), 0), 0)).w;
+    }
     CompositeOutput[pixel] = float4(color, background.a);
 }

@@ -1,6 +1,7 @@
 #include "/Generated/ShaderParameters/VolumeLightingParameters.sf"
 #include "/core/ShadingCommon.sf"
 #include "/volume/VolumeGrid.sf"
+#include "/volume/VolumeShadow.sf"
 
 float VolumePhase(float cosine, float anisotropy)
 {
@@ -22,6 +23,7 @@ void MainCS(uint3 cell : SV_DispatchThreadID)
     }
     float4 medium = Medium.Load(int3(VolumeAddress(cell, 1), 0));
     float3 light = 0.0;
+    float unoccluded = 0.0, occluded = 0.0;
     if (any(medium.rgb > 0.0) && LightCount != 0)
     {
         float3 cameraRay;
@@ -51,8 +53,16 @@ void MainCS(uint3 cell : SV_DispatchThreadID)
                 energy *= attenuation;
                 direction = toLight;
             }
-            light += EvaluateVolumeLight(energy, direction, cameraRay, medium.w);
+            float3 contribution = EvaluateVolumeLight(energy, direction, cameraRay, medium.w);
+            float weight = dot(contribution, float3(0.2126, 0.7152, 0.0722));
+            if (weight > 0.0)
+            {
+                float visibility = VolumeShadowVisibility(source, type, world, viewDepth);
+                light += contribution * visibility;
+                unoccluded += weight;
+                occluded += weight * visibility;
+            }
         }
     }
-    LightingOutput[VolumeAddress(cell, 0)] = float4(light, 1.0);
+    LightingOutput[VolumeAddress(cell, 0)] = float4(light, unoccluded > 0.0 ? occluded / unoccluded : 1.0);
 }

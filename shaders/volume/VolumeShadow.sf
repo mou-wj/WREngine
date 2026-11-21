@@ -1,0 +1,70 @@
+#include "/core/ShadowParametersHelper.sf"
+
+float VolumeShadowVisibility(VolumeLightData source, uint type, float3 world, float viewDepth)
+{
+    if (source.ConeType.z == 0)
+    {
+        return 1.0;
+    }
+    uint textureIndex = uint(source.ConeType.w);
+    if (type == 1)
+    {
+        float3 offset = world - source.PositionRadius.xyz;
+        float range = length(offset);
+        if (range <= 1e-4)
+        {
+            return 1.0;
+        }
+        return ShadowPCF_Cube(textureIndex, CubeClipToUVW(offset / range), range);
+    }
+
+    uint sliceIndex = uint(source.ConeType.z) - 1u;
+    VolumeShadowSlice slice = VolumeShadowSlices[sliceIndex];
+    if (type == 0)
+    {
+        bool found = false;
+        [unroll]
+        for (uint cascade = 0; cascade < 4; ++cascade)
+        {
+            VolumeShadowSlice candidate = VolumeShadowSlices[sliceIndex + cascade];
+            if (viewDepth >= candidate.DepthLayerMip.x && viewDepth <= candidate.DepthLayerMip.y)
+            {
+                slice = candidate;
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+        {
+            return 1.0;
+        }
+    }
+    float4 clip = mul(slice.ShadowProjection, float4(world, 1.0));
+    if (clip.w <= 1e-5)
+    {
+        return 1.0;
+    }
+    float3 projected = clip.xyz / clip.w;
+    float2 uv = ClipToUV(projected.xy);
+    if (any(uv < 0.0) || any(uv > 1.0) || projected.z < 0.0 || projected.z > 1.0)
+    {
+        return 1.0;
+    }
+    float storedDepth;
+    if (type == 0)
+    {
+        // Cascades are array layers of the same light's texture.
+        storedDepth = ParrallelLightShadows[textureIndex].SampleLevel(NearestSampler,
+            float3(uv, slice.DepthLayerMip.z), slice.DepthLayerMip.w).r;
+    }
+    else
+    {
+        uint width, height;
+        LightShadowAtlas.GetDimensions(width, height);
+        float2 inset = 0.5 / float2(width, height);
+        float2 boundsMin = slice.UVTransform.zw, boundsMax = boundsMin + slice.UVTransform.xy;
+        uv = clamp(uv * slice.UVTransform.xy + boundsMin, boundsMin + inset, boundsMax - inset);
+        storedDepth = LightShadowAtlas.SampleLevel(NearestSampler, uv, slice.DepthLayerMip.w).r;
+    }
+    return projected.z - CLIP_SHADOW_BIAS <= storedDepth ? 1.0 : 0.0;
+}

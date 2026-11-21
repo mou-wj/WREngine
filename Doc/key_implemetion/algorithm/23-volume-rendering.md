@@ -26,6 +26,12 @@ T *= t
 
 `VolumeInjectLighting` 遍历光源，按平行光方向、点光距离或聚光范围和锥角计算入射量，并复用 `LocalLightAttenuation` 与 `SpotLightAttenuation`。令 `μ = dot(toLight, cameraRay)`。Henyey–Greenstein 相函数为 `(1-g²)/(4π(1+g²-2gμ)^(3/2))`。正 g 在光向相机传播时加强前向散射。g 为零时固定为 1/(4π)。光照图记录乘过相函数的 RGB，积分写源项 `σ_s × (direct + ambient) + emission`。 [单次散射 Shader](../../../shaders/volume/VolumeLighting.sf) · [通用衰减](../../../shaders/core/ShadingCommon.sf)
 
+## 光源可见性
+
+构图时从 Scene 已分配的阴影记录获取光源编号、切片变换及纹理。Volume 注册同一纹理为 RDG SRV，读取此前基础渲染生成的图。平行光按前向相机深度选 CSM，用同一张二维数组的指定 Layer。聚光使用灯光投影、Atlas UVScale/Offset 和半 texel 内缩，避免越界到相邻光源。点光复用现有 Cube 朝向转换与径向深度比较。无有效阴影、超投影范围和超现有槽容量时按可见处理。 [体积阴影采样](../../../shaders/volume/VolumeShadow.sf) · [场景阴影生成](../../../src/Framework/Renderer/Private/SceneRenderer.cpp)
+
+可见性乘在入射光项上。积分的消光和透射率只由介质决定。**Light visibility** 图以入射光量加权展示该切片的可见比例。基础版本的 CSM 与 Spot 对 Froxel 使用单点深度比较，继承引擎已有的投影和深度偏移单位。
+
 ## 图资源与边界
 
 `VolumeInjectMedium` 写图集 UAV。积分读取图集和不透明深度，写两张屏幕纹理。合成读取场景颜色及两张积分图，写独立结果。最后通过 `VolumeCopyComposite` 的 TransferSrc/Dest 声明复制回颜色目标，避免在同一个 Pass 对该颜色同时绑定 SRV 和 UAV。无效或禁用范围直接跳过。纹理生命周期由 Builder 管理，预览颜色由 Viewer 持有并沿最后访问 Fence 释放。
