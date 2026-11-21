@@ -1,0 +1,139 @@
+#include "/GI/WorldRadianceOctahedral.sf"
+
+uint WorldRadianceSlot(int3 cell, uint level)
+{
+    int size = int(GridSize);
+    uint3 wrapped = uint3((cell % size + size) % size);
+    return ((level * GridSize + wrapped.z) * GridSize + wrapped.y) * GridSize + wrapped.x;
+}
+
+int3 WorldRadianceOrigin(uint level)
+{
+    return level == 0u ? LevelOrigin0 : LevelOrigin1;
+}
+
+float4 LoadWorldRadianceDirection(uint slot, int2 coordinate)
+{
+    int2 texel = WrapWorldRadianceDirection(coordinate, int(DirectionSize));
+    return WorldRadianceAtlas.Load(int3(texel.y * DirectionSize + texel.x, slot, 0));
+}
+
+bool ReadWorldRadianceDirection(uint slot, float3 direction, bool bFilterRadiance,
+    out float3 radiance, out float2 depthRange, out bool sky)
+{
+    float2 pixel = EncodeWorldRadianceDirection(direction) * DirectionSize - 0.5;
+    float2 fraction = frac(pixel);
+    int2 base = int2(floor(pixel));
+    radiance = 0.0;
+    depthRange = float2(TraceDistance, 0.0);
+    sky = false;
+    float weightSum = 0.0;
+    if (bFilterRadiance)
+    {
+        float nearestDistance = LoadWorldRadianceDirection(slot, int2(floor(pixel + 0.5))).w;
+        if (nearestDistance == 0.0)
+        {
+            return false;
+        }
+        sky = nearestDistance < 0.0;
+    }
+    [unroll]
+    for (uint tap = 0; tap < 4u; ++tap)
+    {
+        uint2 corner = uint2(tap & 1u, tap >> 1u);
+        float2 weights = lerp(1.0 - fraction, fraction, float2(corner));
+        float weight = weights.x * weights.y;
+        if (weight <= 1e-5)
+        {
+            continue;
+        }
+        float4 sample = LoadWorldRadianceDirection(slot, base + int2(corner));
+        if (!bFilterRadiance && sample.w == 0.0)
+        {
+            return false;
+        }
+        if (sample.w == 0.0 || (bFilterRadiance && sky != (sample.w < 0.0)))
+        {
+            continue;
+        }
+        float distance = abs(sample.w);
+        depthRange = float2(min(depthRange.x, distance), max(depthRange.y, distance));
+        radiance += sample.rgb * weight;
+        weightSum += weight;
+    }
+    if (weightSum < 0.8)
+    {
+        return false;
+    }
+    radiance /= weightSum;
+    return true;
+}
+
+float4 LookupWorldRadiance(float3 position, float3 direction, float remainingDistance)
+{
+    [loop]
+    for (uint level = 0; level < 2u; ++level)
+    {
+        float spacing = CellSize[level];
+        float3 grid = position / spacing;
+        int3 base = int3(floor(grid));
+        int3 origin = WorldRadianceOrigin(level);
+        if (any(base < origin) || any(base + 1 >= origin + int(GridSize)))
+        {
+            continue;
+        }
+
+        float3 fraction = frac(grid);
+        float3 radianceSum = 0.0;
+        float weightSum = 0.0;
+        float skyWeight = 0.0;
+        [loop]
+        for (uint corner = 0; corner < 8u; ++corner)
+        {
+            uint3 offset = uint3(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u);
+            float3 factors = lerp(1.0 - fraction, fraction, float3(offset));
+            float weight = factors.x * factors.y * factors.z;
+            if (weight < 1e-5)
+            {
+                continue;
+            }
+            uint slot = WorldRadianceSlot(base + int3(offset), level);
+            WorldRadianceProbeRecord probe = WorldProbes[slot];
+            if (probe.Status.x == 0u)
+            {
+                continue;
+            }
+            float3 separation = position - probe.PositionSpacing.xyz;
+            float distance = length(separation);
+            float3 radiance;
+            float2 depth;
+            bool sky;
+            // Reject probe-to-query paths that may cross a surface in the stored depth cone.
+            if (distance > 0.05 && (!ReadWorldRadianceDirection(slot, separation / distance, false, radiance, depth, sky) ||
+                depth.x < distance + 0.15 * spacing))
+            {
+                continue;
+            }
+            if (!ReadWorldRadianceDirection(slot, direction, true, radiance, depth, sky) ||
+                depth.x < distance + spacing ||
+                (sky ? depth.x < remainingDistance + distance : depth.y + distance > remainingDistance))
+            {
+                continue;
+            }
+            // A bin straddling a nearby surface would spread its light to unrelated samples.
+            if (!sky && depth.y - depth.x > max(spacing, 0.35 * depth.x))
+            {
+                continue;
+            }
+            radianceSum += radiance * weight;
+            weightSum += weight;
+            skyWeight += sky ? weight : 0.0;
+        }
+
+        if (weightSum >= 0.75 && (skyWeight < 1e-5 || weightSum - skyWeight < 1e-5))
+        {
+            return float4(radianceSum / weightSum, float(level + 1u));
+        }
+    }
+    return 0.0;
+}

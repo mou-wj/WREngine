@@ -22,15 +22,26 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
         result.Radiance = float4(max(lighting.Radiance.rgb, 0.0), 1.0);
         result.Status.x = 1u;
     }
-    else if (!sdfHit)
+    else if (!sdfHit && (hit.Status.z & 4u) == 0u && Queries[index].Control.y == 1u)
     {
-        float3 direction = normalize(Queries[index].Direction.xyz);
-        float3 sky = bHasEnvironment != 0u
-            ? IBLSpecularMap.SampleLevel(LinearClampIBLSampler, direction, 0).rgb
-            : float3(0.025, 0.035, 0.055);
-        result.Radiance = float4(max(sky, 0.0), 1.0);
+        float4 cache = bUseWorldCache != 0u ? WorldCandidates[index].RadianceLevel : 0.0;
+        if (cache.w > 0.0)
+        {
+            result.Radiance = float4(cache.rgb, 1.0);
+            result.Status.y = uint(cache.w);
+        }
+        else
+        {
+            float3 direction = normalize(Queries[index].Direction.xyz);
+            float3 sky = bHasEnvironment != 0u
+                ? IBLSpecularMap.SampleLevel(LinearClampIBLSampler, direction, 0).rgb
+                : float3(0.025, 0.035, 0.055);
+            result.Radiance = float4(max(sky, 0.0), 1.0);
+        }
         result.Status.x = 1u;
     }
 
+    // Count actual SDF marching steps for cache/reference readback.
+    result.Status.z = hit.Status.w;
     Radiance[index] = result;
 }

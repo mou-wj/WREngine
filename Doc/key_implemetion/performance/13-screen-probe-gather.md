@@ -6,7 +6,7 @@ Screen Probe 的算法与估计公式见 [算法专题](../algorithm/17-screen-p
 
 Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从宿主回调借用当前 `SceneInterface` 和 `SceneView`，由 `GIViewerPreview::Render` 创建新的 `RenderGraphBuilder`，调用 `LumenViewerRenderer::AddPasses` 并执行该 Builder。预览有独立的持久颜色目标、深度、深度金字塔和 GBuffer；输入 Scene/View 仅在当前 UI 绘制和构图中借用，不转移所有权。
 
-`LumenViewerRendererState` 持有材质、直接光照、间接光照缓存和当前 `Scene*`。首次在非空场景选择 Cache 模式时，入口收集静态网格实例快照并捕获材质。需要光照时建立或更新直接图集。之后预览图用 `Register` 绑定持久 Cache，并按 Viewer 所选模式添加对应 Pass。图内 Probe、Query、Radiance 等结构化缓冲和预览用 GBuffer/depth 均由当前 Builder 创建，缓存的 Atlas 与预览颜色目标分别由 Renderer 和 Preview 持有。
+`LumenViewerRendererState` 持有材质、直接光照、间接光照、世界探针缓存和当前 `Scene*`。首次在非空场景选择 Cache 模式时，入口收集静态网格实例快照并捕获材质。需要光照时建立或更新直接图集。之后预览图用 `Register` 绑定持久 Cache，并按 Viewer 所选模式添加对应 Pass。图内 Probe、Query、Radiance 等结构化缓冲和预览用 GBuffer/depth 均由当前 Builder 创建，缓存的 Atlas 与预览颜色目标分别由 Renderer 和 Preview 持有。
 
 切换场景、关闭 Viewer 或工程时，Renderer Reset 沿用预览颜色目标最后访问的 Fence 后释放缓存。调整预览尺寸时，Preview 等待后只替换颜色目标。输出完成点代表与之存在图依赖的访问，新增异步路径时需重新核对完成点。
 
@@ -20,15 +20,26 @@ Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从
 
 以 Card 数 C 计，持久图集共有 `2 × ceil(sqrt(C))² × 64 × 16` 字节。每轮查询与结果的逻辑空间为 `512 × C × (48 + 80)` 字节，实际分配还包含 RDG/RHI 对齐。默认最多自动执行 32 轮，可暂停或手动追加单轮。算法和近似边界见 [多次漫反射](../algorithm/18-surface-cache-radiosity.md)。
 
+## 世界探针缓存
+
+`WorldRadianceCache` 持有两级环绕索引的 432 个 CPU 槽键和最后更新帧，以及一张 36×432 的 RGBA32F 持久图集。每次进入使用缓存的预览帧，先依据世界坐标校验槽身份。新槽在方向样本写入前保持不可见，已有槽优先按最后刷新时间排序，未更新槽按距相机的距离排序。默认预算为每帧 24 个节点，节点至少相隔 32 个缓存更新帧才会周期刷新。预算设成 0 时只复用有效的重叠格点。 [缓存实现](../../../src/Framework/Renderer/Private/GI/WorldRadianceCache.cpp)
+
+控制线程生成本次节点状态与任务列表，上传到当前图的结构化缓冲。依次运行 `WorldRadianceCacheRays`、`SurfaceCacheSDFQuery`、`SurfaceCacheLightingLookup`、`WorldRadianceCacheStore`，光照查询结果用各自的输入名区分。状态里的有效位表示方向行已安排写入，当前图的 Atlas UAV→SRV 依赖保证消费者排在写入之后。未初始化槽的旧行不会被查询。上一图的资源状态和完成点沿用持久纹理的访问 Tracker。图集 Store 完成后，世界图集可视化和屏幕探针查表才读取数据。
+
+当前图的 Radiosity 先于依赖该图集的 Surface Cache 出射光查询。世界探针不作为 Radiosity 的输入。场景变更重建时退休旧资源，灯光、环境贴图、Radiosity 开关或重启变化时清除有效槽并重新分帧填充。常规反弹迭代通过周期刷新渐进传播。GIViewer 关闭时按预览输出的完成点退休资源。
+
+持久 GPU 图集逻辑占用约 243 KiB。状态上传每帧约 13.5 KiB，预算为 `B` 时刷新 `36 × B` 条世界射线。启用缓存的屏幕路径额外存放逐射线的范围修改副本（48 字节）与候选（16 字节）。 [算法说明](../algorithm/19-world-radiance-cache.md)
+
 ## 单图 RDG Pass 与同步
 
 `LumenViewerRenderer::AddPasses` 每次为当前输出尺寸创建场景深度、深度金字塔及 GBuffer，再通过独立 `DefferedSceneRenderer` 构建预览场景颜色和几何。随后按 Viewer 模式安排 Surface Cache 捕获/注册、Lighting 更新/注册以及调试 Pass 或 `AddScreenProbeGatherPasses`。Screen Probe 阶段的 Pass 顺序为：
 
 1. Placement/Ray Generation 写 Probe 与 SurfaceCacheQuery。
-2. Surface Cache Query Compute 读取 Query、写命中结果。
-3. Lighting Lookup 读取材质命中与直接光照 Atlas，加上启用时最新的间接图集，再写出射光查询结果。
-4. Gather 读取 Query、Material Result、Lighting Result，写 Probe Radiance。
-5. Integration 读取 Probe/Radiance/GBuffer，写 Viewer 目标或调试目标。
+2. 启用时 `WorldRadianceCacheRayLookup` 读取 Atlas 和 Probe 状态，为有候选的射线缩短追踪范围。
+3. Surface Cache Query Compute 按当前 Query 范围写命中结果。
+4. Lighting Lookup 读取材质命中与直接光照 Atlas，加上启用时最新的间接图集，再写出射光查询结果。
+5. Gather 读取 Query、Material Result、Lighting Result 和可选世界探针候选，写 Probe Radiance。
+6. Integration 读取 Probe/Radiance/GBuffer，写 Viewer 目标或调试目标。
 
 `GIViewerPreview::Render` 在所有 Pass 添加后执行该图。StructuredBuffer 与临时纹理通过 RDG 参数元数据声明 SRV/UAV/RenderTarget 访问，由 RenderGraph 安排依赖与状态转换；没有新增专用队列、Builder 生命周期扩展或 RHI 访问接口。Screen Probe 的 Integration 结果只写 Viewer 的预览颜色，不合入主窗口的 SceneColor。
 

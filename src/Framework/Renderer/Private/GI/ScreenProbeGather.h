@@ -2,8 +2,8 @@
 
 #include "SurfaceCacheMaterial.h"
 #include "SurfaceCacheDirectLighting.h"
-#include "SceneShaderParameters.h"
-#include "GBufferInfo.h"
+#include "../GBufferInfo.h"
+#include "WorldRadianceCache.h"
 
 namespace Renderer
 {
@@ -36,9 +36,11 @@ namespace Renderer
         SHADER_PARAMETER_STRUCT_REFERENCE(SceneEvnIBLLightParameters, Environment)
         SHADER_PARAMETER(uint32_t, QueryCount)
         SHADER_PARAMETER(uint32_t, bHasEnvironment)
+        SHADER_PARAMETER(uint32_t, bUseWorldCache)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheQuery, Queries)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheQueryResult, MaterialResults)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheLightingQueryResult, LightingResults)
+        SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(WorldRadianceCandidate, WorldCandidates)
         SHADER_PARAMETER_RDG_RWSTRUCTURED_BUFFER(ScreenProbeRadianceRecord, Radiance)
     END_SHADER_PARAMETER_STRUCT(ScreenProbeGatherParameters)
 
@@ -64,9 +66,10 @@ namespace Renderer
         RenderCore::RenderGraphTextureRef GBufferB = nullptr;
         RenderCore::RenderGraphTextureRef GBufferC = nullptr;
         RenderCore::RenderGraphTextureRef Depth = nullptr;
-        Core::Float4x4 InvViewProj = Core::Float4x4(1.0f);
+        Core::Float4x4 InvViewProj = Core::Float4x4::Identity();
         Core::Float3 CameraPosition = {0, 0, 0};
         SceneEvnIBLLightParameters Environment{};
+        const WorldRadianceCacheParameters* WorldCache = nullptr;
         RenderCore::RenderGraphTextureRef IndirectDiffuseOutput = nullptr;
         RenderCore::RenderGraphTextureRef DebugOutput = nullptr;
         bool bHasEnvironment = false;

@@ -25,11 +25,13 @@ namespace Editor
             {"Direct Lighting Atlas", Renderer::ELumenViewerMode::DirectLightingAtlas},
             {"Radiosity / Indirect Atlas", Renderer::ELumenViewerMode::RadiosityIndirectAtlas},
             {"Radiosity / Iteration Delta", Renderer::ELumenViewerMode::RadiosityIterationDelta},
+            {"World Probes / Radiance Atlas", Renderer::ELumenViewerMode::WorldProbeAtlas},
             {"Screen Probes / Placement", Renderer::ELumenViewerMode::ProbePlacement},
             {"Screen Probes / Ray Directions", Renderer::ELumenViewerMode::ProbeRayDirections},
             {"Screen Probes / Hit Ratio", Renderer::ELumenViewerMode::ProbeHitRatio},
             {"Screen Probes / Radiance", Renderer::ELumenViewerMode::ProbeRadiance},
-            {"Screen Probes / Indirect Diffuse", Renderer::ELumenViewerMode::IndirectDiffuse}
+            {"Screen Probes / Indirect Diffuse", Renderer::ELumenViewerMode::IndirectDiffuse},
+            {"Screen Probes / World Cache Hits", Renderer::ELumenViewerMode::ProbeWorldCacheHits}
         };
 
         const char* GetModeName(Renderer::ELumenViewerMode mode)
@@ -64,6 +66,8 @@ namespace Editor
                 return "Accumulated diffuse outgoing radiance across the Surface Cards, excluding direct lighting.";
             case Renderer::ELumenViewerMode::RadiosityIterationDelta:
                 return "Absolute change since the previous bounce, amplified 32x. Darkening indicates convergence.";
+            case Renderer::ELumenViewerMode::WorldProbeAtlas:
+                return "Fine and coarse grids, six XZ slices per grid. Yellow borders are updated probes, dim borders are pending. Pink texels are invalid.";
             case Renderer::ELumenViewerMode::ProbePlacement:
                 return "Screen-space probe placement, surface normals, and tile boundaries.";
             case Renderer::ELumenViewerMode::ProbeRayDirections:
@@ -74,6 +78,8 @@ namespace Editor
                 return "Average incoming radiance gathered by each screen-space probe.";
             case Renderer::ELumenViewerMode::IndirectDiffuse:
                 return "Diffuse indirect lighting reconstructed from the probe grid. Toggle radiosity to compare with one bounce.";
+            case Renderer::ELumenViewerMode::ProbeWorldCacheHits:
+                return "Cyan and violet show rays served by the fine or coarse grid. Gray means full tracing or a nearer SDF hit.";
             }
             return "";
         }
@@ -325,6 +331,17 @@ namespace Editor
                 ImGui::SameLine();
                 ImGui::Text("Iteration %u / %u", m_Preview->GetRadiosityIteration(), m_Radiosity.IterationLimit);
             }
+            if ((m_Mode >= Renderer::ELumenViewerMode::ProbePlacement && m_Mode <= Renderer::ELumenViewerMode::IndirectDiffuse) ||
+                m_Mode == Renderer::ELumenViewerMode::WorldProbeAtlas || m_Mode == Renderer::ELumenViewerMode::ProbeWorldCacheHits)
+            {
+                if (m_Mode != Renderer::ELumenViewerMode::WorldProbeAtlas)
+                {
+                    ImGui::Checkbox("Use world cache", &m_WorldCache.bEnabled);
+                    ImGui::SameLine();
+                }
+                ImGui::SetNextItemWidth(140.0f);
+                ImGui::SliderInt("World probes per frame", &m_WorldCache.UpdateBudget, 0, 128);
+            }
             if (m_Mode == Renderer::ELumenViewerMode::SurfaceCardAtlas)
             {
                 DrawCardViewSelector(m_CardView);
@@ -349,7 +366,7 @@ namespace Editor
             }
             m_PreviewSize = {std::max(1, static_cast<int>(imageWidth)), std::max(1, static_cast<int>(imageHeight))};
             m_bHasScene = source.Scene && source.View && m_Preview->Render(source, m_PreviewSize, m_Mode,
-                m_SelectedCardIndex, m_CardView, m_Radiosity);
+                m_SelectedCardIndex, m_CardView, m_Radiosity, m_WorldCache);
             m_Radiosity.bStep = false;
             m_Radiosity.bRestart = false;
             if (auto* texture = m_Preview->GetTexture())

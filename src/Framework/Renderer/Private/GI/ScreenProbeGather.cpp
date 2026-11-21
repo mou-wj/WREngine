@@ -131,7 +131,7 @@ namespace Renderer
         Require(input.TileSize >= 4 && input.TileSize <= 64 && input.RaysPerProbe >= 1 && input.RaysPerProbe <= 64,
             "tile size or ray count is outside the supported range");
         Require(std::isfinite(input.MaxTraceDistance) && input.MaxTraceDistance > 0, "invalid trace distance");
-        Require(input.DebugMode <= 4, "debug mode must be between 0 and 4");
+        Require(input.DebugMode <= 5, "debug mode must be between 0 and 5");
 
         const auto& gbufferDesc = input.GBufferA->GetDesc();
         Require(gbufferDesc.Width > 0 && gbufferDesc.Height > 0 &&
@@ -172,16 +172,24 @@ namespace Renderer
         AddComputePass<ScreenProbePlacementCS>(builder, "ScreenProbePlacementAndRayGeneration", placement,
             uint32_t((probeCount + 63) / 64));
 
-        auto queryResults = AddSurfaceCacheQueryPass(builder, material, output.Queries, uint32_t(queryCount));
+        const auto world = input.WorldCache ? WorldRadianceCache::AddRayLookupPass(builder, *input.WorldCache,
+            output.Queries, uint32_t(queryCount)) : WorldRadianceCacheRayOutput{};
+        auto queryResults = AddSurfaceCacheQueryPass(builder, material, world.Queries ? world.Queries : output.Queries,
+            uint32_t(queryCount));
         auto lightingResults = AddSurfaceCacheLightingLookupPass(builder, material, lighting, queryResults, uint32_t(queryCount));
 
         auto* gather = builder.AllocateParameter<ScreenProbeGatherParameters>();
         gather->Environment = input.Environment;
         gather->QueryCount = uint32_t(queryCount);
         gather->bHasEnvironment = input.bHasEnvironment ? 1u : 0u;
+        gather->bUseWorldCache = world.Candidates ? 1u : 0u;
         gather->Queries = CreateBufferSRV(builder, output.Queries);
         gather->MaterialResults = CreateBufferSRV(builder, queryResults);
         gather->LightingResults = CreateBufferSRV(builder, lightingResults);
+        // Keep a valid descriptor with world-cache lookup disabled. The shader does not read it.
+        auto candidates = world.Candidates ? world.Candidates : CreateStructuredBuffer(builder, "ScreenProbe.EmptyWorldCandidates",
+            sizeof(WorldRadianceCandidate), 1, false);
+        gather->WorldCandidates = CreateBufferSRV(builder, candidates);
         gather->Radiance = CreateBufferUAV(builder, output.Radiance, uint32_t(queryCount));
         AddComputePass<ScreenProbeGatherCS>(builder, "ScreenProbeRadianceGather", gather,
             uint32_t((queryCount + 63) / 64));

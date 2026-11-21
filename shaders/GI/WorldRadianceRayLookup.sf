@@ -1,0 +1,29 @@
+#include "/Generated/ShaderParameters/WorldRadianceRayLookupParameters.sf"
+#include "/Generated/ShaderParameters/WorldRadianceCacheParameters.sf"
+#include "/GI/WorldRadianceLookup.sf"
+
+[numthreads(64, 1, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint index = thread.x;
+    if (index >= QueryCount)
+    {
+        return;
+    }
+
+    SurfaceCacheQuery query = ScreenQueries[index];
+    WorldRadianceCandidate candidate = (WorldRadianceCandidate)0;
+    float prefix = 2.0 * CellSize.x;
+    if (query.Control.y == 1u && query.OriginDistance.w > 2.0 * prefix)
+    {
+        float3 direction = normalize(query.Direction.xyz);
+        float3 position = query.OriginDistance.xyz + prefix * direction;
+        candidate.RadianceLevel = LookupWorldRadiance(position, direction, query.OriginDistance.w - prefix);
+        if (candidate.RadianceLevel.w > 0.0)
+        {
+            query.OriginDistance.w = prefix;
+        }
+    }
+    TraceQueries[index] = query;
+    CacheCandidates[index] = candidate;
+}

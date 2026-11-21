@@ -138,16 +138,8 @@ namespace Renderer {
             out.IBLLut = rdgT;
         }
         else {
-            RenderCore::RenderGraphTextureDesc emptyCubeMapDesc;
-            emptyCubeMapDesc.Type = RHI::ERHITextureType::TextureCube;
-            emptyCubeMapDesc.Width = 1;
-            emptyCubeMapDesc.Height = 1;
-            emptyCubeMapDesc.ArraySize = 6;
-            emptyCubeMapDesc.MipLevels = 1;
-            emptyCubeMapDesc.Usage = RHI::ERHITextureCreateFlag::ShaderResource;
-            emptyCubeMapDesc.Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
             out.LinearClampIBLSampler = RenderCore::GlobalSampler.get();
-            auto rdgT = builder.CreateTexture("EmptyCubeMap", emptyCubeMapDesc);
+            auto rdgT = builder.RegisterExternalTexture("EmptyCubeMap", RenderCore::GlobalEmptyCubeTexture.get());
             out.IBLDiffuseMap = rdgT;
             out.IBLSpecularMap = rdgT;
             rdgT = builder.RegisterExternalTexture("IBLLutTexture", GlobalIBLLutTexture.get());

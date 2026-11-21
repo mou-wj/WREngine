@@ -92,4 +92,6 @@ Surface Cache 的 Base Color、World Normal、Card Coverage、Roughness、Metall
 
 `Radiosity / Indirect Atlas` 显示累计间接出射光，`Radiosity / Iteration Delta` 显示相邻两轮的变化。启用 `Use radiosity in Screen Probes` 时，探针命中会读取直接与间接出射光之和。`Pause` 停止自动迭代，`Step` 暂停并推进一轮，`Restart` 清除间接历史，可配合暂停逐轮查看。实例快照和灯光变化会触发相应缓存重建或重算。具体失效条件见 [工程说明](../key_implemetion/performance/13-screen-probe-gather.md#radiosity-迭代与缓存失效)，反弹算法见 [Radiosity 算法](../key_implemetion/algorithm/18-surface-cache-radiosity.md)。
 
+`World Probes / Radiance Atlas` 左右显示细层和粗层，每层按 3×2 摆放六个 XZ 切片。每个格点包含八面体方向图，黄色边框表示当帧刷新，暗边框表示等待更新，粉色 texel 表示该方向无效。`Screen Probes / World Cache Hits` 按屏幕探针显示缓存命中比例，青色为细层，紫色为粗层，灰色为完整追踪或近场命中。用 `Use world cache` 切换参考路径。`World probes per frame` 调整更新预算，设为 0 可冻结刷新并检查移动后的重叠槽复用。 [世界探针算法](../key_implemetion/algorithm/19-world-radiance-cache.md)
+
 主场景仍使用 `DefferedSceneRenderer` 的 ScreenSpaceGI/SSR。上述输出只用于 GIViewer 预览。

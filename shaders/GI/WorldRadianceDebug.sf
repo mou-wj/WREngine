@@ -1,0 +1,39 @@
+#include "/Generated/ShaderParameters/WorldRadianceDebugParameters.sf"
+#include "/Generated/ShaderParameters/WorldRadianceCacheParameters.sf"
+#include "/GI/WorldRadianceLookup.sf"
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    if (any(thread.xy >= OutputSize))
+    {
+        return;
+    }
+
+    // Two levels side by side. The six Y slices of each level are laid out in a 3 by 2 grid.
+    uint tileSize = DirectionSize + 2u;
+    uint sliceSize = GridSize * tileSize;
+    uint2 pixel = thread.xy * uint2(6u, 2u) * sliceSize / OutputSize;
+    uint level = pixel.x / (3u * sliceSize);
+    uint slice = (pixel.y / sliceSize) * 3u + (pixel.x / sliceSize) % 3u;
+    uint2 local = pixel % sliceSize;
+    int3 cell = WorldRadianceOrigin(level) + int3(local.x / tileSize, slice, local.y / tileSize);
+    uint slot = WorldRadianceSlot(cell, level);
+    WorldRadianceProbeRecord probe = WorldProbes[slot];
+
+    uint2 coord = pixel % tileSize;
+    float3 levelColor = level == 0u ? float3(0.1, 0.7, 0.95) : float3(0.7, 0.4, 1.0);
+    float3 color = 0.05;
+    if (any(coord == 0u) || any(coord == tileSize - 1u))
+    {
+        color = probe.Status.x == 0u ? levelColor * 0.14 :
+            (probe.Status.y != 0u ? float3(1.0, 0.75, 0.12) : levelColor * lerp(1.0, 0.4, saturate(probe.Status.z / 32.0)));
+    }
+    else if (probe.Status.x != 0u)
+    {
+        uint2 direction = coord - 1u;
+        float4 sample = WorldRadianceAtlas.Load(int3(direction.y * DirectionSize + direction.x, slot, 0));
+        color = sample.w == 0.0 ? float3(0.2, 0.04, 0.13) : sample.rgb / (1.0 + sample.rgb);
+    }
+    DebugOutput[thread.xy] = float4(color, 1.0);
+}

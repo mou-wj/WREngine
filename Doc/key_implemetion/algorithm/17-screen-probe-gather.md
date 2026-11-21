@@ -29,6 +29,8 @@ worldDir = normalize(t*localDir.x + b*localDir.y + N*localDir.z)
 
 `ScreenProbePlacementAndRayGeneration` 将 Query 写入 RDG StructuredBuffer。Surface Cache 的 GPU 输入重载把该 Buffer 直接交给既有 SDF Query Compute。它按实例局部 SDF 找最近命中，恢复 InstanceID、世界位置与几何法线，并用同一 Card Lookup 选择材质 Atlas 的实际 texel。随后 `AddSurfaceCacheLightingLookupPass` 依据该 Texel 取出缓存的直接出射 Radiance，启用时加上 [Radiosity](18-surface-cache-radiosity.md) 图集的间接出射 Radiance。全部查询和结果传递在 GPU 完成。
 
+启用世界探针时，在 SDF Pass 前对较长的射线尝试缓存查询。找到可靠远场候选后，只执行近场 SDF 区段。近场命中和无缓存时仍沿用 Surface Cache 路径。 [World Space Radiance Cache](19-world-radiance-cache.md)
+
 命中且材质与 Lighting 状态有效时，Probe Radiance 存入命中表面的直接出射 Radiance，加上启用时可用的 [Radiosity 间接出射 Radiance](18-surface-cache-radiosity.md)。命中但没有材质 Card/Lighting 覆盖时样本按黑色缺失处理。未命中时，从 IBL Specular Cube Map 的 mip 0 按射线方向采样，没有环境贴图时使用固定环境值 `(0.025,0.035,0.055)`。
 
 ## 屏幕空间重建与材质积分
@@ -42,7 +44,7 @@ E_r/π ≈ (1/n) * sum_i L_i(ω_i) * max(dot(N_r,ω_i),0) / max(dot(N_p,ω_i),1e
 GI_diffuse = BaseColor * (1-Metallic) * AO * (E_r/π)
 ```
 
-`L_i` 是命中面的合计出射 Radiance 或未命中环境 Radiance。分母把 Probe 的 cosine 分布校正为目标表面的 cosine 权重。接收面 BaseColor/Metallic/AO 只乘一次。无效样本不加入分子，仍以固定 `RayCount` 作平均，因此命中无缓存导致的缺样会趋向变暗。
+`L_i` 是命中面的合计出射 Radiance、世界探针的方向样本或未命中环境 Radiance。分母把 Probe 的 cosine 分布校正为目标表面的 cosine 权重。接收面 BaseColor/Metallic/AO 只乘一次。无效样本不加入分子，仍以固定 `RayCount` 作平均，因此命中无缓存导致的缺样会趋向变暗。
 
 ## GIViewer 中的 RenderGraph 顺序
 

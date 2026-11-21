@@ -11,6 +11,7 @@
 #include "GI/SurfaceCacheMaterial.h"
 #include "GI/SurfaceCacheDirectLighting.h"
 #include "GI/SurfaceCacheRadiosity.h"
+#include "GI/WorldRadianceCache.h"
 #include "RHIApi.h"
 
 #include <algorithm>
@@ -25,6 +26,9 @@ namespace Renderer
         std::unique_ptr<SurfaceCacheMaterial> Material;
         std::unique_ptr<SurfaceCacheDirectLighting> Lighting;
         std::unique_ptr<SurfaceCacheRadiosity> Radiosity;
+        std::unique_ptr<WorldRadianceCache> WorldCache;
+        RenderCore::RenderTexture* Environment = nullptr;
+        bool bWorldCacheUsesRadiosity = false;
         std::vector<SurfaceCacheLight> Lights;
         std::vector<LumenViewerCardInfo> Cards;
         Scene* CachedScene = nullptr;
@@ -72,7 +76,8 @@ namespace Renderer
                 mode == ELumenViewerMode::ProbeRayDirections ||
                 mode == ELumenViewerMode::ProbeHitRatio ||
                 mode == ELumenViewerMode::ProbeRadiance ||
-                mode == ELumenViewerMode::IndirectDiffuse;
+                mode == ELumenViewerMode::IndirectDiffuse ||
+                mode == ELumenViewerMode::ProbeWorldCacheHits;
         }
 
         bool SameInstances(const std::vector<SurfaceCacheMeshInstance>& a, const std::vector<SurfaceCacheMeshInstance>& b)
@@ -103,6 +108,8 @@ namespace Renderer
         }
 
         WaitForTexture(lastOutput ? lastOutput : m_State->LastOutput);
+        m_State->WorldCache.reset();
+        m_State->Environment = nullptr;
         m_State->Radiosity.reset();
         m_State->Lights.clear();
         if (m_State->Lighting)
@@ -124,7 +131,8 @@ namespace Renderer
 
     bool LumenViewerRenderer::AddPasses(RenderCore::RenderGraphBuilder& builder, Engine::SceneInterface* sceneInterface,
         const Engine::SceneView& sourceView, RenderCore::RenderTexture* output, ELumenViewerMode mode,
-        uint32_t selectedCardIndex, ELumenViewerCardView cardView, const LumenViewerRadiositySettings& radiositySettings)
+        uint32_t selectedCardIndex, ELumenViewerCardView cardView, const LumenViewerRadiositySettings& radiositySettings,
+        const LumenViewerWorldCacheSettings& worldCacheSettings)
     {
         if (!sceneInterface || !output || !output->GetRHI())
         {
@@ -258,7 +266,8 @@ namespace Renderer
 
         const bool bScreenProbe = NeedsScreenProbe(mode);
         const bool bRadiosityView = IsRadiosityView(mode);
-        if (bScreenProbe || bRadiosityView || mode == ELumenViewerMode::DirectLightingAtlas)
+        const bool bWorldCacheView = mode == ELumenViewerMode::WorldProbeAtlas;
+        if (bScreenProbe || bRadiosityView || bWorldCacheView || mode == ELumenViewerMode::DirectLightingAtlas)
         {
             const auto lights = SurfaceCacheDirectLighting::GatherSceneLights(*scene);
             if (!m_State->Lighting->IsValidFor(*m_State->Material) || lights != m_State->Lights)
@@ -269,11 +278,19 @@ namespace Renderer
                 {
                     m_State->Radiosity->Invalidate();
                 }
+                if (m_State->WorldCache)
+                {
+                    m_State->WorldCache->Invalidate();
+                }
             }
         }
         if (m_State->Radiosity && radiositySettings.bRestart)
         {
             m_State->Radiosity->Invalidate();
+        }
+        if (m_State->WorldCache && radiositySettings.bRestart)
+        {
+            m_State->WorldCache->Invalidate();
         }
 
         if (mode == ELumenViewerMode::SurfaceBaseColor || mode == ELumenViewerMode::SurfaceWorldNormal ||
@@ -304,13 +321,13 @@ namespace Renderer
             return true;
         }
 
-        if (!bScreenProbe && !bRadiosityView)
+        if (!bScreenProbe && !bRadiosityView && !bWorldCacheView)
         {
             return true;
         }
 
         const auto direct = m_State->Lighting->Register(builder, *m_State->Material);
-        const bool bUseRadiosity = bRadiosityView || (bScreenProbe && radiositySettings.bEnabled);
+        const bool bUseRadiosity = bRadiosityView || radiositySettings.bEnabled;
         if (bUseRadiosity && !m_State->Radiosity)
         {
             m_State->Radiosity = std::make_unique<SurfaceCacheRadiosity>();
@@ -334,8 +351,33 @@ namespace Renderer
         probeInput.InvViewProj = views.GetViews().front().InvViewProjectionMatrix;
         probeInput.CameraPosition = views.GetViews().front().CameraWorldPos;
         BuildEvnIBLLightParameters(scene, builder, probeInput.Environment);
-        probeInput.bHasEnvironment = scene->GetGPUResourceInfo().LightResourceInfo.IBLSpecularTexture != nullptr;
+        const auto& lightResources = scene->GetGPUResourceInfo().LightResourceInfo;
+        auto* environment = lightResources.IBLDiffuseTexture ? lightResources.IBLSpecularTexture : nullptr;
+        probeInput.bHasEnvironment = environment != nullptr;
         const auto lighting = bUseRadiosity ? m_State->Radiosity->Register(builder, direct) : direct;
+        WorldRadianceCacheParameters worldCache{};
+        if (bWorldCacheView || worldCacheSettings.bEnabled)
+        {
+            if (!m_State->WorldCache)
+            {
+                m_State->WorldCache = std::make_unique<WorldRadianceCache>();
+            }
+            if (m_State->Environment != environment || m_State->bWorldCacheUsesRadiosity != bUseRadiosity)
+            {
+                m_State->WorldCache->Invalidate();
+                m_State->Environment = environment;
+                m_State->bWorldCacheUsesRadiosity = bUseRadiosity;
+            }
+            worldCache = m_State->WorldCache->Update(builder, probeInput.CameraPosition,
+                uint32_t(std::clamp(worldCacheSettings.UpdateBudget, 0, 128)), material, lighting,
+                probeInput.Environment, probeInput.bHasEnvironment);
+            if (bWorldCacheView)
+            {
+                WorldRadianceCache::AddDebugPass(builder, worldCache, color);
+                return true;
+            }
+            probeInput.WorldCache = &worldCache;
+        }
         if (mode == ELumenViewerMode::IndirectDiffuse)
         {
             probeInput.IndirectDiffuseOutput = color;
@@ -357,6 +399,9 @@ namespace Renderer
                 break;
             case ELumenViewerMode::ProbeRadiance:
                 probeInput.DebugMode = 3;
+                break;
+            case ELumenViewerMode::ProbeWorldCacheHits:
+                probeInput.DebugMode = 5;
                 break;
             default:
                 probeInput.DebugMode = 4;

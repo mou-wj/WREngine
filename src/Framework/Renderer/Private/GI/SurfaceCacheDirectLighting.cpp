@@ -470,7 +470,7 @@ namespace Renderer
         desc.Stride = sizeof(SurfaceCacheLightingQueryResult);
         desc.Size = uint64_t(count) * desc.Stride;
         desc.Usage = ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::ShaderResource | ERHIBufferUsageFlag::UnorderedAccess | ERHIBufferUsageFlag::TransferSrc;
-        auto result = builder.CreateBuffer("SurfaceCache.LightingResults", desc);
+        auto result = builder.CreateBuffer(materialResults->GetName() + ".LightingResults", desc);
         RenderGraphBufferUAVDesc uav;
         uav.Buffer = result;
         uav.Stride = desc.Stride;

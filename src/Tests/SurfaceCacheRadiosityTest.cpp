@@ -1,5 +1,6 @@
 #include "TestBase.h"
 #include "../Framework/Renderer/Private/GI/SurfaceCacheRadiosity.h"
+#include "../Framework/Renderer/Private/GI/ScreenProbeGather.h"
 #include "DistanceFieldMgr.h"
 #include "GlobalShader.h"
 #include "MaterialCore.h"
@@ -27,10 +28,10 @@ namespace Test
             }
         }
 
-        std::shared_ptr<StaticMeshRenderData> MakeWall()
+        std::shared_ptr<StaticMeshRenderData> MakeWall(float halfWidth = 2.0f)
         {
             auto mesh = std::make_shared<StaticMeshRenderData>();
-            mesh->Bounds = BoxSphereBounds(AABB(Float3(-2, -2, -0.15f), Float3(2, 2, 0.15f)));
+            mesh->Bounds = BoxSphereBounds(AABB(Float3(-halfWidth, -halfWidth, -0.15f), Float3(halfWidth, halfWidth, 0.15f)));
             auto& lod = mesh->LODResources.emplace_back();
             auto& vertices = lod.VertexBuffers;
             vertices.PositionBuffer.NumComponents = 3;
@@ -47,7 +48,7 @@ namespace Test
                 for (const auto& corner : corners)
                 {
                     const auto p = n + u * corner.X + v * corner.Y;
-                    vertices.PositionBuffer.Vertices.insert(vertices.PositionBuffer.Vertices.end(), {p.X * 2, p.Y * 2, p.Z * 0.15f});
+                    vertices.PositionBuffer.Vertices.insert(vertices.PositionBuffer.Vertices.end(), {p.X * halfWidth, p.Y * halfWidth, p.Z * 0.15f});
                     vertices.NormalBuffer.Vertices.insert(vertices.NormalBuffer.Vertices.end(), {n.X, n.Y, n.Z});
                     vertices.TangentBuffer.Vertices.insert(vertices.TangentBuffer.Vertices.end(), {u.X, u.Y, u.Z, 1});
                     vertices.UVBuffer.Vertices.insert(vertices.UVBuffer.Vertices.end(), {corner.X * 0.5f + 0.5f, corner.Y * 0.5f + 0.5f});
@@ -69,12 +70,67 @@ namespace Test
             RDG_BUFFER_ACCESS(Lookup, ERHIResourceAccess::TransferSrc)
             RDG_BUFFER_ACCESS(Hits, ERHIResourceAccess::TransferSrc)
         END_SHADER_PARAMETER_STRUCT(RadiosityTestReadback)
+
+        BEGIN_SHADER_PARAMETER_STRUCT(WorldCacheTestUpload)
+            RDG_TEXTURE_ACCESS(GBufferA, ERHIResourceAccess::TransferDest)
+            RDG_TEXTURE_ACCESS(GBufferB, ERHIResourceAccess::TransferDest)
+            RDG_TEXTURE_ACCESS(GBufferC, ERHIResourceAccess::TransferDest)
+            RDG_TEXTURE_ACCESS(Depth, ERHIResourceAccess::TransferDest)
+        END_SHADER_PARAMETER_STRUCT(WorldCacheTestUpload)
+
+        BEGIN_SHADER_PARAMETER_STRUCT(WorldCacheTestReadback)
+            RDG_TEXTURE_ACCESS(Marker, ERHIResourceAccess::TransferSrc)
+            RDG_BUFFER_ACCESS(Radiance, ERHIResourceAccess::TransferSrc)
+            RDG_TEXTURE_ACCESS(Atlas, ERHIResourceAccess::TransferSrc)
+        END_SHADER_PARAMETER_STRUCT(WorldCacheTestReadback)
+
+        constexpr uint32_t TestScreenSize = 32;
+        constexpr uint32_t TestRayCount = TestScreenSize / 8 * (TestScreenSize / 8) * 8;
+
+        ScreenProbeGatherPassInput MakeProbeInput(RenderGraphBuilder& graph, float normalZ)
+        {
+            RenderGraphTextureDesc desc;
+            desc.Width = desc.Height = TestScreenSize;
+            desc.Format = ERHIFormat::R32G32B32A32_Float;
+            desc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest;
+            ScreenProbeGatherPassInput input;
+            auto* upload = graph.AllocateParameter<WorldCacheTestUpload>();
+            input.GBufferA = upload->GBufferA = graph.CreateTexture("Test.GBufferA", desc);
+            input.GBufferB = upload->GBufferB = graph.CreateTexture("Test.GBufferB", desc);
+            input.GBufferC = upload->GBufferC = graph.CreateTexture("Test.GBufferC", desc);
+            input.Depth = upload->Depth = graph.CreateTexture("Test.Depth", desc);
+            graph.AddPass("WorldCacheTestGBuffer", WorldCacheTestUpload::GetMetaData(), upload, EPassFlag::Graphic,
+                [=](RHICommandListBase& cmd)
+                {
+                    const auto update = [&](RenderGraphTextureRef texture, const Float4& value)
+                    {
+                        std::array<Float4, TestScreenSize * TestScreenSize> pixels;
+                        pixels.fill(value);
+                        GRHIApi->UpdateTexture(cmd, texture->GetRHITexture(), pixels.data(),
+                            RHIUpdateTextureRegion::Create2DRegion(TestScreenSize, TestScreenSize));
+                    };
+                    update(upload->GBufferA, {1, 1, 1, 0});
+                    update(upload->GBufferB, {0.5f, 0.5f, normalZ * 0.5f + 0.5f, 1});
+                    update(upload->GBufferC, {0, 1, 1.0f / 255.0f, 1});
+                    update(upload->Depth, {0.5f, 0, 0, 0});
+                });
+
+            input.InvViewProj(0, 0) = input.InvViewProj(1, 1) = 0.5f;
+            input.InvViewProj(2, 3) = -0.5f;
+            input.CameraPosition = {0, 0, -1};
+            input.DebugMode = 5;
+            input.Environment.IBLDiffuseMap = input.Environment.IBLSpecularMap =
+                graph.RegisterExternalTexture("Test.EmptyEnvironment", GlobalEmptyCubeTexture.get());
+            input.Environment.IBLLut = graph.RegisterExternalTexture("Test.EnvironmentLUT", GlobalWhiteTexture.get());
+            input.Environment.LinearClampIBLSampler = GlobalSampler.get();
+            return input;
+        }
     }
 
-    class SurfaceCacheRadiosityTest final : public TestBase
+    class SurfaceCacheGITest : public TestBase
     {
-    public:
-        void Setup() override
+    protected:
+        void InitializeGI(bool bWorldCache)
         {
             GRHIApi = CreateTestRHIApi();
             GRHIApi->Init();
@@ -82,14 +138,36 @@ namespace Test
             InitGlobalRenderResource();
             auto& globals = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::Global];
             const auto registered = globals;
-            std::erase_if(globals, [](const auto& entry)
+            std::erase_if(globals, [=](const auto& entry)
             {
-                return !entry.first.starts_with("SurfaceCache") && entry.first != "PositionOnlyVS";
+                return !entry.first.starts_with("SurfaceCache") && entry.first != "PositionOnlyVS" &&
+                    !(bWorldCache && (entry.first.starts_with("WorldRadiance") || entry.first.starts_with("ScreenProbe")));
             });
             GShaderMap.Initialize();
             globals = registered;
             GDistanceFieldMgr.Initialize();
         }
+
+    public:
+        void Teardown() override
+        {
+            GDistanceFieldMgr.Release();
+            GMeshMaterialShaderMap.Clear();
+            GMaterialShaderMap.Clear();
+            GShaderMap.Clear();
+            RHIPipelineStateCache::ClearAll();
+            GTransientResourceAllocator.ReleaseRHI();
+            ReleaseGlobalRenderResource();
+            GRHIApi->Shutdown();
+            delete GRHIApi;
+            GRHIApi = nullptr;
+        }
+    };
+
+    class SurfaceCacheRadiosityTest final : public SurfaceCacheGITest
+    {
+    public:
+        void Setup() override { InitializeGI(false); }
 
         void Run() override
         {
@@ -296,19 +374,194 @@ namespace Test
                 << " second=" << secondBounceGain << " final_delta=" << lastDelta << std::endl;
         }
 
-        void Teardown() override
-        {
-            GDistanceFieldMgr.Release();
-            GMeshMaterialShaderMap.Clear();
-            GMaterialShaderMap.Clear();
-            GShaderMap.Clear();
-            RHIPipelineStateCache::ClearAll();
-            GTransientResourceAllocator.ReleaseRHI();
-            ReleaseGlobalRenderResource();
-            GRHIApi->Shutdown();
-            delete GRHIApi;
-            GRHIApi = nullptr;
-        }
     };
     REGISTER_RENDER_TEST("SurfaceCacheRadiosityTest", SurfaceCacheRadiosityTest);
+
+    class WorldRadianceCacheTest final : public SurfaceCacheGITest
+    {
+    public:
+        void Setup() override { InitializeGI(true); }
+
+        void Run() override
+        {
+            auto mesh = MakeWall(8.0f);
+            std::array<Material, 2> materials;
+            std::vector<SurfaceCacheMeshInstance> instances(2);
+            for (uint32_t i = 0; i < instances.size(); ++i)
+            {
+                materials[i].SetShadingModel(EShadingModel::Lit);
+                materials[i].SetParameter("Metallic", 0.0f);
+                materials[i].SetParameter("BaseColor", i == 0 ? std::array<float, 4>{0.9f, 0.05f, 0.02f, 1} :
+                    std::array<float, 4>{0.9f, 0.9f, 0.9f, 1});
+                instances[i].InstanceID = i;
+                instances[i].RenderData = mesh;
+                instances[i].Materials = {materials[i].GetRenderProxyShared()};
+                instances[i].LocalToWorld(2, 3) = i == 0 ? -2.0f : 10.0f;
+            }
+            SurfaceCacheMaterial surface;
+            surface.Initialize(instances, 32);
+            SurfaceCacheDirectLighting direct;
+            direct.Initialize(surface, 64, 6);
+            SurfaceCacheRadiosity radiosity;
+            WorldRadianceCache cache;
+            SurfaceCacheLight light;
+            light.Direction = {0, 0, -1};
+            light.Intensity = 3.0f;
+            light.bCastShadow = false;
+
+            RHITextureDesc markerDesc;
+            markerDesc.Width = markerDesc.Height = TestScreenSize;
+            markerDesc.Format = ERHIFormat::R32G32B32A32_Float;
+            markerDesc.Usage = ERHITextureCreateFlag::UAV | ERHITextureCreateFlag::ShaderResource |
+                ERHITextureCreateFlag::TransferSrc;
+            RenderTexture marker(markerDesc);
+            marker.InitRHIResource();
+            struct Frame
+            {
+                std::array<ScreenProbeRadianceRecord, TestRayCount> Samples;
+                std::vector<Float4> Atlas;
+                uint32_t Directions;
+            };
+            const auto render = [&](uint32_t budget, const Float3& camera, bool capture, bool iterate, bool useCache, bool reset,
+                float normalZ = 1.0f)
+            {
+                RenderGraphBuilder graph;
+                auto material = capture ? surface.AddCapturePasses(graph) : surface.Register(graph);
+                auto lighting = capture || reset ? direct.AddUpdatePasses(graph, surface, {light}) : direct.Register(graph, surface);
+                if (iterate)
+                {
+                    radiosity.AddIteration(graph, material, lighting);
+                }
+                lighting = radiosity.Register(graph, lighting);
+                auto input = MakeProbeInput(graph, normalZ);
+                input.IndirectDiffuseOutput = graph.RegisterExternalTexture("Test.Marker", &marker);
+                auto world = cache.Update(graph, camera, budget, material, lighting, input.Environment, input.bHasEnvironment);
+                input.WorldCache = useCache ? &world : nullptr;
+                const auto screen = AddScreenProbeGatherPasses(graph, material, lighting, input);
+                WorldRadianceCache::AddDebugPass(graph, world, screen.DebugVisualization);
+                void* mappedRadiance = nullptr;
+                void* mappedAtlas = nullptr;
+                const auto map = [&](RHICommandListBase& cmd)
+                {
+                    mappedRadiance = GRHIApi->MapReadBuffer(cmd, screen.Radiance->GetRHIBuffer(), {});
+                    mappedAtlas = GRHIApi->MapReadTexture(cmd, world.WorldRadianceAtlas->GetRHITexture(), {});
+                };
+                auto* read = graph.AllocateParameter<WorldCacheTestReadback>();
+                read->Marker = input.IndirectDiffuseOutput;
+                read->Radiance = screen.Radiance;
+                read->Atlas = world.WorldRadianceAtlas;
+                const bool bGL = GShaderPlatform == ERHIShaderPlatform::OpenGL;
+                graph.AddPass("WorldCacheTestReadback", WorldCacheTestReadback::GetMetaData(), read, EPassFlag::Graphic,
+                    [&](RHICommandListBase& cmd)
+                    {
+                        if (!bGL)
+                        {
+                            map(cmd);
+                        }
+                    });
+                graph.Execute();
+                auto fence = marker.GetTracker().GetLastAccessFence();
+                auto* queue = GRHIApi->GetQueue(fence.QueueType);
+                queue->WaitValue(fence.Value);
+                if (bGL)
+                {
+                    auto* context = queue->AcquireCommandContext();
+                    RHICommandListBase cmd(context);
+                    cmd.SetImmediate(true);
+                    cmd.Begin();
+                    map(cmd);
+                    cmd.End();
+                    queue->WaitValue(queue->ExecuteContext(context));
+                }
+                Verify(mappedRadiance && mappedAtlas, "world cache and screen probe readback");
+                Frame frame;
+                std::copy_n(static_cast<const ScreenProbeRadianceRecord*>(mappedRadiance), TestRayCount, frame.Samples.begin());
+                auto* start = static_cast<const Float4*>(mappedAtlas);
+                frame.Directions = world.WorldRadianceAtlas->GetDesc().Width;
+                frame.Atlas.assign(start, start + frame.Directions * world.WorldRadianceAtlas->GetDesc().Height);
+                GRHIApi->Unmap(mappedRadiance);
+                GRHIApi->Unmap(mappedAtlas);
+                return frame;
+            };
+
+            const Float3 camera{0.1f, 0, 0};
+            const auto cold = render(0, camera, true, true, true, false);
+            render(128, camera, false, true, false, false);
+            render(128, camera, false, true, false, false);
+            render(128, camera, false, true, false, false);
+            const auto reference = render(128, camera, false, false, false, false);
+            const auto cached = render(0, camera, false, false, true, false);
+            const auto moved = render(0, {2.1f, 0, 0}, false, false, true, false);
+            Verify(std::equal(cached.Atlas.begin(), cached.Atlas.begin() + cached.Directions, moved.Atlas.begin()),
+                "slot for world cell zero retains all directions after scrolling");
+            uint32_t cacheHits = 0, movedHits = 0, traceSteps = 0, cachedSteps = 0;
+            float reflectedRed = 0.0f, reflectedGreen = 0.0f;
+            float referenceRed = 0.0f, atlasRed = 0.0f;
+            uint32_t geometryDirections = 0;
+            for (const auto& direction : cached.Atlas)
+            {
+                if (direction.W > 0)
+                {
+                    ++geometryDirections;
+                    atlasRed = std::max(atlasRed, direction.X);
+                }
+            }
+            for (uint32_t i = 0; i < cached.Samples.size(); ++i)
+            {
+                const auto& sample = cached.Samples[i];
+                const auto& expected = reference.Samples[i];
+                Verify(cold.Samples[i].Status.Y == 0 && expected.Status.Y == 0, "cold and disabled paths use full tracing");
+                Verify(std::isfinite(sample.Radiance.X) && sample.Radiance.X >= 0.0f, "finite nonnegative radiance");
+                traceSteps += expected.Status.Z;
+                cachedSteps += sample.Status.Z;
+                referenceRed = std::max(referenceRed, expected.Radiance.X);
+                if (sample.Status.Y != 0)
+                {
+                    ++cacheHits;
+                    if (sample.Radiance.X > reflectedRed)
+                    {
+                        reflectedRed = sample.Radiance.X;
+                        reflectedGreen = sample.Radiance.Y;
+                    }
+                }
+                if (sample.Status.Y != 0 && moved.Samples[i].Status.Y == sample.Status.Y &&
+                    moved.Samples[i].Radiance == sample.Radiance)
+                {
+                    ++movedHits;
+                }
+            }
+            std::cout << "WORLD_RADIANCE_CACHE hits=" << cacheHits << " reused=" << movedHits <<
+                " sdf_steps=" << traceSteps << " cached_steps=" << cachedSteps <<
+                " reflected=" << reflectedRed << "," << reflectedGreen <<
+                " reference_red=" << referenceRed << " geometry_directions=" << geometryDirections << " atlas_red=" << atlasRed << std::endl;
+            Verify(cacheHits > 0 && movedHits > 0 && cachedSteps < traceSteps, "world cache replaces some far SDF marching across frames");
+            Verify(reflectedRed > 0.03f && reflectedRed > 4 * reflectedGreen, "world rays see the white wall's red radiosity");
+
+            const auto nearReference = render(0, camera, false, false, false, false, -1.0f);
+            const auto nearCached = render(0, camera, false, false, true, false, -1.0f);
+            for (uint32_t i = 0; i < nearCached.Samples.size(); i += 8)
+            {
+                const auto& referenceRay = nearReference.Samples[i];
+                const auto& cachedRay = nearCached.Samples[i];
+                Verify(referenceRay.Status.Z > 0 && cachedRay.Status.Y == 0 &&
+                    std::abs(cachedRay.Radiance.X - referenceRay.Radiance.X) < 1e-5f &&
+                    cachedRay.Radiance.X > 0.5f, "the near wall occludes any cached far radiance");
+            }
+
+            cache.Invalidate();
+            radiosity.Invalidate();
+            light.bEnabled = false;
+            const auto reset = render(0, camera, false, false, true, true);
+            for (const auto& sample : reset.Samples)
+            {
+                Verify(sample.Status.Y == 0 && sample.Radiance.X <= 0.0251f, "invalidation suppresses radiance from old lights");
+            }
+            direct.Release();
+            surface.Release();
+            GDistanceFieldMgr.ReleaseMeshDistanceField(*mesh);
+            mesh->LODResources.front().ReleaseResources();
+            std::cout << "WORLD_RADIANCE_CACHE_TEST_OK" << std::endl;
+        }
+    };
+    REGISTER_RENDER_TEST("WorldRadianceCacheTest", WorldRadianceCacheTest);
 }

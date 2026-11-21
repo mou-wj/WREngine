@@ -74,6 +74,7 @@
 | [Surface Card 材质与直接光照查询](algorithm/16-surface-cache-material.md) | 六向捕获、离屏阴影和出射 Radiance 怎样计算，SDF 如何定位实例与同一 Atlas 采样？ |
 | [Screen Probe Gather](algorithm/17-screen-probe-gather.md) | 探针如何布置、查询缓存并重建屏幕间接光照？ |
 | [Surface Cache Radiosity](algorithm/18-surface-cache-radiosity.md) | Card 半球采样如何传播多次漫反射，固定采样与反射率如何影响收敛？ |
+| [World Space Radiance Cache](algorithm/19-world-radiance-cache.md) | 两级网格如何跨帧复用节点，方向光照怎样表示，何时可截短屏幕射线？ |
 
 ## 如何阅读和核查
 

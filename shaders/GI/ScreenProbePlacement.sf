@@ -1,6 +1,5 @@
 #include "/Generated/ShaderParameters/ScreenProbePlacementParameters.sf"
-#include "/Generated/ShaderParameters/GBufferTextureParameters.sf"
-#include "/core/GBufferParametersHelper.sf"
+#include "/Generated/ShaderParameters/GBufferInputParameters.sf"
 
 void BuildBasis(float3 normal, out float3 tangent, out float3 bitangent)
 {

@@ -1,0 +1,19 @@
+#include "/Generated/ShaderParameters/WorldRadianceRaysParameters.sf"
+#include "/GI/WorldRadianceOctahedral.sf"
+
+[numthreads(64, 1, 1)]
+void MainCS(uint3 group : SV_GroupID, uint ray : SV_GroupIndex)
+{
+    uint count = DirectionSize * DirectionSize;
+    if (group.x >= UpdateCount || ray >= count)
+    {
+        return;
+    }
+
+    float2 uv = (float2(ray % DirectionSize, ray / DirectionSize) + 0.5) / DirectionSize;
+    SurfaceCacheQuery query = (SurfaceCacheQuery)0;
+    query.OriginDistance = float4(Updates[group.x].Position.xyz, TraceDistance);
+    query.Direction = float4(DecodeWorldRadianceDirection(uv), 0.0);
+    query.Control.xy = uint2(0xffffffffu, 1u);
+    WorldQueries[group.x * count + ray] = query;
+}

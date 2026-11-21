@@ -13,7 +13,7 @@ namespace Editor
         ~GIViewerPreview();
         bool Render(const GIViewerSource& source, Core::Int2 size, Renderer::ELumenViewerMode mode,
             uint32_t selectedCardIndex, Renderer::ELumenViewerCardView cardView,
-            const Renderer::LumenViewerRadiositySettings& radiosity);
+            const Renderer::LumenViewerRadiositySettings& radiosity, const Renderer::LumenViewerWorldCacheSettings& worldCache);
         void Reset();
         void ResetCache();
         RenderCore::RenderTexture* GetTexture() const { return m_Color.get(); }
