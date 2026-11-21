@@ -11,3 +11,7 @@ file(GLOB_RECURSE MODULE_SOURCES CONFIGURE_DEPENDS
 add_executable(Tests ${HEADERS} ${MODULE_SOURCES})
 target_link_libraries(Tests PRIVATE Engine SlateCore Application Core RHIVulkan Renderer RHIOpenGL RHIDirectX12)
 target_include_directories(Tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Volume benchmarks use the native Vulkan queue for timestamp markers.
+set_source_files_properties(VolumeRenderTest.cpp PROPERTIES
+    INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/../Framework/RHIVulkan/Private")

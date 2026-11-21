@@ -1,0 +1,61 @@
+// Keep writable image bindings before the shared inputs for OpenGL's image-unit limit.
+#include "/Generated/ShaderParameters/VolumeReconstructParameters.sf"
+#include "/Generated/ShaderParameters/VolumeRayParameters.sf"
+#include "/volume/VolumeIntegrationCommon.sf"
+#include "/volume/VolumeDisplay.sf"
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= ScreenSize))
+    {
+        return;
+    }
+    float endDepth = VolumeEndDepth(pixel, SceneDepth.Load(int3(pixel, 0)));
+    int2 last = int2((ScreenSize + 1) / 2) - 1;
+    float2 uv = (float2(pixel) - 1.0) * 0.5;
+    if ((ScreenSize.x & 1u) != 0 && pixel.x == ScreenSize.x - 1)
+    {
+        uv.x = last.x;
+    }
+    if ((ScreenSize.y & 1u) != 0 && pixel.y == ScreenSize.y - 1)
+    {
+        uv.y = last.y;
+    }
+    int2 base = int2(floor(uv));
+    float2 fraction = frac(uv);
+    float depthTolerance = max(0.015, abs(endDepth) * 0.015);
+    float3 radiance = 0.0;
+    float4 transmittance = 0.0;
+    float weightSum = 0.0;
+    [unroll]
+    for (uint i = 0; i < 4; ++i)
+    {
+        int2 offset = int2(i & 1, i >> 1);
+        int2 tap = clamp(base + offset, 0, last);
+        float4 sampleL = SparseScattering.Load(int3(tap, 0));
+        float depthDifference = abs(sampleL.w - endDepth);
+        float2 weightXY = lerp(1.0 - fraction, fraction, float2(offset));
+        float weight = weightXY.x * weightXY.y * saturate(1.0 - depthDifference / depthTolerance);
+        if (weight > 0.0 && (sampleL.w < 0.0) == (endDepth < 0.0))
+        {
+            radiance += weight * sampleL.rgb;
+            transmittance += weight * SparseTransmittance.Load(int3(tap, 0));
+            weightSum += weight;
+        }
+    }
+    if (weightSum < 0.25)
+    {
+        float3 exactT;
+        IntegrateVolumeRay(pixel, abs(endDepth), radiance, exactT);
+        transmittance = float4(exactT, 0.0);
+    }
+    else
+    {
+        radiance /= weightSum;
+        transmittance /= weightSum;
+    }
+    float4 background = SceneColor.Load(int3(pixel, 0));
+    CompositeOutput[pixel] = float4(DisplayIntegratedVolume(IntegrationMode, radiance, transmittance, background.rgb), background.a);
+}

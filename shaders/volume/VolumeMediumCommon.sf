@@ -24,11 +24,15 @@ void MainCS(uint3 cell : SV_DispatchThreadID)
     {
         float3 ray;
         float viewDepth;
-        float3 world = VolumeFroxelCenter(cell, viewDepth, ray);
+        float3 world = VolumeFroxelSample(cell, viewDepth, ray);
         [loop]
         for (uint i = 0; i < LocalCount; ++i)
         {
             VolumeLocalData local = LocalVolumes[i];
+            if (viewDepth < local.LocalDepthRange.x || viewDepth > local.LocalDepthRange.y)
+            {
+                continue;
+            }
             float3 p = mul(local.WorldToLocal, float4(world, 1.0)).xyz;
             bool inside = local.LocalEmission.w == 0 ? all(abs(p) <= 1.0) : dot(p, p) <= 1.0;
             if (!inside)

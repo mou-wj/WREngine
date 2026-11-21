@@ -1,0 +1,41 @@
+#include "/Generated/ShaderParameters/VolumeTemporalParameters.sf"
+#include "/Generated/ShaderParameters/VolumeRayParameters.sf"
+#include "/volume/VolumeIntegrationCommon.sf"
+
+float BlendVolumeHistory(uint2 pixel, inout float4 current, inout float3 transmittance)
+{
+    float weight = 0.0;
+    if (TemporalSettings.x > 0.0)
+    {
+        float3 ray = normalize(VolumeWorldPosition(float2(pixel) + 0.5, 0) - CameraPosition);
+        float3 perDepth = ray / max(dot(ray, CameraForward), 1e-4);
+        float anchor = current.w < 0.0 ? (NearDistance - current.w) * 0.5 : current.w;
+        float3 world = CameraPosition + perDepth * anchor;
+        float4 previousClip = mul(PreviousViewProjection, float4(world, 1.0));
+        float2 uv = previousClip.xy / max(previousClip.w, 1e-5) * float2(0.5, -0.5) + 0.5;
+        if (previousClip.w > 0.0 && all(uv >= 0.0) && all(uv < 1.0))
+        {
+            uint2 previousIndex = uint2(uv * float2(ScreenSize)) / IntegrationStride;
+            float4 previous = PreviousScattering.Load(int3(previousIndex, 0));
+            float depthTolerance = max(0.025, previousClip.w * 0.025);
+            bool depthMatches = current.w < 0.0 ? previous.w < 0.0 :
+                previous.w > 0.0 && abs(previous.w - previousClip.w) < depthTolerance;
+            if (depthMatches)
+            {
+                float3 oldT = PreviousTransmittance.Load(int3(previousIndex, 0)).rgb;
+                float3 deltaT = abs(transmittance - oldT);
+                float3 deltaL = abs(current.rgb - previous.rgb) / max(max(current.rgb, previous.rgb), 0.04);
+                float oldColorChange = max(deltaL.x, max(deltaL.y, deltaL.z));
+                float oldOpticalChange = max(deltaT.x, max(deltaT.y, deltaT.z));
+                weight = TemporalSettings.x * (1.0 - smoothstep(0.09, 0.45, oldOpticalChange)) *
+                    (1.0 - smoothstep(0.18, 0.80, oldColorChange));
+                current.rgb = lerp(current.rgb, previous.rgb, weight);
+                transmittance = saturate(lerp(transmittance, oldT, weight));
+            }
+        }
+    }
+    return weight;
+}
+
+#define VOLUME_BLEND_HISTORY 1
+#include "/volume/VolumeIntegrateMain.sf"

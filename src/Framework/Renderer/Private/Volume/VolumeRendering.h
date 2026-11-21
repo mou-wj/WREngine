@@ -2,6 +2,7 @@
 
 #include "Math.hpp"
 #include "RenderGraphResource.h"
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -57,7 +58,8 @@ namespace Renderer
         LightVisibility,
         LocalOverlap,
         IndirectLighting,
-        DensitySources
+        DensitySources,
+        HistoryWeight
     };
 
     struct VolumeRenderSettings
@@ -70,17 +72,71 @@ namespace Renderer
         EVolumeView View = EVolumeView::Composite;
         uint32_t DebugSlice = 16;
         uint32_t LightMask = 7; // Directional, Point, Spot in bits 0 through 2.
+        uint32_t FroxelTileSize = 8;
+        uint32_t FroxelSliceCount = 32;
+        // Advance when external geometry or texture content changes in place.
+        uint64_t SceneRevision = 0;
+        float HistoryWeight = 0.85f;
+        bool bSpatialReconstruction = false;
+        bool bJitter = false;
         bool bEnabled = true;
         bool bShadows = true;
         bool bUseSkyEnvironment = true;
     };
 
+    struct VolumeRenderStats
+    {
+        Core::UInt3 FroxelSize{};
+        Core::UInt2 IntegrationSize{};
+        uint64_t TransientBytes = 0;
+        uint64_t HistoryBytes = 0;
+        bool bHistoryEligible = false;
+    };
+
+    class VolumeRenderHistory;
+
     // The caller supplies one full-size perspective view and a transferable, linear scene color.
     RENDERER_API void AddVolumePasses(RenderCore::RenderGraphBuilder& builder, const Engine::SceneView& view,
         RenderCore::RenderGraphTextureRef sceneDepth, RenderCore::RenderGraphTextureRef sceneColor,
-        const VolumeRenderSettings& settings, Engine::SceneInterface* scene = nullptr);
+        const VolumeRenderSettings& settings, Engine::SceneInterface* scene = nullptr,
+        VolumeRenderHistory* history = nullptr, VolumeRenderStats* stats = nullptr);
+
+    // One owner per perspective view. Use on the same thread that builds and submits its graph.
+    class RENDERER_API VolumeRenderHistory
+    {
+    public:
+        VolumeRenderHistory();
+        ~VolumeRenderHistory();
+        VolumeRenderHistory(const VolumeRenderHistory&) = delete;
+        VolumeRenderHistory& operator=(const VolumeRenderHistory&) = delete;
+
+        void Invalidate();
+        void Release();
+
+    private:
+        struct Slot
+        {
+            std::unique_ptr<RenderCore::RenderTexture> Scattering;
+            std::unique_ptr<RenderCore::RenderTexture> Transmittance;
+        };
+        std::array<Slot, 2> m_Slots;
+        Core::UInt2 m_Size{};
+        Core::Mat4 m_PreviousViewProjection{};
+        Core::Float3 m_PreviousOrigin{};
+        Core::Float3 m_PreviousForward{};
+        uint64_t m_PreviousFrame = 0;
+        size_t m_PreviousInputs = 0;
+        double m_PreviousTime = 0;
+        uint32_t m_NextSlot = 0;
+        bool m_bValid = false;
+
+        friend void AddVolumePasses(RenderCore::RenderGraphBuilder&, const Engine::SceneView&,
+            RenderCore::RenderGraphTextureRef, RenderCore::RenderGraphTextureRef, const VolumeRenderSettings&,
+            Engine::SceneInterface*, VolumeRenderHistory*, VolumeRenderStats*);
+    };
 
     // Optional attachment for a caller which owns the scene and its perspective view.
-    RENDERER_API Engine::SceneViewDrawExtension MakeVolumeDrawExtension(VolumeRenderSettings settings, Engine::SceneInterface* scene);
+    RENDERER_API Engine::SceneViewDrawExtension MakeVolumeDrawExtension(VolumeRenderSettings settings, Engine::SceneInterface* scene,
+        VolumeRenderHistory* history = nullptr, VolumeRenderStats* stats = nullptr);
     RENDERER_API std::shared_ptr<RenderCore::RenderTexture> CreateVolumePreviewDensityTexture();
 }

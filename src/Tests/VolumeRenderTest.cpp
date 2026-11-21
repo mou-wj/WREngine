@@ -15,7 +15,9 @@
 #include "StaticMeshAsset.h"
 #include "StaticMeshComponent.h"
 #include "Viewport.h"
+#include "VulkanQueue.h"
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -32,6 +34,140 @@ namespace Test
         constexpr uint32_t Height = 9;
         constexpr size_t Center = (Height / 2) * Width + Width / 2;
         using Pixels = std::array<Core::Float4, Width * Height>;
+
+        struct VolumeTestFrame
+        {
+            uint64_t Index = 0;
+            float CameraX = 0;
+            bool bNearCenter = false;
+            VolumeRenderHistory* History = nullptr;
+            VolumeRenderStats* Stats = nullptr;
+        };
+
+        // Native timestamps stay in the benchmark. Split physical queues need profiling on both queues.
+        class VolumeBenchmarkTimer
+        {
+        public:
+            void Initialize()
+            {
+                if (GShaderPlatform != ERHIShaderPlatform::Vulkan)
+                {
+                    return;
+                }
+                auto* graphics = static_cast<RHIVulkan::VulkanQueue*>(GRHIApi->GetQueue(EQueueType::Graphics));
+                auto* compute = static_cast<RHIVulkan::VulkanQueue*>(GRHIApi->GetQueue(EQueueType::Compute));
+                if (graphics->GetHandle() != compute->GetHandle())
+                {
+                    return;
+                }
+                const auto physical = graphics->GetDevice()->GetPhysicalDevice();
+                uint32_t families = 0;
+                vkGetPhysicalDeviceQueueFamilyProperties(physical, &families, nullptr);
+                std::vector<VkQueueFamilyProperties> properties(families);
+                vkGetPhysicalDeviceQueueFamilyProperties(physical, &families, properties.data());
+                m_ValidBits = properties.at(graphics->GetFamilyIndex()).timestampValidBits;
+                if (m_ValidBits == 0)
+                {
+                    return;
+                }
+                VkPhysicalDeviceProperties deviceProperties{};
+                vkGetPhysicalDeviceProperties(physical, &deviceProperties);
+                m_NanosecondsPerTick = deviceProperties.limits.timestampPeriod;
+                m_Device = graphics->GetDevice()->GetHandle();
+                VkQueryPoolCreateInfo desc{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+                desc.queryType = VK_QUERY_TYPE_TIMESTAMP;
+                desc.queryCount = 2;
+                Check(vkCreateQueryPool(m_Device, &desc, nullptr, &m_Pool));
+                m_Queue = graphics->GetHandle();
+
+                VkCommandPoolCreateInfo commands{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+                commands.queueFamilyIndex = graphics->GetFamilyIndex();
+                Check(vkCreateCommandPool(m_Device, &commands, nullptr, &m_Markers));
+                VkCommandBufferAllocateInfo allocate{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+                allocate.commandPool = m_Markers;
+                allocate.commandBufferCount = uint32_t(m_Buffers.size());
+                allocate.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+                Check(vkAllocateCommandBuffers(m_Device, &allocate, m_Buffers.data()));
+                for (uint32_t index = 0; index < uint32_t(m_Buffers.size()); ++index)
+                {
+                    VkFenceCreateInfo fence{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+                    Check(vkCreateFence(m_Device, &fence, nullptr, &m_Fences[index]));
+                    const auto buffer = m_Buffers[index];
+                    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+                    Check(vkBeginCommandBuffer(buffer, &begin));
+                    if (index == 0)
+                    {
+                        vkCmdResetQueryPool(buffer, m_Pool, 0, 2);
+                    }
+                    vkCmdWriteTimestamp(buffer, index == 0 ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                        m_Pool, index);
+                    Check(vkEndCommandBuffer(buffer));
+                }
+            }
+
+            ~VolumeBenchmarkTimer()
+            {
+                if (m_Device)
+                {
+                    for (size_t index = 0; index < m_Fences.size(); ++index)
+                    {
+                        if (m_InFlight[index])
+                        {
+                            vkWaitForFences(m_Device, 1, &m_Fences[index], VK_TRUE, UINT64_MAX);
+                        }
+                        vkDestroyFence(m_Device, m_Fences[index], nullptr);
+                    }
+                    vkDestroyCommandPool(m_Device, m_Markers, nullptr);
+                    vkDestroyQueryPool(m_Device, m_Pool, nullptr);
+                }
+            }
+
+            bool IsAvailable() const { return m_Pool != VK_NULL_HANDLE; }
+
+            void Mark(uint32_t index)
+            {
+                if (!IsAvailable())
+                {
+                    return;
+                }
+                Check(vkResetFences(m_Device, 1, &m_Fences[index]));
+                VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+                submit.commandBufferCount = 1;
+                submit.pCommandBuffers = &m_Buffers[index];
+                // The standalone benchmark submits from one CPU thread.
+                Check(vkQueueSubmit(m_Queue, 1, &submit, m_Fences[index]));
+                m_InFlight[index] = true;
+            }
+
+            double ReadMilliseconds()
+            {
+                Check(vkWaitForFences(m_Device, uint32_t(m_Fences.size()), m_Fences.data(), VK_TRUE, UINT64_MAX));
+                m_InFlight = {};
+                std::array<uint64_t, 2> times{};
+                Check(vkGetQueryPoolResults(m_Device, m_Pool, 0, 2, sizeof(times), times.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT));
+                const uint64_t mask = m_ValidBits < 64 ? (uint64_t(1) << m_ValidBits) - 1 : UINT64_MAX;
+                return double((times[1] - times[0]) & mask) * m_NanosecondsPerTick / 1e6;
+            }
+
+        private:
+            static void Check(VkResult result)
+            {
+                if (result != VK_SUCCESS)
+                {
+                    throw std::runtime_error("Vulkan volume timestamp query failed: " + std::to_string(result));
+                }
+            }
+
+            VkQueue m_Queue = VK_NULL_HANDLE;
+            VkDevice m_Device = VK_NULL_HANDLE;
+            VkQueryPool m_Pool = VK_NULL_HANDLE;
+            VkCommandPool m_Markers = VK_NULL_HANDLE;
+            std::array<VkCommandBuffer, 2> m_Buffers{};
+            std::array<VkFence, 2> m_Fences{};
+            std::array<bool, 2> m_InFlight{};
+            uint32_t m_ValidBits = 0;
+            float m_NanosecondsPerTick = 0;
+        };
 
         BEGIN_SHADER_PARAMETER_STRUCT(VolumeTestUpload)
             RDG_TEXTURE_ACCESS(Color, ERHIResourceAccess::TransferDest)
@@ -90,11 +226,11 @@ namespace Test
         }
 
         Pixels Render(const VolumeRenderSettings& settings, float surfaceDistance, Engine::SceneInterface* scene = nullptr,
-            double timeSeconds = 0)
+            double timeSeconds = 0, const VolumeTestFrame& frame = {})
         {
             Engine::Camera camera;
-            camera.SetPosition({0, 0, 0});
-            camera.SetTarget({0, 0, -1});
+            camera.SetPosition({frame.CameraX, 0, 0});
+            camera.SetTarget({frame.CameraX, 0, -1});
             camera.SetUp({0, 1, 0});
             camera.SetPerspective(Core::DegToRad(45.0f), float(Width) / Height, 0.1f, 100.0f);
             Engine::SceneView view;
@@ -106,6 +242,7 @@ namespace Test
             view.CameraWorldPos = camera.GetPosition();
             view.Viewport = {0, 0, Width, Height};
             view.BuildSplitDepths();
+            view.FrameIndex = frame.Index;
             view.FrameTimeSeconds = timeSeconds;
 
             RHITextureDesc colorDesc{};
@@ -131,13 +268,20 @@ namespace Test
             background.fill({0.8f, 0.4f, 0.2f, 1.0f});
             std::array<float, Width * Height> sceneDepth;
             sceneDepth.fill(surfaceDistance > 0.0f ? camera.WorldToNdc({0, 0, -surfaceDistance}).Z : 1.0f);
+            if (frame.bNearCenter)
+            {
+                for (uint32_t row = 0; row < Height; ++row)
+                {
+                    sceneDepth[row * Width + Width / 2] = camera.WorldToNdc({frame.CameraX, 0, -2}).Z;
+                }
+            }
             graph.AddPass("VolumeTestUpload", VolumeTestUpload::GetMetaData(), upload, EPassFlag::Graphic, [&](RHICommandListBase& cmd)
             {
                 const auto region = RHIUpdateTextureRegion::Create2DRegion(Width, Height);
                 GRHIApi->UpdateTexture(cmd, upload->Color->GetRHITexture(), background.data(), region);
                 GRHIApi->UpdateTexture(cmd, upload->Depth->GetRHITexture(), sceneDepth.data(), region);
             });
-            AddVolumePasses(graph, view, upload->Depth, upload->Color, settings, scene);
+            AddVolumePasses(graph, view, upload->Depth, upload->Color, settings, scene, frame.History, frame.Stats);
 
             return ExecuteAndRead(graph, upload->Color, color);
         }
@@ -176,7 +320,7 @@ namespace Test
         }
     }
 
-    class VolumeRenderTest final : public TestBase
+    class VolumeRenderTest : public TestBase
     {
     public:
         void Setup() override
@@ -447,16 +591,232 @@ namespace Test
             std::cout << "VOLUME_DENSITY_TEST_OK textureT=" << textureT << " noiseMaxDelta=" << noiseChange <<
                 " textureMaxDelta=" << textureChange << " transmittance=" << animatedT0 << "->" << animatedT1 << std::endl;
 
+            VolumeRenderHistory lightHistory;
+            densityTest.View = EVolumeView::HistoryWeight;
+            densityTest.bShadows = false;
+            const auto historyFrame = [&](uint64_t index)
+            {
+                return Render(densityTest, 6, &scene, 0, {.Index = index, .History = &lightHistory})[Center].X;
+            };
+            RequireNear(historyFrame(0), 0, "lighting history starts empty");
+            RequireNear(historyFrame(1), densityTest.HistoryWeight, "stable lights permit history");
+            spot.SetIntensity(spot.GetIntensity() * 2.0f);
+            scene.FlushPendingUpdates();
+            RequireNear(historyFrame(2), 0, "a scene light edit resets volume lighting history");
+
             // The fixture textures are borrowed sampler inputs, outside the scene allocator.
             scene.ForEachLight([&](Engine::LightSceneProxy* proxy) { scene.GetLightShadowInfo(proxy).Allocation = {}; });
             scene.RemoveLight(&directional);
             scene.RemoveLight(&point);
             scene.RemoveLight(&spot);
             scene.FlushPendingUpdates();
+
+            TestVolumeFiltering();
+        }
+
+    private:
+        static void TestVolumeFiltering()
+        {
+            VolumeRenderSettings settings;
+            settings.Medium.Density = 0.2f;
+            settings.Medium.Absorption = {1, 1, 1};
+            settings.Medium.Scattering = {};
+            settings.MaxDistance = 20;
+            settings.View = EVolumeView::Transmittance;
+            const auto reference = Render(settings, 10, nullptr, 0, {.bNearCenter = true});
+            settings.bSpatialReconstruction = true;
+            VolumeRenderStats stats;
+            const auto spatial = Render(settings, 10, nullptr, 0, {.bNearCenter = true, .Stats = &stats});
+            RequireNear(spatial[Center].X, reference[Center].X, "depth reconstruction preserves an unsampled foreground stripe");
+            RequireNear(spatial[Center + 1].X, reference[Center + 1].X, "foreground does not bleed into background");
+            if (stats.IntegrationSize != Core::UInt2{(Width + 1) / 2, (Height + 1) / 2})
+            {
+                throw std::runtime_error("Spatial reconstruction must dispatch one primary integration ray per 2x2 region.");
+            }
+
+            VolumeRenderHistory history;
+            settings.View = EVolumeView::HistoryWeight;
+            const auto renderFrame = [&](uint64_t index, float cameraX = 0.0f, bool bNearCenter = false)
+            {
+                return Render(settings, 10, nullptr, 0, {index, cameraX, bNearCenter, &history, &stats});
+            };
+            RequireNear(renderFrame(0)[Center].X, 0, "first frame does not reuse history");
+            RequireNear(renderFrame(1)[Center].X, settings.HistoryWeight, "stationary scene reuses its history");
+            RequireNear(renderFrame(2, 0.24f)[Center].X, settings.HistoryWeight, "camera translation reprojects the previous depth plane");
+            const auto disoccluded = renderFrame(3, 0.24f, true);
+            RequireNear(disoccluded[Center].X, 0, "new foreground rejects previous background");
+            RequireNear(disoccluded[Center - 2].X, settings.HistoryWeight, "surrounding history remains valid");
+            settings.Medium.Density = 0.6f;
+            RequireNear(renderFrame(4, 0.24f, true)[Center - 2].X, 0, "medium edit invalidates history immediately");
+            RequireNear(renderFrame(5, 0.24f, true)[Center - 2].X, settings.HistoryWeight, "new medium can start accumulating");
+            RequireNear(renderFrame(6, 10.0f)[Center].X, 0, "camera jump invalidates history");
+            settings.SceneRevision++;
+            RequireNear(renderFrame(7, 10.0f)[Center].X, 0, "external scene revision invalidates history");
+
+            settings.View = EVolumeView::Transmittance;
+            settings.Medium.Density = 0.08f;
+            settings.bJitter = true;
+            auto& local = settings.LocalVolumes.emplace_back();
+            local.Position = {0, 0, -4};
+            local.HalfExtent = {3, 2, 3};
+            local.Medium.Density = 0.4;
+            local.DensityField.Mode = EVolumeDensityMode::Noise;
+            local.DensityField.Frequency = 2.2f;
+            history.Invalidate();
+            Pixels previousRaw{}, previousFiltered{};
+            double rawDifference = 0, filteredDifference = 0;
+            for (uint64_t i = 0; i < 16; ++i)
+            {
+                const auto raw = Render(settings, 10, nullptr, 0, {.Index = i});
+                const auto filtered = renderFrame(i);
+                if (i >= 4)
+                {
+                    for (size_t pixel = 0; pixel < raw.size(); ++pixel)
+                    {
+                        const auto dr = raw[pixel].X - previousRaw[pixel].X;
+                        const auto df = filtered[pixel].X - previousFiltered[pixel].X;
+                        rawDifference += dr * dr;
+                        filteredDifference += df * df;
+                    }
+                }
+                previousRaw = raw;
+                previousFiltered = filtered;
+            }
+            const double rawRms = std::sqrt(rawDifference / (12 * Width * Height));
+            const double filteredRms = std::sqrt(filteredDifference / (12 * Width * Height));
+            if (rawRms < 0.005 || filteredRms > rawRms * 0.8)
+            {
+                throw std::runtime_error("Temporal accumulation must reduce jitter in a stationary nonuniform volume.");
+            }
+            std::cout << "VOLUME_FILTER_TEST_OK edgeT=" << spatial[Center].X << " rms=" << rawRms << "->" <<
+                filteredRms << std::endl;
         }
     };
 
     REGISTER_RENDER_TEST("VolumeRenderTest", VolumeRenderTest);
+
+    template<bool bOptimized, uint32_t WidthInPixels = 960, uint32_t HeightInPixels = 540>
+    class VolumeBenchmark final : public VolumeRenderTest
+    {
+    public:
+        void Run() override
+        {
+            constexpr uint32_t width = WidthInPixels, height = HeightInPixels, frames = 80, warmupFrames = 8;
+            Engine::Camera camera;
+            camera.SetPosition({0, 0, 0});
+            camera.SetTarget({0, 0, -1});
+            camera.SetUp({0, 1, 0});
+            camera.SetPerspective(Core::DegToRad(45.0f), float(width) / height, 0.1f, 100.0f);
+            Engine::SceneView view;
+            view.ViewMatrix = camera.GetViewMatrix();
+            view.ProjectionMatrix = camera.GetProjectionMatrix();
+            view.InvViewProjectionMatrix = camera.GetInverseViewProjectionMatrix();
+            view.NearClip = 0.1f;
+            view.FarClip = 100.0f;
+            view.CameraWorldPos = camera.GetPosition();
+            view.Viewport = {0, 0, width, height};
+
+            RHITextureDesc desc{};
+            desc.Width = width;
+            desc.Height = height;
+            desc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest;
+            desc.Format = ERHIFormat::R32G32B32A32_Float;
+            RenderTexture color(desc);
+            color.InitRHIResource();
+            desc.Format = ERHIFormat::R32_Float;
+            RenderTexture depth(desc);
+            depth.InitRHIResource();
+            const auto wait = [&]()
+            {
+                const auto fence = color.GetTracker().GetLastAccessFence();
+                GRHIApi->GetQueue(fence.QueueType)->WaitValue(fence.Value);
+            };
+
+            {
+                const std::vector<Core::Float4> background(width * height, {0.4f, 0.3f, 0.2f, 1.0f});
+                std::vector<float> depths(width * height, 1.0f);
+                const float plane = camera.WorldToNdc({0, 0, -8}).Z;
+                for (uint32_t row = height / 4; row < 3 * height / 4; ++row)
+                {
+                    std::fill_n(depths.begin() + row * width + width / 4, width / 2, plane);
+                }
+                RenderGraphBuilder graph;
+                auto* upload = graph.AllocateParameter<VolumeTestUpload>();
+                upload->Color = graph.RegisterExternalTexture("VolumeBenchmark.Color", &color);
+                upload->Depth = graph.RegisterExternalTexture("VolumeBenchmark.Depth", &depth);
+                graph.AddPass("VolumeBenchmarkUpload", VolumeTestUpload::GetMetaData(), upload, EPassFlag::Graphic, [&](RHICommandListBase& cmd)
+                {
+                    const auto region = RHIUpdateTextureRegion::Create2DRegion(width, height);
+                    GRHIApi->UpdateTexture(cmd, color.GetRHI(), background.data(), region);
+                    GRHIApi->UpdateTexture(cmd, depth.GetRHI(), depths.data(), region);
+                });
+                graph.Execute();
+                wait();
+            }
+
+            VolumeRenderSettings settings;
+            settings.View = EVolumeView::Scattering;
+            settings.MaxDistance = 25;
+            settings.bSpatialReconstruction = bOptimized;
+            settings.bJitter = bOptimized;
+            auto& fog = settings.LocalVolumes.emplace_back();
+            fog.Position = {0, 0, -10};
+            fog.HalfExtent = {12, 8, 7};
+            fog.Medium.Density = 0.4f;
+            fog.DensityField.Mode = EVolumeDensityMode::Noise;
+            VolumeRenderHistory history;
+            VolumeRenderStats stats;
+            VolumeBenchmarkTimer timer;
+            timer.Initialize();
+            double querySumMs = 0;
+            auto start = std::chrono::steady_clock::now();
+            for (uint32_t i = 0; i < frames; ++i)
+            {
+                if (i == warmupFrames)
+                {
+                    start = std::chrono::steady_clock::now();
+                }
+                view.FrameIndex = i;
+                RenderGraphBuilder graph;
+                const auto colorTarget = graph.RegisterExternalTexture("VolumeBenchmark.Color", &color);
+                const auto sceneDepth = graph.RegisterExternalTexture("VolumeBenchmark.Depth", &depth);
+                AddVolumePasses(graph, view, sceneDepth, colorTarget, settings, nullptr, bOptimized ? &history : nullptr, &stats);
+                if (i >= warmupFrames)
+                {
+                    timer.Mark(0);
+                }
+                graph.Execute();
+                if (i >= warmupFrames && timer.IsAvailable())
+                {
+                    timer.Mark(1);
+                    querySumMs += timer.ReadMilliseconds();
+                }
+                else
+                {
+                    wait();
+                }
+            }
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+            std::cout << "VOLUME_BENCHMARK_OK optimized=" << bOptimized << " size=" << width << 'x' << height << " frames=" << frames - warmupFrames
+                << " primaryRays=" << stats.IntegrationSize.X * stats.IntegrationSize.Y
+                << " transientBytes=" << stats.TransientBytes << " historyBytes=" << stats.HistoryBytes
+                << " completedFrameMs=" << ms / (frames - warmupFrames);
+            if (timer.IsAvailable())
+            {
+                std::cout << " vulkanQueueSpanMs=" << querySumMs / (frames - warmupFrames);
+            }
+            std::cout << std::endl;
+        }
+    };
+
+    using VolumeBenchmarkReference = VolumeBenchmark<false>;
+    using VolumeBenchmarkOptimized = VolumeBenchmark<true>;
+    using VolumeBenchmarkReference1080p = VolumeBenchmark<false, 1920, 1080>;
+    using VolumeBenchmarkOptimized1080p = VolumeBenchmark<true, 1920, 1080>;
+    REGISTER_RENDER_TEST("VolumeBenchmarkReference", VolumeBenchmarkReference);
+    REGISTER_RENDER_TEST("VolumeBenchmarkOptimized", VolumeBenchmarkOptimized);
+    REGISTER_RENDER_TEST("VolumeBenchmarkReference1080p", VolumeBenchmarkReference1080p);
+    REGISTER_RENDER_TEST("VolumeBenchmarkOptimized1080p", VolumeBenchmarkOptimized1080p);
 
     class VolumePipelineTest final : public TestBase
     {
@@ -545,12 +905,13 @@ namespace Test
             view.InvViewProjectionMatrix = camera.GetInverseViewProjectionMatrix();
             view.Flags = Engine::VF_EnableShadows;
 
-            const auto render = [&](const VolumeRenderSettings* settings)
+            const auto render = [&](const VolumeRenderSettings* settings, VolumeRenderHistory* history = nullptr, uint64_t frame = 0)
             {
                 auto drawView = view;
+                drawView.FrameIndex = frame;
                 if (settings)
                 {
-                    drawView.DrawExtensions.push_back(MakeVolumeDrawExtension(*settings, scene.get()));
+                    drawView.DrawExtensions.push_back(MakeVolumeDrawExtension(*settings, scene.get(), history));
                 }
                 Engine::SceneViewFamily family;
                 family.Scene = scene.get();
@@ -587,9 +948,27 @@ namespace Test
             }
             RequireNear(withoutIBL[Center].X, 0.0f, "disabling sky input with zero ambient removes indirect fog light");
             RequireNear(render(nullptr)[Center].X, base[Center].X, "view without an extension preserves the original render");
+
+            VolumeRenderHistory history;
+            settings.bUseSkyEnvironment = true;
+            settings.bSpatialReconstruction = true;
+            settings.View = EVolumeView::HistoryWeight;
+            RequireNear(render(&settings, &history, 0)[Center].X, 0, "deferred preview starts without history");
+            const float historyWeight = render(&settings, &history, 1)[Center].X;
+            RequireNear(historyWeight, settings.HistoryWeight, "deferred view accumulates at unchanged opaque depth");
+            settings.View = EVolumeView::Composite;
+            const auto optimized = render(&settings, &history, 2);
+            if (!std::isfinite(optimized[Center].X) || std::abs(optimized[Center].X - composite[Center].X) > 0.02f)
+            {
+                throw std::runtime_error("Depth-aware deferred volume diverged from the reference at the test surface.");
+            }
+            history.Release();
+            settings.View = EVolumeView::HistoryWeight;
+            RequireNear(render(&settings, &history, 3)[Center].X, 0, "reopened deferred preview starts with clean history");
             std::cout << "VOLUME_PIPELINE_TEST_OK baseline=" << base[Center].X << " composite=" << composite[Center].X <<
                 " foregroundT=" << transmittance[Center].X << " skyT=" << transmittance[0].X <<
-                " indirect=" << indirect[Center].X << std::endl;
+                " indirect=" << indirect[Center].X << " historyWeight=" << historyWeight <<
+                " optimizedComposite=" << optimized[Center].X << std::endl;
 
             scene->RemovePrimitive(&mesh);
             scene->RemoveLight(&directional);

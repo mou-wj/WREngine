@@ -1,6 +1,8 @@
 #include "VolumeRendering.h"
 #include "GlobalShader.h"
+#include "HashHelper.hpp"
 #include "LightSceneProxy.h"
+#include "PrimitiveSceneProxy.h"
 #include "RenderGraphBuilder.h"
 #include "RHIPipelineStateCache.h"
 #include "Scene.h"
@@ -32,6 +34,7 @@ namespace Renderer
         SHADER_PARAMETER(Core::Float4, LocalEmission)
         SHADER_PARAMETER(Core::Float4, DensityParameters)
         SHADER_PARAMETER(Core::Float4, DensityOffsetMode)
+        SHADER_PARAMETER(Core::Float4, LocalDepthRange)
     END_SHADER_PARAMETER_STRUCT(VolumeLocalData)
 
     BEGIN_SHADER_PARAMETER_STRUCT(VolumeMediumParameters)
@@ -56,6 +59,7 @@ namespace Renderer
         SHADER_PARAMETER(Core::Float4, PositionRadius)
         SHADER_PARAMETER(Core::Float4, DirectionInnerCos)
         SHADER_PARAMETER(Core::Float4, ConeType)
+        SHADER_PARAMETER(Core::Float4, DepthRange)
     END_SHADER_PARAMETER_STRUCT(VolumeLightData)
 
     BEGIN_SHADER_PARAMETER_STRUCT(VolumeShadowSlice)
@@ -86,16 +90,39 @@ namespace Renderer
         RDG_BUFFER_ACCESS(Buffer, ERHIResourceAccess::TransferDest)
     END_SHADER_PARAMETER_STRUCT(VolumeBufferUpload)
 
-    BEGIN_SHADER_PARAMETER_STRUCT(VolumeIntegrateParameters)
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeRayParameters)
         SHADER_PARAMETER_STRUCT_REFERENCE(VolumeGridParameters, Grid)
         SHADER_PARAMETER(uint32_t, IntegrationMode)
+        SHADER_PARAMETER(uint32_t, IntegrationStride)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float>, SceneDepth)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, Medium)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, DirectVolumeLighting)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, IndirectVolumeLighting)
+    END_SHADER_PARAMETER_STRUCT(VolumeRayParameters)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeIntegrateParameters)
+        SHADER_PARAMETER_STRUCT_REFERENCE(VolumeRayParameters, Ray)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, ScatteringOutput)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, TransmittanceOutput)
     END_SHADER_PARAMETER_STRUCT(VolumeIntegrateParameters)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeReconstructParameters)
+        SHADER_PARAMETER_STRUCT_REFERENCE(VolumeRayParameters, Ray)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, SparseScattering)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, SparseTransmittance)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, SceneColor)
+        SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, CompositeOutput)
+    END_SHADER_PARAMETER_STRUCT(VolumeReconstructParameters)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeTemporalParameters)
+        SHADER_PARAMETER_STRUCT_REFERENCE(VolumeRayParameters, Ray)
+        SHADER_PARAMETER(Core::Mat4, PreviousViewProjection)
+        SHADER_PARAMETER(Core::Float4, TemporalSettings)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, PreviousScattering)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, PreviousTransmittance)
+        SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, ScatteringOutput)
+        SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, TransmittanceOutput)
+    END_SHADER_PARAMETER_STRUCT(VolumeTemporalParameters)
 
     BEGIN_SHADER_PARAMETER_STRUCT(VolumeCompositeParameters)
         SHADER_PARAMETER_STRUCT_REFERENCE(VolumeGridParameters, Grid)
@@ -135,6 +162,20 @@ namespace Renderer
         static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VolumeIntegrateParameters::GetMetaData(); }
     };
 
+    class VolumeReconstructCS : public GlobalShader
+    {
+    public:
+        DECLARE_GLOBAL_SHADER_TYPE(VolumeReconstructCS)
+        static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VolumeReconstructParameters::GetMetaData(); }
+    };
+
+    class VolumeTemporalCS : public GlobalShader
+    {
+    public:
+        DECLARE_GLOBAL_SHADER_TYPE(VolumeTemporalCS)
+        static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VolumeTemporalParameters::GetMetaData(); }
+    };
+
     class VolumeLightingCS : public GlobalShader
     {
     public:
@@ -159,6 +200,8 @@ namespace Renderer
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeMediumCS, "VolumeMediumCS", "/volume/VolumeMedium.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeTexturedMediumCS, "VolumeTexturedMediumCS", "/volume/VolumeTexturedMedium.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeIntegrateCS, "VolumeIntegrateCS", "/volume/VolumeIntegrate.sf", "MainCS", ERHIShaderFrequency::Compute);
+    IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeReconstructCS, "VolumeReconstructCS", "/volume/VolumeReconstruct.sf", "MainCS", ERHIShaderFrequency::Compute);
+    IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeTemporalCS, "VolumeTemporalCS", "/volume/VolumeTemporal.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeLightingCS, "VolumeLightingCS", "/volume/VolumeLighting.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeEnvironmentCS, "VolumeEnvironmentCS", "/volume/VolumeEnvironment.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeCompositeCS, "VolumeCompositeCS", "/volume/VolumeComposite.sf", "MainCS", ERHIShaderFrequency::Compute);
@@ -201,6 +244,30 @@ namespace Renderer
         Core::Float4 Pack(Core::Float3 color, float alpha)
         {
             return {color.X, color.Y, color.Z, alpha};
+        }
+
+        void HashValues(size_t& hash, std::initializer_list<float> values)
+        {
+            for (const float value : values)
+            {
+                HashCombine(hash, value);
+            }
+        }
+
+        void HashVector(size_t& hash, const Core::Float4& value)
+        {
+            HashValues(hash, {value.X, value.Y, value.Z, value.W});
+        }
+
+        void HashMatrix(size_t& hash, const Core::Mat4& matrix)
+        {
+            for (int row = 0; row < 4; ++row)
+            {
+                for (int column = 0; column < 4; ++column)
+                {
+                    HashCombine(hash, matrix(row, column));
+                }
+            }
         }
 
         template<class Record>
@@ -282,8 +349,8 @@ namespace Renderer
             }
         }
 
-        void BindVolumeLights(RenderGraphBuilder& builder, const Engine::SceneView& view, Scene* scene,
-            const VolumeRenderSettings& settings, VolumeLightingParameters& params)
+        void BindVolumeLights(RenderGraphBuilder& builder, const Engine::SceneView& view, const VolumeGridParameters& grid,
+            Scene* scene, const VolumeRenderSettings& settings, VolumeLightingParameters& params, size_t* inputsHash)
         {
             std::vector<VolumeLightData> lights;
             std::vector<VolumeShadowSlice> slices;
@@ -306,11 +373,15 @@ namespace Renderer
                 const auto mask = settings.LightMask;
                 scene->ForEachLight([&](LightSceneProxy* proxy)
                 {
+                    if (proxy->GetIntensity() <= 0.0f)
+                    {
+                        return;
+                    }
                     VolumeLightData light{};
                     light.ColorIntensity = Pack(proxy->GetColor(), proxy->GetIntensity());
                     if (proxy->GetLightType() == ELightType::Directional && (mask & 1u))
                     {
-                        light.DirectionInnerCos = Pack(static_cast<DirectionalLightSceneProxy*>(proxy)->GetDirection(), 0);
+                        light.DirectionInnerCos = Pack(Core::Normalize(static_cast<DirectionalLightSceneProxy*>(proxy)->GetDirection()), 0);
                     }
                     else if (proxy->GetLightType() == ELightType::Point && (mask & 2u))
                     {
@@ -323,13 +394,37 @@ namespace Renderer
                         const auto* spot = static_cast<SpotLightSceneProxy*>(proxy);
                         light.ConeType = {std::cos(spot->GetOuterConeAngle()), 2.0f, 0, 0};
                         light.PositionRadius = Pack(spot->GetPosition(), spot->GetAttenuationRadius());
-                        light.DirectionInnerCos = Pack(spot->GetDirection(), std::cos(spot->GetInnerConeAngle()));
+                        light.DirectionInnerCos = Pack(Core::Normalize(spot->GetDirection()), std::cos(spot->GetInnerConeAngle()));
                     }
                     else
                     {
                         return;
                     }
-                    if (settings.bShadows && proxy->IsCastShadow())
+                    const bool bCastsShadow = settings.bShadows && proxy->IsCastShadow();
+                    if (inputsHash)
+                    {
+                        HashVector(*inputsHash, light.ColorIntensity);
+                        HashVector(*inputsHash, light.PositionRadius);
+                        HashVector(*inputsHash, light.DirectionInnerCos);
+                        HashVector(*inputsHash, light.ConeType);
+                        HashCombine(*inputsHash, bCastsShadow);
+                    }
+                    light.DepthRange = {grid.VolumeCameraOrigin.W, grid.VolumeCameraAxis.W, 0, 0};
+                    if (light.ConeType.Y != 0)
+                    {
+                        const auto position = Core::Float3{light.PositionRadius.X, light.PositionRadius.Y, light.PositionRadius.Z};
+                        const auto forward = Core::Float3{grid.VolumeCameraAxis.X, grid.VolumeCameraAxis.Y, grid.VolumeCameraAxis.Z};
+                        const float depth = Core::Dot(position - view.CameraWorldPos, forward);
+                        const float radius = light.PositionRadius.W;
+                        light.DepthRange.X = depth - radius;
+                        light.DepthRange.Y = depth + radius;
+                        if (radius <= 0 || light.DepthRange.Y < grid.VolumeCameraOrigin.W ||
+                            light.DepthRange.X > grid.VolumeCameraAxis.W)
+                        {
+                            return;
+                        }
+                    }
+                    if (bCastsShadow)
                     {
                         const auto shadow = shadows.find(proxy);
                         if (shadow != shadows.end())
@@ -346,12 +441,54 @@ namespace Renderer
         }
     }
 
+    VolumeRenderHistory::VolumeRenderHistory() = default;
+
+    VolumeRenderHistory::~VolumeRenderHistory()
+    {
+        Release();
+    }
+
+    void VolumeRenderHistory::Invalidate()
+    {
+        m_bValid = false;
+    }
+
+    void VolumeRenderHistory::Release()
+    {
+        for (auto& slot : m_Slots)
+        {
+            for (auto* image : {slot.Scattering.get(), slot.Transmittance.get()})
+            {
+                if (image && GRHIApi)
+                {
+                    const auto fence = image->GetTracker().GetLastAccessFence();
+                    if (fence.Value)
+                    {
+                        GRHIApi->GetQueue(fence.QueueType)->WaitValue(fence.Value);
+                    }
+                }
+            }
+            slot = {};
+        }
+        m_Size = {};
+        m_NextSlot = 0;
+        Invalidate();
+    }
+
     void AddVolumePasses(RenderGraphBuilder& builder, const Engine::SceneView& view,
         RenderGraphTextureRef sceneDepth, RenderGraphTextureRef sceneColor, const VolumeRenderSettings& settings,
-        Engine::SceneInterface* sceneInterface)
+        Engine::SceneInterface* sceneInterface, VolumeRenderHistory* history, VolumeRenderStats* stats)
     {
+        if (stats)
+        {
+            *stats = {};
+        }
         if (!settings.bEnabled || settings.MaxDistance <= view.NearClip)
         {
+            if (history)
+            {
+                history->Invalidate();
+            }
             return;
         }
         if (!sceneColor || !sceneDepth)
@@ -370,11 +507,32 @@ namespace Renderer
             throw std::invalid_argument("Volume requires a full-size perspective view, matching zero-to-one depth, and linear RGBA32F color with TransferDest.");
         }
 
-        constexpr uint32_t tileSize = 8, atlasColumns = 8;
-        const Core::UInt3 froxelSize{DivideRoundUp(colorDesc.Width, tileSize), DivideRoundUp(colorDesc.Height, tileSize), 32};
+        const uint32_t tileSize = std::clamp(settings.FroxelTileSize, 4u, 16u);
+        const uint32_t depthSlices = std::clamp(settings.FroxelSliceCount, 16u, 64u);
+        // These column counts keep atlas dimensions bounded for the preset slice counts.
+        const uint32_t atlasColumns = depthSlices <= 16 ? 4u : 8u;
+        const Core::UInt3 froxelSize{DivideRoundUp(colorDesc.Width, tileSize), DivideRoundUp(colorDesc.Height, tileSize), depthSlices};
+        const bool bIntegratedView = settings.View == EVolumeView::Composite || settings.View == EVolumeView::Scattering ||
+            settings.View == EVolumeView::Transmittance || settings.View == EVolumeView::HistoryWeight;
+        const bool bUseHistory = history && bIntegratedView && settings.HistoryWeight > 0.0f;
+        if (history && !bUseHistory)
+        {
+            history->Invalidate();
+        }
+        const bool bNeedsRays = bIntegratedView || settings.View == EVolumeView::DirectLighting ||
+            settings.View == EVolumeView::IndirectLighting;
+        const uint32_t stride = settings.bSpatialReconstruction && bNeedsRays ? 2u : 1u;
+        const Core::UInt2 size{colorDesc.Width, colorDesc.Height};
+        const Core::UInt2 integrationSize{DivideRoundUp(size.X, stride), DivideRoundUp(size.Y, stride)};
+        if (stats)
+        {
+            stats->FroxelSize = froxelSize;
+            stats->IntegrationSize = bNeedsRays ? integrationSize : Core::UInt2{};
+        }
         VolumeGridParameters grid{};
         grid.FroxelGrid = {froxelSize.X, froxelSize.Y, froxelSize.Z, tileSize};
-        grid.VolumeFrame = {colorDesc.Width, colorDesc.Height, atlasColumns, 0};
+        const uint32_t phase = settings.bJitter && bIntegratedView ? uint32_t(view.FrameIndex % 64) + 1 : 0u;
+        grid.VolumeFrame = {colorDesc.Width, colorDesc.Height, atlasColumns, phase};
         grid.InverseViewProjection = view.InvViewProjectionMatrix;
         grid.VolumeCameraOrigin = Pack(view.CameraWorldPos, view.NearClip);
         const auto forward = Core::Normalize(Core::Float3{-view.ViewMatrix(2, 0), -view.ViewMatrix(2, 1), -view.ViewMatrix(2, 2)});
@@ -395,6 +553,23 @@ namespace Renderer
         mediumParams.MediumAbsorption = Pack(settings.Medium.Absorption, settings.Medium.Density);
         mediumParams.MediumEmission = Pack(settings.Medium.Emission, 0);
         mediumParams.bWriteDensitySources = bShowDensitySources ? 1u : 0u;
+        size_t inputsHash = 0;
+        float maxFlow = 0.0f;
+        if (bUseHistory)
+        {
+            HashCombine(inputsHash, settings.SceneRevision);
+            HashCombine(inputsHash, settings.LightMask);
+            HashCombine(inputsHash, depthSlices);
+            HashCombine(inputsHash, tileSize);
+            HashCombine(inputsHash, stride);
+            HashCombine(inputsHash, size.X);
+            HashCombine(inputsHash, size.Y);
+            HashCombine(inputsHash, settings.bJitter);
+            HashVector(inputsHash, mediumParams.MediumScattering);
+            HashVector(inputsHash, mediumParams.MediumAbsorption);
+            HashVector(inputsHash, mediumParams.MediumEmission);
+            HashValues(inputsHash, {view.NearClip, farDistance});
+        }
         std::vector<VolumeLocalData> localData;
         std::vector<RenderTexture*> densityTextures;
         localData.reserve(settings.LocalVolumes.size());
@@ -416,6 +591,10 @@ namespace Renderer
             packed.LocalScattering = Pack(local.Medium.Scattering, local.Medium.Anisotropy);
             packed.LocalAbsorption = Pack(local.Medium.Absorption, local.Medium.Density);
             packed.LocalEmission = Pack(local.Medium.Emission, static_cast<float>(local.Shape));
+            const float centerDepth = Core::Dot(local.Position - view.CameraWorldPos, forward);
+            const float boundingRadius = local.Shape == EVolumeShape::Box ? local.HalfExtent.Length() :
+                std::max({local.HalfExtent.X, local.HalfExtent.Y, local.HalfExtent.Z});
+            packed.LocalDepthRange = {centerDepth - boundingRadius, centerDepth + boundingRadius, 0, 0};
             const auto& field = local.DensityField;
             const auto offset = field.Offset + field.Velocity * static_cast<float>(view.FrameTimeSeconds);
             float mode = static_cast<float>(field.Mode);
@@ -445,7 +624,26 @@ namespace Renderer
             packed.DensityParameters = {std::max(field.Scale, 0.0f), field.Bias, std::max(field.Threshold, 0.0f),
                 std::max(field.Frequency, 0.001f)};
             packed.DensityOffsetMode = Pack(offset, mode);
-            localData.push_back(packed);
+            if (bUseHistory)
+            {
+                HashMatrix(inputsHash, transform);
+                HashVector(inputsHash, packed.LocalScattering);
+                HashVector(inputsHash, packed.LocalAbsorption);
+                HashVector(inputsHash, packed.LocalEmission);
+                HashVector(inputsHash, packed.DensityParameters);
+                HashVector(inputsHash, Pack(field.Offset, mode));
+                HashVector(inputsHash, Pack(field.Velocity, 0));
+                HashCombine(inputsHash, field.Texture);
+                if (field.Mode != EVolumeDensityMode::Uniform)
+                {
+                    const float frequency = field.Mode == EVolumeDensityMode::Noise ? packed.DensityParameters.W : 1.0f;
+                    maxFlow = std::max(maxFlow, field.Velocity.Length() * frequency);
+                }
+            }
+            if (packed.LocalDepthRange.Y >= view.NearClip && packed.LocalDepthRange.X <= farDistance)
+            {
+                localData.push_back(packed);
+            }
         }
         mediumParams.LocalCount = static_cast<uint32_t>(localData.size());
         mediumParams.LocalVolumes = UploadVolumeRecords(builder, "Volume.LocalMedia", std::move(localData));
@@ -470,18 +668,34 @@ namespace Renderer
             AddCompute<VolumeTexturedMediumCS>(builder, "VolumeInjectTexturedMedium", params, volumeGroups);
         }
 
+        const uint64_t mediumPixels = uint64_t(desc.Width) * desc.Height;
         desc.Height = froxelSize.Y * DivideRoundUp(froxelSize.Z, atlasColumns);
+        const uint64_t lightingPixels = uint64_t(desc.Width) * desc.Height;
         const auto directLighting = builder.CreateTexture("Volume.DirectLighting", desc);
         auto* lightingParams = builder.AllocateParameter<VolumeLightingParameters>();
         lightingParams->Grid = grid;
         auto* scene = dynamic_cast<Scene*>(sceneInterface);
-        BindVolumeLights(builder, view, scene, settings, *lightingParams);
+        BindVolumeLights(builder, view, grid, scene, settings, *lightingParams, bUseHistory ? &inputsHash : nullptr);
         lightingParams->Medium = medium;
         lightingParams->LightingOutput = MakeUAV(builder, directLighting);
         AddCompute<VolumeLightingCS>(builder, "VolumeInjectLighting", lightingParams, volumeGroups);
 
         const auto* resources = scene ? &scene->GetGPUResourceInfo().LightResourceInfo : nullptr;
         auto* environment = settings.bUseSkyEnvironment && resources ? resources->IBLSpecularTexture : nullptr;
+        if (bUseHistory)
+        {
+            HashCombine(inputsHash, sceneInterface);
+            HashCombine(inputsHash, environment);
+            HashVector(inputsHash, Pack(settings.AmbientRadiance, settings.EnvironmentIntensity));
+            if (scene)
+            {
+                scene->ForEachPrimitive([&](Engine::PrimitiveSceneProxy* primitive)
+                {
+                    HashCombine(inputsHash, primitive);
+                    HashMatrix(inputsHash, primitive->GetLocalToWorld());
+                });
+            }
+        }
         desc.Width = desc.Height = 1;
         const auto indirectLighting = builder.CreateTexture("Volume.IndirectLighting", desc);
         auto* ambientParams = builder.AllocateParameter<VolumeEnvironmentParameters>();
@@ -494,34 +708,138 @@ namespace Renderer
         ambientParams->AmbientOutput = MakeUAV(builder, indirectLighting);
         AddCompute<VolumeEnvironmentCS>(builder, "VolumeGatherEnvironment", ambientParams, {1, 1, 1});
 
-        desc.Width = colorDesc.Width;
-        desc.Height = colorDesc.Height;
-        const auto scattering = builder.CreateTexture("Volume.Scattering", desc);
-        const auto transmittance = builder.CreateTexture("Volume.Transmittance", desc);
-        auto* integrate = builder.AllocateParameter<VolumeIntegrateParameters>();
-        integrate->Grid = grid;
-        integrate->IntegrationMode = static_cast<uint32_t>(settings.View);
-        integrate->SceneDepth = sceneDepth;
-        integrate->Medium = medium;
-        integrate->DirectVolumeLighting = directLighting;
-        integrate->IndirectVolumeLighting = indirectLighting;
-        integrate->ScatteringOutput = MakeUAV(builder, scattering);
-        integrate->TransmittanceOutput = MakeUAV(builder, transmittance);
-        AddCompute<VolumeIntegrateCS>(builder, "VolumeIntegrate", integrate, screenGroups);
+        RenderGraphTextureRef scattering, transmittance;
+        VolumeRayParameters ray{};
+        const Core::UInt3 integrationGroups{DivideRoundUp(integrationSize.X, 8), DivideRoundUp(integrationSize.Y, 8), 1};
+        uint64_t transientPixels = mediumPixels + lightingPixels + 1 + uint64_t(size.X) * size.Y;
+        if (bNeedsRays)
+        {
+            ray.Grid = grid;
+            ray.IntegrationMode = static_cast<uint32_t>(settings.View);
+            ray.IntegrationStride = stride;
+            ray.SceneDepth = sceneDepth;
+            ray.Medium = medium;
+            ray.DirectVolumeLighting = directLighting;
+            ray.IndirectVolumeLighting = indirectLighting;
+            if (!bUseHistory)
+            {
+                desc.Width = integrationSize.X;
+                desc.Height = integrationSize.Y;
+                transientPixels += 2 * uint64_t(desc.Width) * desc.Height;
+                scattering = builder.CreateTexture("Volume.Scattering", desc);
+                transmittance = builder.CreateTexture("Volume.Transmittance", desc);
+                auto* integrate = builder.AllocateParameter<VolumeIntegrateParameters>();
+                integrate->Ray = ray;
+                integrate->ScatteringOutput = MakeUAV(builder, scattering);
+                integrate->TransmittanceOutput = MakeUAV(builder, transmittance);
+                AddCompute<VolumeIntegrateCS>(builder, "VolumeIntegrate", integrate, integrationGroups);
+            }
+        }
+        else
+        {
+            scattering = transmittance = builder.RegisterExternalTexture("Volume.UnusedIntegration", GlobalWhiteTexture.get());
+        }
 
+        if (bUseHistory)
+        {
+            if (history->m_Size != integrationSize)
+            {
+                history->Release();
+                RHITextureDesc historyDesc{};
+                historyDesc.Width = integrationSize.X;
+                historyDesc.Height = integrationSize.Y;
+                historyDesc.Format = ERHIFormat::R32G32B32A32_Float;
+                historyDesc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::UAV;
+                for (auto& slot : history->m_Slots)
+                {
+                    slot.Scattering = std::make_unique<RenderTexture>(historyDesc);
+                    slot.Scattering->InitRHIResource();
+                    slot.Transmittance = std::make_unique<RenderTexture>(historyDesc);
+                    slot.Transmittance->InitRHIResource();
+                }
+                history->m_Size = integrationSize;
+            }
+
+            const auto index = history->m_NextSlot;
+            auto& current = history->m_Slots[index];
+            auto& previous = history->m_Slots[1 - index];
+            const float maxJump = std::max(0.5f, farDistance * 0.12f);
+            const bool bReuse = history->m_bValid && view.FrameIndex == history->m_PreviousFrame + 1 &&
+                inputsHash == history->m_PreviousInputs &&
+                (view.CameraWorldPos - history->m_PreviousOrigin).LengthSquared() <= maxJump * maxJump &&
+                Core::Dot(history->m_PreviousForward, forward) > 0.85f;
+            const auto flow = maxFlow * float(std::abs(view.FrameTimeSeconds - history->m_PreviousTime));
+            const float weight = bReuse ? std::clamp(settings.HistoryWeight, 0.0f, 0.95f) *
+                std::clamp(1.0f - flow * 4.0f, 0.0f, 1.0f) : 0.0f;
+            auto* temporal = builder.AllocateParameter<VolumeTemporalParameters>();
+            temporal->Ray = ray;
+            temporal->PreviousViewProjection = history->m_PreviousViewProjection;
+            temporal->TemporalSettings = {weight, 0, 0, 0};
+            if (weight > 0.0f)
+            {
+                temporal->PreviousScattering = builder.RegisterExternalTexture("Volume.PreviousScattering", previous.Scattering.get());
+                temporal->PreviousTransmittance = builder.RegisterExternalTexture("Volume.PreviousTransmittance", previous.Transmittance.get());
+            }
+            else
+            {
+                temporal->PreviousScattering = temporal->PreviousTransmittance =
+                    builder.RegisterExternalTexture("Volume.EmptyHistory", GlobalWhiteTexture.get());
+            }
+            scattering = builder.RegisterExternalTexture("Volume.CurrentScattering", current.Scattering.get());
+            transmittance = builder.RegisterExternalTexture("Volume.CurrentTransmittance", current.Transmittance.get());
+            temporal->ScatteringOutput = MakeUAV(builder, scattering);
+            temporal->TransmittanceOutput = MakeUAV(builder, transmittance);
+            AddCompute<VolumeTemporalCS>(builder, "VolumeIntegrateTemporal", temporal, integrationGroups);
+            history->m_PreviousViewProjection = view.ProjectionMatrix * view.ViewMatrix;
+            history->m_PreviousOrigin = view.CameraWorldPos;
+            history->m_PreviousForward = forward;
+            history->m_PreviousFrame = view.FrameIndex;
+            history->m_PreviousInputs = inputsHash;
+            history->m_PreviousTime = view.FrameTimeSeconds;
+            history->m_NextSlot = 1 - index;
+            history->m_bValid = true;
+            if (stats)
+            {
+                stats->bHistoryEligible = weight > 0.0f;
+            }
+        }
+        if (stats)
+        {
+            stats->TransientBytes = transientPixels * 16;
+            if (history)
+            {
+                stats->HistoryBytes = uint64_t(history->m_Size.X) * history->m_Size.Y * 4 * 16;
+            }
+        }
+
+        desc.Width = size.X;
+        desc.Height = size.Y;
         desc.Usage |= ERHITextureCreateFlag::TransferSrc;
         const auto composite = builder.CreateTexture("Volume.Composite", desc);
-        auto* compositeParams = builder.AllocateParameter<VolumeCompositeParameters>();
-        compositeParams->Grid = grid;
-        compositeParams->DrawMode = static_cast<uint32_t>(settings.View);
-        compositeParams->DebugSlice = std::min(settings.DebugSlice, froxelSize.Z - 1);
-        compositeParams->Medium = medium;
-        compositeParams->VolumeScattering = scattering;
-        compositeParams->VolumeTransmittance = transmittance;
-        compositeParams->VolumeDirect = directLighting;
-        compositeParams->SceneColor = sceneColor;
-        compositeParams->CompositeOutput = MakeUAV(builder, composite);
-        AddCompute<VolumeCompositeCS>(builder, "VolumeComposite", compositeParams, screenGroups);
+        if (stride != 1)
+        {
+            auto* reconstruct = builder.AllocateParameter<VolumeReconstructParameters>();
+            reconstruct->Ray = ray;
+            reconstruct->SparseScattering = scattering;
+            reconstruct->SparseTransmittance = transmittance;
+            reconstruct->SceneColor = sceneColor;
+            reconstruct->CompositeOutput = MakeUAV(builder, composite);
+            AddCompute<VolumeReconstructCS>(builder, "VolumeReconstructAndComposite", reconstruct, screenGroups);
+        }
+        else
+        {
+            auto* compositeParams = builder.AllocateParameter<VolumeCompositeParameters>();
+            compositeParams->Grid = grid;
+            compositeParams->DrawMode = static_cast<uint32_t>(settings.View);
+            compositeParams->DebugSlice = std::min(settings.DebugSlice, froxelSize.Z - 1);
+            compositeParams->Medium = medium;
+            compositeParams->VolumeScattering = scattering;
+            compositeParams->VolumeTransmittance = transmittance;
+            compositeParams->VolumeDirect = directLighting;
+            compositeParams->SceneColor = sceneColor;
+            compositeParams->CompositeOutput = MakeUAV(builder, composite);
+            AddCompute<VolumeCompositeCS>(builder, "VolumeComposite", compositeParams, screenGroups);
+        }
 
         auto* copy = builder.AllocateParameter<VolumeCopyParameters>();
         copy->Source = composite;
@@ -535,12 +853,13 @@ namespace Renderer
             });
     }
 
-    Engine::SceneViewDrawExtension MakeVolumeDrawExtension(VolumeRenderSettings settings, Engine::SceneInterface* scene)
+    Engine::SceneViewDrawExtension MakeVolumeDrawExtension(VolumeRenderSettings settings, Engine::SceneInterface* scene,
+        VolumeRenderHistory* history, VolumeRenderStats* stats)
     {
-        return {[settings = std::move(settings), scene](RenderGraphBuilder& graph, const Engine::SceneView& view,
+        return {[settings = std::move(settings), scene, history, stats](RenderGraphBuilder& graph, const Engine::SceneView& view,
             RenderGraphTextureRef color, RenderGraphTextureRef depth)
         {
-            AddVolumePasses(graph, view, depth, color, settings, scene);
+            AddVolumePasses(graph, view, depth, color, settings, scene, history, stats);
         }};
     }
 

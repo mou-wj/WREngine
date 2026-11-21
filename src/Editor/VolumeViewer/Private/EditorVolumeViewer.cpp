@@ -13,6 +13,7 @@
 #include "Viewport.h"
 #include "imgui.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <vector>
 
@@ -34,6 +35,8 @@ namespace Editor
     public:
         VolumeViewerPreview()
         {
+            Settings.bSpatialReconstruction = true;
+            Settings.bJitter = true;
             Renderer::LocalVolume box;
             box.Position = {-0.8f, 0.8f, -0.6f};
             box.RotationDegrees = {0, 24, 0};
@@ -60,6 +63,7 @@ namespace Editor
         void Reset()
         {
             WaitForDraw();
+            m_History.Release();
             m_Color.reset();
             m_DemoDensity.reset();
             if (m_Scene)
@@ -86,6 +90,7 @@ namespace Editor
 
         void ResetCamera()
         {
+            m_History.Invalidate();
             m_Yaw = 0.62f;
             m_Pitch = 0.31f;
             m_Distance = 12.0f;
@@ -187,17 +192,48 @@ namespace Editor
                     local.DensityField.Texture = m_DemoDensity.get();
                 }
             }
-            view.DrawExtensions.push_back(Renderer::MakeVolumeDrawExtension(std::move(frameSettings), m_Scene.get()));
+            view.DrawExtensions.push_back(Renderer::MakeVolumeDrawExtension(std::move(frameSettings), m_Scene.get(), &m_History, &Stats));
             Engine::SceneViewFamily family;
             family.Scene = m_Scene.get();
             family.RenderTarget = this;
             family.AddView(std::move(view));
             family.BuildAllViews();
+            if (bMeasureCompletedFrame)
+            {
+                WaitForDraw();
+            }
+            const auto start = std::chrono::steady_clock::now();
             Engine::GetRenderModuleInstance()->BeginRender(&family);
+            if (bMeasureCompletedFrame)
+            {
+                WaitForDraw();
+                CompletedFrameMilliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+                bMeasureCompletedFrame = false;
+            }
+        }
+
+        void SetQualityPreset(bool bOptimized)
+        {
+            ResetCamera();
+            bAnimateDensity = false;
+            m_DensityTime = 0;
+            Settings.View = Renderer::EVolumeView::Composite;
+            Settings.FroxelTileSize = 8;
+            Settings.FroxelSliceCount = 32;
+            Settings.bSpatialReconstruction = bOptimized;
+            Settings.bJitter = bOptimized;
+            Settings.HistoryWeight = bOptimized ? 0.85f : 0.0f;
+            if (!bOptimized)
+            {
+                m_History.Release();
+            }
         }
 
         Renderer::VolumeRenderSettings Settings;
+        Renderer::VolumeRenderStats Stats;
         Core::Float3 LightIntensities{3, 20, 45};
+        double CompletedFrameMilliseconds = 0;
+        bool bMeasureCompletedFrame = false;
         bool bAnimateDensity = true;
 
     private:
@@ -279,6 +315,7 @@ namespace Editor
         std::unique_ptr<Engine::SkyLightComponent> m_Sky;
         std::unique_ptr<RenderCore::RenderTexture> m_Color;
         std::shared_ptr<RenderCore::RenderTexture> m_DemoDensity;
+        Renderer::VolumeRenderHistory m_History;
         Engine::Camera m_Camera;
         Core::Float3 m_Focus{0, 0.8f, 0};
         float m_Yaw = 0.62f;
@@ -324,7 +361,7 @@ namespace Editor
             ImGui::Checkbox("Enable volume", &settings.bEnabled);
             ImGui::SameLine();
             const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels", "Direct lighting",
-                "Light visibility", "Local overlap", "Indirect lighting", "Density sources"};
+                "Light visibility", "Local overlap", "Indirect lighting", "Density sources", "History weight"};
             int mode = static_cast<int>(settings.View);
             ImGui::SetNextItemWidth(170.0f);
             if (ImGui::Combo("View", &mode, views, IM_ARRAYSIZE(views)))
@@ -334,6 +371,40 @@ namespace Editor
             ImGui::SameLine();
             ImGui::SetNextItemWidth(130.0f);
             ImGui::SliderFloat("Density", &settings.Medium.Density, 0.0f, 0.4f, "%.3f");
+            if (ImGui::CollapsingHeader("Quality and timing"))
+            {
+                if (ImGui::Button("Reference preset"))
+                {
+                    m_Preview->SetQualityPreset(false);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Optimized preset"))
+                {
+                    m_Preview->SetQualityPreset(true);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Measure completed frame"))
+                {
+                    m_Preview->bMeasureCompletedFrame = true;
+                }
+                ImGui::Checkbox("Depth-aware reconstruction", &settings.bSpatialReconstruction);
+                ImGui::SameLine();
+                ImGui::Checkbox("Froxel jitter", &settings.bJitter);
+                ImGui::SliderFloat("History weight", &settings.HistoryWeight, 0.0f, 0.95f, "%.2f");
+                int tileSize = int(settings.FroxelTileSize);
+                int slices = int(settings.FroxelSliceCount);
+                ImGui::SliderInt("Tile pixels", &tileSize, 4, 16);
+                ImGui::SliderInt("Depth slices", &slices, 16, 64);
+                settings.FroxelTileSize = uint32_t(tileSize);
+                settings.FroxelSliceCount = uint32_t(slices);
+                const auto& stats = m_Preview->Stats;
+                ImGui::Text("Froxels %u x %u x %u | Primary rays %u x %u", stats.FroxelSize.X, stats.FroxelSize.Y,
+                    stats.FroxelSize.Z, stats.IntegrationSize.X, stats.IntegrationSize.Y);
+                constexpr double bytesPerMiB = 1024.0 * 1024.0;
+                ImGui::Text("Image payload %.1f MiB transient + %.1f MiB history",
+                    stats.TransientBytes / bytesPerMiB, stats.HistoryBytes / bytesPerMiB);
+                ImGui::TextDisabled("Completed frame %.2f ms (CPU + queue wait)", m_Preview->CompletedFrameMilliseconds);
+            }
             if (ImGui::CollapsingHeader("Medium"))
             {
                 DrawMediumControls(settings.Medium);
@@ -414,7 +485,7 @@ namespace Editor
                 settings.View == Renderer::EVolumeView::DensitySources)
             {
                 int slice = settings.DebugSlice;
-                ImGui::SliderInt("Slice", &slice, 0, 31);
+                ImGui::SliderInt("Slice", &slice, 0, int(settings.FroxelSliceCount) - 1);
                 settings.DebugSlice = uint32_t(slice);
             }
             const auto available = ImGui::GetContentRegionAvail();

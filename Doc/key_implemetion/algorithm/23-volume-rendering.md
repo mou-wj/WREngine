@@ -4,13 +4,13 @@
 
 ## 网格与介质
 
-屏幕划分为 8×8 像素的 Tile，横纵方向向上取整。深度方向有 32 个对数层，边界为 `z_i = near × (far/near)^(i/32)`，其中 far 取视图远裁剪与介质范围的较小值。这里的 z 沿相机前轴，透视像素的实际世界长度为 `Δz / dot(ray, cameraForward)`。体素使用逻辑坐标 (tile.x, tile.y, slice)，在二维图集中每 8 个切片一行。三组切片分别保存 RGB 消光及标量密度、RGB 散射及各向异性参数、RGB 自发光。 [格点寻址](../../../shaders/volume/VolumeGrid.sf) · [介质注入](../../../shaders/volume/VolumeMedium.sf)
+屏幕默认划分为 8×8 像素的 Tile，横纵方向向上取整。深度默认 32 个对数层，边界为 `z_i = near × (far/near)^(i/N)`，其中 N 为层数，far 取视图远裁剪与介质范围的较小值。这里的 z 沿相机前轴，透视像素的实际世界长度为 `Δz / dot(ray, cameraForward)`。当前支持 4–16 像素 Tile 与 16–64 层，三组二维图集切片分别保存 RGB 消光及标量密度、RGB 散射及各向异性参数、RGB 自发光。 [格点寻址](../../../shaders/volume/VolumeGrid.sf) · [介质注入](../../../shaders/volume/VolumeMediumCommon.sf)
 
 均匀介质的消光 `σ_t = σ_s + σ_a`，其中散射系数和吸收系数分别由数据乘以非负密度。自发光也乘以介质密度，单位为每世界长度的线性辐射。
 
 ## 局部介质
 
-调用方为每次构图传入 `LocalVolume` 列表，记录形状、位置、Euler 角、半轴尺度和介质参数。`Volume.LocalMedia` 上传世界到局部的逆矩阵。Froxel 中心落入局部坐标的 `[-1,1]³` 为盒内，平方长度不超过 1 为球内。非均匀缩放自然形成椭球。无效尺度或非正密度在上传前剔除。
+调用方为每次构图传入 `LocalVolume` 列表，记录形状、位置、Euler 角、半轴尺度和介质参数。`Volume.LocalMedia` 上传世界到局部的逆矩阵。Froxel 样本落入局部坐标的 `[-1,1]³` 为盒内，平方长度不超过 1 为球内。非均匀缩放自然形成椭球。无效尺度、非正密度或与积分深度区间无交集的包围球在上传前剔除。注入时先比较样本的轴向深度，再进行世界到局部变换和精确形状判定。
 
 在覆盖区域中，`σ_s`、`σ_a` 和自发光分别相加，故多个介质的光学厚度累加、透射率相乘。有效 g 取各介质散射系数亮度加权的均值，对同一相函数的介质是精确的，对多个方向性不同的相函数是近似。重叠计数存于自发光切片的 Alpha，供调试查看局部边界。中心采样会量化局部边缘，尺寸小于一个 Froxel 的区域可能遗漏。 [局部注入](../../../shaders/volume/VolumeMediumCommon.sf)
 
@@ -30,13 +30,25 @@ L += T × q × (1 - t) / σ_t
 T *= t
 ```
 
-光学厚度接近零时积分因子使用 `d × (1 - σ_t × d / 2)`，因此无消光的自发光也能正确累积。合成写 RGB `L + T × sceneColor`，保留背景 Alpha。 [积分](../../../shaders/volume/VolumeIntegrate.sf) · [合成](../../../shaders/volume/VolumeComposite.sf)
+光学厚度接近零时积分因子使用 `d × (1 - σ_t × d / 2)`，因此无消光的自发光也能正确累积。积分预先计算对数层间公比，通过递乘推进边界，最后一段仍以深度给出的终点截断。合成写 RGB `L + T × sceneColor`，保留背景 Alpha。 [积分](../../../shaders/volume/VolumeIntegrationCommon.sf) · [合成](../../../shaders/volume/VolumeDisplay.sf)
+
+### 稀疏积分和深度感知重建
+
+空间重建可选 stride 2，按每 2×2 像素区域选择一个主采样点，奇数尺寸的末边夹到实际像素。每个像素在重建时比较同类深度的四个邻居。积分图的 L Alpha 保存有符号终点深度，正数表示体积范围内有不透明几何，负数表示在积分范围内无遮挡。同类采样以双线性权重乘 `max(0, 1 - abs(Δz) / max(0.015, 0.015 × |z_end|))` 加权。权重和小于 0.25 时直接按该像素的深度重新积分，保留稀疏采样网格漏掉的细前景。其余像素一次写最终颜色。2×2 屏幕相邻样本存在遮挡和视线方向差异，因此重建是近似，深度不匹配时回退可增加工作量。 [重建与合成](../../../shaders/volume/VolumeReconstruct.sf)
+
+### 抖动与历史重投影
+
+启用抖动后，帧编号驱动长度 64 的三维序列，在一个 Froxel 各轴的 15%–85% 位置采样。局部介质、直接光和阴影使用同一个世界位置。积分边界与不透明截断保持固定。
+
+时域混合并入主积分 Dispatch。前景锚点取不透明终点，无遮挡时取射线介质段中点。将锚点乘上一帧 VP 获得历史屏幕位置，拒绝屏幕外、相机背后和遮挡分类变化。前景另用上一帧的 clip.w 校验历史终点，容差为 `max(0.025, 0.025 × clip.w)`。通过校验的历史按当前与历史透射率及相对散射差衰减权重。T Alpha 保存实际混合权重，**History weight** 用灰度显示它。回退到精确积分的像素只用本帧结果。 [时域 Shader](../../../shaders/volume/VolumeTemporal.sf)
+
+`VolumeRenderHistory` 每视图维护两组 L/T 纹理和上帧相机快照。非连续帧、尺寸和采样配置变化、相机切换或跳变、光源和介质参数变化、可见 Primitive 变换和环境贴图引用变化均使历史失效。原地更新外部几何、阴影或密度数据的调用方可递增 `SceneRevision`。连续密度动画以最大局部流速乘帧间隔估计活动程度，移动越快，历史权重越低。屏幕每条射线只有一个历史锚点，当前实现会在深度或光照突变处保守降权。 [C++ 历史管理](../../../src/Framework/Renderer/Private/Volume/VolumeRendering.cpp)
 
 ## 单次散射与光源注入
 
 在 Scene 更新后，`BindVolumeLights` 读取已启用的场景代理，将光色、强度、范围和锥角余弦打包为四个四分量向量。数据保存在 RDG 上传 Pass 的值捕获中，经 RHI staging 在提交时上传。光源类型过滤只影响体积注入。方向与世界位置从 Froxel 的屏幕中心和对数层中心恢复。
 
-`VolumeInjectLighting` 遍历光源，按平行光方向、点光距离或聚光范围和锥角计算入射量，并复用 `LocalLightAttenuation` 与 `SpotLightAttenuation`。令 `μ = dot(toLight, cameraRay)`。Henyey–Greenstein 相函数为 `(1-g²)/(4π(1+g²-2gμ)^(3/2))`。正 g 在光向相机传播时加强前向散射。g 为零时固定为 1/(4π)。光照图记录乘过相函数的 RGB，积分写源项 `σ_s × (direct + ambient) + emission`。 [单次散射 Shader](../../../shaders/volume/VolumeLighting.sf) · [通用衰减](../../../shaders/core/ShadingCommon.sf)
+`VolumeInjectLighting` 遍历光源，点光与聚光先用范围球轴向深度和平方距离排除覆盖外样本，再调用 `LocalLightAttenuation` 与 `SpotLightAttenuation`。令 `μ = dot(toLight, cameraRay)`。Henyey–Greenstein 相函数为 `(1-g²)/(4π(1+g²-2gμ)^(3/2))`。正 g 在光向相机传播时加强前向散射。g 为零时固定为 1/(4π)。光照图记录乘过相函数的 RGB，积分写源项 `σ_s × (direct + ambient) + emission`。 [单次散射 Shader](../../../shaders/volume/VolumeLighting.sf) · [通用衰减](../../../shaders/core/ShadingCommon.sf)
 
 ## 光源可见性
 
@@ -52,6 +64,6 @@ T *= t
 
 ## 图资源与边界
 
-`VolumeInjectMedium` 或 `VolumeInjectTexturedMedium` 写图集 UAV。积分读取图集和不透明深度，写两张屏幕纹理。合成读取场景颜色及两张积分图，写独立结果。最后通过 `VolumeCopyComposite` 的 TransferSrc/Dest 声明复制回颜色目标，避免在同一个 Pass 对该颜色同时绑定 SRV 和 UAV。无效或禁用范围直接跳过。临时纹理由 Builder 管理，预览颜色和演示密度纹理由 Viewer 持有。关闭时等待最后一次预览颜色访问，该帧的体积积分和颜色复制都依赖密度读取。
+`VolumeInjectMedium` 或 `VolumeInjectTexturedMedium` 写图集 UAV，随后注入光照。`VolumeIntegrate` 读取图集和不透明深度，写临时 L/T。启用时域时，`VolumeIntegrateTemporal` 直接读取上一组 L/T，写另一组历史纹理。`VolumeReconstructAndComposite` 或 `VolumeComposite` 读取场景颜色及积分结果，写独立颜色目标，然后 `VolumeCopyComposite` 用 TransferSrc/Dest 复制回目标。只看 Froxel 切片的模式跳过积分。临时纹理由 RenderGraph 管理。历史纹理由同一视图持有，每帧注册为外部资源，既有资源追踪记录跨帧访问 Fence。正常构图不等待历史，调整采样尺寸或释放时等待各纹理已登记的访问 Fence。Viewer 的颜色和演示密度资源同样遵循其预览提交的释放顺序。
 
-介质图集的逻辑空间为 `ceil(W/8) × ceil(H/8) × 32 × 3 × 16` 字节，光照图占同尺寸单组切片。另有两张积分图和一张合成图，各 16 B/像素。第一版每像素最多 32 次迭代，XY 用最近 Tile。要求输入为全尺寸透视视图与可写入复制目标的线性颜色，近平面之前和最大距离之外省略介质。
+介质图集三组切片，光照图集一组，每 texel 16 字节。启用 Density sources 时介质增加一组切片。合成占一张 16 B/像素的纹理。历史关闭时，临时积分占两张各 16 B/样本的纹理。开启时用四张持久纹理轮替，stride 2 时宽高均向上取半。统计基于纹理描述和图集行填充。实际峰值显存取决于 RenderGraph 的临时分配和复用。输入仍为全尺寸透视视图与可写入复制目标的线性颜色，近平面之前和最大距离之外省略介质。

@@ -1,5 +1,6 @@
 #include "/Generated/ShaderParameters/VolumeCompositeParameters.sf"
 #include "/volume/VolumeGrid.sf"
+#include "/volume/VolumeDisplay.sf"
 
 [numthreads(8, 8, 1)]
 void MainCS(uint3 thread : SV_DispatchThreadID)
@@ -10,19 +11,9 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
         return;
     }
 
-    float3 scattering = VolumeScattering.Load(int3(pixel, 0)).rgb;
-    float3 transmittance = VolumeTransmittance.Load(int3(pixel, 0)).rgb;
     float4 background = SceneColor.Load(int3(pixel, 0));
-    float3 color = scattering + transmittance * background.rgb;
-    if (DrawMode == 1 || DrawMode == 5 || DrawMode == 8)
-    {
-        color = scattering;
-    }
-    else if (DrawMode == 2)
-    {
-        color = transmittance;
-    }
-    else if (DrawMode == 3)
+    float3 color;
+    if (DrawMode == 3)
     {
         float density = Medium.Load(int3(VolumeAddress(uint3(pixel / TileSize, DebugSlice), 0), 0)).w;
         color = 1.0 - exp(-density * 6.0);
@@ -56,6 +47,12 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     {
         float3 quantities = Medium.Load(int3(VolumeAddress(uint3(pixel / TileSize, DebugSlice), 3), 0)).rgb;
         color = 1.0 - exp(-4.0 * quantities);
+    }
+    else
+    {
+        float3 scattering = VolumeScattering.Load(int3(pixel, 0)).rgb;
+        float4 transmittance = VolumeTransmittance.Load(int3(pixel, 0));
+        color = DisplayIntegratedVolume(DrawMode, scattering, transmittance, background.rgb);
     }
     CompositeOutput[pixel] = float4(color, background.a);
 }

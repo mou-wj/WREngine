@@ -1,0 +1,22 @@
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 sampleIndex = thread.xy;
+    uint2 integrationSize = (ScreenSize + IntegrationStride - 1) / IntegrationStride;
+    if (any(sampleIndex >= integrationSize))
+    {
+        return;
+    }
+    uint2 pixel = min(sampleIndex * IntegrationStride + IntegrationStride / 2, ScreenSize - 1);
+    float endDepth = VolumeEndDepth(pixel, SceneDepth.Load(int3(pixel, 0)));
+    float3 radiance, transmittance;
+    IntegrateVolumeRay(pixel, abs(endDepth), radiance, transmittance);
+    float4 scattering = float4(radiance, endDepth);
+#if VOLUME_BLEND_HISTORY
+    float weight = BlendVolumeHistory(pixel, scattering, transmittance);
+#else
+    float weight = 0.0;
+#endif
+    ScatteringOutput[sampleIndex] = scattering;
+    TransmittanceOutput[sampleIndex] = float4(transmittance, weight);
+}

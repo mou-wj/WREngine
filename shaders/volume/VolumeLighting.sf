@@ -28,22 +28,27 @@ void MainCS(uint3 cell : SV_DispatchThreadID)
     {
         float3 cameraRay;
         float viewDepth;
-        float3 world = VolumeFroxelCenter(cell, viewDepth, cameraRay);
+        float3 world = VolumeFroxelSample(cell, viewDepth, cameraRay);
         [loop]
         for (uint i = 0; i < LightCount; ++i)
         {
             VolumeLightData source = SceneLights[i];
+            if (viewDepth < source.DepthRange.x || viewDepth > source.DepthRange.y)
+            {
+                continue;
+            }
             float3 energy = source.ColorIntensity.rgb * source.ColorIntensity.w;
-            float3 direction = normalize(-source.DirectionInnerCos.xyz);
+            float3 direction = -source.DirectionInnerCos.xyz;
             uint type = uint(source.ConeType.y);
             if (type != 0)
             {
                 float3 offset = source.PositionRadius.xyz - world;
-                float range = length(offset);
-                if (range <= 1e-4 || range >= source.PositionRadius.w)
+                float rangeSquared = dot(offset, offset);
+                if (rangeSquared <= 1e-8 || rangeSquared >= source.PositionRadius.w * source.PositionRadius.w)
                 {
                     continue;
                 }
+                float range = sqrt(rangeSquared);
                 float attenuation = LocalLightAttenuation(range, source.PositionRadius.w);
                 float3 toLight = offset / range;
                 if (type == 2)
