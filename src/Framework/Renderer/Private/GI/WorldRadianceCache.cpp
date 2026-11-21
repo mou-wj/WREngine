@@ -181,6 +181,7 @@ namespace Renderer
     void WorldRadianceCache::Invalidate()
     {
         m_Slots.fill({});
+        m_UpdatedProbeCount = 0;
     }
 
     WorldRadianceCacheParameters WorldRadianceCache::Update(RenderGraphBuilder& builder, const Core::Float3& camera,
@@ -262,6 +263,7 @@ namespace Renderer
         }
 
         const auto updateCount = std::min<uint32_t>(budget, uint32_t(pending.size()));
+        m_UpdatedProbeCount = updateCount;
         if (updateCount > 0)
         {
             std::partial_sort(pending.begin(), pending.begin() + updateCount, pending.end(),

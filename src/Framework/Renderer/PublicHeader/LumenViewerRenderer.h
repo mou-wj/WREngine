@@ -28,7 +28,12 @@ namespace Renderer
         RadiosityIndirectAtlas,
         RadiosityIterationDelta,
         WorldProbeAtlas,
-        ProbeWorldCacheHits
+        ProbeWorldCacheHits,
+        ProbeRawDiffuse,
+        ProbeTemporalDiffuse,
+        ProbeHistoryValidity,
+        ProbeHistoryWeight,
+        ProbeReprojectionError
     };
 
     enum class ELumenViewerCardView : uint32_t

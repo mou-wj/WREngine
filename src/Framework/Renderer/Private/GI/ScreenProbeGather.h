@@ -27,6 +27,7 @@ namespace Renderer
         SHADER_PARAMETER(Core::UInt2, ProbeGridSize)
         SHADER_PARAMETER(uint32_t, TileSize)
         SHADER_PARAMETER(uint32_t, RayCount)
+        SHADER_PARAMETER(uint32_t, SamplePhase)
         SHADER_PARAMETER(float, MaxTraceDistance)
         SHADER_PARAMETER_RDG_RWSTRUCTURED_BUFFER(ScreenProbeRecord, Probes)
         SHADER_PARAMETER_RDG_RWSTRUCTURED_BUFFER(SurfaceCacheQuery, Queries)
@@ -47,12 +48,13 @@ namespace Renderer
     BEGIN_SHADER_PARAMETER_STRUCT(ScreenProbeIntegrationParameters)
         SHADER_PARAMETER_STRUCT_REFERENCE(GBufferInputParameters, GBuffer)
         SHADER_PARAMETER(Core::Float4x4, InvViewProj)
-        SHADER_PARAMETER(Core::Float3, CameraPosition)
         SHADER_PARAMETER(Core::UInt2, ScreenSize)
         SHADER_PARAMETER(Core::UInt2, ProbeGridSize)
         SHADER_PARAMETER(uint32_t, TileSize)
         SHADER_PARAMETER(uint32_t, RayCount)
         SHADER_PARAMETER(uint32_t, DebugMode)
+        SHADER_PARAMETER(uint32_t, bStoreConfidence)
+        SHADER_PARAMETER(uint32_t, bWriteDebug)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(ScreenProbeRecord, Probes)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(SurfaceCacheQuery, Queries)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(ScreenProbeRadianceRecord, Radiance)
@@ -76,6 +78,7 @@ namespace Renderer
         uint32_t TileSize = 8;
         uint32_t RaysPerProbe = 8;
         float MaxTraceDistance = 100.0f;
+        uint32_t SamplePhase = 0;
         uint32_t DebugMode = 0;
     };
 

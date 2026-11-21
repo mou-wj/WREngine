@@ -40,6 +40,7 @@ namespace Renderer
         WorldRadianceCache& operator=(const WorldRadianceCache&) = delete;
 
         void Invalidate();
+        uint32_t GetUpdatedProbeCount() const { return m_UpdatedProbeCount; }
         WorldRadianceCacheParameters Update(RenderCore::RenderGraphBuilder& builder, const Core::Float3& camera,
             uint32_t budget, const SurfaceCacheMaterialParameters& material, const SurfaceCacheLightingParameters& lighting,
             const SceneEvnIBLLightParameters& environment, bool bHasEnvironment);
@@ -63,5 +64,6 @@ namespace Renderer
         RenderCore::RenderTextureSP m_Atlas;
         std::array<Slot, SlotCount> m_Slots{};
         uint64_t m_Frame = 0;
+        uint32_t m_UpdatedProbeCount = 0;
     };
 }

@@ -52,7 +52,7 @@
 | [工程快照与二进制数据](performance/10-project-snapshots.md) | 如何保存运行时节点、层级及资源，脱离源文件恢复，并保持多文件一致和 GPU 状态？ |
 | [Virtual Geometry 流送](performance/11-virtual-geometry-streaming.md) | 如何管理有限 Page Cache、异步读取/上传、缺页合法 Cut、去重、预算、淘汰和完成点？ |
 | [Surface Cache 材质与光照资源](performance/12-surface-cache-material.md) | 材质/直接光照 Atlas 如何分离、持久更新、失效并维护 RDG 与来源资源的完成点？ |
-| [Screen Probe 与 Radiosity 工程实现](performance/13-screen-probe-gather.md) | 预览图如何持有缓存、管理跨帧 Ping-Pong 和 Pass 依赖？ |
+| [Screen Probe 与 Radiosity 工程实现](performance/13-screen-probe-gather.md) | 预览图如何持有缓存、管理图集和屏幕历史的 Ping-Pong 及 Pass 依赖？ |
 
 ## 原理与算法：algorithm
 
@@ -75,6 +75,7 @@
 | [Screen Probe Gather](algorithm/17-screen-probe-gather.md) | 探针如何布置、查询缓存并重建屏幕间接光照？ |
 | [Surface Cache Radiosity](algorithm/18-surface-cache-radiosity.md) | Card 半球采样如何传播多次漫反射，固定采样与反射率如何影响收敛？ |
 | [World Space Radiance Cache](algorithm/19-world-radiance-cache.md) | 两级网格如何跨帧复用节点，方向光照怎样表示，何时可截短屏幕射线？ |
+| [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) | 如何用深度法线重投影、识别遮挡失效、抑制历史拖影并保留光照边界？ |
 
 ## 如何阅读和核查
 

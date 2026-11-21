@@ -166,6 +166,7 @@ namespace Renderer
         placement->ProbeGridSize = output.ProbeGridSize;
         placement->TileSize = input.TileSize;
         placement->RayCount = input.RaysPerProbe;
+        placement->SamplePhase = input.SamplePhase;
         placement->MaxTraceDistance = input.MaxTraceDistance;
         placement->Probes = CreateBufferUAV(builder, output.Probes, uint32_t(probeCount));
         placement->Queries = CreateBufferUAV(builder, output.Queries, uint32_t(queryCount));
@@ -196,8 +197,10 @@ namespace Renderer
 
         output.IndirectDiffuse = input.IndirectDiffuseOutput ? input.IndirectDiffuseOutput :
             CreateOutputTexture(builder, "ScreenProbe.IndirectDiffuse", gbufferDesc.Width, gbufferDesc.Height);
+        const bool bWriteDebug = input.DebugOutput || input.SamplePhase == 0;
         output.DebugVisualization = input.DebugOutput ? input.DebugOutput :
-            CreateOutputTexture(builder, "ScreenProbe.DebugVisualization", gbufferDesc.Width, gbufferDesc.Height);
+            CreateOutputTexture(builder, "ScreenProbe.DebugVisualization",
+                bWriteDebug ? gbufferDesc.Width : 1u, bWriteDebug ? gbufferDesc.Height : 1u);
         auto* integration = builder.AllocateParameter<ScreenProbeIntegrationParameters>();
         integration->GBuffer.GBufferA = input.GBufferA;
         integration->GBuffer.GBufferB = input.GBufferB;
@@ -205,12 +208,13 @@ namespace Renderer
         integration->GBuffer.Depth = input.Depth;
         integration->GBuffer.PointSampler = GlobalNearestSampler.get();
         integration->InvViewProj = input.InvViewProj;
-        integration->CameraPosition = input.CameraPosition;
         integration->ScreenSize = {gbufferDesc.Width, gbufferDesc.Height};
         integration->ProbeGridSize = output.ProbeGridSize;
         integration->TileSize = input.TileSize;
         integration->RayCount = input.RaysPerProbe;
         integration->DebugMode = input.DebugMode;
+        integration->bStoreConfidence = input.SamplePhase != 0 ? 1u : 0u;
+        integration->bWriteDebug = bWriteDebug ? 1u : 0u;
         integration->Probes = CreateBufferSRV(builder, output.Probes);
         integration->Queries = CreateBufferSRV(builder, output.Queries);
         integration->Radiance = CreateBufferSRV(builder, output.Radiance);

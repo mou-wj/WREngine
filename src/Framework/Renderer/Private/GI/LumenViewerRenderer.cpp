@@ -8,6 +8,7 @@
 #include "StaticMeshProcess.h"
 #include "LocalVertexFactory.h"
 #include "GI/ScreenProbeGather.h"
+#include "GI/ScreenProbeFilter.h"
 #include "GI/SurfaceCacheMaterial.h"
 #include "GI/SurfaceCacheDirectLighting.h"
 #include "GI/SurfaceCacheRadiosity.h"
@@ -27,6 +28,10 @@ namespace Renderer
         std::unique_ptr<SurfaceCacheDirectLighting> Lighting;
         std::unique_ptr<SurfaceCacheRadiosity> Radiosity;
         std::unique_ptr<WorldRadianceCache> WorldCache;
+        std::unique_ptr<ScreenProbeFilter> ProbeFilter;
+        RenderCore::RenderTexture* HistoryEnvironment = nullptr;
+        bool bHistoryUsesRadiosity = false;
+        bool bHistoryUsesWorldCache = false;
         RenderCore::RenderTexture* Environment = nullptr;
         bool bWorldCacheUsesRadiosity = false;
         std::vector<SurfaceCacheLight> Lights;
@@ -76,8 +81,26 @@ namespace Renderer
                 mode == ELumenViewerMode::ProbeRayDirections ||
                 mode == ELumenViewerMode::ProbeHitRatio ||
                 mode == ELumenViewerMode::ProbeRadiance ||
-                mode == ELumenViewerMode::IndirectDiffuse ||
                 mode == ELumenViewerMode::ProbeWorldCacheHits;
+        }
+
+        bool NeedsProbeFilter(ELumenViewerMode mode)
+        {
+            return mode == ELumenViewerMode::IndirectDiffuse ||
+                (mode >= ELumenViewerMode::ProbeRawDiffuse && mode <= ELumenViewerMode::ProbeReprojectionError);
+        }
+
+        EScreenProbeFilterView GetProbeFilterView(ELumenViewerMode mode)
+        {
+            switch (mode)
+            {
+            case ELumenViewerMode::ProbeRawDiffuse: return EScreenProbeFilterView::Raw;
+            case ELumenViewerMode::ProbeTemporalDiffuse: return EScreenProbeFilterView::Temporal;
+            case ELumenViewerMode::ProbeHistoryValidity: return EScreenProbeFilterView::HistoryValidity;
+            case ELumenViewerMode::ProbeHistoryWeight: return EScreenProbeFilterView::HistoryWeight;
+            case ELumenViewerMode::ProbeReprojectionError: return EScreenProbeFilterView::ReprojectionError;
+            default: return EScreenProbeFilterView::Spatial;
+            }
         }
 
         bool SameInstances(const std::vector<SurfaceCacheMeshInstance>& a, const std::vector<SurfaceCacheMeshInstance>& b)
@@ -108,6 +131,8 @@ namespace Renderer
         }
 
         WaitForTexture(lastOutput ? lastOutput : m_State->LastOutput);
+        m_State->ProbeFilter.reset();
+        m_State->HistoryEnvironment = nullptr;
         m_State->WorldCache.reset();
         m_State->Environment = nullptr;
         m_State->Radiosity.reset();
@@ -157,6 +182,11 @@ namespace Renderer
         }
 
         m_State->LastOutput = output;
+        const bool bFiltering = NeedsProbeFilter(mode);
+        if (!bFiltering && m_State->ProbeFilter)
+        {
+            m_State->ProbeFilter->Invalidate();
+        }
         Engine::SceneView view = sourceView;
         view.Viewport = {0, 0, static_cast<int>(outputDesc.Width), static_cast<int>(outputDesc.Height)};
         view.RenderTargetWidth = static_cast<float>(outputDesc.Width);
@@ -264,15 +294,17 @@ namespace Renderer
             material = m_State->Material->Register(builder);
         }
 
-        const bool bScreenProbe = NeedsScreenProbe(mode);
+        const bool bScreenProbe = NeedsScreenProbe(mode) || bFiltering;
         const bool bRadiosityView = IsRadiosityView(mode);
         const bool bWorldCacheView = mode == ELumenViewerMode::WorldProbeAtlas;
+        bool bLightingChanged = false;
         if (bScreenProbe || bRadiosityView || bWorldCacheView || mode == ELumenViewerMode::DirectLightingAtlas)
         {
             const auto lights = SurfaceCacheDirectLighting::GatherSceneLights(*scene);
             if (!m_State->Lighting->IsValidFor(*m_State->Material) || lights != m_State->Lights)
             {
                 m_State->Lighting->AddUpdatePasses(builder, *m_State->Material, lights);
+                bLightingChanged = true;
                 m_State->Lights = lights;
                 if (m_State->Radiosity)
                 {
@@ -332,8 +364,9 @@ namespace Renderer
         {
             m_State->Radiosity = std::make_unique<SurfaceCacheRadiosity>();
         }
-        if (bUseRadiosity && (radiositySettings.bStep || (!radiositySettings.bPaused &&
-            m_State->Radiosity->GetIteration() < radiositySettings.IterationLimit)))
+        const bool bRadiosityAdvances = bUseRadiosity && (radiositySettings.bStep || (!radiositySettings.bPaused &&
+            m_State->Radiosity->GetIteration() < radiositySettings.IterationLimit));
+        if (bRadiosityAdvances)
         {
             m_State->Radiosity->AddIteration(builder, material, direct);
         }
@@ -378,10 +411,41 @@ namespace Renderer
             }
             probeInput.WorldCache = &worldCache;
         }
-        if (mode == ELumenViewerMode::IndirectDiffuse)
+        if (bFiltering)
         {
-            probeInput.IndirectDiffuseOutput = color;
-            probeInput.DebugMode = 4;
+            if (!m_State->ProbeFilter)
+            {
+                m_State->ProbeFilter = std::make_unique<ScreenProbeFilter>();
+            }
+            if (bLightingChanged || radiositySettings.bRestart || m_State->HistoryEnvironment != environment ||
+                m_State->bHistoryUsesRadiosity != bUseRadiosity || m_State->bHistoryUsesWorldCache != worldCacheSettings.bEnabled)
+            {
+                m_State->ProbeFilter->Invalidate();
+                m_State->HistoryEnvironment = environment;
+                m_State->bHistoryUsesRadiosity = bUseRadiosity;
+                m_State->bHistoryUsesWorldCache = worldCacheSettings.bEnabled;
+            }
+            probeInput.SamplePhase = m_State->ProbeFilter->GetSamplePhase();
+            auto probes = AddScreenProbeGatherPasses(builder, material, lighting, probeInput);
+            const auto& previewView = views.GetViews().front();
+            ScreenProbeFilterInput filter;
+            filter.RawGI = probes.IndirectDiffuse;
+            filter.Output = color;
+            filter.GBuffer.GBufferA = probeInput.GBufferA;
+            filter.GBuffer.GBufferB = probeInput.GBufferB;
+            filter.GBuffer.GBufferC = probeInput.GBufferC;
+            filter.GBuffer.Depth = probeInput.Depth;
+            filter.GBuffer.PointSampler = RenderCore::GlobalNearestSampler.get();
+            filter.ViewProjection = previewView.ViewProjectionMatrix;
+            filter.InverseViewProjection = previewView.InvViewProjectionMatrix;
+            filter.CameraPosition = previewView.CameraWorldPos;
+            filter.View = GetProbeFilterView(mode);
+            if (bRadiosityAdvances || (probeInput.WorldCache && m_State->WorldCache->GetUpdatedProbeCount() != 0))
+            {
+                filter.HistoryWeightLimit = 0.72f;
+            }
+            m_State->ProbeFilter->AddPasses(builder, filter);
+            return true;
         }
         else
         {

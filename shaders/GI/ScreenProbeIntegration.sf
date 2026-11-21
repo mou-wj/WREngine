@@ -1,23 +1,12 @@
 #include "/Generated/ShaderParameters/ScreenProbeIntegrationParameters.sf"
 #include "/Generated/ShaderParameters/GBufferInputParameters.sf"
+#include "/GI/ScreenProbeGeometry.sf"
 
-float3 ReconstructPosition(float2 uv, float depth)
-{
-    float2 ndc = float2(uv.x * 2.0 - 1.0, (1.0 - uv.y) * 2.0 - 1.0);
-    float4 position = mul(InvViewProj, float4(ndc, depth, 1.0));
-    return position.xyz / position.w;
-}
-
-float3 EvaluateProbeIncoming(uint probeIndex, float3 surfaceNormal)
+float4 EvaluateProbeIncoming(uint probeIndex, float3 surfaceNormal)
 {
     ScreenProbeRecord probe = Probes[probeIndex];
-    if (probe.Status.x == 0u)
-    {
-        return 0.0;
-    }
-
     float3 probeNormal = normalize(probe.WorldNormal.xyz);
-    float3 incoming = 0.0;
+    float4 incoming = 0.0;
     [loop]
     for (uint rayIndex = 0; rayIndex < RayCount; ++rayIndex)
     {
@@ -32,13 +21,13 @@ float3 EvaluateProbeIncoming(uint probeIndex, float3 surfaceNormal)
         float3 direction = normalize(query.Direction.xyz);
         float probeCosine = max(dot(direction, probeNormal), 1e-3);
         float surfaceCosine = max(dot(direction, surfaceNormal), 0.0);
-        incoming += sample.Radiance.rgb * (surfaceCosine / probeCosine);
+        incoming += float4(sample.Radiance.rgb * (surfaceCosine / probeCosine), 1.0);
     }
 
     return incoming / max(float(RayCount), 1.0);
 }
 
-float ProbeWeight(ScreenProbeRecord probe, float3 worldPosition, float3 normal, float spatialWeight)
+float ProbeWeight(ScreenProbeRecord probe, float3 worldPosition, float3 normal, float footprint, float spatialWeight)
 {
     if (probe.Status.x == 0u)
     {
@@ -46,16 +35,83 @@ float ProbeWeight(ScreenProbeRecord probe, float3 worldPosition, float3 normal, 
     }
 
     float normalAgreement = dot(normalize(probe.WorldNormal.xyz), normal);
-    if (normalAgreement < 0.65)
+    if (normalAgreement < 0.75)
     {
         return 0.0;
     }
 
-    float pixelDistance = length(worldPosition - CameraPosition);
-    float probeDistance = probe.WorldPositionDepth.w;
-    float tolerance = max(0.02, pixelDistance * 0.025);
-    float depthWeight = exp(-abs(pixelDistance - probeDistance) / tolerance);
-    return spatialWeight * smoothstep(0.65, 0.9, normalAgreement) * depthWeight;
+    float3 separation = probe.WorldPositionDepth.xyz - worldPosition;
+    float planeDistance = max(abs(dot(separation, normal)), abs(dot(separation, probe.WorldNormal.xyz)));
+    float tolerance = max(0.005, footprint * 1.25);
+    if (planeDistance >= tolerance || length(separation) > footprint * (1.75 * TileSize))
+    {
+        return 0.0;
+    }
+    return spatialWeight * smoothstep(0.75, 0.95, normalAgreement) * (1.0 - planeDistance / tolerance);
+}
+
+float4 ReconstructProbeIncoming(uint2 pixel, float3 worldPosition, float3 normal, float footprint)
+{
+    // The first sample is at TileSize / 2. The final partial tile may clamp its sample to the image edge.
+    int2 baseProbe = int2(floor((float2(pixel) - float(TileSize / 2u)) / TileSize));
+    float4 incoming = 0.0;
+    float totalWeight = 0.0;
+    [unroll]
+    for (uint tap = 0; tap < 4u; ++tap)
+    {
+        int2 coord = clamp(baseProbe + int2(tap & 1u, tap >> 1u), int2(0, 0), int2(ProbeGridSize) - 1);
+        // At a screen edge repeated clamped indices must not multiply a probe's weight.
+        if (any(coord != baseProbe + int2(tap & 1u, tap >> 1u)))
+        {
+            continue;
+        }
+        uint index = uint(coord.y) * ProbeGridSize.x + uint(coord.x);
+        ScreenProbeRecord probe = Probes[index];
+        float2 weights = saturate(1.0 - abs(probe.ScreenPosition.xy - float2(pixel)) / TileSize);
+        float weight = ProbeWeight(probe, worldPosition, normal, footprint, weights.x * weights.y);
+        if (weight > 1e-5)
+        {
+            incoming += EvaluateProbeIncoming(index, normal) * weight;
+            totalWeight += weight;
+        }
+    }
+    if (totalWeight > 1e-5 && incoming.w > 1e-5)
+    {
+        return incoming / totalWeight;
+    }
+
+    // At thin surfaces or disocclusions, prefer a compatible neighbor over a zero-filled tile.
+    int2 cell = int2(pixel / TileSize);
+    float bestWeight = 0.0;
+    float4 best = 0.0;
+    [loop]
+    for (int y = -1; y <= 1; ++y)
+    {
+        [loop]
+        for (int x = -1; x <= 1; ++x)
+        {
+            int2 coord = cell + int2(x, y);
+            if (any(coord < 0) || any(coord >= int2(ProbeGridSize)))
+            {
+                continue;
+            }
+            uint index = uint(coord.y) * ProbeGridSize.x + uint(coord.x);
+            ScreenProbeRecord probe = Probes[index];
+            float2 offset = (probe.ScreenPosition.xy - float2(pixel)) / TileSize;
+            float weight = ProbeWeight(probe, worldPosition, normal, footprint, exp(-dot(offset, offset)));
+            if (weight > bestWeight)
+            {
+                float4 sample = EvaluateProbeIncoming(index, normal);
+                if (sample.w > 0.0)
+                {
+                    best = sample;
+                    bestWeight = weight;
+                }
+            }
+        }
+    }
+    best.w *= 0.6;
+    return best;
 }
 
 [numthreads(8, 8, 1)]
@@ -73,47 +129,25 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     float4 gbufferB = GBufferB.SampleLevel(PointSampler, uv, 0);
     float4 gbufferC = GBufferC.SampleLevel(PointSampler, uv, 0);
     uint shadingModel = uint(gbufferC.b * 255.0 + 0.5);
-    float3 worldPosition = depth < 0.999999 ? ReconstructPosition(uv, depth) : 0.0;
     float3 normal = normalize(gbufferB.rgb * 2.0 - 1.0);
     float3 indirect = 0.0;
+    float confidence = 0.0;
 
     if (depth < 0.999999 && shadingModel == 1u)
     {
-        float2 probeCoordinate = (float2(pixel) + 0.5) / TileSize - 0.5;
-        int2 baseProbe = int2(floor(probeCoordinate));
-        float2 fraction = frac(probeCoordinate);
-        float totalWeight = 0.0;
-        float3 incoming = 0.0;
-
-        [unroll]
-        for (uint y = 0; y < 2; ++y)
-        {
-            [unroll]
-            for (uint x = 0; x < 2; ++x)
-            {
-                int2 offset = int2(x, y);
-                int2 coord = clamp(baseProbe + offset, int2(0, 0), int2(ProbeGridSize) - 1);
-                uint probeIndex = uint(coord.y) * ProbeGridSize.x + uint(coord.x);
-                float2 axisWeight = lerp(1.0 - fraction, fraction, float2(x, y));
-                float spatialWeight = axisWeight.x * axisWeight.y;
-                ScreenProbeRecord probe = Probes[probeIndex];
-                float weight = ProbeWeight(probe, worldPosition, normal, spatialWeight);
-                if (weight > 1e-5)
-                {
-                    incoming += EvaluateProbeIncoming(probeIndex, normal) * weight;
-                    totalWeight += weight;
-                }
-            }
-        }
-
-        if (totalWeight > 1e-5)
-        {
-            float3 diffuseReflectance = gbufferA.rgb * (1.0 - saturate(gbufferA.a));
-            indirect = diffuseReflectance * saturate(gbufferC.g) * (incoming / totalWeight);
-        }
+        float3 position = ReconstructGIPosition(pixel, depth, ScreenSize, InvViewProj);
+        float footprint = GIPixelFootprint(pixel, depth, ScreenSize, InvViewProj, position);
+        float4 incoming = ReconstructProbeIncoming(pixel, position, normal, footprint);
+        float3 diffuseReflectance = gbufferA.rgb * (1.0 - saturate(gbufferA.a));
+        indirect = diffuseReflectance * saturate(gbufferC.g) * incoming.rgb;
+        confidence = incoming.w;
     }
 
-    OutputGI[pixel] = float4(indirect, 1.0);
+    OutputGI[pixel] = float4(indirect, bStoreConfidence != 0u ? confidence : 1.0);
+    if (bWriteDebug == 0u)
+    {
+        return;
+    }
     float4 debugColor = float4(indirect, 1.0);
     uint2 cell = pixel / TileSize;
     uint probeIndex = cell.y * ProbeGridSize.x + cell.x;

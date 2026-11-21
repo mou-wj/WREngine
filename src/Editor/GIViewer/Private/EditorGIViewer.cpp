@@ -30,8 +30,13 @@ namespace Editor
             {"Screen Probes / Ray Directions", Renderer::ELumenViewerMode::ProbeRayDirections},
             {"Screen Probes / Hit Ratio", Renderer::ELumenViewerMode::ProbeHitRatio},
             {"Screen Probes / Radiance", Renderer::ELumenViewerMode::ProbeRadiance},
-            {"Screen Probes / Indirect Diffuse", Renderer::ELumenViewerMode::IndirectDiffuse},
-            {"Screen Probes / World Cache Hits", Renderer::ELumenViewerMode::ProbeWorldCacheHits}
+            {"Screen Probes / World Cache Hits", Renderer::ELumenViewerMode::ProbeWorldCacheHits},
+            {"GI / Raw", Renderer::ELumenViewerMode::ProbeRawDiffuse},
+            {"GI / Temporal", Renderer::ELumenViewerMode::ProbeTemporalDiffuse},
+            {"GI / Spatial Filtered", Renderer::ELumenViewerMode::IndirectDiffuse},
+            {"GI / History Validity", Renderer::ELumenViewerMode::ProbeHistoryValidity},
+            {"GI / History Weight", Renderer::ELumenViewerMode::ProbeHistoryWeight},
+            {"GI / Reprojection Error", Renderer::ELumenViewerMode::ProbeReprojectionError}
         };
 
         const char* GetModeName(Renderer::ELumenViewerMode mode)
@@ -77,9 +82,19 @@ namespace Editor
             case Renderer::ELumenViewerMode::ProbeRadiance:
                 return "Average incoming radiance gathered by each screen-space probe.";
             case Renderer::ELumenViewerMode::IndirectDiffuse:
-                return "Diffuse indirect lighting reconstructed from the probe grid. Toggle radiosity to compare with one bounce.";
+                return "Indirect diffuse after temporal accumulation and edge-aware spatial filtering.";
             case Renderer::ELumenViewerMode::ProbeWorldCacheHits:
                 return "Cyan and violet show rays served by the fine or coarse grid. Gray means full tracing or a nearer SDF hit.";
+            case Renderer::ELumenViewerMode::ProbeRawDiffuse:
+                return "Current indirect diffuse after probe reconstruction, before temporal accumulation.";
+            case Renderer::ELumenViewerMode::ProbeTemporalDiffuse:
+                return "Indirect diffuse after reprojecting and blending compatible history.";
+            case Renderer::ELumenViewerMode::ProbeHistoryValidity:
+                return "Green identifies a valid previous surface. Red identifies rejected or reset history.";
+            case Renderer::ELumenViewerMode::ProbeHistoryWeight:
+                return "Brightness is the fraction of the current result taken from history.";
+            case Renderer::ELumenViewerMode::ProbeReprojectionError:
+                return "Red shows geometric disagreement, green shows agreement, and blue shows screen motion.";
             }
             return "";
         }
@@ -332,7 +347,8 @@ namespace Editor
                 ImGui::Text("Iteration %u / %u", m_Preview->GetRadiosityIteration(), m_Radiosity.IterationLimit);
             }
             if ((m_Mode >= Renderer::ELumenViewerMode::ProbePlacement && m_Mode <= Renderer::ELumenViewerMode::IndirectDiffuse) ||
-                m_Mode == Renderer::ELumenViewerMode::WorldProbeAtlas || m_Mode == Renderer::ELumenViewerMode::ProbeWorldCacheHits)
+                m_Mode == Renderer::ELumenViewerMode::WorldProbeAtlas || m_Mode == Renderer::ELumenViewerMode::ProbeWorldCacheHits ||
+                (m_Mode >= Renderer::ELumenViewerMode::ProbeRawDiffuse && m_Mode <= Renderer::ELumenViewerMode::ProbeReprojectionError))
             {
                 if (m_Mode != Renderer::ELumenViewerMode::WorldProbeAtlas)
                 {

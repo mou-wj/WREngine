@@ -1,5 +1,6 @@
 #include "/Generated/ShaderParameters/ScreenProbePlacementParameters.sf"
 #include "/Generated/ShaderParameters/GBufferInputParameters.sf"
+#include "/GI/ScreenProbeGeometry.sf"
 
 void BuildBasis(float3 normal, out float3 tangent, out float3 bitangent)
 {
@@ -16,13 +17,6 @@ float Hash01(uint value)
     value *= 0x846ca68bu;
     value ^= value >> 16;
     return float(value) * (1.0 / 4294967295.0);
-}
-
-float3 ReconstructPosition(float2 uv, float depth)
-{
-    float2 ndc = float2(uv.x * 2.0 - 1.0, (1.0 - uv.y) * 2.0 - 1.0);
-    float4 position = mul(InvViewProj, float4(ndc, depth, 1.0));
-    return position.xyz / position.w;
 }
 
 [numthreads(64, 1, 1)]
@@ -44,7 +38,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     float4 gbufferC = GBufferC.SampleLevel(PointSampler, uv, 0);
 
     bool valid = depth < 0.999999 && uint(gbufferC.b * 255.0 + 0.5) == 1u;
-    float3 worldPosition = valid ? ReconstructPosition(uv, depth) : 0.0;
+    float3 worldPosition = valid ? ReconstructGIPosition(pixel, depth, ScreenSize, InvViewProj) : 0.0;
     float3 normal = valid ? normalize(gbufferB.rgb * 2.0 - 1.0) : float3(0, 1, 0);
     ScreenProbeRecord probe = (ScreenProbeRecord)0;
     probe.WorldPositionDepth = float4(worldPosition, valid ? length(worldPosition - CameraPosition) : 0.0);
@@ -57,6 +51,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     float3 bitangent;
     BuildBasis(normal, tangent, bitangent);
     float rotation = Hash01(probeIndex * 747796405u + 2891336453u) * 6.28318530718;
+    rotation += frac(float(SamplePhase) * 0.61803398875);
     [loop]
     for (uint rayIndex = 0; rayIndex < RayCount; ++rayIndex)
     {

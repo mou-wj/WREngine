@@ -88,10 +88,12 @@ Viewer 默认显示 Scene 预览。选择 Surface Cache、Direct Lighting、Radi
 
 Scene 视图提供 `Draw Mesh Cards in scene` 和 `Selected Card only` 开关。Mesh Card 列表按 Scene Instance 和六个轴向投影列出 Card；选择 Card 后显示其世界中心、法线、范围和 Atlas Tile。场景叠加把 Card 的世界投影矩形经当前 ViewProjection 投到预览图片上，以轴向颜色区分并以黄色强调选中项。该叠加由 ImGui 绘制，按 X-ray 方式显示，不受场景深度遮挡；它表示空间覆盖范围，不代表捕获到的表面三角形。选中 Card 后可切换并放大查看其 Atlas Tile 的 Base Color、World Normal、Coverage、Roughness 或 Metallic。
 
-Surface Cache 的 Base Color、World Normal、Card Coverage、Roughness、Metallic 和 Direct Lighting Atlas 显示对应图集。Card 投影示意表达 U/V 投影基与法线方向。Screen Probe 的 Placement、Ray Directions、Hit Ratio、Radiance 和 Indirect Diffuse 显示屏幕空间各阶段结果。
+Surface Cache 的 Base Color、World Normal、Card Coverage、Roughness、Metallic 和 Direct Lighting Atlas 显示对应图集。Card 投影示意表达 U/V 投影基与法线方向。Screen Probe 的 Placement、Ray Directions、Hit Ratio 和 Radiance 显示探针阶段结果。
 
 `Radiosity / Indirect Atlas` 显示累计间接出射光，`Radiosity / Iteration Delta` 显示相邻两轮的变化。启用 `Use radiosity in Screen Probes` 时，探针命中会读取直接与间接出射光之和。`Pause` 停止自动迭代，`Step` 暂停并推进一轮，`Restart` 清除间接历史，可配合暂停逐轮查看。实例快照和灯光变化会触发相应缓存重建或重算。具体失效条件见 [工程说明](../key_implemetion/performance/13-screen-probe-gather.md#radiosity-迭代与缓存失效)，反弹算法见 [Radiosity 算法](../key_implemetion/algorithm/18-surface-cache-radiosity.md)。
 
 `World Probes / Radiance Atlas` 左右显示细层和粗层，每层按 3×2 摆放六个 XZ 切片。每个格点包含八面体方向图，黄色边框表示当帧刷新，暗边框表示等待更新，粉色 texel 表示该方向无效。`Screen Probes / World Cache Hits` 按屏幕探针显示缓存命中比例，青色为细层，紫色为粗层，灰色为完整追踪或近场命中。用 `Use world cache` 切换参考路径。`World probes per frame` 调整更新预算，设为 0 可冻结刷新并检查移动后的重叠槽复用。 [世界探针算法](../key_implemetion/algorithm/19-world-radiance-cache.md)
+
+`GI / Raw`、`GI / Temporal` 与 `GI / Spatial Filtered` 分别显示当前探针重建、时域累积和边缘感知空间滤波后的漫反射间接光。`GI / History Validity` 用绿色表示通过重投影检查，红色表示历史被拒绝或重置。`GI / History Weight` 用灰度表示最终历史权重。`GI / Reprojection Error` 的红绿通道显示归一化的几何残差，蓝色显示屏幕运动幅度。六种 GI 视图间切换保留历史，离开这些视图后重新进入会开始新一轮累积。使用宿主视口相机改变视角可观察历史重建。 [滤波与调试含义](../key_implemetion/algorithm/20-gi-temporal-spatial-filter.md)
 
 主场景仍使用 `DefferedSceneRenderer` 的 ScreenSpaceGI/SSR。上述输出只用于 GIViewer 预览。

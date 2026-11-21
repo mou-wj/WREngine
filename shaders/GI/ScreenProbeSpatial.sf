@@ -1,0 +1,64 @@
+#include "/Generated/ShaderParameters/ScreenProbeSpatialParameters.sf"
+#include "/GI/ScreenProbeGeometry.sf"
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= FilterSize))
+    {
+        return;
+    }
+    float4 center = TemporalLighting.Load(int3(pixel, 0));
+    float4 geometry = TemporalGeometry.Load(int3(pixel, 0));
+    if (geometry.w < 0.0)
+    {
+        FilterOutput[pixel] = float4(0, 0, 0, 1);
+        return;
+    }
+
+    float3 position = ReconstructGIPosition(pixel, geometry.w, FilterSize, CurrentInverseViewProjection);
+    float footprint = GIPixelFootprint(pixel, geometry.w, FilterSize, CurrentInverseViewProjection, position);
+    float4 material = MaterialColor.Load(int3(pixel, 0));
+    float3 sum = center.w > 0.0 ? center.rgb : 0.0;
+    float totalWeight = center.w > 0.0 ? 1.0 : 0.0;
+    [unroll]
+    for (int y = -1; y <= 1; ++y)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; ++x)
+        {
+            int2 coord = int2(pixel) + int2(x, y);
+            if ((x == 0 && y == 0) || any(coord < 0) || any(coord >= int2(FilterSize)))
+            {
+                continue;
+            }
+            float4 neighbor = TemporalGeometry.Load(int3(coord, 0));
+            float4 sample = TemporalLighting.Load(int3(coord, 0));
+            float normalAgreement = dot(neighbor.xyz, geometry.xyz);
+            if (neighbor.w < 0.0 || sample.w < 1.0 || normalAgreement < 0.85)
+            {
+                continue;
+            }
+            float3 delta = ReconstructGIPosition(coord, neighbor.w, FilterSize, CurrentInverseViewProjection) - position;
+            float plane = max(abs(dot(delta, geometry.xyz)), abs(dot(delta, neighbor.xyz)));
+            float planeLimit = max(0.005, footprint * 0.75);
+            if (plane >= planeLimit || length(delta) > footprint * 2.5)
+            {
+                continue;
+            }
+            float4 colorDifference = abs(MaterialColor.Load(int3(coord, 0)) - material);
+            float albedo = max(max(colorDifference.r, colorDifference.g), max(colorDifference.b, colorDifference.a));
+            float luma = abs(GILuminance(sample.rgb - center.rgb));
+            float lumaScale = 0.035 + 0.30 * GILuminance(center.rgb);
+            float lightWeight = center.w > 0.0 ? exp(-luma / lumaScale) : 1.0;
+            float weight = exp(-0.65 * float(x * x + y * y)) * (1.0 - plane / planeLimit) *
+                smoothstep(0.85, 0.98, normalAgreement) * exp(-albedo * 12.0) * lightWeight;
+            sum += sample.rgb * weight;
+            totalWeight += weight;
+        }
+    }
+    float3 filtered = totalWeight > 1e-5 ? sum / totalWeight : center.rgb;
+    float blend = center.w > 0.0 ? lerp(0.70, 0.35, saturate((center.w - 1.0) / 11.0)) : 1.0;
+    FilterOutput[pixel] = float4(lerp(center.rgb, filtered, blend), 1.0);
+}

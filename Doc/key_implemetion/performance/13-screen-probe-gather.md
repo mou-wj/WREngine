@@ -6,7 +6,7 @@ Screen Probe 的算法与估计公式见 [算法专题](../algorithm/17-screen-p
 
 Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从宿主回调借用当前 `SceneInterface` 和 `SceneView`，由 `GIViewerPreview::Render` 创建新的 `RenderGraphBuilder`，调用 `LumenViewerRenderer::AddPasses` 并执行该 Builder。预览有独立的持久颜色目标、深度、深度金字塔和 GBuffer；输入 Scene/View 仅在当前 UI 绘制和构图中借用，不转移所有权。
 
-`LumenViewerRendererState` 持有材质、直接光照、间接光照、世界探针缓存和当前 `Scene*`。首次在非空场景选择 Cache 模式时，入口收集静态网格实例快照并捕获材质。需要光照时建立或更新直接图集。之后预览图用 `Register` 绑定持久 Cache，并按 Viewer 所选模式添加对应 Pass。图内 Probe、Query、Radiance 等结构化缓冲和预览用 GBuffer/depth 均由当前 Builder 创建，缓存的 Atlas 与预览颜色目标分别由 Renderer 和 Preview 持有。
+`LumenViewerRendererState` 持有材质、直接光照、间接光照、世界探针缓存、屏幕历史和当前 `Scene*`。首次在非空场景选择 Cache 模式时，入口收集静态网格实例快照并捕获材质。需要光照时建立或更新直接图集。之后预览图用 `Register` 绑定持久 Cache，并按 Viewer 所选模式添加对应 Pass。图内 Probe、Query、Radiance 等结构化缓冲和预览用 GBuffer/depth 均由当前 Builder 创建，缓存的 Atlas 与预览颜色目标分别由 Renderer 和 Preview 持有。
 
 切换场景、关闭 Viewer 或工程时，Renderer Reset 沿用预览颜色目标最后访问的 Fence 后释放缓存。调整预览尺寸时，Preview 等待后只替换颜色目标。输出完成点代表与之存在图依赖的访问，新增异步路径时需重新核对完成点。
 
@@ -39,9 +39,19 @@ Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从
 3. Surface Cache Query Compute 按当前 Query 范围写命中结果。
 4. Lighting Lookup 读取材质命中与直接光照 Atlas，加上启用时最新的间接图集，再写出射光查询结果。
 5. Gather 读取 Query、Material Result、Lighting Result 和可选世界探针候选，写 Probe Radiance。
-6. Integration 读取 Probe/Radiance/GBuffer，写 Viewer 目标或调试目标。
+6. Integration 读取 Probe/Radiance/GBuffer，写原始间接光和按模式启用的调试目标。
+7. GI 滤波模式追加 `ScreenProbeTemporal`。该 Pass 读取原始间接光、当前 GBuffer 和历史 SRV，写入本轮历史 UAV。Raw、Temporal、History Validity、History Weight 和 Reprojection Error 模式在此写 Viewer 颜色。
+8. Spatial Filtered 模式追加 `ScreenProbeSpatial`，从本轮历史 SRV 和 GBufferA 空间滤波，写 Viewer 颜色。
 
-`GIViewerPreview::Render` 在所有 Pass 添加后执行该图。StructuredBuffer 与临时纹理通过 RDG 参数元数据声明 SRV/UAV/RenderTarget 访问，由 RenderGraph 安排依赖与状态转换；没有新增专用队列、Builder 生命周期扩展或 RHI 访问接口。Screen Probe 的 Integration 结果只写 Viewer 的预览颜色，不合入主窗口的 SceneColor。
+`GIViewerPreview::Render` 在所有 Pass 添加后执行该图。StructuredBuffer 与纹理通过 RDG 参数元数据声明 SRV/UAV/RenderTarget 访问，由 RenderGraph 安排依赖与状态转换。屏幕间接光的消费者是 Viewer 自己的预览颜色。
+
+## 屏幕历史与失效
+
+[ScreenProbeFilter](../../../src/Framework/Renderer/Private/GI/ScreenProbeFilter.cpp) 由预览 Renderer 按需持有，每个 Viewer 独立。两组 Ping-Pong 槽各有 `Lighting` 和 `Geometry` 两张 RGBA32F `RenderTexture`。`Lighting` 保存线性漫反射间接光 RGB 和历史长度，`Geometry` 保存世界法线 RGB 和设备深度，负深度表示无效。CPU 保留前一帧的 VP、逆 VP、相机位置及读写槽状态。图在预览控制线程串行构建并提交；历史通过 `RegisterExternalTexture` 让 RDG 接续上次访问 Fence 和资源状态。同一帧读上一槽，写当前槽，空间 Pass 等待当前槽 UAV 并以 SRV 读取。预览输出的完成点覆盖这一依赖链。
+
+分辨率变化时，Preview 沿用上一输出的完成点替换颜色目标，下一次滤波按新尺寸重新分配历史。关闭 Viewer、工程或替换缓存实例时，`LumenViewerRenderer::Reset` 沿用预览输出 Fence 退休历史。失效只标记旧历史不可读，首帧绑定已有白纹理作为未访问占位，并完整覆盖当前槽。未完成滤波构图时不提交新槽状态。
+
+场景实例或材质代理快照变化、灯光快照变化、环境贴图对象变化、重建 Surface Cache、Radiosity 重启及来源开关变化会重置历史。跳过滤波模式、预览尺寸变化以及帧间相机位置变化超过 8 个世界单位也会使上一结果失效。普通 Radiosity 更新和当帧有预算的世界探针刷新降低权重上限，几何与亮度条件继续逐像素生效。未单独为屏幕历史增加 GPU 等待或回收接口。 [重投影算法](../algorithm/20-gi-temporal-spatial-filter.md)
 
 ## 分辨率对应的理论负载
 
@@ -57,10 +67,10 @@ Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从
 | 两张 1920×1080 RGBA32F 输出 | 16 B/像素 | 63.28 MiB |
 | 合计 | — | 约 116.7 MiB |
 
-表内是逻辑 Buffer 负载，不包含 Viewer 的 GBuffer/深度、持久 Surface Cache/Lighting Atlas、RenderGraph/RHI 对齐和驱动额外分配。GPU 阶段结果可能在各自最后消费者完成前并存；实际峰值需要 GPU 资源统计测量。当前没有预算控制或分辨率自适应。打开 Viewer 时还会建立一套独立场景缓冲，因此该数值不是 Viewer 的全部显存占用。
+表内是保留完整 Probe Debug 输出时的逻辑负载。GI 滤波模式的 Integration 用一张全分辨率 RawGI 和 1×1 Debug 占位，空间结果写既有 Viewer 颜色目标。屏幕历史的四张 RGBA32F 纹理以 `4 × 16 × W × H` 字节常驻，1080p 约 126.56 MiB。以上不包含 Viewer 的 GBuffer/深度、持久 Surface Cache/Lighting Atlas、RenderGraph/RHI 对齐和驱动额外分配。当前没有历史精度预算或分辨率自适应，实际 GPU 峰值与 Pass 耗时待测。
 
 ## 限制与验证范围
 
-Probe 每帧重建，跨帧迭代历史保存在 Surface Cache。当前使用固定探针间隔和固定样本数。GBuffer 法线与距离约束对薄物体和急剧深度变化的过滤存在局限，原有 SDF 精度和 Card 覆盖限制继续适用。Viewer 关闭时释放缓存。快照尚未跟踪 RenderData 对象内部原地修改的几何或 SDF，遇到这类变化需显式重建。
+Probe 每帧重建，方向性 Radiance 没有独立的跨帧滤波。当前使用固定探针间隔和固定样本数，滤波模式逐帧旋转射线方位。GIViewer 的 GBuffer 没有物体级 Motion Vector。法线和距离判断对薄物体、共面不同物体以及急剧深度变化存在局限，原有 SDF 精度和 Card 覆盖限制继续适用。快照尚未跟踪 RenderData 对象内部原地修改的几何或 SDF，遇到这类变化需显式重建。
 
-四色墙 GPU 图集与查询读回、`out/pro2` 的 Viewer 图形界面验证以及已知启动诊断见 [2026-11-20 开发记录](../../dev/bugfix/故障与修复记录-2026-11-20.md#surface-cache-radiosity-开发与验证)。帧耗时、显存峰值及更复杂输入仍待测量和验证。
+多后端的滤波像素读回和 `out/pro2` 调试视图检查见 [时空滤波验证](../../dev/bugfix/故障与修复记录-2026-11-21.md#gi-时空滤波验证)。四色墙 GPU 图集与查询读回见 [Radiosity 验证](../../dev/bugfix/故障与修复记录-2026-11-20.md#surface-cache-radiosity-开发与验证)。

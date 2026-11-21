@@ -1,0 +1,19 @@
+float3 ReconstructGIPosition(float2 pixel, float depth, uint2 size, float4x4 inverseViewProjection)
+{
+    float2 uv = (pixel + 0.5) / float2(size);
+    float2 ndc = uv * float2(2.0, -2.0) + float2(-1.0, 1.0);
+    float4 world = mul(inverseViewProjection, float4(ndc, depth, 1.0));
+    return world.xyz / world.w;
+}
+
+float GIPixelFootprint(float2 pixel, float depth, uint2 size, float4x4 inverseViewProjection, float3 position)
+{
+    float3 offsetX = ReconstructGIPosition(pixel + float2(1, 0), depth, size, inverseViewProjection) - position;
+    float3 offsetY = ReconstructGIPosition(pixel + float2(0, 1), depth, size, inverseViewProjection) - position;
+    return max(length(offsetX), length(offsetY));
+}
+
+float GILuminance(float3 color)
+{
+    return dot(color, float3(0.2126, 0.7152, 0.0722));
+}
