@@ -39,6 +39,8 @@ namespace Editor
             box.RotationDegrees = {0, 24, 0};
             box.HalfExtent = {2.3f, 1.0f, 2.6f};
             box.Medium.Density = 0.28f;
+            box.DensityField.Mode = Renderer::EVolumeDensityMode::Noise;
+            box.DensityField.Velocity = {0.04f, 0.01f, 0.02f};
             Settings.LocalVolumes.push_back(box);
 
             Renderer::LocalVolume sphere;
@@ -47,6 +49,8 @@ namespace Editor
             sphere.HalfExtent = {2.1f, 1.3f, 1.6f};
             sphere.Medium.Density = 0.32f;
             sphere.Medium.Scattering = {0.32f, 0.58f, 0.86f};
+            sphere.DensityField.Mode = Renderer::EVolumeDensityMode::Texture;
+            sphere.DensityField.Velocity = {-0.03f, 0.01f, 0.04f};
             Settings.LocalVolumes.push_back(sphere);
         }
         ~VolumeViewerPreview() { Reset(); }
@@ -57,6 +61,7 @@ namespace Editor
         {
             WaitForDraw();
             m_Color.reset();
+            m_DemoDensity.reset();
             if (m_Scene)
             {
                 for (const auto& mesh : m_Meshes)
@@ -164,9 +169,25 @@ namespace Editor
             view.ViewProjectionMatrix = m_Camera.GetViewProjectionMatrix();
             view.InvViewProjectionMatrix = m_Camera.GetInverseViewProjectionMatrix();
             view.FrameIndex = m_FrameIndex++;
-            view.FrameTimeSeconds = ImGui::GetTime();
+            if (bAnimateDensity)
+            {
+                m_DensityTime += ImGui::GetIO().DeltaTime;
+            }
+            view.FrameTimeSeconds = m_DensityTime;
             view.Flags = Engine::VF_EnableShadows;
-            view.DrawExtensions.push_back(Renderer::MakeVolumeDrawExtension(Settings, m_Scene.get()));
+            auto frameSettings = Settings;
+            for (auto& local : frameSettings.LocalVolumes)
+            {
+                if (local.DensityField.Mode == Renderer::EVolumeDensityMode::Texture && !local.DensityField.Texture)
+                {
+                    if (!m_DemoDensity)
+                    {
+                        m_DemoDensity = Renderer::CreateVolumePreviewDensityTexture();
+                    }
+                    local.DensityField.Texture = m_DemoDensity.get();
+                }
+            }
+            view.DrawExtensions.push_back(Renderer::MakeVolumeDrawExtension(std::move(frameSettings), m_Scene.get()));
             Engine::SceneViewFamily family;
             family.Scene = m_Scene.get();
             family.RenderTarget = this;
@@ -177,6 +198,7 @@ namespace Editor
 
         Renderer::VolumeRenderSettings Settings;
         Core::Float3 LightIntensities{3, 20, 45};
+        bool bAnimateDensity = true;
 
     private:
         Core::Float3 OrbitDirection() const
@@ -256,12 +278,14 @@ namespace Editor
         std::unique_ptr<Engine::SpotLightComponent> m_Spot;
         std::unique_ptr<Engine::SkyLightComponent> m_Sky;
         std::unique_ptr<RenderCore::RenderTexture> m_Color;
+        std::shared_ptr<RenderCore::RenderTexture> m_DemoDensity;
         Engine::Camera m_Camera;
         Core::Float3 m_Focus{0, 0.8f, 0};
         float m_Yaw = 0.62f;
         float m_Pitch = 0.31f;
         float m_Distance = 12.0f;
         uint64_t m_FrameIndex = 0;
+        double m_DensityTime = 0;
         bool m_bOrbiting = false;
         bool m_bPanning = false;
     };
@@ -300,7 +324,7 @@ namespace Editor
             ImGui::Checkbox("Enable volume", &settings.bEnabled);
             ImGui::SameLine();
             const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels", "Direct lighting",
-                "Light visibility", "Local overlap", "Indirect lighting"};
+                "Light visibility", "Local overlap", "Indirect lighting", "Density sources"};
             int mode = static_cast<int>(settings.View);
             ImGui::SetNextItemWidth(170.0f);
             if (ImGui::Combo("View", &mode, views, IM_ARRAYSIZE(views)))
@@ -331,6 +355,7 @@ namespace Editor
             }
             if (ImGui::CollapsingHeader("Local volumes"))
             {
+                ImGui::Checkbox("Animate density", &m_Preview->bAnimateDensity);
                 if (ImGui::Button("Add box"))
                 {
                     settings.LocalVolumes.emplace_back();
@@ -353,6 +378,25 @@ namespace Editor
                         ImGui::DragFloat3("Rotation (degrees)", &local.RotationDegrees.X, 1.0f);
                         ImGui::DragFloat3("Half extents", &local.HalfExtent.X, 0.05f, 0.02f, 50.0f);
                         ImGui::DragFloat("Density", &local.Medium.Density, 0.005f, 0.0f, 2.0f);
+                        auto& field = local.DensityField;
+                        int densityMode = static_cast<int>(field.Mode);
+                        const char* densityModes[] = {"Uniform", "Procedural noise", "3D texture"};
+                        if (ImGui::Combo("Density source", &densityMode, densityModes, IM_ARRAYSIZE(densityModes)))
+                        {
+                            field.Mode = static_cast<Renderer::EVolumeDensityMode>(densityMode);
+                        }
+                        if (field.Mode != Renderer::EVolumeDensityMode::Uniform)
+                        {
+                            ImGui::DragFloat3("Density offset", &field.Offset.X, 0.01f);
+                            ImGui::DragFloat3("Density velocity", &field.Velocity.X, 0.01f);
+                            ImGui::DragFloat("Density scale", &field.Scale, 0.01f, 0.0f, 4.0f);
+                            ImGui::DragFloat("Density bias", &field.Bias, 0.01f, -1.0f, 1.0f);
+                            ImGui::DragFloat("Density threshold", &field.Threshold, 0.01f, 0.0f, 1.0f);
+                            if (field.Mode == Renderer::EVolumeDensityMode::Noise)
+                            {
+                                ImGui::DragFloat("Noise frequency", &field.Frequency, 0.1f, 0.01f, 32.0f);
+                            }
+                        }
                         DrawMediumControls(local.Medium);
                         bRemove = ImGui::Button("Remove volume");
                         ImGui::TreePop();
@@ -366,7 +410,8 @@ namespace Editor
                 }
             }
             if (settings.View == Renderer::EVolumeView::Density || settings.View == Renderer::EVolumeView::Froxels ||
-                settings.View == Renderer::EVolumeView::LightVisibility || settings.View == Renderer::EVolumeView::LocalOverlap)
+                settings.View == Renderer::EVolumeView::LightVisibility || settings.View == Renderer::EVolumeView::LocalOverlap ||
+                settings.View == Renderer::EVolumeView::DensitySources)
             {
                 int slice = settings.DebugSlice;
                 ImGui::SliderInt("Slice", &slice, 0, 31);

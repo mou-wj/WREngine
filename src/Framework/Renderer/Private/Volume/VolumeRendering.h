@@ -2,10 +2,11 @@
 
 #include "Math.hpp"
 #include "RenderGraphResource.h"
+#include <memory>
 #include <vector>
 
 namespace Engine { class SceneView; class SceneInterface; struct SceneViewDrawExtension; }
-namespace RenderCore { class RenderGraphBuilder; }
+namespace RenderCore { class RenderGraphBuilder; class RenderTexture; }
 
 namespace Renderer
 {
@@ -20,6 +21,20 @@ namespace Renderer
     };
 
     enum class EVolumeShape : uint32_t { Box, Sphere };
+    enum class EVolumeDensityMode : uint32_t { Uniform, Noise, Texture };
+
+    struct VolumeDensityField
+    {
+        EVolumeDensityMode Mode = EVolumeDensityMode::Uniform;
+        // Borrowed RHI resource. Its owner must retain it through the draw's last GPU access.
+        RenderCore::RenderTexture* Texture = nullptr;
+        Core::Float3 Offset{0, 0, 0};
+        Core::Float3 Velocity{0, 0, 0};
+        float Scale = 1.0f;
+        float Bias = 0.0f;
+        float Threshold = 0.0f;
+        float Frequency = 3.0f;
+    };
 
     struct LocalVolume
     {
@@ -28,6 +43,7 @@ namespace Renderer
         Core::Float3 RotationDegrees{0, 0, 0};
         Core::Float3 HalfExtent{1, 1, 1};
         VolumeMedium Medium;
+        VolumeDensityField DensityField;
     };
 
     enum class EVolumeView : uint32_t
@@ -40,7 +56,8 @@ namespace Renderer
         DirectLighting,
         LightVisibility,
         LocalOverlap,
-        IndirectLighting
+        IndirectLighting,
+        DensitySources
     };
 
     struct VolumeRenderSettings
@@ -65,4 +82,5 @@ namespace Renderer
 
     // Optional attachment for a caller which owns the scene and its perspective view.
     RENDERER_API Engine::SceneViewDrawExtension MakeVolumeDrawExtension(VolumeRenderSettings settings, Engine::SceneInterface* scene);
+    RENDERER_API std::shared_ptr<RenderCore::RenderTexture> CreateVolumePreviewDensityTexture();
 }

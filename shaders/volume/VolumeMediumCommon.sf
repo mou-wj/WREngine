@@ -1,0 +1,62 @@
+#include "/volume/VolumeGrid.sf"
+#include "/volume/VolumeDensity.sf"
+
+float ScatteringWeight(float3 scattering)
+{
+    return dot(scattering, float3(0.2126, 0.7152, 0.0722));
+}
+
+[numthreads(4, 4, 4)]
+void MainCS(uint3 cell : SV_DispatchThreadID)
+{
+    if (any(cell >= FroxelSize))
+    {
+        return;
+    }
+    float density = max(0.0, MediumAbsorption.w);
+    float3 scattering = density * max(0.0, MediumScattering.rgb);
+    float3 absorption = density * max(0.0, MediumAbsorption.rgb);
+    float3 emission = density * max(0.0, MediumEmission.rgb);
+    float anisotropySum = ScatteringWeight(scattering) * clamp(MediumScattering.w, -0.95, 0.95);
+    float3 densitySources = float3(0.0, density, 0.0);
+    uint overlap = 0;
+    if (LocalCount > 0)
+    {
+        float3 ray;
+        float viewDepth;
+        float3 world = VolumeFroxelCenter(cell, viewDepth, ray);
+        [loop]
+        for (uint i = 0; i < LocalCount; ++i)
+        {
+            VolumeLocalData local = LocalVolumes[i];
+            float3 p = mul(local.WorldToLocal, float4(world, 1.0)).xyz;
+            bool inside = local.LocalEmission.w == 0 ? all(abs(p) <= 1.0) : dot(p, p) <= 1.0;
+            if (!inside)
+            {
+                continue;
+            }
+            float localDensity = SampleVolumeDensity(local, p);
+            if (localDensity <= 0.0)
+            {
+                continue;
+            }
+            uint mode = uint(local.DensityOffsetMode.w);
+            densitySources += mode == 0 ? float3(0, localDensity, 0) :
+                (mode == 1 ? float3(localDensity, 0, 0) : float3(0, 0, localDensity));
+            float3 localScattering = localDensity * max(local.LocalScattering.rgb, 0.0);
+            density += localDensity;
+            scattering += localScattering;
+            absorption += localDensity * max(local.LocalAbsorption.rgb, 0.0);
+            emission += localDensity * max(local.LocalEmission.rgb, 0.0);
+            anisotropySum += ScatteringWeight(localScattering) * clamp(local.LocalScattering.w, -0.95, 0.95);
+            ++overlap;
+        }
+    }
+    MediumOutput[VolumeAddress(cell, 0)] = float4(scattering + absorption, density);
+    MediumOutput[VolumeAddress(cell, 1)] = float4(scattering, anisotropySum / max(1e-8, ScatteringWeight(scattering)));
+    MediumOutput[VolumeAddress(cell, 2)] = float4(emission, overlap);
+    if (bWriteDensitySources != 0)
+    {
+        MediumOutput[VolumeAddress(cell, 3)] = float4(densitySources, 1.0);
+    }
+}

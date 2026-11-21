@@ -52,5 +52,10 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
             color = float3(0.95, 0.95, 0.95);
         }
     }
+    else if (DrawMode == 9)
+    {
+        float3 quantities = Medium.Load(int3(VolumeAddress(uint3(pixel / TileSize, DebugSlice), 3), 0)).rgb;
+        color = 1.0 - exp(-4.0 * quantities);
+    }
     CompositeOutput[pixel] = float4(color, background.a);
 }

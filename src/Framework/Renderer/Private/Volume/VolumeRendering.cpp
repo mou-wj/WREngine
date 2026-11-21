@@ -8,6 +8,7 @@
 #include "SceneView.h"
 #include "Transform.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <stdexcept>
 
@@ -29,6 +30,8 @@ namespace Renderer
         SHADER_PARAMETER(Core::Float4, LocalScattering)
         SHADER_PARAMETER(Core::Float4, LocalAbsorption)
         SHADER_PARAMETER(Core::Float4, LocalEmission)
+        SHADER_PARAMETER(Core::Float4, DensityParameters)
+        SHADER_PARAMETER(Core::Float4, DensityOffsetMode)
     END_SHADER_PARAMETER_STRUCT(VolumeLocalData)
 
     BEGIN_SHADER_PARAMETER_STRUCT(VolumeMediumParameters)
@@ -37,9 +40,16 @@ namespace Renderer
         SHADER_PARAMETER(Core::Float4, MediumAbsorption)
         SHADER_PARAMETER(Core::Float4, MediumEmission)
         SHADER_PARAMETER(uint32_t, LocalCount)
+        SHADER_PARAMETER(uint32_t, bWriteDensitySources)
         SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(VolumeLocalData, LocalVolumes)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, MediumOutput)
     END_SHADER_PARAMETER_STRUCT(VolumeMediumParameters)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeTexturedMediumParameters)
+        SHADER_PARAMETER_STRUCT_REFERENCE(VolumeMediumParameters, Common)
+        SHADER_PARAMETER_SAMPLER(VolumeDensitySampler)
+        SHADER_PARAMETER_RDG_TEXTURE_ARRAY(Texture3D<float4>, VolumeDensityTextures, 8)
+    END_SHADER_PARAMETER_STRUCT(VolumeTexturedMediumParameters)
 
     BEGIN_SHADER_PARAMETER_STRUCT(VolumeLightData)
         SHADER_PARAMETER(Core::Float4, ColorIntensity)
@@ -111,6 +121,13 @@ namespace Renderer
         static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VolumeMediumParameters::GetMetaData(); }
     };
 
+    class VolumeTexturedMediumCS : public GlobalShader
+    {
+    public:
+        DECLARE_GLOBAL_SHADER_TYPE(VolumeTexturedMediumCS)
+        static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VolumeTexturedMediumParameters::GetMetaData(); }
+    };
+
     class VolumeIntegrateCS : public GlobalShader
     {
     public:
@@ -140,6 +157,7 @@ namespace Renderer
     };
 
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeMediumCS, "VolumeMediumCS", "/volume/VolumeMedium.sf", "MainCS", ERHIShaderFrequency::Compute);
+    IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeTexturedMediumCS, "VolumeTexturedMediumCS", "/volume/VolumeTexturedMedium.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeIntegrateCS, "VolumeIntegrateCS", "/volume/VolumeIntegrate.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeLightingCS, "VolumeLightingCS", "/volume/VolumeLighting.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeEnvironmentCS, "VolumeEnvironmentCS", "/volume/VolumeEnvironment.sf", "MainCS", ERHIShaderFrequency::Compute);
@@ -366,16 +384,19 @@ namespace Renderer
 
         RenderGraphTextureDesc desc{};
         desc.Width = froxelSize.X * atlasColumns;
-        desc.Height = froxelSize.Y * DivideRoundUp(froxelSize.Z * 3, atlasColumns);
+        const bool bShowDensitySources = settings.View == EVolumeView::DensitySources;
+        desc.Height = froxelSize.Y * DivideRoundUp(froxelSize.Z * (bShowDensitySources ? 4u : 3u), atlasColumns);
         desc.Format = ERHIFormat::R32G32B32A32_Float;
         desc.Usage = ERHITextureCreateFlag::UAV | ERHITextureCreateFlag::ShaderResource;
         const auto medium = builder.CreateTexture("Volume.Medium", desc);
-        auto* mediumParams = builder.AllocateParameter<VolumeMediumParameters>();
-        mediumParams->Grid = grid;
-        mediumParams->MediumScattering = Pack(settings.Medium.Scattering, settings.Medium.Anisotropy);
-        mediumParams->MediumAbsorption = Pack(settings.Medium.Absorption, settings.Medium.Density);
-        mediumParams->MediumEmission = Pack(settings.Medium.Emission, 0);
+        VolumeMediumParameters mediumParams{};
+        mediumParams.Grid = grid;
+        mediumParams.MediumScattering = Pack(settings.Medium.Scattering, settings.Medium.Anisotropy);
+        mediumParams.MediumAbsorption = Pack(settings.Medium.Absorption, settings.Medium.Density);
+        mediumParams.MediumEmission = Pack(settings.Medium.Emission, 0);
+        mediumParams.bWriteDensitySources = bShowDensitySources ? 1u : 0u;
         std::vector<VolumeLocalData> localData;
+        std::vector<RenderTexture*> densityTextures;
         localData.reserve(settings.LocalVolumes.size());
         for (const auto& local : settings.LocalVolumes)
         {
@@ -395,12 +416,59 @@ namespace Renderer
             packed.LocalScattering = Pack(local.Medium.Scattering, local.Medium.Anisotropy);
             packed.LocalAbsorption = Pack(local.Medium.Absorption, local.Medium.Density);
             packed.LocalEmission = Pack(local.Medium.Emission, static_cast<float>(local.Shape));
+            const auto& field = local.DensityField;
+            const auto offset = field.Offset + field.Velocity * static_cast<float>(view.FrameTimeSeconds);
+            float mode = static_cast<float>(field.Mode);
+            if (field.Mode == EVolumeDensityMode::Texture)
+            {
+                if (!field.Texture || !field.Texture->GetRHI() ||
+                    field.Texture->GetRHI()->GetDesc().Type != ERHITextureType::Texture3D ||
+                    !EnumHasAnyFlags(field.Texture->GetRHI()->GetDesc().Usage, ERHITextureCreateFlag::ShaderResource))
+                {
+                    throw std::invalid_argument("Volume texture density requires a sampled 3D texture.");
+                }
+                auto index = std::find(densityTextures.begin(), densityTextures.end(), field.Texture);
+                if (index == densityTextures.end())
+                {
+                    if (densityTextures.size() == 8)
+                    {
+                        throw std::invalid_argument("Volume supports eight unique density textures per view.");
+                    }
+                    mode += static_cast<float>(densityTextures.size());
+                    densityTextures.push_back(field.Texture);
+                }
+                else
+                {
+                    mode += static_cast<float>(index - densityTextures.begin());
+                }
+            }
+            packed.DensityParameters = {std::max(field.Scale, 0.0f), field.Bias, std::max(field.Threshold, 0.0f),
+                std::max(field.Frequency, 0.001f)};
+            packed.DensityOffsetMode = Pack(offset, mode);
             localData.push_back(packed);
         }
-        mediumParams->LocalCount = static_cast<uint32_t>(localData.size());
-        mediumParams->LocalVolumes = UploadVolumeRecords(builder, "Volume.LocalMedia", std::move(localData));
-        mediumParams->MediumOutput = MakeUAV(builder, medium);
-        AddCompute<VolumeMediumCS>(builder, "VolumeInjectMedium", mediumParams, volumeGroups);
+        mediumParams.LocalCount = static_cast<uint32_t>(localData.size());
+        mediumParams.LocalVolumes = UploadVolumeRecords(builder, "Volume.LocalMedia", std::move(localData));
+        mediumParams.MediumOutput = MakeUAV(builder, medium);
+        if (densityTextures.empty())
+        {
+            auto* params = builder.AllocateParameter<VolumeMediumParameters>();
+            *params = mediumParams;
+            AddCompute<VolumeMediumCS>(builder, "VolumeInjectMedium", params, volumeGroups);
+        }
+        else
+        {
+            auto* params = builder.AllocateParameter<VolumeTexturedMediumParameters>();
+            params->Common = mediumParams;
+            params->VolumeDensitySampler = GlobalSampler.get();
+            for (size_t index = 0; index < 8; ++index)
+            {
+                auto* texture = index < densityTextures.size() ? densityTextures[index] : densityTextures.front();
+                params->VolumeDensityTextures[index] = builder.RegisterExternalTexture(
+                    "Volume.DensityInput." + std::to_string(index), texture);
+            }
+            AddCompute<VolumeTexturedMediumCS>(builder, "VolumeInjectTexturedMedium", params, volumeGroups);
+        }
 
         desc.Height = froxelSize.Y * DivideRoundUp(froxelSize.Z, atlasColumns);
         const auto directLighting = builder.CreateTexture("Volume.DirectLighting", desc);
@@ -474,5 +542,28 @@ namespace Renderer
         {
             AddVolumePasses(graph, view, depth, color, settings, scene);
         }};
+    }
+
+    std::shared_ptr<RenderTexture> CreateVolumePreviewDensityTexture()
+    {
+        constexpr uint32_t size = 16;
+        constexpr float frequency = 6.2831853f / size;
+        std::array<float, size * size * size> values{};
+        for (uint32_t z = 0; z < size; ++z)
+        {
+            for (uint32_t y = 0; y < size; ++y)
+            {
+                for (uint32_t x = 0; x < size; ++x)
+                {
+                    const float bands = std::sin(frequency * x + 1.3f * std::sin(frequency * z)) * std::cos(frequency * y);
+                    const float detail = std::cos(frequency * (2.0f * x + y - z));
+                    values[(z * size + y) * size + x] = std::clamp(0.52f + 0.33f * bands + 0.15f * detail, 0.0f, 1.0f);
+                }
+            }
+        }
+        auto texture = Create3DTexture(size, size, size, ERHIFormat::R32_Float,
+            ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest, "VolumePreviewDensity");
+        texture->UploadData(values.data(), 0, 0);
+        return texture;
     }
 }

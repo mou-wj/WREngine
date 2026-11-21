@@ -1,0 +1,67 @@
+float VolumeNoiseHash(int3 latticePoint)
+{
+    uint3 value = uint3(latticePoint);
+    uint hash = value.x * 0x9e3779b9u + value.y * 0x85ebca6bu + value.z * 0xc2b2ae35u;
+    hash ^= hash >> 16;
+    hash *= 0x7feb352du;
+    hash ^= hash >> 15;
+    return float(hash & 0x00ffffffu) * (1.0 / 16777215.0);
+}
+
+float VolumeValueNoise(float3 position)
+{
+    int3 cell = int3(floor(position));
+    float3 v = frac(position);
+    v = v * v * (3.0 - 2.0 * v);
+    float lower = lerp(
+        lerp(VolumeNoiseHash(cell), VolumeNoiseHash(cell + int3(1, 0, 0)), v.x),
+        lerp(VolumeNoiseHash(cell + int3(0, 1, 0)), VolumeNoiseHash(cell + int3(1, 1, 0)), v.x), v.y);
+    float upper = lerp(
+        lerp(VolumeNoiseHash(cell + int3(0, 0, 1)), VolumeNoiseHash(cell + int3(1, 0, 1)), v.x),
+        lerp(VolumeNoiseHash(cell + int3(0, 1, 1)), VolumeNoiseHash(cell + int3(1, 1, 1)), v.x), v.y);
+    return lerp(lower, upper, v.z);
+}
+
+#if VOLUME_HAS_DENSITY_TEXTURE
+float SampleVolumeDensityTexture(uint slot, float3 coordinate)
+{
+    // Constant descriptor indices work on devices without sampled-image array dynamic indexing.
+    switch (slot)
+    {
+    case 0: return VolumeDensityTextures[0].SampleLevel(VolumeDensitySampler, coordinate, 0).r;
+    case 1: return VolumeDensityTextures[1].SampleLevel(VolumeDensitySampler, coordinate, 0).r;
+    case 2: return VolumeDensityTextures[2].SampleLevel(VolumeDensitySampler, coordinate, 0).r;
+    case 3: return VolumeDensityTextures[3].SampleLevel(VolumeDensitySampler, coordinate, 0).r;
+    case 4: return VolumeDensityTextures[4].SampleLevel(VolumeDensitySampler, coordinate, 0).r;
+    case 5: return VolumeDensityTextures[5].SampleLevel(VolumeDensitySampler, coordinate, 0).r;
+    case 6: return VolumeDensityTextures[6].SampleLevel(VolumeDensitySampler, coordinate, 0).r;
+    case 7: return VolumeDensityTextures[7].SampleLevel(VolumeDensitySampler, coordinate, 0).r;
+    default: return 0.0;
+    }
+}
+#endif
+
+float SampleVolumeDensity(VolumeLocalData local, float3 localPosition)
+{
+    uint mode = uint(local.DensityOffsetMode.w);
+    if (mode == 0)
+    {
+        return local.LocalAbsorption.w;
+    }
+    float3 coordinate = localPosition * 0.5 + 0.5 + local.DensityOffsetMode.xyz;
+    float density = 1.0;
+    if (mode == 1)
+    {
+        float3 p = coordinate * local.DensityParameters.w;
+        density = 0.62 * VolumeValueNoise(p) + 0.27 * VolumeValueNoise(p * 2.03 + 8.0) +
+            0.11 * VolumeValueNoise(p * 4.01 + 17.0);
+    }
+#if VOLUME_HAS_DENSITY_TEXTURE
+    if (mode >= 2)
+    {
+        density = SampleVolumeDensityTexture(mode - 2, frac(coordinate));
+    }
+#endif
+    float remapped = density * local.DensityParameters.x + local.DensityParameters.y - local.DensityParameters.z;
+    return local.LocalAbsorption.w * max(remapped, 0.0);
+}

@@ -1,0 +1,5 @@
+#include "/Generated/ShaderParameters/VolumeMediumParameters.sf"
+#include "/Generated/ShaderParameters/VolumeTexturedMediumParameters.sf"
+
+#define VOLUME_HAS_DENSITY_TEXTURE 1
+#include "/volume/VolumeMediumCommon.sf"

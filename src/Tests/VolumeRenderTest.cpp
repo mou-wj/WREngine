@@ -89,7 +89,8 @@ namespace Test
             return pixels;
         }
 
-        Pixels Render(const VolumeRenderSettings& settings, float surfaceDistance, Engine::SceneInterface* scene = nullptr)
+        Pixels Render(const VolumeRenderSettings& settings, float surfaceDistance, Engine::SceneInterface* scene = nullptr,
+            double timeSeconds = 0)
         {
             Engine::Camera camera;
             camera.SetPosition({0, 0, 0});
@@ -105,6 +106,7 @@ namespace Test
             view.CameraWorldPos = camera.GetPosition();
             view.Viewport = {0, 0, Width, Height};
             view.BuildSplitDepths();
+            view.FrameTimeSeconds = timeSeconds;
 
             RHITextureDesc colorDesc{};
             colorDesc.Width = Width;
@@ -380,6 +382,71 @@ namespace Test
             RequireNear(Render(settings, 6, &scene)[Center].X, std::exp(-0.05f * 5.9f), "moving the box leaves only global fog");
             std::cout << "VOLUME_LOCAL_TEST_OK overlap=" << overlapT.X << std::endl;
 
+            auto constantDensity = Create3DTexture(2, 2, 2, ERHIFormat::R32_Float,
+                ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest, "VolumeTest.ConstantDensity");
+            std::array<float, 8> constantSamples;
+            constantSamples.fill(0.5f);
+            constantDensity->UploadData(constantSamples.data(), 0, 0);
+            VolumeRenderSettings densityTest;
+            densityTest.MaxDistance = 20;
+            densityTest.Medium.Density = 0;
+            densityTest.View = EVolumeView::Transmittance;
+            auto textureVolume = box;
+            textureVolume.DensityField.Mode = EVolumeDensityMode::Texture;
+            textureVolume.DensityField.Texture = constantDensity.get();
+            textureVolume.DensityField.Scale = 1.5f;
+            textureVolume.DensityField.Bias = 0.1f;
+            textureVolume.DensityField.Threshold = 0.2f;
+            densityTest.LocalVolumes = {textureVolume};
+            const auto textureT = Render(densityTest, 6)[Center].X;
+            RequireNear(textureT, std::exp(-0.13f * 5.9f), "3D texture coefficient follows scale, bias and threshold");
+
+            auto varyingTexture = CreateVolumePreviewDensityTexture();
+            auto movingTexture = textureVolume;
+            movingTexture.DensityField.Texture = varyingTexture.get();
+            movingTexture.DensityField.Velocity = {0.41f, 0.28f, 0.13f};
+            movingTexture.DensityField.Threshold = 0;
+            auto movingNoise = sphere;
+            movingNoise.DensityField.Mode = EVolumeDensityMode::Noise;
+            movingNoise.DensityField.Velocity = {0.31f, -0.12f, 0.07f};
+            densityTest.LocalVolumes = {box, movingNoise, textureVolume, movingTexture};
+            densityTest.View = EVolumeView::DensitySources;
+            const auto firstFields = Render(densityTest, 6);
+            const auto secondFields = Render(densityTest, 6, nullptr, 1.75);
+            RequireNear(firstFields[Center].Y, 1.0f - std::exp(-4 * box.Medium.Density),
+                "uniform local density coexists with noise and textures");
+            float noiseChange = 0.0f;
+            float textureChange = 0.0f;
+            for (size_t i = 0; i < firstFields.size(); ++i)
+            {
+                RequireNear(secondFields[i].Y, firstFields[i].Y, "uniform density stays stable as fields move");
+                noiseChange = std::max(noiseChange, std::abs(secondFields[i].X - firstFields[i].X));
+                textureChange = std::max(textureChange, std::abs(secondFields[i].Z - firstFields[i].Z));
+            }
+            if (firstFields[Center].X <= 0.03f || firstFields[Center].Z <= 1.0f - std::exp(-4 * 0.13f) ||
+                noiseChange < 0.01f || textureChange < 0.01f)
+            {
+                throw std::runtime_error("Animated procedural and texture density must change while both contribute.");
+            }
+            densityTest.View = EVolumeView::Transmittance;
+            const auto animatedT0 = Render(densityTest, 6)[Center].X;
+            const auto animatedT1 = Render(densityTest, 6, nullptr, 1.75)[Center].X;
+            if (std::abs(animatedT1 - animatedT0) < 0.005f)
+            {
+                throw std::runtime_error("Animated density must change extinction.");
+            }
+            densityTest.View = EVolumeView::DirectLighting;
+            densityTest.bShadows = false;
+            const auto densityLit = Render(densityTest, 6, &scene, 1.75)[Center];
+            densityTest.bShadows = true;
+            if (densityLit.X <= 0.05f)
+            {
+                throw std::runtime_error("Nonuniform media must receive direct light.");
+            }
+            RequireNear(Render(densityTest, 6, &scene, 1.75)[Center].X, 0.0f, "nonuniform media receive shadowed incident light");
+            std::cout << "VOLUME_DENSITY_TEST_OK textureT=" << textureT << " noiseMaxDelta=" << noiseChange <<
+                " textureMaxDelta=" << textureChange << " transmittance=" << animatedT0 << "->" << animatedT1 << std::endl;
+
             // The fixture textures are borrowed sampler inputs, outside the scene allocator.
             scene.ForEachLight([&](Engine::LightSceneProxy* proxy) { scene.GetLightShadowInfo(proxy).Allocation = {}; });
             scene.RemoveLight(&directional);
@@ -503,6 +570,9 @@ namespace Test
             settings.AmbientRadiance = {};
             settings.LocalVolumes.emplace_back();
             settings.LocalVolumes.back().HalfExtent = {2, 2, 2};
+            const auto density = CreateVolumePreviewDensityTexture();
+            settings.LocalVolumes.back().DensityField.Mode = EVolumeDensityMode::Texture;
+            settings.LocalVolumes.back().DensityField.Texture = density.get();
             const auto composite = render(&settings);
             settings.View = EVolumeView::Transmittance;
             const auto transmittance = render(&settings);

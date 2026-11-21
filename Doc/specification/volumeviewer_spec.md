@@ -16,6 +16,8 @@
 
 **Local volumes** 初始包含一个盒体和一个椭球，可新增、删除及编辑变换与介质。**Local overlap** 按覆盖数量着色，白线标记该切片中数量变化的边界。**Density** 显示局部与全局密度之和。 [覆盖与叠加规则](../key_implemetion/algorithm/23-volume-rendering.md#局部介质)
 
+初始盒体使用程序噪声，椭球使用内置 16³ 密度纹理。每个局部介质可通过 **Density source** 切换来源，编辑坐标偏移、速度、密度缩放和阈值。**Animate density** 可暂停或继续移动密度场。选择 **Density sources** 并移动 **Slice**，红、绿、蓝分别表示噪声、均匀介质和纹理的密度。多种源覆盖同一个 Froxel 时会混合显示。 [密度定义](../key_implemetion/algorithm/23-volume-rendering.md#非均匀密度)
+
 **Indirect lighting** 显示体积中的低频环境散射。可切换 **Use sky environment** 和 **Sky intensity**，天空输入来自预览场景的现有 IBL 环境。主场景需要显式将 `MakeVolumeDrawExtension` 注册到符合输入要求的 SceneView。 [合成约定](../key_implemetion/algorithm/23-volume-rendering.md#天空环境与合成位置)
 
 ## 验证范围
@@ -30,4 +32,6 @@
 
 局部介质用例的盒体、椭球与全局雾叠加透射率为 0.094419。三后端均验证重叠计数、局部直接光和阴影响应、删除椭球及将盒体移出视野。
 
-`VolumePipelineTest -rhi=Vulkan` 使用真实延迟渲染、基础网格、三种灯光、场景阴影和天空，进行离屏读回。前景透射率约 0.307868，天空约 5.34×10⁻⁸，间接散射红通道为 0.256215，关闭 IBL 后为零。未注册扩展时的前景读回保持一致。测试正常退出，完整 Renderer 初始化仍输出已有的 SPIR-V 校验及旧 Shader 编译诊断。
+非均匀密度用例在三个后端均读回常量 3D 密度纹理的透射率 0.464403，与 `exp(-0.13 × 5.9)` 一致。均匀、噪声及两张纹理同时参与时，噪声与纹理调试通道的最大时间差约为 0.1454、0.0759，均匀通道保持稳定。中心像素透射率从 0.0350 变到 0.0271，并验证非均匀介质会散射直接光、受其阴影遮挡。
+
+`VolumePipelineTest -rhi=Vulkan` 使用真实延迟渲染、基础网格、三种灯光、场景阴影、天空和 3D 局部密度纹理进行离屏读回。前景透射率约 0.313092，天空约 5.48×10⁻⁸，间接散射红通道为 0.254097，关闭 IBL 后为零。未注册扩展时的前景读回保持一致。测试正常退出，完整 Renderer 初始化仍输出已有的 SPIR-V 校验及旧 Shader 编译诊断。

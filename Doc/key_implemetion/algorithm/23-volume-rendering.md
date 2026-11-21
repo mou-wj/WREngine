@@ -12,7 +12,13 @@
 
 调用方为每次构图传入 `LocalVolume` 列表，记录形状、位置、Euler 角、半轴尺度和介质参数。`Volume.LocalMedia` 上传世界到局部的逆矩阵。Froxel 中心落入局部坐标的 `[-1,1]³` 为盒内，平方长度不超过 1 为球内。非均匀缩放自然形成椭球。无效尺度或非正密度在上传前剔除。
 
-在覆盖区域中，`σ_s`、`σ_a` 和自发光分别相加，故多个介质的光学厚度累加、透射率相乘。有效 g 取各介质散射系数亮度加权的均值，对同一相函数的介质是精确的，对多个方向性不同的相函数是近似。重叠计数存于自发光切片的 Alpha，供调试查看局部边界。中心采样会量化局部边缘，尺寸小于一个 Froxel 的区域可能遗漏。 [局部注入](../../../shaders/volume/VolumeMedium.sf)
+在覆盖区域中，`σ_s`、`σ_a` 和自发光分别相加，故多个介质的光学厚度累加、透射率相乘。有效 g 取各介质散射系数亮度加权的均值，对同一相函数的介质是精确的，对多个方向性不同的相函数是近似。重叠计数存于自发光切片的 Alpha，供调试查看局部边界。中心采样会量化局部边缘，尺寸小于一个 Froxel 的区域可能遗漏。 [局部注入](../../../shaders/volume/VolumeMediumCommon.sf)
+
+### 非均匀密度
+
+每个局部介质可独立选择均匀、程序噪声或 3D 纹理。通过 `WorldToLocal` 得到 `p_local` 后，采样坐标为 `0.5 × p_local + 0.5 + Offset + Velocity × FrameTimeSeconds`，速度采用每秒的归一化局部坐标单位。程序噪声用 `Frequency` 缩放该坐标，再对三个频带进行加权，单个频带用晶格整数哈希和三线性平滑插值。纹理采用重复寻址，从 Mip 0 取红通道。对两种非均匀场，最终密度为 `Medium.Density × max(0, sample × Scale + Bias - Threshold)`。密度分别乘入散射、吸收和自发光，阴影仍只改变入射光。
+
+外部生产者可向 `VolumeDensityField::Texture` 提供已初始化、可采样的 3D 纹理。使用常规 RHI/RDG 写入并登记同步后可供后续注入读取。纹理借用到最后一次 GPU 访问结束，由调用方持有。Volume 按纹理对象去重，每视图最多八张不同纹理。绑定数组中的空槽复用第一个有效输入，HLSL 用常量描述符索引采样。无纹理的视图使用独立 Shader 入口，两条路径共用介质计算。只有 **Density sources** 调试模式会分配额外切片，RGB 分别展示程序噪声、均匀介质和纹理的合计密度。 [采样代码](../../../shaders/volume/VolumeDensity.sf) · [密度参数](../../../src/Framework/Renderer/Private/Volume/VolumeRendering.h)
 
 ## 按深度积分
 
@@ -46,6 +52,6 @@ T *= t
 
 ## 图资源与边界
 
-`VolumeInjectMedium` 写图集 UAV。积分读取图集和不透明深度，写两张屏幕纹理。合成读取场景颜色及两张积分图，写独立结果。最后通过 `VolumeCopyComposite` 的 TransferSrc/Dest 声明复制回颜色目标，避免在同一个 Pass 对该颜色同时绑定 SRV 和 UAV。无效或禁用范围直接跳过。纹理生命周期由 Builder 管理，预览颜色由 Viewer 持有并沿最后访问 Fence 释放。
+`VolumeInjectMedium` 或 `VolumeInjectTexturedMedium` 写图集 UAV。积分读取图集和不透明深度，写两张屏幕纹理。合成读取场景颜色及两张积分图，写独立结果。最后通过 `VolumeCopyComposite` 的 TransferSrc/Dest 声明复制回颜色目标，避免在同一个 Pass 对该颜色同时绑定 SRV 和 UAV。无效或禁用范围直接跳过。临时纹理由 Builder 管理，预览颜色和演示密度纹理由 Viewer 持有。关闭时等待最后一次预览颜色访问，该帧的体积积分和颜色复制都依赖密度读取。
 
 介质图集的逻辑空间为 `ceil(W/8) × ceil(H/8) × 32 × 3 × 16` 字节，光照图占同尺寸单组切片。另有两张积分图和一张合成图，各 16 B/像素。第一版每像素最多 32 次迭代，XY 用最近 Tile。要求输入为全尺寸透视视图与可写入复制目标的线性颜色，近平面之前和最大距离之外省略介质。
