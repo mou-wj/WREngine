@@ -61,7 +61,8 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
             {
                 continue;
             }
-            float nearT = 0, farT = distance;
+            float nearT = instance.Info.x == query.Control.z ? asfloat(query.Control.w) : 0.0;
+            float farT = distance;
             if (!RayBox(origin, direction, instance.BoundsMin.xyz, instance.BoundsMax.xyz, nearT, farT))
             {
                 continue;

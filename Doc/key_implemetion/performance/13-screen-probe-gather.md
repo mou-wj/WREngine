@@ -6,9 +6,19 @@ Screen Probe 的算法与估计公式见 [算法专题](../algorithm/17-screen-p
 
 Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从宿主回调借用当前 `SceneInterface` 和 `SceneView`，由 `GIViewerPreview::Render` 创建新的 `RenderGraphBuilder`，调用 `LumenViewerRenderer::AddPasses` 并执行该 Builder。预览有独立的持久颜色目标、深度、深度金字塔和 GBuffer；输入 Scene/View 仅在当前 UI 绘制和构图中借用，不转移所有权。
 
-`LumenViewerRendererState` 持有 `SurfaceCacheMaterial`、`SurfaceCacheDirectLighting` 和当前 `Scene*`。首次在非空场景打开 Viewer 时，入口收集静态网格实例快照、初始化两种 Cache，并在本帧图中加入 Material Capture。需要直接光照或 Probe 模式时加入/更新 Lighting Cache。之后同一场景的预览图用 `Register` 绑定持久 Cache，并按 Viewer 所选模式添加对应的 Cache 调试或 Screen Probe Pass。图内 Probe、Query、Radiance 等结构化缓冲和预览用 GBuffer/depth 均由该次 Builder 创建，不跨 Builder 保存；Cache 的 Atlas 与 Preview 颜色目标由相应 Renderer/Preview 对象持有。
+`LumenViewerRendererState` 持有材质、直接光照、间接光照缓存和当前 `Scene*`。首次在非空场景选择 Cache 模式时，入口收集静态网格实例快照并捕获材质。需要光照时建立或更新直接图集。之后预览图用 `Register` 绑定持久 Cache，并按 Viewer 所选模式添加对应 Pass。图内 Probe、Query、Radiance 等结构化缓冲和预览用 GBuffer/depth 均由当前 Builder 创建，缓存的 Atlas 与预览颜色目标分别由 Renderer 和 Preview 持有。
 
-同一 Scene 的内容变更不会自动让缓存失效。用户可按 `Rebuild Surface Cache` 先重置，再由后续预览图重新捕获；切换到不同 Scene 时入口重置旧 Cache。关闭 Viewer、关闭工程或调整预览尺寸也会释放/替换预览颜色目标。释放前沿用资源访问 Fence：Preview 等待其颜色目标的最后访问，Renderer Reset 再释放 Cache；不使用 `WaitIdle` 或全局保活列表。关闭或切换时序若有新的跨队列访问，应继续依据真实最后访问 Fence 审核，不能仅凭输出画面已提交推断全部资源已退休。
+切换场景、关闭 Viewer 或工程时，Renderer Reset 沿用预览颜色目标最后访问的 Fence 后释放缓存。调整预览尺寸时，Preview 等待后只替换颜色目标。输出完成点代表与之存在图依赖的访问，新增异步路径时需重新核对完成点。
+
+## Radiosity 迭代与缓存失效
+
+[LumenViewerRenderer](../../../src/Framework/Renderer/Private/GI/LumenViewerRenderer.cpp) 在需要 Surface Cache 的模式下，以 InstanceID 对当前可见静态网格排序，对比标识、变换、RenderData 与不可变材质代理。任何一项变化都会退休旧图集并全量重捕获。需要光照时对比场景灯光快照，重新计算直接图集并将间接迭代数归零。重置按钮可单独清除间接历史，重建按钮可显式重捕获。相机移动与预览尺寸变化不改变世界空间 Card 的采样。
+
+每个 Viewer 独占 [SurfaceCacheRadiosity](../../../src/Framework/Renderer/Private/GI/SurfaceCacheRadiosity.h) 的两张间接图集。首次迭代分配图集。每帧最多安排一次迭代，读上一轮的外部 SRV 并写另一张外部 UAV，根据当前迭代数公布写入的图集。第零轮返回直接光照。失效只清零迭代数，第一次重新写入完整图集，旧内容不会被采样。预览图在控制线程串行构建和提交，图集替换前沿用上一输出纹理的最后访问 Fence。材质采样、SDF 查询、积分和 Viewer 输出通过 RDG 传递依赖，覆盖该阶段图集的使用。旧灯光只触发重新构图，现有 RDG 跟踪持久图集写入的前序访问。
+
+每迭代依次安排 `SurfaceCacheRadiosityRays`、`SurfaceCacheSDFQuery` 和 `SurfaceCacheRadiosityIntegrate`。Query 和 Hit 缓冲由当前 RenderGraph 负责。已有 GPU Query 结果缓存以输入缓冲名构造图内名称，使 Radiosity 与 Screen Probe 可各自追踪。之后根据模式追加 `SurfaceCacheRadiosityDebug` 或 Screen Probe 现有的 Lookup/Gather/Integration。连续两轮各自占据一张纹理，Delta 直接比较两者。黑色有效单元保留 alpha=1，空白处 alpha=0。
+
+以 Card 数 C 计，持久图集共有 `2 × ceil(sqrt(C))² × 64 × 16` 字节。每轮查询与结果的逻辑空间为 `512 × C × (48 + 80)` 字节，实际分配还包含 RDG/RHI 对齐。默认最多自动执行 32 轮，可暂停或手动追加单轮。算法和近似边界见 [多次漫反射](../algorithm/18-surface-cache-radiosity.md)。
 
 ## 单图 RDG Pass 与同步
 
@@ -16,7 +26,7 @@ Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从
 
 1. Placement/Ray Generation 写 Probe 与 SurfaceCacheQuery。
 2. Surface Cache Query Compute 读取 Query、写命中结果。
-3. Direct Lighting Lookup 读取材质命中与 Lighting Atlas，写 Lighting 查询结果。
+3. Lighting Lookup 读取材质命中与直接光照 Atlas，加上启用时最新的间接图集，再写出射光查询结果。
 4. Gather 读取 Query、Material Result、Lighting Result，写 Probe Radiance。
 5. Integration 读取 Probe/Radiance/GBuffer，写 Viewer 目标或调试目标。
 
@@ -40,6 +50,6 @@ Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从
 
 ## 限制与验证范围
 
-固定 Probe 不做跨帧历史、去噪、重要性采样、自适应放置、反射/屏幕命中补充或多次反弹；GBuffer 法线/距离约束可能漏掉薄物体和急剧深度变化，也可能保留局部漏光。SDF 精度、Card 覆盖和 Lighting Cache 的限制继续适用。Viewer 关闭后不自动保留缓存；同一场景发生编辑后必须显式重建，尚无 Scene 变更通知或增量捕获。
+Probe 每帧重建，跨帧迭代历史保存在 Surface Cache。当前使用固定探针间隔和固定样本数。GBuffer 法线与距离约束对薄物体和急剧深度变化的过滤存在局限，原有 SDF 精度和 Card 覆盖限制继续适用。Viewer 关闭时释放缓存。快照尚未跟踪 RenderData 对象内部原地修改的几何或 SDF，遇到这类变化需显式重建。
 
-`cmake --build out/build/screen-probe-vs --target Renderer GIViewer Editor Langcher --config Debug` 编译通过。使用该隔离目录启动 `Langcher.exe -app=Editor` 后，日志出现 `[Editor] First scene and GUI frame submitted`，进程仍在运行；同时 Vulkan validation 报告 `StorageImageReadWithoutFormat` 和重复 `OpTypeImage` 错误，并记录 GlobalDiffuseLightMap、ScreenSpaceReflectionDepthPyramid、HZBOcclusionTest Shader 编译失败。这些发生在空场景启动路径，不能当作 GIViewer 非空场景验证，也尚未确认与新 Lumen Pass 有关。未在 Viewer 中加载非空场景、打开各模式或进行画面/读回核验，因此 SDF Query、Cache Lookup、Probe Integration 及颜色反弹仍待验证。相关缓存生命周期和功能验收建议见 [优化项](../../dev/optimize/优化点-2026-11-17.md#sc-opt-08-screen-probe-缓存生命周期和实际场景验证)。
+四色墙 GPU 图集与查询读回、`out/pro2` 的 Viewer 图形界面验证以及已知启动诊断见 [2026-11-20 开发记录](../../dev/bugfix/故障与修复记录-2026-11-20.md#surface-cache-radiosity-开发与验证)。帧耗时、显存峰值及更复杂输入仍待测量和验证。

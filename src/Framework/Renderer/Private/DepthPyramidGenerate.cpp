@@ -4,6 +4,8 @@
 #include "RHIApi.h"
 
 #include <algorithm>
+#include <string>
+#include <vector>
 
 namespace Renderer {
 
@@ -57,6 +59,21 @@ namespace Renderer {
 
         pyramidMipUAV = graphBuilder.CreateTextureUAV("DepthPyramidGenerateUAV", mipUAVDesc);
 
+        std::vector<RenderCore::RenderGraphTextureUAVRef> mipUAVs;
+        mipUAVs.reserve(mipCount);
+        for (uint32_t mip = 0; mip < mipCount; ++mip)
+        {
+            RenderCore::RenderGraphTextureUAVDesc mipDesc;
+            mipDesc.Format = pyramidDesc.Format;
+            mipDesc.ArraySize = pyramidDesc.ArraySize;
+            mipDesc.FirstMipSlice = mip;
+            mipDesc.MipCount = 1;
+            mipDesc.Texture = input.DepthPyramidTexture;
+            mipDesc.ViewType = RHI::ERHITextureViewType::TextureView2D;
+            mipUAVs.push_back(graphBuilder.CreateTextureUAV(
+                "DepthPyramidGenerateMip" + std::to_string(mip), mipDesc));
+        }
+
         RHI::RHIComputePipelineStateDesc computeDesc;
         computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
@@ -66,14 +83,12 @@ namespace Renderer {
         *passParameter = DepthPyramidGenerateParameters{};
         passParameter->InputDepthTexture = inputCopy.SceneDepthTexture;
         passParameter->InDepthMipTexture = pyramidMipUAV;
-        auto pyramidViewCache = graphBuilder.GetExternalTextureViewCache(input.DepthPyramidTexture);
-        auto pyramidTexture = input.DepthPyramidTexture;
         graphBuilder.AddPass<DepthPyramidGenerateParameters>(
             "BuildDepthPyramidPass",
             DepthPyramidGenerateParameters::GetMetaData(),
             passParameter,
             RenderCore::EPassFlag::Compute,
-            [inputCopy, shader, pipelineState, mipCount, sceneDepthDesc, pyramidDesc,passParameter, pyramidViewCache, pyramidTexture](RHI::RHICommandListBase& rhiCmdList)
+            [inputCopy, shader, pipelineState, mipCount, sceneDepthDesc, pyramidDesc, passParameter, mipUAVs](RHI::RHICommandListBase& rhiCmdList)
             {
                 auto& cmd = static_cast<RHI::RHIComputeCommandList&>(rhiCmdList);
                 cmd.SetComputePipelineState(pipelineState);
@@ -95,19 +110,8 @@ namespace Renderer {
                     params.OutputExtent = Core::Int2(static_cast<int>(dstWidth), static_cast<int>(dstHeight));
                     params.InputMipLevel = mip;
                     params.DepthSampler = RenderCore::GlobalSampler.get();
-					RHI::RHITexUAVCreateInfo depthMipUAVDesc;
-                    depthMipUAVDesc.Format = pyramidDesc.Format;
-                    depthMipUAVDesc.ArraySize = pyramidDesc.ArraySize;
-                    depthMipUAVDesc.FirstMipSlice = mip;
-                    depthMipUAVDesc.MipCount = 1;
-                    depthMipUAVDesc.ViewType = RHI::ERHITextureViewType::TextureView2D;
-                    auto curOutMipUAV = pyramidViewCache->GetOrCreateUAV(pyramidTexture->GetRHITexture(), depthMipUAVDesc);
-                    params.OutDepthMipTexture = curOutMipUAV;
-                    if (mip > 0) {
-						depthMipUAVDesc.FirstMipSlice = mip - 1;
-                    }
-                    auto curSrcMipUAV = pyramidViewCache->GetOrCreateUAV(pyramidTexture->GetRHITexture(), depthMipUAVDesc);
-                    params.SrcDepthMipTexture = curSrcMipUAV;
+                    params.OutDepthMipTexture = mipUAVs[mip]->GetRHIShaderResourceView();
+                    params.SrcDepthMipTexture = mipUAVs[mip > 0 ? mip - 1 : 0]->GetRHIShaderResourceView();
 
                     SetShaderParameters(cmd, shader, &params);
 

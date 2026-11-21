@@ -10,6 +10,7 @@
 #include "GI/ScreenProbeGather.h"
 #include "GI/SurfaceCacheMaterial.h"
 #include "GI/SurfaceCacheDirectLighting.h"
+#include "GI/SurfaceCacheRadiosity.h"
 #include "RHIApi.h"
 
 #include <algorithm>
@@ -23,6 +24,8 @@ namespace Renderer
     public:
         std::unique_ptr<SurfaceCacheMaterial> Material;
         std::unique_ptr<SurfaceCacheDirectLighting> Lighting;
+        std::unique_ptr<SurfaceCacheRadiosity> Radiosity;
+        std::vector<SurfaceCacheLight> Lights;
         std::vector<LumenViewerCardInfo> Cards;
         Scene* CachedScene = nullptr;
         RenderCore::RenderTexture* LastOutput = nullptr;
@@ -58,14 +61,9 @@ namespace Renderer
             return builder.CreateTexture(name, desc);
         }
 
-        bool NeedsLighting(ELumenViewerMode mode)
+        bool IsRadiosityView(ELumenViewerMode mode)
         {
-            return mode == ELumenViewerMode::DirectLightingAtlas ||
-                mode == ELumenViewerMode::ProbePlacement ||
-                mode == ELumenViewerMode::ProbeRayDirections ||
-                mode == ELumenViewerMode::ProbeHitRatio ||
-                mode == ELumenViewerMode::ProbeRadiance ||
-                mode == ELumenViewerMode::IndirectDiffuse;
+            return mode == ELumenViewerMode::RadiosityIndirectAtlas || mode == ELumenViewerMode::RadiosityIterationDelta;
         }
 
         bool NeedsScreenProbe(ELumenViewerMode mode)
@@ -75,6 +73,15 @@ namespace Renderer
                 mode == ELumenViewerMode::ProbeHitRatio ||
                 mode == ELumenViewerMode::ProbeRadiance ||
                 mode == ELumenViewerMode::IndirectDiffuse;
+        }
+
+        bool SameInstances(const std::vector<SurfaceCacheMeshInstance>& a, const std::vector<SurfaceCacheMeshInstance>& b)
+        {
+            return std::ranges::equal(a, b, [](const auto& lhs, const auto& rhs)
+            {
+                return lhs.InstanceID == rhs.InstanceID && lhs.RenderData == rhs.RenderData &&
+                    std::ranges::equal(lhs.LocalToWorld.Elements, rhs.LocalToWorld.Elements) && lhs.Materials == rhs.Materials;
+            });
         }
     }
 
@@ -96,6 +103,8 @@ namespace Renderer
         }
 
         WaitForTexture(lastOutput ? lastOutput : m_State->LastOutput);
+        m_State->Radiosity.reset();
+        m_State->Lights.clear();
         if (m_State->Lighting)
         {
             m_State->Lighting->Release();
@@ -115,7 +124,7 @@ namespace Renderer
 
     bool LumenViewerRenderer::AddPasses(RenderCore::RenderGraphBuilder& builder, Engine::SceneInterface* sceneInterface,
         const Engine::SceneView& sourceView, RenderCore::RenderTexture* output, ELumenViewerMode mode,
-        uint32_t selectedCardIndex, ELumenViewerCardView cardView)
+        uint32_t selectedCardIndex, ELumenViewerCardView cardView, const LumenViewerRadiositySettings& radiositySettings)
     {
         if (!sceneInterface || !output || !output->GetRHI())
         {
@@ -196,9 +205,15 @@ namespace Renderer
             return true;
         }
 
+        auto instances = SurfaceCacheMaterial::GatherSceneInstances(*scene);
+        std::ranges::sort(instances, {}, &SurfaceCacheMeshInstance::InstanceID);
+        if (m_State->Material && !SameInstances(m_State->Material->GetInstances(), instances))
+        {
+            Reset(output);
+            m_State->LastOutput = output;
+        }
         if (!m_State->Material)
         {
-            const auto instances = SurfaceCacheMaterial::GatherSceneInstances(*scene);
             if (instances.empty())
             {
                 return false;
@@ -241,10 +256,24 @@ namespace Renderer
             material = m_State->Material->Register(builder);
         }
 
-        if (NeedsLighting(mode) && !m_State->Lighting->IsValidFor(*m_State->Material))
+        const bool bScreenProbe = NeedsScreenProbe(mode);
+        const bool bRadiosityView = IsRadiosityView(mode);
+        if (bScreenProbe || bRadiosityView || mode == ELumenViewerMode::DirectLightingAtlas)
         {
-            m_State->Lighting->AddUpdatePasses(builder, *m_State->Material,
-                SurfaceCacheDirectLighting::GatherSceneLights(*scene));
+            const auto lights = SurfaceCacheDirectLighting::GatherSceneLights(*scene);
+            if (!m_State->Lighting->IsValidFor(*m_State->Material) || lights != m_State->Lights)
+            {
+                m_State->Lighting->AddUpdatePasses(builder, *m_State->Material, lights);
+                m_State->Lights = lights;
+                if (m_State->Radiosity)
+                {
+                    m_State->Radiosity->Invalidate();
+                }
+            }
+        }
+        if (m_State->Radiosity && radiositySettings.bRestart)
+        {
+            m_State->Radiosity->Invalidate();
         }
 
         if (mode == ELumenViewerMode::SurfaceBaseColor || mode == ELumenViewerMode::SurfaceWorldNormal ||
@@ -275,8 +304,25 @@ namespace Renderer
             return true;
         }
 
-        if (!NeedsScreenProbe(mode))
+        if (!bScreenProbe && !bRadiosityView)
         {
+            return true;
+        }
+
+        const auto direct = m_State->Lighting->Register(builder, *m_State->Material);
+        const bool bUseRadiosity = bRadiosityView || (bScreenProbe && radiositySettings.bEnabled);
+        if (bUseRadiosity && !m_State->Radiosity)
+        {
+            m_State->Radiosity = std::make_unique<SurfaceCacheRadiosity>();
+        }
+        if (bUseRadiosity && (radiositySettings.bStep || (!radiositySettings.bPaused &&
+            m_State->Radiosity->GetIteration() < radiositySettings.IterationLimit)))
+        {
+            m_State->Radiosity->AddIteration(builder, material, direct);
+        }
+        if (bRadiosityView)
+        {
+            m_State->Radiosity->AddDebugPass(builder, direct, color, mode == ELumenViewerMode::RadiosityIterationDelta);
             return true;
         }
 
@@ -289,7 +335,7 @@ namespace Renderer
         probeInput.CameraPosition = views.GetViews().front().CameraWorldPos;
         BuildEvnIBLLightParameters(scene, builder, probeInput.Environment);
         probeInput.bHasEnvironment = scene->GetGPUResourceInfo().LightResourceInfo.IBLSpecularTexture != nullptr;
-        const auto lighting = m_State->Lighting->Register(builder, *m_State->Material);
+        const auto lighting = bUseRadiosity ? m_State->Radiosity->Register(builder, direct) : direct;
         if (mode == ELumenViewerMode::IndirectDiffuse)
         {
             probeInput.IndirectDiffuseOutput = color;
@@ -325,5 +371,10 @@ namespace Renderer
     const std::vector<LumenViewerCardInfo>& LumenViewerRenderer::GetSurfaceCards() const
     {
         return m_State->Cards;
+    }
+
+    uint32_t LumenViewerRenderer::GetRadiosityIteration() const
+    {
+        return m_State->Radiosity ? m_State->Radiosity->GetIteration() : 0;
     }
 }

@@ -1,0 +1,28 @@
+// Called with identical coordinates in ray generation and integration.
+bool GetRadiositySurface(SurfaceCard card, uint2 cell, out uint2 pixel, out float3 position, out float3 normal)
+{
+    const float2 offsets[5] = {
+        float2(0.5, 0.5), float2(0.25, 0.25), float2(0.75, 0.25), float2(0.25, 0.75), float2(0.75, 0.75)
+    };
+    position = 0;
+    normal = 0;
+    pixel = 0;
+    [unroll]
+    for (uint i = 0; i < 5; ++i)
+    {
+        pixel = card.Tile.xy + min(uint2((float2(cell) + offsets[i]) * card.Tile.zw / TileSize), card.Tile.zw - 1u);
+        float4 captured = PositionCoverage.Load(int3(pixel, 0));
+        if (captured.w > 0.5)
+        {
+            position = captured.xyz;
+            normal = normalize(NormalRoughness.Load(int3(pixel, 0)).xyz);
+            return dot(normal, card.AxisN.xyz) > 0.0;
+        }
+    }
+    return false;
+}
+
+uint GetRadiosityQueryIndex(uint cardIndex, uint2 cell)
+{
+    return (cardIndex * TileSize * TileSize + cell.y * TileSize + cell.x) * RaysPerTexel;
+}

@@ -1,0 +1,49 @@
+#include "/Generated/ShaderParameters/SurfaceCacheRadiosityIntegrateParameters.sf"
+#include "/Generated/ShaderParameters/SurfaceCacheMaterialParameters.sf"
+#include "/Generated/ShaderParameters/SurfaceCacheLightingParameters.sf"
+#include "/GI/SurfaceCacheRadiositySample.sf"
+#include "/GI/SurfaceCacheOutgoingRadiance.sf"
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    uint cardIndex = group.y * TilesPerRow + group.x;
+    uint2 outputPixel = group.xy * TileSize + thread.xy;
+    if (cardIndex >= CardCount)
+    {
+        Output[outputPixel] = 0;
+        return;
+    }
+
+    SurfaceCard card = Cards[cardIndex];
+    uint2 pixel;
+    float3 position, normal;
+    if (!GetRadiositySurface(card, thread.xy, pixel, position, normal))
+    {
+        Output[outputPixel] = 0;
+        return;
+    }
+
+    float3 incoming = 0.0;
+    uint firstRay = GetRadiosityQueryIndex(cardIndex, thread.xy);
+    for (uint ray = 0; ray < RaysPerTexel; ++ray)
+    {
+        uint index = firstRay + ray;
+        SurfaceCacheQueryResult hit = RadiosityHits[index];
+        if ((hit.Status.z & 3u) == 3u && hit.Status.y < CardCount &&
+            dot(hit.NormalRoughness.xyz, RadiosityQueries[index].Direction.xyz) < 0.0)
+        {
+            float4 radiance = LoadSurfaceCacheOutgoing(Cards[hit.Status.y], hit.SampleCoordinate.xy);
+            if (radiance.a > 0.5)
+            {
+                incoming += max(radiance.rgb, 0.0);
+            }
+        }
+    }
+
+    // Cosine PDF cancels Lambert's cosine/pi. Include misses in the denominator.
+    // Cap diffuse gain below one so the fixed transport iteration is contractive.
+    float4 base = BaseColorMetallic.Load(int3(pixel, 0));
+    float3 reflectance = min(saturate(base.rgb) * (1.0 - saturate(base.a)), 0.98);
+    Output[outputPixel] = float4(reflectance * (incoming / float(RaysPerTexel)), 1.0);
+}

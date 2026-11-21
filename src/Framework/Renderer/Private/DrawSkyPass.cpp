@@ -94,11 +94,11 @@ namespace Renderer {
 
         //rendertarget info
         pipelineDesc.AttachmentDesc.ColorAttachmentCount = 1;
-        pipelineDesc.AttachmentDesc.ColorAttachments[0].Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
+        pipelineDesc.AttachmentDesc.ColorAttachments[0].Format = colorAttachment->GetDesc().Format;
         pipelineDesc.AttachmentDesc.ColorAttachments[0].Actions = ERenderTargetActions::Load_Store;
         pipelineDesc.AttachmentDesc.DepthActions = ERenderTargetActions::Load_Store;
         pipelineDesc.AttachmentDesc.bEnableDepth = true;
-        pipelineDesc.AttachmentDesc.DepthStencilFormat = RHI::ERHIFormat::D32_Float;
+        pipelineDesc.AttachmentDesc.DepthStencilFormat = depthAttachment->GetDesc().Format;
         auto pipeline = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(pipelineDesc);
         BEGIN_SHADER_PARAMETER_STRUCT(DrawSkyPassParameters)
             SHADER_PARAMETER_STRUCT_REFERENCE(DrawSkyVertexParameters, vsParam)

@@ -1,0 +1,21 @@
+// The material cache packs equal square Cards with a one-texel border.
+// The radiosity cache packs the same Cards at a smaller resolution without borders.
+uint2 GetRadiosityCoordinate(SurfaceCard card, uint2 pixel, uint tileSize)
+{
+    uint2 tile = card.Tile.xy / (card.Tile.zw + 2u);
+    return tile * tileSize + (pixel - card.Tile.xy) * tileSize / card.Tile.zw;
+}
+
+float4 LoadSurfaceCacheOutgoing(SurfaceCard card, uint2 pixel)
+{
+    float4 lighting = DirectRadiance.Load(int3(pixel, 0));
+    if (lighting.a > 0.5 && RadiosityTileSize != 0u)
+    {
+        float4 indirect = IndirectRadiance.Load(int3(GetRadiosityCoordinate(card, pixel, RadiosityTileSize), 0));
+        if (indirect.a > 0.5)
+        {
+            lighting.rgb += indirect.rgb;
+        }
+    }
+    return lighting;
+}

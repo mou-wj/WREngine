@@ -52,6 +52,7 @@
 | [工程快照与二进制数据](performance/10-project-snapshots.md) | 如何保存运行时节点、层级及资源，脱离源文件恢复，并保持多文件一致和 GPU 状态？ |
 | [Virtual Geometry 流送](performance/11-virtual-geometry-streaming.md) | 如何管理有限 Page Cache、异步读取/上传、缺页合法 Cut、去重、预算、淘汰和完成点？ |
 | [Surface Cache 材质与光照资源](performance/12-surface-cache-material.md) | 材质/直接光照 Atlas 如何分离、持久更新、失效并维护 RDG 与来源资源的完成点？ |
+| [Screen Probe 与 Radiosity 工程实现](performance/13-screen-probe-gather.md) | 预览图如何持有缓存、管理跨帧 Ping-Pong 和 Pass 依赖？ |
 
 ## 原理与算法：algorithm
 
@@ -71,6 +72,8 @@
 | [Virtual Geometry GPU 软件光栅化](algorithm/14-virtual-geometry-software-rasterization.md) | 如何按投影大小分流、用两阶段原子维持深度与 ID 一致，并合并硬件结果、统计和验证？ |
 | [Virtual Geometry Page 压缩](algorithm/15-virtual-geometry-page-compression.md) | 如何组织根页与普通页、无损编码顶点/索引、独立校验与恢复物理地址？ |
 | [Surface Card 材质与直接光照查询](algorithm/16-surface-cache-material.md) | 六向捕获、离屏阴影和出射 Radiance 怎样计算，SDF 如何定位实例与同一 Atlas 采样？ |
+| [Screen Probe Gather](algorithm/17-screen-probe-gather.md) | 探针如何布置、查询缓存并重建屏幕间接光照？ |
+| [Surface Cache Radiosity](algorithm/18-surface-cache-radiosity.md) | Card 半球采样如何传播多次漫反射，固定采样与反射率如何影响收敛？ |
 
 ## 如何阅读和核查
 

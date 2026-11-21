@@ -1,0 +1,60 @@
+#include "/Generated/ShaderParameters/SurfaceCacheRadiosityRaysParameters.sf"
+#include "/Generated/ShaderParameters/SurfaceCacheMaterialParameters.sf"
+#include "/GI/SurfaceCacheRadiositySample.sf"
+
+float StableRotation(uint seed)
+{
+    seed ^= seed >> 16u;
+    seed *= 0x7feb352du;
+    seed ^= seed >> 15u;
+    seed *= 0x846ca68bu;
+    seed ^= seed >> 16u;
+    return float(seed >> 8u) * (1.0 / 16777216.0);
+}
+
+// Each group covers one Card, with one thread per radiosity texel.
+[numthreads(8, 8, 1)]
+void MainCS(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    uint cardIndex = group.y * TilesPerRow + group.x;
+    if (cardIndex >= CardCount)
+    {
+        return;
+    }
+
+    SurfaceCard card = Cards[cardIndex];
+    uint2 pixel;
+    float3 position, normal;
+    bool valid = GetRadiositySurface(card, thread.xy, pixel, position, normal);
+    uint firstRay = GetRadiosityQueryIndex(cardIndex, thread.xy);
+    if (!valid)
+    {
+        SurfaceCacheQuery invalid = (SurfaceCacheQuery)0;
+        invalid.Direction.y = 1.0;
+        invalid.Control.y = 2u;
+        for (uint ray = 0; ray < RaysPerTexel; ++ray)
+        {
+            RadiosityQueries[firstRay + ray] = invalid;
+        }
+        return;
+    }
+
+    SurfaceCacheInstance instance = Instances[card.Owner.y];
+    float bias = max(0.002, min(card.Extent.w, 0.5 * instance.SDFResolution.w));
+    float minSelfDistance = max(bias, 2.0 * instance.SDFResolution.w);
+    float3 up = abs(normal.z) < 0.999 ? float3(0, 0, 1) : float3(0, 1, 0);
+    float3 tangent = normalize(cross(up, normal));
+    float3 bitangent = cross(normal, tangent);
+    float rotation = StableRotation(firstRay + 1u);
+    for (uint ray = 0; ray < RaysPerTexel; ++ray)
+    {
+        float u = (float(ray) + 0.5) / float(RaysPerTexel);
+        float phi = 6.28318530718 * frac(rotation + float(ray) * 0.61803398875);
+        float3 direction = sqrt(u) * (cos(phi) * tangent + sin(phi) * bitangent) + sqrt(1.0 - u) * normal;
+        SurfaceCacheQuery query;
+        query.OriginDistance = float4(position + normal * bias, TraceDistance);
+        query.Direction = float4(direction, 0.0);
+        query.Control = uint4(0xffffffffu, 1u, card.Owner.x, asuint(minSelfDistance));
+        RadiosityQueries[firstRay + ray] = query;
+    }
+}

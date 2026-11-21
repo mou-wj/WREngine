@@ -17,10 +17,13 @@ namespace Renderer
         Core::Float3 Direction = {0, -1, 0};
         float InnerConeAngle = 0.35f, OuterConeAngle = 0.7f; // Radians, half angles.
         bool bEnabled = true, bCastShadow = true;
+        bool operator==(const SurfaceCacheLight&) const = default;
     };
 
     BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCacheLightingParameters)
+        SHADER_PARAMETER(uint32_t, RadiosityTileSize)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D, DirectRadiance)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, IndirectRadiance)
     END_SHADER_PARAMETER_STRUCT(SurfaceCacheLightingParameters)
 
     BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCacheLightingQueryResult)

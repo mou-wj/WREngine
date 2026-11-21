@@ -66,6 +66,8 @@ namespace Renderer
     BEGIN_SHADER_PARAMETER_STRUCT(SurfaceCacheQuery)
         SHADER_PARAMETER(Core::Float4, OriginDistance)
         SHADER_PARAMETER(Core::Float4, Direction)
+        // X = target instance, Y = mode, Z/W = source instance and asuint(minimum self-hit distance).
+        // W = 0 preserves the default trace interval.
         SHADER_PARAMETER(Core::UInt4, Control)
     END_SHADER_PARAMETER_STRUCT(SurfaceCacheQuery)
 

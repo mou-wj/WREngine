@@ -631,7 +631,7 @@ namespace Renderer
         resultDesc.Stride = sizeof(SurfaceCacheQueryResult);
         resultDesc.Usage = ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::UnorderedAccess |
             ERHIBufferUsageFlag::ShaderResource | ERHIBufferUsageFlag::TransferSrc;
-        auto results = builder.CreateBuffer("SurfaceCache.GPUQueryResults", resultDesc);
+        auto results = builder.CreateBuffer(queryBuffer->GetName() + ".SurfaceCacheResults", resultDesc);
         RenderGraphBufferUAVDesc resultUAVDesc;
         resultUAVDesc.Buffer = results;
         resultUAVDesc.Stride = resultDesc.Stride;

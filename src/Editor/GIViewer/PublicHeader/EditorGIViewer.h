@@ -39,6 +39,7 @@ namespace Editor
         Core::Int2 m_PreviewSize{640, 360};
         Renderer::ELumenViewerMode m_Mode = Renderer::ELumenViewerMode::Scene;
         Renderer::ELumenViewerCardView m_CardView = Renderer::ELumenViewerCardView::BaseColor;
+        Renderer::LumenViewerRadiositySettings m_Radiosity;
         uint32_t m_SelectedCardIndex = UINT32_MAX;
         bool m_bOpen = false;
         bool m_bVisible = false;

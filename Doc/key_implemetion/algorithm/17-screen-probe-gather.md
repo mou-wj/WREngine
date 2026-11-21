@@ -27,9 +27,9 @@ worldDir = normalize(t*localDir.x + b*localDir.y + N*localDir.z)
 
 ## SDF 命中、材质和出射辐射
 
-`ScreenProbePlacementAndRayGeneration` 将 Query 写入 RDG StructuredBuffer。Surface Cache 的 GPU 输入重载把该 Buffer 直接交给既有 SDF Query Compute；它按实例局部 SDF 找最近命中，恢复 InstanceID、世界位置/几何法线，并用同一 Card Lookup 选择材质 Atlas 的实际 texel。随后 `AddSurfaceCacheLightingLookupPass` 依据该 Texel 取出缓存的 Lambert 漫反射直接出射 Radiance。CPU 不逐射线读回，不复制另一套 SDF 或 Card 搜索。
+`ScreenProbePlacementAndRayGeneration` 将 Query 写入 RDG StructuredBuffer。Surface Cache 的 GPU 输入重载把该 Buffer 直接交给既有 SDF Query Compute。它按实例局部 SDF 找最近命中，恢复 InstanceID、世界位置与几何法线，并用同一 Card Lookup 选择材质 Atlas 的实际 texel。随后 `AddSurfaceCacheLightingLookupPass` 依据该 Texel 取出缓存的直接出射 Radiance，启用时加上 [Radiosity](18-surface-cache-radiosity.md) 图集的间接出射 Radiance。全部查询和结果传递在 GPU 完成。
 
-命中且材质与 Lighting 状态有效时，Probe Radiance 存入命中表面的直接出射 Radiance；命中但没有材质 Card/Lighting 覆盖时样本无效，按黑色缺失处理，不伪造环境填充。未命中时，从 IBL Specular Cube Map 的 mip 0 按射线方向采样；没有环境贴图时使用固定环境值 `(0.025,0.035,0.055)`。这处环境采样是未命中背景的 Radiance，不是对命中材质重复乘反射率。
+命中且材质与 Lighting 状态有效时，Probe Radiance 存入命中表面的直接出射 Radiance，加上启用时可用的 [Radiosity 间接出射 Radiance](18-surface-cache-radiosity.md)。命中但没有材质 Card/Lighting 覆盖时样本按黑色缺失处理。未命中时，从 IBL Specular Cube Map 的 mip 0 按射线方向采样，没有环境贴图时使用固定环境值 `(0.025,0.035,0.055)`。
 
 ## 屏幕空间重建与材质积分
 
@@ -42,7 +42,7 @@ E_r/π ≈ (1/n) * sum_i L_i(ω_i) * max(dot(N_r,ω_i),0) / max(dot(N_p,ω_i),1e
 GI_diffuse = BaseColor * (1-Metallic) * AO * (E_r/π)
 ```
 
-`L_i` 是命中面直接出射 Radiance 或未命中环境 Radiance。分母把 Probe 的 cosine 分布校正为目标表面的 cosine 权重；接收面 BaseColor/Metallic/AO 只乘一次。公式不使用源命中面的 BaseColor 再次调制其直接出射值，也不加入 Roughness 镜面、Emissive、间接多次反弹或反射。无效样本不加入分子；仍以固定 `RayCount` 作平均，因此命中无缓存导致的缺样会趋向变暗。
+`L_i` 是命中面的合计出射 Radiance 或未命中环境 Radiance。分母把 Probe 的 cosine 分布校正为目标表面的 cosine 权重。接收面 BaseColor/Metallic/AO 只乘一次。无效样本不加入分子，仍以固定 `RayCount` 作平均，因此命中无缓存导致的缺样会趋向变暗。
 
 ## GIViewer 中的 RenderGraph 顺序
 
@@ -54,4 +54,4 @@ Pass 之间只传 RDG Texture/Buffer 引用。RDG 元数据声明 GBuffer/Atlas/
 
 设屏幕像素数为 `P=W*H`，Probe 数约 `P/T²`，每 Probe 射线数为 `R`。SDF 查询与 Lighting Lookup 处理 `O(P*R/T²)` 条射线；Radiance gather 处理相同数量，Integration 对每像素最多访问 4 个 Probe、每 Probe 重新遍历 R 条射线，复杂度近似 `O(P*R)`。以 1920×1080、T=8、R=8 估算，约 32,400 个 Probe、259,200 条射线；Structured Buffer 和两张 RGBA32F 输出的主体空间约 120 MiB/帧，未计 GBuffer、Cache 纹理、RDG 对齐和驱动额外分配。因此此配置主要验证数据流，性能不代表可投产默认值。
 
-固定 Probe 不做跨帧历史、去噪、重要性采样、自适应放置、反射/屏幕命中补充或多次反弹；GBuffer 法线/距离约束可能漏掉薄物体和急剧深度变化，也可能保留局部漏光。SDF 自身精度、Card 覆盖和 Lighting Cache 的限制继续适用。当前 GIViewer 的缓存属于 Viewer 实例：场景变化不会自动失效，用户可通过 Rebuild Surface Cache 显式释放并重建；切换场景会重置旧缓存。未在 Viewer 中观察过非空场景的 Probe 命中及颜色反弹前，不宣称完整 GI 流程已验证。生命周期、构建限制及验证状态见 [优化项](../../dev/optimize/优化点-2026-11-17.md#sc-opt-08-screen-probe-缓存生命周期和实际场景验证)。
+Probe 本身每帧重建。跨帧光照传播由 Surface Cache Radiosity 完成。GBuffer 法线和距离约束可能漏掉薄物体或突变的深度层，SDF 精度、Card 覆盖和 Lighting Cache 的限制继续适用。场景变更与显式重建的时序见 [工程专题](../performance/13-screen-probe-gather.md#radiosity-迭代与缓存失效)。

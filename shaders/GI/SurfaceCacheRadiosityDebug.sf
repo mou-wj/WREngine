@@ -1,0 +1,28 @@
+#include "/Generated/ShaderParameters/SurfaceCacheRadiosityDebugParameters.sf"
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    if (any(thread.xy >= OutputSize))
+    {
+        return;
+    }
+    if (Iteration == 0u)
+    {
+        Output[thread.xy] = float4(0, 0, 0, 1);
+        return;
+    }
+
+    uint2 size;
+    Current.GetDimensions(size.x, size.y);
+    uint2 pixel = min(thread.xy * size / OutputSize, size - 1u);
+    float4 current = Current.Load(int3(pixel, 0));
+    float3 color = current.rgb;
+    if (bShowDelta != 0u)
+    {
+        float3 previous = Iteration > 1u ? Previous.Load(int3(pixel, 0)).rgb : 0.0;
+        color = abs(color - previous) * 32.0;
+    }
+    color = max(color, 0.0);
+    Output[thread.xy] = float4(current.a > 0.5 ? color / (1.0 + color) : 0.0, 1.0);
+}

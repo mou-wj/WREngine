@@ -1,6 +1,7 @@
 #include "/Generated/ShaderParameters/SurfaceCacheLightingLookupParameters.sf"
 #include "/Generated/ShaderParameters/SurfaceCacheMaterialParameters.sf"
 #include "/Generated/ShaderParameters/SurfaceCacheLightingParameters.sf"
+#include "/GI/SurfaceCacheOutgoingRadiance.sf"
 
 [numthreads(64, 1, 1)]
 void MainCS(uint3 thread : SV_DispatchThreadID)
@@ -21,7 +22,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
         if (card.Owner.x == hit.Status.x && all(pixel >= card.Tile.xy) && all(pixel < card.Tile.xy + card.Tile.zw) &&
             PositionCoverage.Load(int3(pixel, 0)).w > 0.5)
         {
-            float4 lighting = DirectRadiance.Load(int3(pixel, 0));
+            float4 lighting = LoadSurfaceCacheOutgoing(card, pixel);
             if (lighting.a > 0.5)
             {
                 result.Radiance = lighting;

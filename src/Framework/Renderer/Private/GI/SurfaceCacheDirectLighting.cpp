@@ -267,8 +267,10 @@ namespace Renderer
     SurfaceCacheLightingParameters SurfaceCacheDirectLighting::Register(RenderGraphBuilder& builder, const SurfaceCacheMaterial& material) const
     {
         Check(IsValidFor(material), "lighting is invalid/stale; update after material capture");
-        SurfaceCacheLightingParameters result;
+        SurfaceCacheLightingParameters result{};
         result.DirectRadiance = builder.RegisterExternalTexture("SurfaceCache.Lighting." + std::to_string(reinterpret_cast<uintptr_t>(this)), m_Radiance.get());
+        // A bound SRV is required even when the zero tile size disables indirect sampling.
+        result.IndirectRadiance = result.DirectRadiance;
         return result;
     }
 
@@ -440,19 +442,18 @@ namespace Renderer
                 }
             }
         }
-        SurfaceCacheLightingParameters lighting;
-        lighting.DirectRadiance = builder.RegisterExternalTexture("SurfaceCache.Lighting." + std::to_string(reinterpret_cast<uintptr_t>(this)), m_Radiance.get());
+        auto radiance = builder.RegisterExternalTexture("SurfaceCache.Lighting." + std::to_string(reinterpret_cast<uintptr_t>(this)), m_Radiance.get());
         auto* p = builder.AllocateParameter<SurfaceCacheDirectParameters>();
         p->Cache = cache;
         p->LightCount = uint32_t(data.size());
         p->Lights = ReadBuffer(builder, Upload(builder, data, "SurfaceCache.LightData"));
         p->Shadows = ReadBuffer(builder, Upload(builder, shadows, "SurfaceCache.ShadowSlices"));
         p->ShadowAtlas = shadow;
-        p->Output = WriteTexture(builder, lighting.DirectRadiance);
+        p->Output = WriteTexture(builder, radiance);
         Compute<SurfaceCacheDirectCS>(builder, "SurfaceCacheDirectLighting", p, (cache.AtlasSize.X + 7) / 8, (cache.AtlasSize.Y + 7) / 8);
         m_MaterialRevision = material.GetRevision();
         m_bValid = true; // Scheduled, not GPU-complete. A discarded/failed graph requires Invalidate().
-        return lighting;
+        return Register(builder, material);
     }
 
     RenderGraphBufferRef AddSurfaceCacheLightingLookupPass(RenderGraphBuilder& builder, const SurfaceCacheMaterialParameters& material,

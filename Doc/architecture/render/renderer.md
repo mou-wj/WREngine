@@ -97,7 +97,7 @@ Virtual Geometry 的可选流送由 Renderer::VirtualGeometryStreaming 管理每
 
 Private/GI 的 SurfaceCacheMaterial 与 SurfaceCacheDirectLighting 分别提供表面材质捕获/查询和独立的漫反射直接出射 Radiance 缓存：使用 Engine 静态网格、材质代理和局部 SDF，分别持有材质与光照 Atlas，复用现有灯光、阴影绘制、MeshMaterialShader 和 RDG，由消费者显式重捕获/重算并检查版本；不改变场景、全局距离场或 RHI 的职责，也不自动加入主场景光照。后续 GI 消费者显式持有和调用该缓存，接口及生命周期见 [Surface Cache 工程实现](../../key_implemetion/performance/12-surface-cache-material.md)，投影与查询见 [算法专题](../../key_implemetion/algorithm/16-surface-cache-material.md)。
 
-Screen Probe Gather 和上述缓存目前由 [LumenViewerRenderer](../../../src/Framework/Renderer/PublicHeader/LumenViewerRenderer.h) 作为独立消费者编排，Editor 的 GIViewer 调用该入口，在单独的预览 RenderGraph 中生成 Surface Cache、Direct Lighting、Probe 和可视化结果。`RenderModule` 与常规 `DefferedSceneRenderer` 不调用此入口，Lumen GI 输出不合入主场景目标。GIViewer 模块关系和阶段选择见 [Editor 架构](../app/editor.md) 与 [Renderer 使用约定](../../specification/renderer_spec.md#lumen-gi-viewer)，Screen Probe 算法和资源时序见 [算法专题](../../key_implemetion/algorithm/17-screen-probe-gather.md) 及 [工程专题](../../key_implemetion/performance/13-screen-probe-gather.md)。
+Editor 的 GIViewer 通过 [LumenViewerRenderer](../../../src/Framework/Renderer/PublicHeader/LumenViewerRenderer.h) 编排独立预览图。材质与直接光照缓存作为 Radiosity 输入，间接出射光单独保存并与直接出射光一起供 Screen Probe 查询。该入口的输出限定在 Viewer 的颜色目标。阶段选择和模块关系见 [Renderer 使用约定](../../specification/renderer_spec.md#lumen-gi-viewer) 与 [Editor 架构](../app/editor.md)，缓存与 Pass 时序见 [工程专题](../../key_implemetion/performance/13-screen-probe-gather.md)。
 
 换句话说：
 

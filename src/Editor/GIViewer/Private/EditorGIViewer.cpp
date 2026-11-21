@@ -23,6 +23,8 @@ namespace Editor
             {"Surface Cache / Metallic", Renderer::ELumenViewerMode::SurfaceMetallic},
             {"Surface Cache / Selected Mesh Card", Renderer::ELumenViewerMode::SurfaceCardAtlas},
             {"Direct Lighting Atlas", Renderer::ELumenViewerMode::DirectLightingAtlas},
+            {"Radiosity / Indirect Atlas", Renderer::ELumenViewerMode::RadiosityIndirectAtlas},
+            {"Radiosity / Iteration Delta", Renderer::ELumenViewerMode::RadiosityIterationDelta},
             {"Screen Probes / Placement", Renderer::ELumenViewerMode::ProbePlacement},
             {"Screen Probes / Ray Directions", Renderer::ELumenViewerMode::ProbeRayDirections},
             {"Screen Probes / Hit Ratio", Renderer::ELumenViewerMode::ProbeHitRatio},
@@ -58,6 +60,10 @@ namespace Editor
                 return "Selected Mesh Card atlas tile, enlarged to show its captured surface attributes.";
             case Renderer::ELumenViewerMode::DirectLightingAtlas:
                 return "Direct-lighting cache atlas, evaluated for the captured Mesh Cards.";
+            case Renderer::ELumenViewerMode::RadiosityIndirectAtlas:
+                return "Accumulated diffuse outgoing radiance across the Surface Cards, excluding direct lighting.";
+            case Renderer::ELumenViewerMode::RadiosityIterationDelta:
+                return "Absolute change since the previous bounce, amplified 32x. Darkening indicates convergence.";
             case Renderer::ELumenViewerMode::ProbePlacement:
                 return "Screen-space probe placement, surface normals, and tile boundaries.";
             case Renderer::ELumenViewerMode::ProbeRayDirections:
@@ -67,7 +73,7 @@ namespace Editor
             case Renderer::ELumenViewerMode::ProbeRadiance:
                 return "Average incoming radiance gathered by each screen-space probe.";
             case Renderer::ELumenViewerMode::IndirectDiffuse:
-                return "One-bounce diffuse indirect lighting reconstructed from the probe grid.";
+                return "Diffuse indirect lighting reconstructed from the probe grid. Toggle radiosity to compare with one bounce.";
             }
             return "";
         }
@@ -236,7 +242,7 @@ namespace Editor
         const auto position = ImGui::GetWindowPos();
         const auto size = ImGui::GetWindowSize();
         m_PopupGeometry = {position.x, position.y, size.x, size.y};
-        if (m_bVisible)
+        if (m_bOpen && m_bVisible)
         {
             ImGui::BeginChild("Lumen GI stages", {245, 0}, ImGuiChildFlags_Borders);
             ImGui::TextUnformatted("Lumen stages");
@@ -260,7 +266,7 @@ namespace Editor
                 m_SelectedCardIndex = UINT32_MAX;
                 m_Mode = Renderer::ELumenViewerMode::SurfaceCoverage;
             }
-            ImGui::TextWrapped("Build captures six axis-aligned Mesh Cards per static mesh. Rebuild after changing scene geometry, materials, or lights.");
+            ImGui::TextWrapped("Build captures six axis-aligned Mesh Cards per static mesh.");
 
             ImGui::Separator();
             ImGui::Text("Mesh Cards (%zu)", cards.size());
@@ -303,6 +309,22 @@ namespace Editor
             ImGui::BeginGroup();
             ImGui::Text("View: %s", GetModeName(m_Mode));
             ImGui::TextWrapped("%s", GetModeDescription(m_Mode));
+            if (m_Mode >= Renderer::ELumenViewerMode::ProbePlacement)
+            {
+                ImGui::Checkbox("Use radiosity in Screen Probes", &m_Radiosity.bEnabled);
+                ImGui::SameLine();
+                ImGui::Checkbox("Pause", &m_Radiosity.bPaused);
+                ImGui::SameLine();
+                if (ImGui::Button("Step"))
+                {
+                    m_Radiosity.bPaused = true;
+                    m_Radiosity.bStep = true;
+                }
+                ImGui::SameLine();
+                m_Radiosity.bRestart = ImGui::Button("Restart");
+                ImGui::SameLine();
+                ImGui::Text("Iteration %u / %u", m_Preview->GetRadiosityIteration(), m_Radiosity.IterationLimit);
+            }
             if (m_Mode == Renderer::ELumenViewerMode::SurfaceCardAtlas)
             {
                 DrawCardViewSelector(m_CardView);
@@ -327,7 +349,9 @@ namespace Editor
             }
             m_PreviewSize = {std::max(1, static_cast<int>(imageWidth)), std::max(1, static_cast<int>(imageHeight))};
             m_bHasScene = source.Scene && source.View && m_Preview->Render(source, m_PreviewSize, m_Mode,
-                m_SelectedCardIndex, m_CardView);
+                m_SelectedCardIndex, m_CardView, m_Radiosity);
+            m_Radiosity.bStep = false;
+            m_Radiosity.bRestart = false;
             if (auto* texture = m_Preview->GetTexture())
             {
                 const auto imagePosition = ImGui::GetCursorScreenPos();

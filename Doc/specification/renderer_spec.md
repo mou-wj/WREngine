@@ -82,12 +82,14 @@ AddSurfaceCacheLightingDebugPass 不传 queryResults 时输出 Atlas；传入 Li
 
 ## Lumen GI Viewer
 
-Lumen 的 Surface Cache Material、Direct Lighting 与 Screen Probe Gather 目前只由独立的 [LumenViewerRenderer](../../src/Framework/Renderer/PublicHeader/LumenViewerRenderer.h) 编排，并通过 Editor 的 [GIViewer 模块](../../src/Editor/GIViewer/PublicHeader/EditorGIViewer.h) 从 View 页打开。Viewer 使用当前场景与相机视图创建自己的 RenderGraph 预览目标、深度和 GBuffer，再按所选阶段运行 Surface Cache 捕获/查询、直接光照缓存、Screen Probe Gather 与可视化；这些 Pass 不进入 `RenderModule` 的常规场景构图，也不改写主渲染器的 GBuffer 或颜色附件。
+Lumen 的 Surface Cache Material、Direct Lighting、Radiosity 与 Screen Probe Gather 由独立的 [LumenViewerRenderer](../../src/Framework/Renderer/PublicHeader/LumenViewerRenderer.h) 编排。通过 Editor 的 [GIViewer](../../src/Editor/GIViewer/PublicHeader/EditorGIViewer.h) 模块从 View 页打开。Viewer 使用当前场景与相机创建独立 RenderGraph、预览颜色目标、深度和 GBuffer，按所选阶段运行缓存和探针 Pass。
 
-Viewer 默认显示 Scene 预览，不在打开时自动建立 Surface Cache 或运行 Screen Probe。选择 Surface Cache、Direct Lighting 或 Screen Probe 阶段会按需初始化并捕获缓存；`Build/Rebuild Surface Cache` 按钮切换到 Card Coverage 视图并执行重建。这样打开 Viewer 时先呈现当前场景，昂贵的 GI 阶段由用户主动选择。
+Viewer 默认显示 Scene 预览。选择 Surface Cache、Direct Lighting、Radiosity 或 Screen Probe 阶段会按需初始化缓存。`Rebuild Surface Cache` 按钮切换到 Card Coverage 视图并重建。
 
 Scene 视图提供 `Draw Mesh Cards in scene` 和 `Selected Card only` 开关。Mesh Card 列表按 Scene Instance 和六个轴向投影列出 Card；选择 Card 后显示其世界中心、法线、范围和 Atlas Tile。场景叠加把 Card 的世界投影矩形经当前 ViewProjection 投到预览图片上，以轴向颜色区分并以黄色强调选中项。该叠加由 ImGui 绘制，按 X-ray 方式显示，不受场景深度遮挡；它表示空间覆盖范围，不代表捕获到的表面三角形。选中 Card 后可切换并放大查看其 Atlas Tile 的 Base Color、World Normal、Coverage、Roughness 或 Metallic。
 
-Surface Cache 的 Base Color、World Normal、Card Coverage、Roughness、Metallic 和 Direct Lighting Atlas 显示各自缓存图集；Screen Probe 的 Placement、Ray Directions、Hit Ratio、Radiance 和 Indirect Diffuse 显示屏幕空间阶段结果。每个阶段在 Viewer 中附有用途说明。Capture projection plane 示意图表达 Card 的 U/V 投影基与法线方向，不是场景内按世界尺寸绘制的覆盖盒。场景几何、材质、光源变化后，可在 Viewer 中显式重建 Surface Cache。Screen Probe 固定配置、估计公式、资源预算与工程生命周期见 [算法说明](../key_implemetion/algorithm/17-screen-probe-gather.md) 和 [工程说明](../key_implemetion/performance/13-screen-probe-gather.md)。这是一条隔离验证路径，不代表 Lumen 已接入产品主渲染流程；非空场景的各阶段结果与画面仍须实际验证。
+Surface Cache 的 Base Color、World Normal、Card Coverage、Roughness、Metallic 和 Direct Lighting Atlas 显示对应图集。Card 投影示意表达 U/V 投影基与法线方向。Screen Probe 的 Placement、Ray Directions、Hit Ratio、Radiance 和 Indirect Diffuse 显示屏幕空间各阶段结果。
 
-常规 `DefferedSceneRenderer` 继续运行原有 ScreenSpaceGI/SSR 路径。该现有效果与 Lumen Screen Probe Gather 是不同实现，Viewer 的阶段输出不会改变它。
+`Radiosity / Indirect Atlas` 显示累计间接出射光，`Radiosity / Iteration Delta` 显示相邻两轮的变化。启用 `Use radiosity in Screen Probes` 时，探针命中会读取直接与间接出射光之和。`Pause` 停止自动迭代，`Step` 暂停并推进一轮，`Restart` 清除间接历史，可配合暂停逐轮查看。实例快照和灯光变化会触发相应缓存重建或重算。具体失效条件见 [工程说明](../key_implemetion/performance/13-screen-probe-gather.md#radiosity-迭代与缓存失效)，反弹算法见 [Radiosity 算法](../key_implemetion/algorithm/18-surface-cache-radiosity.md)。
+
+主场景仍使用 `DefferedSceneRenderer` 的 ScreenSpaceGI/SSR。上述输出只用于 GIViewer 预览。

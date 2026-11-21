@@ -24,7 +24,9 @@ namespace Renderer
         ProbeRayDirections,
         ProbeHitRatio,
         ProbeRadiance,
-        IndirectDiffuse
+        IndirectDiffuse,
+        RadiosityIndirectAtlas,
+        RadiosityIterationDelta
     };
 
     enum class ELumenViewerCardView : uint32_t
@@ -52,6 +54,15 @@ namespace Renderer
 
     class LumenViewerRendererState;
 
+    struct LumenViewerRadiositySettings
+    {
+        uint32_t IterationLimit = 32;
+        bool bEnabled = true;
+        bool bPaused = false;
+        bool bStep = false;
+        bool bRestart = false;
+    };
+
     // Builds the Lumen stages into a caller-owned preview target and cache lifetime.
     class RENDERER_API LumenViewerRenderer
     {
@@ -63,8 +74,10 @@ namespace Renderer
 
         bool AddPasses(RenderCore::RenderGraphBuilder& builder, Engine::SceneInterface* scene,
             const Engine::SceneView& view, RenderCore::RenderTexture* output, ELumenViewerMode mode,
-            uint32_t selectedCardIndex = UINT32_MAX, ELumenViewerCardView cardView = ELumenViewerCardView::BaseColor);
+            uint32_t selectedCardIndex = UINT32_MAX, ELumenViewerCardView cardView = ELumenViewerCardView::BaseColor,
+            const LumenViewerRadiositySettings& radiosity = {});
         const std::vector<LumenViewerCardInfo>& GetSurfaceCards() const;
+        uint32_t GetRadiosityIteration() const;
         void Reset(RenderCore::RenderTexture* lastOutput = nullptr);
 
     private:
