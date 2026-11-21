@@ -17,6 +17,16 @@ namespace Renderer {
 
     void DefferedSceneRenderer::Build(RenderCore::RenderGraphBuilder& builder)
     {
+        BuildPasses(builder, false);
+    }
+
+    RenderGraphTextureRef DefferedSceneRenderer::BuildWithDeferredSpecular(RenderGraphBuilder& builder)
+    {
+        return BuildPasses(builder, true);
+    }
+
+    RenderGraphTextureRef DefferedSceneRenderer::BuildPasses(RenderGraphBuilder& builder, bool bDeferSpecular)
+    {
         auto sceneColorTargetTexture = SceneTextures.SceneColor;
         RenderTargetBindingSlots renderTargetBindingSlots;
         renderTargetBindingSlots.NumColorRenderTargets = 3;
@@ -40,7 +50,7 @@ namespace Renderer {
             if (sceneEnvMap)
                 for (auto view : Views->GetViews())
                     AddDrawSkyBoxPass(builder,sceneEnvMap,SceneTextures.SceneColor,SceneTextures.SceneDepth,view);
-            return;
+            return nullptr;
         }
         // Build deferred rendering passes for each view.
         // Collect the views and static mesh batches.
@@ -158,7 +168,7 @@ namespace Renderer {
                 }
                 else {
                     LOG_ERROR("Blend mode not supported");
-                    return;
+                    return nullptr;
                 }
                 auto pipeline = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(pipelineDesc);
 
@@ -239,6 +249,7 @@ namespace Renderer {
             auto* paramss = builder.AllocateParameter<StaticMeshMaterialDefferedShadingCSParameters>();
             paramss->InvViewProj = view.InvViewProjectionMatrix;
             paramss->CameraPos = view.CameraWorldPos;
+            paramss->bDeferSpecularIBL = bDeferSpecular;
             paramss->ScreenSize.X = width;
             paramss->ScreenSize.Y = height;
             paramss->GBuffer.GBufferInput.GBufferA = SceneTextures.GBufferA;
@@ -264,7 +275,14 @@ namespace Renderer {
 			AddStaticMeshDefferedShadingPass(builder, paramss, false);
             //构建生成屏幕空间反射的深度
             
-            AddStaticMeshDefferedShadingPass(builder, paramss, true);
+            if (!bDeferSpecular || (Scene->GetGPUResourceInfo().LightResourceInfo.IBLDiffuseTexture && sceneEnvMap))
+            {
+                AddStaticMeshDefferedShadingPass(builder, paramss, true);
+            }
+            if (bDeferSpecular)
+            {
+                return defferedColor;
+            }
             //构建深度金字塔
 			BuildDepthPyramidPassInput input;
             input.SceneDepthTexture = SceneTextures.SceneDepth;
@@ -289,5 +307,6 @@ namespace Renderer {
                 AddDrawSkyBoxPass(builder, sceneEnvMap, SceneTextures.SceneColor, SceneTextures.SceneDepth, view);
             }
         }
+        return nullptr;
     }
 }

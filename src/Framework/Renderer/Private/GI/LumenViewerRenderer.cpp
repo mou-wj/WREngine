@@ -9,11 +9,13 @@
 #include "LocalVertexFactory.h"
 #include "GI/ScreenProbeGather.h"
 #include "GI/ScreenProbeFilter.h"
+#include "GI/Reflections.h"
 #include "GI/SurfaceCacheMaterial.h"
 #include "GI/SurfaceCacheDirectLighting.h"
 #include "GI/SurfaceCacheRadiosity.h"
 #include "GI/WorldRadianceCache.h"
 #include "RHIApi.h"
+#include "DrawSkyPass.h"
 
 #include <algorithm>
 #include <cmath>
@@ -204,12 +206,15 @@ namespace Renderer
         views.BuildAllViews();
 
         const auto color = builder.RegisterExternalTexture("LumenViewer.Output", output);
+        const bool bReflectionView = mode >= ELumenViewerMode::ReflectionComposite && mode <= ELumenViewerMode::ReflectionContribution;
+        auto instances = bReflectionView ? SurfaceCacheMaterial::GatherSceneInstances(*scene) : std::vector<SurfaceCacheMeshInstance>{};
+        const bool bReflections = bReflectionView && !instances.empty();
         const auto depthUsage = RHI::ERHITextureCreateFlag::DepthStencil | RHI::ERHITextureCreateFlag::ShaderResource;
         const auto depth = CreateTexture(builder, "LumenViewer.Depth", outputDesc.Width, outputDesc.Height,
             RHI::ERHIFormat::D32_Float, depthUsage);
         const uint32_t maxMipLevel = std::max(1u, static_cast<uint32_t>(std::log2(std::max(outputDesc.Width, outputDesc.Height))));
         const auto pyramidUsage = depthUsage | RHI::ERHITextureCreateFlag::UAV;
-        const auto depthPyramid = CreateTexture(builder, "LumenViewer.DepthPyramid", outputDesc.Width,
+        const auto depthPyramid = bReflections ? nullptr : CreateTexture(builder, "LumenViewer.DepthPyramid", outputDesc.Width,
             outputDesc.Height, RHI::ERHIFormat::D32_Float, pyramidUsage, maxMipLevel);
 
         const auto gbufferInfo = CreateGBufferInfo({});
@@ -234,16 +239,32 @@ namespace Renderer
         sceneRenderer->SceneTextures.GBufferC = gbuffers[2];
         sceneRenderer->BuildSceneLightShadowMap(scene, builder);
         sceneRenderer->UploadShadowMapInfo(scene, builder);
-        sceneRenderer->Build(builder);
+        RenderCore::RenderGraphTextureRef reflectionBase = nullptr;
+        if (bReflections)
+        {
+            reflectionBase = sceneRenderer->BuildWithDeferredSpecular(builder);
+        }
+        else
+        {
+            sceneRenderer->Build(builder);
+        }
         Engine::LocalVertexFactoryInstanceManager::Get().UpdateGPUResources();
         scene->UpdateGlobalDistanceFieldIfNeeded();
+
+        if (bReflections && !reflectionBase)
+        {
+            return false;
+        }
 
         if (mode == ELumenViewerMode::Scene)
         {
             return true;
         }
 
-        auto instances = SurfaceCacheMaterial::GatherSceneInstances(*scene);
+        if (!bReflectionView)
+        {
+            instances = SurfaceCacheMaterial::GatherSceneInstances(*scene);
+        }
         std::ranges::sort(instances, {}, &SurfaceCacheMeshInstance::InstanceID);
         if (m_State->Material && !SameInstances(m_State->Material->GetInstances(), instances))
         {
@@ -298,7 +319,7 @@ namespace Renderer
         const bool bRadiosityView = IsRadiosityView(mode);
         const bool bWorldCacheView = mode == ELumenViewerMode::WorldProbeAtlas;
         bool bLightingChanged = false;
-        if (bScreenProbe || bRadiosityView || bWorldCacheView || mode == ELumenViewerMode::DirectLightingAtlas)
+        if (bScreenProbe || bRadiosityView || bWorldCacheView || bReflections || mode == ELumenViewerMode::DirectLightingAtlas)
         {
             const auto lights = SurfaceCacheDirectLighting::GatherSceneLights(*scene);
             if (!m_State->Lighting->IsValidFor(*m_State->Material) || lights != m_State->Lights)
@@ -353,7 +374,7 @@ namespace Renderer
             return true;
         }
 
-        if (!bScreenProbe && !bRadiosityView && !bWorldCacheView)
+        if (!bScreenProbe && !bRadiosityView && !bWorldCacheView && !bReflections)
         {
             return true;
         }
@@ -410,6 +431,31 @@ namespace Renderer
                 return true;
             }
             probeInput.WorldCache = &worldCache;
+        }
+        if (reflectionBase)
+        {
+            auto previewView = views.GetViews().front();
+            ReflectionsInput reflections;
+            reflections.GBuffer.GBufferA = gbuffers[0];
+            reflections.GBuffer.GBufferB = gbuffers[1];
+            reflections.GBuffer.GBufferC = gbuffers[2];
+            reflections.GBuffer.Depth = depth;
+            reflections.GBuffer.PointSampler = RenderCore::GlobalNearestSampler.get();
+            reflections.DeferredColor = reflectionBase;
+            reflections.Output = color;
+            reflections.ViewProjection = previewView.ViewProjectionMatrix;
+            reflections.InverseViewProjection = previewView.InvViewProjectionMatrix;
+            reflections.CameraPosition = previewView.CameraWorldPos;
+            reflections.Environment = probeInput.Environment;
+            reflections.bHasEnvironment = probeInput.bHasEnvironment;
+            reflections.WorldCache = probeInput.WorldCache;
+            reflections.View = static_cast<EReflectionView>(uint32_t(mode) - uint32_t(ELumenViewerMode::ReflectionComposite));
+            AddReflectionsPasses(builder, reflections, material, lighting);
+            if (reflections.View == EReflectionView::Composite && environment)
+            {
+                AddDrawSkyBoxPass(builder, environment, color, depth, previewView);
+            }
+            return true;
         }
         if (bFiltering)
         {

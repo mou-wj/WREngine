@@ -1,6 +1,7 @@
 #include "TestBase.h"
 #include "../Framework/Renderer/Private/GI/SurfaceCacheRadiosity.h"
 #include "../Framework/Renderer/Private/GI/ScreenProbeGather.h"
+#include "../Framework/Renderer/Private/GI/Reflections.h"
 #include "DistanceFieldMgr.h"
 #include "GlobalShader.h"
 #include "MaterialCore.h"
@@ -130,7 +131,7 @@ namespace Test
     class SurfaceCacheGITest : public TestBase
     {
     protected:
-        void InitializeGI(bool bWorldCache)
+        void InitializeGI(bool bWorldCache, bool bReflections = false)
         {
             GRHIApi = CreateTestRHIApi();
             GRHIApi->Init();
@@ -141,7 +142,8 @@ namespace Test
             std::erase_if(globals, [=](const auto& entry)
             {
                 return !entry.first.starts_with("SurfaceCache") && entry.first != "PositionOnlyVS" &&
-                    !(bWorldCache && (entry.first.starts_with("WorldRadiance") || entry.first.starts_with("ScreenProbe")));
+                    !(bWorldCache && (entry.first.starts_with("WorldRadiance") || entry.first.starts_with("ScreenProbe"))) &&
+                    !(bReflections && entry.first.starts_with("Reflection"));
             });
             GShaderMap.Initialize();
             globals = registered;
@@ -564,4 +566,260 @@ namespace Test
         }
     };
     REGISTER_RENDER_TEST("WorldRadianceCacheTest", WorldRadianceCacheTest);
+
+    namespace
+    {
+        BEGIN_SHADER_PARAMETER_STRUCT(ReflectionsTestUpload)
+            RDG_TEXTURE_ACCESS(Color, ERHIResourceAccess::TransferDest)
+            RDG_TEXTURE_ACCESS(Normal, ERHIResourceAccess::TransferDest)
+            RDG_TEXTURE_ACCESS(Material, ERHIResourceAccess::TransferDest)
+            RDG_TEXTURE_ACCESS(Depth, ERHIResourceAccess::TransferDest)
+            RDG_TEXTURE_ACCESS(Deferred, ERHIResourceAccess::TransferDest)
+            RDG_TEXTURE_ACCESS(Environment, ERHIResourceAccess::TransferDest)
+            RDG_TEXTURE_ACCESS(Lut, ERHIResourceAccess::TransferDest)
+        END_SHADER_PARAMETER_STRUCT(ReflectionsTestUpload)
+
+        BEGIN_SHADER_PARAMETER_STRUCT(ReflectionsTestReadback)
+            RDG_TEXTURE_ACCESS(Output, ERHIResourceAccess::TransferSrc)
+        END_SHADER_PARAMETER_STRUCT(ReflectionsTestReadback)
+    }
+
+    class ReflectionsTest final : public SurfaceCacheGITest
+    {
+    public:
+        void Setup() override { InitializeGI(true, true); }
+
+        void Run() override
+        {
+            constexpr uint32_t size = 32;
+            constexpr uint32_t receiver = 15 * size + 15;
+            const Float4 screenColor{0.1f, 0.8f, 0.2f, 1};
+            const Float4 baseLighting{0.07f, 0.06f, 0.05f, 1};
+            const Float4 sky{0.2f, 0.4f, 0.6f, 1};
+            const Float4 lut{0.75f, 0.1f, 0, 1};
+            using Image = std::array<Float4, size * size>;
+            auto wall = MakeWall(4.0f);
+            Material red;
+            red.SetShadingModel(EShadingModel::Lit);
+            red.SetParameter("BaseColor", std::array<float, 4>{0.85f, 0.04f, 0.03f, 1.0f});
+            red.SetParameter("Metallic", 0.0f);
+            SurfaceCacheMeshInstance instance;
+            instance.InstanceID = 1;
+            instance.RenderData = wall;
+            instance.LocalToWorld(2, 3) = 2.0f;
+            instance.Materials = {red.GetRenderProxyShared()};
+            SurfaceCacheMaterial surface;
+            surface.Initialize({instance}, 32);
+            SurfaceCacheDirectLighting direct;
+            direct.Initialize(surface, 64, 6);
+            WorldRadianceCache world;
+            SurfaceCacheLight light;
+            light.Direction = {0, 0, 1};
+            light.Intensity = 3.0f;
+            light.bCastShadow = false;
+
+            RHITextureDesc textureDesc;
+            textureDesc.Width = textureDesc.Height = size;
+            textureDesc.Format = ERHIFormat::R32G32B32A32_Float;
+            textureDesc.Usage = ERHITextureCreateFlag::UAV | ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferSrc;
+            RenderTexture output(textureDesc);
+            output.InitRHIResource();
+            textureDesc.Width = textureDesc.Height = 1;
+            textureDesc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest;
+            RenderTexture brdf(textureDesc);
+            brdf.InitRHIResource();
+            textureDesc.Type = ERHITextureType::TextureCube;
+            textureDesc.ArraySize = 6;
+            RenderTexture environment(textureDesc);
+            environment.InitRHIResource();
+
+            bool capture = true;
+            const auto render = [&](EReflectionView view, bool bScreenObject, bool bAwayFromWall,
+                float roughness = 0.02f, bool bUseWorld = false, bool bDisableCards = false)
+            {
+                Image colors, normals, materials, depths, deferred;
+                colors.fill({0.85f, 0.85f, 0.85f, 0.95f});
+                normals.fill({0.5f, 0.5f, 0.0f, roughness});
+                materials.fill({0, 1, 1.0f / 255.0f, 1});
+                depths.fill({1, 0, 0, 0});
+                deferred.fill(baseLighting);
+                for (uint32_t y = 3; y < 29; ++y)
+                {
+                    for (uint32_t x = 4; x <= 15; ++x)
+                    {
+                        const uint32_t index = y * size + x;
+                        depths[index].X = 0.3f;
+                        if (!bAwayFromWall)
+                        {
+                            normals[index] = {0.9472136f, 0.5f, 0.2763932f, roughness};
+                        }
+                    }
+                    if (bScreenObject)
+                    {
+                        for (uint32_t x = 19; x <= 29; ++x)
+                        {
+                            const uint32_t index = y * size + x;
+                            depths[index].X = 0.55f;
+                            deferred[index] = screenColor;
+                        }
+                    }
+                }
+
+                RenderGraphBuilder graph;
+                auto material = capture ? surface.AddCapturePasses(graph) : surface.Register(graph);
+                if (bDisableCards)
+                {
+                    // Keep the genuine SDF hit while simulating a region without Card coverage.
+                    material.CardCount = 0;
+                }
+                const auto lighting = capture ? direct.AddUpdatePasses(graph, surface, {light}) : direct.Register(graph, surface);
+                RenderGraphTextureDesc desc;
+                desc.Width = desc.Height = size;
+                desc.Format = ERHIFormat::R32G32B32A32_Float;
+                desc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest;
+                auto* upload = graph.AllocateParameter<ReflectionsTestUpload>();
+                upload->Color = graph.CreateTexture("ReflectionsTest.Color", desc);
+                upload->Normal = graph.CreateTexture("ReflectionsTest.Normal", desc);
+                upload->Material = graph.CreateTexture("ReflectionsTest.Material", desc);
+                upload->Depth = graph.CreateTexture("ReflectionsTest.Depth", desc);
+                upload->Deferred = graph.CreateTexture("ReflectionsTest.Deferred", desc);
+                const auto env = graph.RegisterExternalTexture("ReflectionsTest.Environment", &environment);
+                const auto lutTexture = graph.RegisterExternalTexture("ReflectionsTest.BRDF", &brdf);
+                upload->Environment = capture ? env : nullptr;
+                upload->Lut = capture ? lutTexture : nullptr;
+                graph.AddPass("ReflectionsTestUpload", ReflectionsTestUpload::GetMetaData(), upload, EPassFlag::Graphic,
+                    [&](RHICommandListBase& cmd)
+                    {
+                        const auto update = [&](RenderGraphTextureRef texture, const Image& pixels)
+                        {
+                            GRHIApi->UpdateTexture(cmd, texture->GetRHITexture(), pixels.data(), RHIUpdateTextureRegion::Create2DRegion(size, size));
+                        };
+                        update(upload->Color, colors);
+                        update(upload->Normal, normals);
+                        update(upload->Material, materials);
+                        update(upload->Depth, depths);
+                        update(upload->Deferred, deferred);
+                        if (upload->Environment)
+                        {
+                            auto region = RHIUpdateTextureRegion::Create2DRegion(1, 1);
+                            GRHIApi->UpdateTexture(cmd, brdf.GetRHI(), &lut, region);
+                            for (region.ArraySlice = 0; region.ArraySlice < 6; ++region.ArraySlice)
+                            {
+                                GRHIApi->UpdateTexture(cmd, environment.GetRHI(), &sky, region);
+                            }
+                        }
+                    });
+
+                ReflectionsInput input;
+                input.GBuffer.GBufferA = upload->Color;
+                input.GBuffer.GBufferB = upload->Normal;
+                input.GBuffer.GBufferC = upload->Material;
+                input.GBuffer.Depth = upload->Depth;
+                input.GBuffer.PointSampler = GlobalNearestSampler.get();
+                input.DeferredColor = upload->Deferred;
+                input.CameraPosition = {-0.03125f, 0.03125f, -1};
+                input.View = view;
+                input.Environment.IBLDiffuseMap = input.Environment.IBLSpecularMap = env;
+                input.Environment.IBLLut = lutTexture;
+                input.Environment.LinearClampIBLSampler = GlobalSampler.get();
+                input.bHasEnvironment = true;
+                WorldRadianceCacheParameters worldParameters{};
+                if (bUseWorld)
+                {
+                    worldParameters = world.Update(graph, input.CameraPosition, 128, material, lighting, input.Environment, true);
+                    input.WorldCache = &worldParameters;
+                }
+                input.Output = graph.RegisterExternalTexture("ReflectionsTest.Output", &output);
+                AddReflectionsPasses(graph, input, material, lighting);
+
+                void* mapped = nullptr;
+                const auto map = [&](RHICommandListBase& cmd)
+                {
+                    mapped = GRHIApi->MapReadTexture(cmd, output.GetRHI(), {});
+                };
+                auto* read = graph.AllocateParameter<ReflectionsTestReadback>();
+                read->Output = input.Output;
+                const bool bGL = GShaderPlatform == ERHIShaderPlatform::OpenGL;
+                graph.AddPass("ReflectionsTestReadback", ReflectionsTestReadback::GetMetaData(), read, EPassFlag::Graphic,
+                    [&](RHICommandListBase& cmd)
+                    {
+                        if (!bGL)
+                        {
+                            map(cmd);
+                        }
+                    });
+                graph.Execute();
+                const auto fence = output.GetTracker().GetLastAccessFence();
+                auto* queue = GRHIApi->GetQueue(fence.QueueType);
+                queue->WaitValue(fence.Value);
+                if (bGL)
+                {
+                    auto* context = queue->AcquireCommandContext();
+                    RHICommandListBase cmd(context);
+                    cmd.SetImmediate(true);
+                    cmd.Begin();
+                    map(cmd);
+                    cmd.End();
+                    queue->WaitValue(queue->ExecuteContext(context));
+                }
+                Verify(mapped != nullptr, "reflection pixels were read back");
+                Image pixels;
+                std::copy_n(static_cast<const Float4*>(mapped), pixels.size(), pixels.begin());
+                GRHIApi->Unmap(mapped);
+                capture = false;
+                return pixels;
+            };
+
+            const auto ray = render(EReflectionView::RayDirection, true, false)[receiver];
+            const auto screen = render(EReflectionView::Radiance, true, false)[receiver];
+            const auto screenHit = render(EReflectionView::ScreenHit, true, false)[receiver];
+            const auto sdf = render(EReflectionView::Radiance, false, false)[receiver];
+            const auto sdfHit = render(EReflectionView::SDFHit, false, false)[receiver];
+            const auto fallback = render(EReflectionView::Radiance, false, true)[receiver];
+            std::cout << "Reflection ray=" << ray.X << "," << ray.Z << " screen=" << screen.Y << " confidence=" << screenHit.Z
+                << " SDF=" << sdf.X << "," << sdf.Y << " validity=" << sdfHit.Y << " environment=" << fallback.Z << std::endl;
+            Verify(std::abs(ray.X - 0.9f) < 1e-4f && std::abs(ray.Z - 0.8f) < 1e-4f, "a smooth receiver reflects along the mirror direction");
+            Verify(screenHit.Z > 0.9f && std::abs(screen.Y - screenColor.Y) < 1e-4f, "screen trace hits the visible green target");
+            Verify(sdfHit.Y > 0.75f && sdf.X > 0.7f && sdf.X > 3.0f * sdf.Y, "miss continues to off-screen SDF and red Card lighting");
+            Verify(std::abs(fallback.Z - sky.Z) < 1e-4f && std::abs(fallback.X - sky.X) < 1e-4f, "a miss restores prefiltered sky radiance");
+            const auto uncoveredSource = render(EReflectionView::Source, false, false, 0.02f, false, true)[receiver];
+            const auto uncovered = render(EReflectionView::Radiance, false, false, 0.02f, false, true)[receiver];
+            Verify(uncoveredSource.X > 0.95f && uncoveredSource.Y < 0.35f && std::abs(uncovered.Z - sky.Z) < 1e-4f,
+                "SDF geometry without a valid Card is distinguished from a miss and falls back to sky");
+
+            const auto contribution = render(EReflectionView::Contribution, true, false)[receiver];
+            const auto composite = render(EReflectionView::Composite, true, false)[receiver];
+            Verify(contribution.Y > 0.0f && contribution.Y < screen.Y &&
+                std::abs(composite.Y - (baseLighting.Y + contribution.Y)) < 1e-5f, "composition adds exactly the BRDF-weighted specular term");
+
+            const auto smoothRays = render(EReflectionView::RayDirection, false, true);
+            const auto roughRays = render(EReflectionView::RayDirection, false, true, 0.65f);
+            uint32_t bentRays = 0;
+            for (uint32_t i = 0; i < roughRays.size(); ++i)
+            {
+                const Float3 delta{roughRays[i].X - smoothRays[i].X, roughRays[i].Y - smoothRays[i].Y, roughRays[i].Z - smoothRays[i].Z};
+                if (roughRays[i].Z > 0.0f && delta.LengthSquared() > 0.01f)
+                {
+                    ++bentRays;
+                }
+            }
+            Verify(bentRays > 80, "roughness broadens the reflection direction distribution");
+            Image sources;
+            for (uint32_t i = 0; i < 4; ++i)
+            {
+                sources = render(EReflectionView::Source, false, true, 0.65f, true);
+            }
+            const auto worldHits = std::ranges::count_if(sources, [](const Float4& color)
+            {
+                return color.X > 0.75f && color.Z > 0.95f;
+            });
+            Verify(worldHits > 0, "rough misses use available world radiance probes");
+            std::cout << "REFLECTIONS_TEST_OK roughDirectionChanges=" << bentRays << " worldHits=" << worldHits << std::endl;
+            direct.Release();
+            surface.Release();
+            GDistanceFieldMgr.ReleaseMeshDistanceField(*wall);
+            wall->LODResources.front().ReleaseResources();
+        }
+    };
+    REGISTER_RENDER_TEST("ReflectionsTest", ReflectionsTest);
 }

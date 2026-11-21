@@ -1,135 +1,32 @@
 #include "/Generated/ShaderParameters/SceneEvnIBLLightParameters.sf"
 #include "/core/ShadingCommon.sf"
 
-float3 ShadeIBL(
-    ShadingContext Context,
-    MaterialData Material,
-    float3 DiffuseIrradiance,
-    float3 PrefilteredSpecular,
-    float2 BRDF)
+float3 GetIBLFresnel(MaterialData material, float nDotV)
 {
-    float3 N =
-        normalize(
-            Material.NormalTS);
-
-    float3 V =
-        normalize(
-            Context.ViewDirection);
-
-    float NdotV =
-        saturate(
-            dot(N, V));
-
-    //------------------------------------
-    // Fresnel
-    //------------------------------------
-
-    float3 F0 =
-        lerp(
-            0.04.xxx,
-            Material.BaseColor,
-            Material.Metallic);
-
-    float3 F =
-        FresnelSchlickRoughness(
-            NdotV,
-            F0,
-            Material.Roughness);
-
-    //------------------------------------
-    // Diffuse
-    //------------------------------------
-
-    float3 kd =
-        (1.0 - F) *
-        (1.0 - Material.Metallic);
-
-    float3 Diffuse =
-        DiffuseIrradiance *
-        Material.BaseColor;
-
-    //------------------------------------
-    // Specular
-    //------------------------------------
-
-    float3 Specular =
-        PrefilteredSpecular *
-        (
-            F * BRDF.x +
-            BRDF.y
-        );
-
-    //------------------------------------
-    // Final
-    //------------------------------------
-
-    return
-        kd *
-        Diffuse +
-        Specular;
+    float3 f0 = lerp(0.04.xxx, material.BaseColor, material.Metallic);
+    return FresnelSchlickRoughness(nDotV, f0, material.Roughness);
 }
-float3 CalculateIBLShading(ShadingContext Context,
-                            MaterialData Material ,
-                            float3 N, 
-                            float3 V, 
-                            float3 R, 
-                            float NdotV )
+
+float3 GetIBLSpecularWeight(MaterialData material, float nDotV)
 {
-    float3 Result = 0;
-    //---------------------------------
-    // Sample diffuse irradiance
-    //---------------------------------
+    float2 brdf = IBLLut.SampleLevel(LinearClampIBLSampler, float2(nDotV, material.Roughness), 0).rg;
+    return GetIBLFresnel(material, nDotV) * brdf.x + brdf.y;
+}
 
-    float3 DiffuseIrradiance =
-        IBLDiffuseMap.Sample(
-            LinearClampIBLSampler,
-            N).rgb;
+float3 SampleIBLSpecular(float3 direction, float roughness)
+{
+    uint width, height, mipCount;
+    IBLSpecularMap.GetDimensions(0, width, height, mipCount);
+    return IBLSpecularMap.SampleLevel(LinearClampIBLSampler, direction, roughness * float(mipCount - 1)).rgb;
+}
 
-    //---------------------------------
-    // Sample prefiltered specular
-    //---------------------------------
-
-    uint Width;
-    uint Height;
-    uint MipCount;
-
-    IBLSpecularMap.GetDimensions(
-        0,
-        Width,
-        Height,
-        MipCount);
-
-    float MipLevel =
-        Material.Roughness *
-        (MipCount - 1);
-
-    float3 PrefilteredSpecular =
-        IBLSpecularMap.SampleLevel(
-            LinearClampIBLSampler,
-            R,
-            MipLevel).rgb;
-
-    //---------------------------------
-    // Sample BRDF LUT
-    //---------------------------------
-
-    float2 BRDF =
-        IBLLut.Sample(
-            LinearClampIBLSampler,
-            float2(
-                NdotV,
-                Material.Roughness)).rg;
-
-    //---------------------------------
-    // Evaluate IBL
-    //---------------------------------
-
-    Result +=
-        ShadeIBL(
-            Context,
-            Material,
-            DiffuseIrradiance,
-            PrefilteredSpecular,
-            BRDF);
-    return Result;
+float3 CalculateIBLShading(MaterialData material, float3 normal, float3 mirrorDirection, float nDotV, bool bIncludeSpecular)
+{
+    float3 diffuse = IBLDiffuseMap.SampleLevel(LinearClampIBLSampler, normal, 0).rgb * material.BaseColor;
+    diffuse *= (1.0 - GetIBLFresnel(material, nDotV)) * (1.0 - material.Metallic);
+    if (!bIncludeSpecular)
+    {
+        return diffuse;
+    }
+    return diffuse + SampleIBLSpecular(mirrorDirection, material.Roughness) * GetIBLSpecularWeight(material, nDotV);
 }

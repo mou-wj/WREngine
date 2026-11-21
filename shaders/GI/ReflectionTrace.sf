@@ -1,0 +1,192 @@
+#include "/Generated/ShaderParameters/ReflectionTraceParameters.sf"
+#include "/Generated/ShaderParameters/ReflectionViewParameters.sf"
+#include "/Generated/ShaderParameters/GBufferInputParameters.sf"
+#include "/GI/ScreenProbeGeometry.sf"
+
+static const float ReflectionTraceDistance = 50.0;
+
+float HashReflectionSample(uint seed)
+{
+    seed ^= seed >> 16;
+    seed *= 0x7feb352du;
+    seed ^= seed >> 15;
+    seed *= 0x846ca68bu;
+    return float((seed ^ (seed >> 16)) & 0xffffffu) * (1.0 / 16777216.0);
+}
+
+float3 SampleReflectionDirection(float3 normal, float3 view, float roughness, uint seed)
+{
+    if (roughness <= 0.03)
+    {
+        return reflect(-view, normal);
+    }
+
+    // Sample the GGX distribution of normals visible from the receiver.
+    float3 up = abs(normal.z) < 0.99 ? float3(0, 0, 1) : float3(0, 1, 0);
+    float3 tangent = normalize(cross(up, normal));
+    float3 bitangent = cross(normal, tangent);
+    float3 localView = float3(dot(view, tangent), dot(view, bitangent), dot(view, normal));
+    float alpha = roughness * roughness;
+    float3 stretchedView = normalize(float3(alpha * localView.xy, localView.z));
+    float planarLength = dot(stretchedView.xy, stretchedView.xy);
+    float3 axis = planarLength > 1e-6 ? float3(-stretchedView.y, stretchedView.x, 0) * rsqrt(planarLength) : float3(1, 0, 0);
+    float3 secondAxis = cross(stretchedView, axis);
+    float radius = sqrt(HashReflectionSample(seed + 1u));
+    float azimuth = 6.28318530718 * HashReflectionSample(seed + 0x9e3779b9u);
+    float u = radius * cos(azimuth);
+    float v = lerp(sqrt(max(0.0, 1.0 - u * u)), radius * sin(azimuth), 0.5 * (1.0 + stretchedView.z));
+    float3 stretchedNormal = axis * u + secondAxis * v + stretchedView * sqrt(max(0.0, 1.0 - u * u - v * v));
+    float3 localHalf = normalize(float3(alpha * stretchedNormal.xy, max(0.0, stretchedNormal.z)));
+    float3 halfVector = tangent * localHalf.x + bitangent * localHalf.y + normal * localHalf.z;
+    return reflect(-view, halfVector);
+}
+
+bool ClipReflectionPlane(float a, float b, inout float2 interval)
+{
+    if (a < 0.0 && b < 0.0)
+    {
+        return false;
+    }
+    if (a < 0.0)
+    {
+        interval.x = max(interval.x, a / (a - b));
+    }
+    else if (b < 0.0)
+    {
+        interval.y = min(interval.y, a / (a - b));
+    }
+    return interval.x < interval.y;
+}
+
+float2 ReflectionScreenPosition(float4 clip)
+{
+    return (clip.xy / clip.w * float2(0.5, -0.5) + 0.5) * float2(ReflectionSize);
+}
+
+float3 TraceScreenReflection(float3 origin, float3 direction, int2 receiver)
+{
+    float4 clipOrigin = mul(ViewProjection, float4(origin, 1));
+    float4 clipEnd = mul(ViewProjection, float4(origin + direction * ReflectionTraceDistance, 1));
+    float2 interval = float2(0, 1);
+    if (!ClipReflectionPlane(clipOrigin.w - 1e-4, clipEnd.w - 1e-4, interval) ||
+        !ClipReflectionPlane(clipOrigin.z, clipEnd.z, interval) ||
+        !ClipReflectionPlane(clipOrigin.w - clipOrigin.z, clipEnd.w - clipEnd.z, interval) ||
+        !ClipReflectionPlane(clipOrigin.w + clipOrigin.x, clipEnd.w + clipEnd.x, interval) ||
+        !ClipReflectionPlane(clipOrigin.w - clipOrigin.x, clipEnd.w - clipEnd.x, interval) ||
+        !ClipReflectionPlane(clipOrigin.w + clipOrigin.y, clipEnd.w + clipEnd.y, interval) ||
+        !ClipReflectionPlane(clipOrigin.w - clipOrigin.y, clipEnd.w - clipEnd.y, interval))
+    {
+        return 0.0;
+    }
+
+    float4 a = lerp(clipOrigin, clipEnd, interval.x);
+    float4 b = lerp(clipOrigin, clipEnd, interval.y);
+    float2 screenA = ReflectionScreenPosition(a);
+    float2 screenB = ReflectionScreenPosition(b);
+    float2 span = abs(screenB - screenA);
+    float lengthInPixels = max(span.x, span.y);
+    if (lengthInPixels < 2.0)
+    {
+        return 0.0;
+    }
+    uint steps = min(96u, uint(ceil(lengthInPixels)));
+    float2 deviceDepth = float2(a.z / a.w, b.z / b.w);
+    float previous = 0.0;
+    bool bWasInFront = false;
+    [loop]
+    for (uint i = 0; i <= steps; ++i)
+    {
+        float t = float(i) / float(steps);
+        int2 coord = int2(floor(lerp(screenA, screenB, t)));
+        if (any(coord < 0) || any(coord >= int2(ReflectionSize)) || all(abs(coord - receiver) <= 1))
+        {
+            continue;
+        }
+        float sceneDepth = Depth.Load(int3(coord, 0)).r;
+        float rayDepth = lerp(deviceDepth.x, deviceDepth.y, t);
+        bool bInFront = rayDepth < sceneDepth || sceneDepth >= 0.999999;
+        if (bWasInFront && !bInFront)
+        {
+            float lo = previous;
+            float hi = t;
+            [unroll]
+            for (uint j = 0; j < 4; ++j)
+            {
+                float midpoint = 0.5 * (lo + hi);
+                int2 midpointPixel = int2(floor(lerp(screenA, screenB, midpoint)));
+                float midDepth = Depth.Load(int3(midpointPixel, 0)).r;
+                if (lerp(deviceDepth.x, deviceDepth.y, midpoint) < midDepth || midDepth >= 0.999999)
+                {
+                    lo = midpoint;
+                }
+                else
+                {
+                    hi = midpoint;
+                }
+            }
+
+            coord = int2(floor(lerp(screenA, screenB, hi)));
+            sceneDepth = Depth.Load(int3(coord, 0)).r;
+            float3 position = ReconstructGIPosition(coord, sceneDepth, ReflectionSize, InverseViewProjection);
+            float3 hitNormal = normalize(GBufferB.Load(int3(coord, 0)).rgb * 2.0 - 1.0);
+            float footprint = GIPixelFootprint(coord, sceneDepth, ReflectionSize, InverseViewProjection, position);
+            float worldFraction = lerp(interval.x / a.w, interval.y / b.w, hi) / lerp(1.0 / a.w, 1.0 / b.w, hi);
+            float distance = worldFraction * ReflectionTraceDistance;
+            float miss = length(origin + direction * distance - position);
+            float tolerance = clamp(2.0 * footprint, 0.025, 0.35);
+            if (distance > 0.04 && miss < tolerance && dot(hitNormal, -direction) > 0.05)
+            {
+                float2 hitUV = (float2(coord) + 0.5) / float2(ReflectionSize);
+                float2 edge = min(hitUV, 1.0 - hitUV);
+                float edgeConfidence = smoothstep(0.0, 0.06, min(edge.x, edge.y));
+                float depthConfidence = 1.0 - smoothstep(0.65, 1.0, miss / tolerance);
+                return float3(hitUV, edgeConfidence * depthConfidence);
+            }
+        }
+        previous = t;
+        bWasInFront = bInFront;
+    }
+    return 0.0;
+}
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= ReflectionSize))
+    {
+        return;
+    }
+
+    uint index = pixel.y * ReflectionSize.x + pixel.x;
+    SurfaceCacheQuery query = (SurfaceCacheQuery)0;
+    query.Direction = float4(0, 0, 1, 0);
+    query.Control = uint4(0xffffffffu, 2u, 0xffffffffu, 0u);
+    float3 hit = 0.0;
+    float depth = Depth.Load(int3(pixel, 0)).r;
+    uint model = uint(GBufferC.Load(int3(pixel, 0)).b * 255.0 + 0.5);
+    float4 normalRoughness = GBufferB.Load(int3(pixel, 0));
+    float3 unpackedNormal = normalRoughness.rgb * 2.0 - 1.0;
+    if (depth < 0.999999 && model == 1u && dot(unpackedNormal, unpackedNormal) > 1e-6)
+    {
+        float3 position = ReconstructGIPosition(pixel, depth, ReflectionSize, InverseViewProjection);
+        float3 normal = normalize(unpackedNormal);
+        float3 view = normalize(CameraPosition - position);
+        if (dot(view, normal) > 1e-4)
+        {
+            float3 direction = SampleReflectionDirection(normal, view, saturate(normalRoughness.w), index);
+            if (dot(direction, normal) > 1e-4)
+            {
+                float footprint = GIPixelFootprint(pixel, depth, ReflectionSize, InverseViewProjection, position);
+                float bias = clamp(footprint * 0.5, 0.02, 0.10);
+                float3 origin = position + normal * bias + direction * bias;
+                hit = TraceScreenReflection(origin, direction, int2(pixel));
+                query.Direction = float4(direction, 1.0);
+                query.OriginDistance = float4(origin, ReflectionTraceDistance);
+                query.Control.y = hit.z >= 0.999 ? 2u : 1u;
+            }
+        }
+    }
+    TraceQueries[index] = query;
+    ScreenHit[pixel] = float4(hit, 0.0);
+}

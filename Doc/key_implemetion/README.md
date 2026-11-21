@@ -76,6 +76,7 @@
 | [Surface Cache Radiosity](algorithm/18-surface-cache-radiosity.md) | Card 半球采样如何传播多次漫反射，固定采样与反射率如何影响收敛？ |
 | [World Space Radiance Cache](algorithm/19-world-radiance-cache.md) | 两级网格如何跨帧复用节点，方向光照怎样表示，何时可截短屏幕射线？ |
 | [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) | 如何用深度法线重投影、识别遮挡失效、抑制历史拖影并保留光照边界？ |
+| [GIViewer 混合反射](algorithm/21-hybrid-reflections.md) | 屏幕深度与 Mesh SDF 如何提供反射命中，镜面光如何与延迟光照合成？ |
 
 ## 如何阅读和核查
 

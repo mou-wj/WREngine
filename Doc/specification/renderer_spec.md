@@ -96,4 +96,8 @@ Surface Cache 的 Base Color、World Normal、Card Coverage、Roughness、Metall
 
 `GI / Raw`、`GI / Temporal` 与 `GI / Spatial Filtered` 分别显示当前探针重建、时域累积和边缘感知空间滤波后的漫反射间接光。`GI / History Validity` 用绿色表示通过重投影检查，红色表示历史被拒绝或重置。`GI / History Weight` 用灰度表示最终历史权重。`GI / Reprojection Error` 的红绿通道显示归一化的几何残差，蓝色显示屏幕运动幅度。六种 GI 视图间切换保留历史，离开这些视图后重新进入会开始新一轮累积。使用宿主视口相机改变视角可观察历史重建。 [滤波与调试含义](../key_implemetion/algorithm/20-gi-temporal-spatial-filter.md)
 
-主场景仍使用 `DefferedSceneRenderer` 的 ScreenSpaceGI/SSR。上述输出只用于 GIViewer 预览。
+### 反射预览
+
+在 `Reflections / Composite` 查看延迟底色与混合反射的合成。`Ray Direction` 用 RGB 表示世界方向，`Screen Hit` 用 RG 表示屏幕 UV、B 表示置信度。`SDF Hit` 的 R 表示几何命中、G 表示有效 Card 光照、B 表示归一化距离。`Source` 中绿、黄、橙、紫、蓝分别表示屏幕命中、SDF 加 Card、SDF 缺覆盖回退、世界探针、环境。另有 `Roughness`、`Radiance` 和 `Contribution` 视图独立观察接收面材质、入射辐射和 BRDF 加权后的反射项。
+
+`Use radiosity in reflections` 控制离屏 Card 光照是否加入反弹项，`Use world cache` 控制粗糙反射的世界缓存回退。当前主场景仍使用 `DefferedSceneRenderer` 的常规 ScreenSpaceGI/SSR。预览反射合成复用同一延迟 GBuffer 与直接光，在延迟漫反射 IBL 之后写入镜面项。 [算法与回退](../key_implemetion/algorithm/21-hybrid-reflections.md)

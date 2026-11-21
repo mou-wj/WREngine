@@ -45,13 +45,7 @@ void MainCS(uint3 DTid : SV_DispatchThreadID)
     {
         case SHADINGMODEL_LIT:
 #if IS_IBL
-            Lighting = CalculateIBLShading(
-                        Context,
-                        Material,
-                        N,
-                        V,
-                        R,
-                        NdotV);
+            Lighting = CalculateIBLShading(Material, N, R, NdotV, bDeferSpecularIBL == 0u);
 #else
             Lighting = EvaluateSceneLighting(Context, Material);
 #endif  
@@ -66,7 +60,10 @@ void MainCS(uint3 DTid : SV_DispatchThreadID)
     
 
 #if IS_IBL
-    OutputColor[PixelPos] += float4(Lighting, 1);
+    if (bDeferSpecularIBL == 0u || ShadingModelId == SHADINGMODEL_LIT)
+    {
+        OutputColor[PixelPos] += float4(Lighting, 1);
+    }
 #else
     OutputColor[PixelPos] = float4(Lighting, 1);
 #endif

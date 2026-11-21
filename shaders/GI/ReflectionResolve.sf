@@ -1,0 +1,111 @@
+#include "/Generated/ShaderParameters/ReflectionResolveParameters.sf"
+#if REFLECTION_WORLD_CACHE
+// Declare world-probe storage before the texture-only parameter blocks to keep its GL binding in range.
+#include "/Generated/ShaderParameters/WorldRadianceCacheParameters.sf"
+#endif
+#include "/Generated/ShaderParameters/ReflectionViewParameters.sf"
+#include "/core/GBufferParametersHelper.sf"
+#include "/core/EnvIBLParametersHelper.sf"
+#include "/GI/ScreenProbeGeometry.sf"
+
+#if REFLECTION_WORLD_CACHE
+#include "/GI/WorldRadianceLookup.sf"
+#endif
+
+// The cache contains view-independent outgoing diffuse light. It travels to the receiver along the
+// reflected ray. The hit's own view-dependent term is limited to its environment specular lobe.
+float3 ShadeSDFReflection(SurfaceCacheQueryResult hit, SurfaceCacheLightingQueryResult lighting, float3 direction)
+{
+    MaterialData material = (MaterialData)0;
+    material.BaseColor = saturate(hit.BaseColorMetallic.rgb);
+    material.Metallic = saturate(hit.BaseColorMetallic.a);
+    material.Roughness = saturate(hit.NormalRoughness.w);
+    float3 normal = normalize(hit.NormalRoughness.xyz);
+    float nDotV = dot(normal, -direction);
+    float3 radiance = lighting.Radiance.rgb;
+    if (nDotV > 0.0 && bHasEnvironment != 0u)
+    {
+        radiance += SampleIBLSpecular(reflect(direction, normal), material.Roughness) * GetIBLSpecularWeight(material, nDotV);
+    }
+    return radiance;
+}
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= ReflectionSize))
+    {
+        return;
+    }
+    float3 deferred = DeferredColor.Load(int3(pixel, 0)).rgb;
+    float depth = Depth.Load(int3(pixel, 0)).r;
+    uint model = uint(GBufferC.Load(int3(pixel, 0)).b * 255.0 + 0.5);
+    float2 uv = (float2(pixel) + 0.5) / float2(ReflectionSize);
+    MaterialData material = ReconstructMaterialData(uv);
+    if (depth >= 0.999999 || model != 1u || dot(material.NormalTS, material.NormalTS) <= 1e-6)
+    {
+        ReflectionOutput[pixel] = float4(ReflectionView == 0u ? deferred : 0.0, 1.0);
+        return;
+    }
+
+    material.Roughness = saturate(material.Roughness);
+    material.Metallic = saturate(material.Metallic);
+    float3 normal = normalize(material.NormalTS);
+    float3 position = ReconstructGIPosition(pixel, depth, ReflectionSize, InverseViewProjection);
+    float3 view = normalize(CameraPosition - position);
+    float3 mirrorDirection = reflect(-view, normal);
+    float3 environment = bHasEnvironment != 0u ? max(SampleIBLSpecular(mirrorDirection, material.Roughness), 0.0) : 0.0;
+    float3 incoming = environment;
+    uint pixelIndex = pixel.y * ReflectionSize.x + pixel.x;
+    SurfaceCacheQuery query = TraceQueries[pixelIndex];
+    SurfaceCacheQueryResult hit = SDFHits[pixelIndex];
+    SurfaceCacheLightingQueryResult lighting = HitLighting[pixelIndex];
+    float3 screen = ScreenHit.Load(int3(pixel, 0)).xyz;
+    bool bSDFHit = (hit.Status.z & 1u) != 0u && hit.PositionDistance.w > 0.025;
+    bool bValidSDF = bSDFHit && (hit.Status.z & 2u) != 0u && (lighting.Status.z & 2u) != 0u;
+    // Blue = IBL fallback. Orange = a geometric SDF hit whose surface cannot be shaded.
+    float3 source = bSDFHit ? float3(1.0, 0.30, 0.06) : float3(0.12, 0.32, 1.0);
+    if (bValidSDF)
+    {
+        incoming = max(ShadeSDFReflection(hit, lighting, query.Direction.xyz), 0.0);
+        source = float3(1.0, 0.78, 0.08);
+    }
+#if REFLECTION_WORLD_CACHE
+    else if (!bSDFHit && (hit.Status.z & 4u) == 0u && query.Control.y == 1u && material.Roughness > 0.45)
+    {
+        // Full SDF tracing has already ruled out near blockers. Skip the receiver's unreliable probe cells.
+        float prefix = 2.0 * CellSize.x;
+        float4 world = LookupWorldRadiance(query.OriginDistance.xyz + prefix * query.Direction.xyz,
+            query.Direction.xyz, query.OriginDistance.w - prefix);
+        if (world.w > 0.0)
+        {
+            // The probe direction field supplies a low-frequency approximation on rough surfaces.
+            incoming = lerp(environment, max(world.rgb, 0.0), smoothstep(0.45, 0.65, material.Roughness));
+            source = float3(0.78, 0.28, 1.0);
+        }
+    }
+#endif
+    if (screen.z > 0.0)
+    {
+        int2 screenPixel = min(int2(screen.xy * float2(ReflectionSize)), int2(ReflectionSize) - 1);
+        incoming = lerp(incoming, max(DeferredColor.Load(int3(screenPixel, 0)).rgb, 0.0), screen.z);
+        source = lerp(source, float3(0.08, 0.90, 0.25), screen.z);
+    }
+
+    // Single-sample approximation of the rough lobe. The existing reflected-energy scale is applied once.
+    incoming = lerp(incoming, environment, smoothstep(0.8, 1.0, material.Roughness));
+    float3 reflected = incoming * GetIBLSpecularWeight(material, saturate(dot(normal, view)));
+    float3 color = deferred + reflected;
+    switch (ReflectionView)
+    {
+    case 1u: color = query.Direction.w > 0.0 ? query.Direction.xyz * 0.5 + 0.5 : 0.0; break;
+    case 2u: color = float3(screen.xy, 1.0) * screen.z; break;
+    case 3u: color = bSDFHit ? float3(1.0, bValidSDF ? 0.8 : 0.15, saturate(hit.PositionDistance.w / 50.0)) : 0.0; break;
+    case 4u: color = source; break;
+    case 5u: color = material.Roughness; break;
+    case 6u: color = incoming; break;
+    case 7u: color = reflected; break;
+    }
+    ReflectionOutput[pixel] = float4(color, 1.0);
+}

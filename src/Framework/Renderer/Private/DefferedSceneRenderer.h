@@ -5,5 +5,9 @@ namespace Renderer {
 	public:
 		// 一帧渲染入口
 		void Build(RenderCore::RenderGraphBuilder& graphBuilder) override;
+		// A single-view caller supplies the specular environment term and final composition.
+		RenderCore::RenderGraphTextureRef BuildWithDeferredSpecular(RenderCore::RenderGraphBuilder& builder);
+	private:
+		RenderCore::RenderGraphTextureRef BuildPasses(RenderCore::RenderGraphBuilder& builder, bool bDeferSpecular);
 	};
 }

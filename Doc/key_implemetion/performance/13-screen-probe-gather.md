@@ -53,6 +53,14 @@ Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从
 
 场景实例或材质代理快照变化、灯光快照变化、环境贴图对象变化、重建 Surface Cache、Radiosity 重启及来源开关变化会重置历史。跳过滤波模式、预览尺寸变化以及帧间相机位置变化超过 8 个世界单位也会使上一结果失效。普通 Radiosity 更新和当帧有预算的世界探针刷新降低权重上限，几何与亮度条件继续逐像素生效。未单独为屏幕历史增加 GPU 等待或回收接口。 [重投影算法](../algorithm/20-gi-temporal-spatial-filter.md)
 
+## 反射图与资源
+
+GIViewer 反射模式调用 [DefferedSceneRenderer::BuildWithDeferredSpecular](../../../src/Framework/Renderer/Private/DefferedSceneRenderer.cpp)。此单视图入口在已有 GBuffer 和直接光计算后，只保留漫反射 IBL 到 `DeferredColor`。后续 Pass 为 `ReflectionScreenTrace`、`SurfaceCacheSDFQuery`、`SurfaceCacheLightingLookup`、`ReflectionResolve`，合成视图最后绘制天空。原有主场景和其他预览模式仍由普通 `Build` 编排。
+
+`ReflectionScreenTrace` 从 GBuffer 采样，写屏幕交点和 `SurfaceCacheQuery`。SDF Pass 读取查询与持久 Mesh SDF Atlas，写命中记录。Lighting Lookup 读取该记录与既有持久 Card 图集，写出射光记录。`ReflectionResolve` 读取其中间产物、延迟底色、环境图及可选世界探针记录，写 Viewer 预览颜色。Surface Cache 与世界图集沿用 Renderer 的所有权和失效规则。GPU 追踪没有 CPU 读回依赖，RDG 参数元数据中的 SRV/UAV 访问建立顺序。Renderer 关闭时沿用 Viewer 颜色的最后访问 Fence；反射本身没有持久历史或额外 CPU 等待。
+
+每像素的反射中间资源包括 16 字节屏幕交点、48 字节查询、80 字节 SDF 命中和 48 字节光照记录，共 192 字节。1080p 的逻辑总量约 379.7 MiB，另有已有延迟底色和 GBuffer。各缓冲只在自身所需图阶段存活，实际峰值取决于 RDG 分配与驱动对齐。GIViewer 对反射分辨率按比例设 1920×1080 上限，组合后的颜色仍铺满面板。 [反射算法](../algorithm/21-hybrid-reflections.md) · [验证记录](../../dev/bugfix/故障与修复记录-2026-11-21.md#giviewer-反射验证)
+
 ## 分辨率对应的理论负载
 
 以 1920×1080、8×8 Tile、8 Rays 估算：Probe 数为 32,400，Ray Query 数为 259,200。按 C++ Shader Parameter 布局估算：

@@ -36,7 +36,15 @@ namespace Editor
             {"GI / Spatial Filtered", Renderer::ELumenViewerMode::IndirectDiffuse},
             {"GI / History Validity", Renderer::ELumenViewerMode::ProbeHistoryValidity},
             {"GI / History Weight", Renderer::ELumenViewerMode::ProbeHistoryWeight},
-            {"GI / Reprojection Error", Renderer::ELumenViewerMode::ProbeReprojectionError}
+            {"GI / Reprojection Error", Renderer::ELumenViewerMode::ProbeReprojectionError},
+            {"Reflections / Composite", Renderer::ELumenViewerMode::ReflectionComposite},
+            {"Reflections / Ray Direction", Renderer::ELumenViewerMode::ReflectionRayDirection},
+            {"Reflections / Screen Hit", Renderer::ELumenViewerMode::ReflectionScreenHit},
+            {"Reflections / SDF Hit", Renderer::ELumenViewerMode::ReflectionSDFHit},
+            {"Reflections / Source", Renderer::ELumenViewerMode::ReflectionSource},
+            {"Reflections / Roughness", Renderer::ELumenViewerMode::ReflectionRoughness},
+            {"Reflections / Radiance", Renderer::ELumenViewerMode::ReflectionRadiance},
+            {"Reflections / Contribution", Renderer::ELumenViewerMode::ReflectionContribution}
         };
 
         const char* GetModeName(Renderer::ELumenViewerMode mode)
@@ -95,6 +103,22 @@ namespace Editor
                 return "Brightness is the fraction of the current result taken from history.";
             case Renderer::ELumenViewerMode::ProbeReprojectionError:
                 return "Red shows geometric disagreement, green shows agreement, and blue shows screen motion.";
+            case Renderer::ELumenViewerMode::ReflectionComposite:
+                return "Deferred direct lighting and diffuse IBL with the resolved specular term.";
+            case Renderer::ELumenViewerMode::ReflectionRayDirection:
+                return "World-space ray direction mapped from [-1, 1] to RGB.";
+            case Renderer::ELumenViewerMode::ReflectionScreenHit:
+                return "Screen hit UV in red and green, confidence in blue.";
+            case Renderer::ELumenViewerMode::ReflectionSDFHit:
+                return "Red marks SDF geometry. Green indicates valid Card lighting, blue indicates hit distance.";
+            case Renderer::ELumenViewerMode::ReflectionSource:
+                return "Green: screen hit. Yellow: SDF and Card. Orange: unshaded SDF hit. Purple: world probe. Blue: environment.";
+            case Renderer::ELumenViewerMode::ReflectionRoughness:
+                return "Receiver roughness from GBuffer B.";
+            case Renderer::ELumenViewerMode::ReflectionRadiance:
+                return "Incoming specular radiance before the receiver's Fresnel and BRDF.";
+            case Renderer::ELumenViewerMode::ReflectionContribution:
+                return "Reflected specular light after applying the receiver's Fresnel and BRDF.";
             }
             return "";
         }
@@ -330,9 +354,11 @@ namespace Editor
             ImGui::BeginGroup();
             ImGui::Text("View: %s", GetModeName(m_Mode));
             ImGui::TextWrapped("%s", GetModeDescription(m_Mode));
+            const bool bReflections = m_Mode >= Renderer::ELumenViewerMode::ReflectionComposite &&
+                m_Mode <= Renderer::ELumenViewerMode::ReflectionContribution;
             if (m_Mode >= Renderer::ELumenViewerMode::ProbePlacement)
             {
-                ImGui::Checkbox("Use radiosity in Screen Probes", &m_Radiosity.bEnabled);
+                ImGui::Checkbox(bReflections ? "Use radiosity in reflections" : "Use radiosity in Screen Probes", &m_Radiosity.bEnabled);
                 ImGui::SameLine();
                 ImGui::Checkbox("Pause", &m_Radiosity.bPaused);
                 ImGui::SameLine();
@@ -348,7 +374,7 @@ namespace Editor
             }
             if ((m_Mode >= Renderer::ELumenViewerMode::ProbePlacement && m_Mode <= Renderer::ELumenViewerMode::IndirectDiffuse) ||
                 m_Mode == Renderer::ELumenViewerMode::WorldProbeAtlas || m_Mode == Renderer::ELumenViewerMode::ProbeWorldCacheHits ||
-                (m_Mode >= Renderer::ELumenViewerMode::ProbeRawDiffuse && m_Mode <= Renderer::ELumenViewerMode::ProbeReprojectionError))
+                (m_Mode >= Renderer::ELumenViewerMode::ProbeRawDiffuse && m_Mode <= Renderer::ELumenViewerMode::ProbeReprojectionError) || bReflections)
             {
                 if (m_Mode != Renderer::ELumenViewerMode::WorldProbeAtlas)
                 {
@@ -380,7 +406,11 @@ namespace Editor
                 imageWidth = available.x;
                 imageHeight = imageWidth / std::max(0.01f, aspect);
             }
-            m_PreviewSize = {std::max(1, static_cast<int>(imageWidth)), std::max(1, static_cast<int>(imageHeight))};
+            // The per-pixel reflection query buffers are bounded independently of the UI layout.
+            const float previewScale = bReflections ? std::min({1.0f, 1920.0f / std::max(1.0f, imageWidth),
+                1080.0f / std::max(1.0f, imageHeight)}) : 1.0f;
+            m_PreviewSize = {std::max(1, static_cast<int>(imageWidth * previewScale)),
+                std::max(1, static_cast<int>(imageHeight * previewScale))};
             m_bHasScene = source.Scene && source.View && m_Preview->Render(source, m_PreviewSize, m_Mode,
                 m_SelectedCardIndex, m_CardView, m_Radiosity, m_WorldCache);
             m_Radiosity.bStep = false;
@@ -388,7 +418,8 @@ namespace Editor
             if (auto* texture = m_Preview->GetTexture())
             {
                 const auto imagePosition = ImGui::GetCursorScreenPos();
-                const ImVec2 imageSize{static_cast<float>(m_PreviewSize.X), static_cast<float>(m_PreviewSize.Y)};
+                const ImVec2 imageSize{bReflections ? std::max(1.0f, imageWidth) : static_cast<float>(m_PreviewSize.X),
+                    bReflections ? std::max(1.0f, imageHeight) : static_cast<float>(m_PreviewSize.Y)};
                 ImGui::Image(static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(texture)),
                     imageSize);
                 if (m_Mode == Renderer::ELumenViewerMode::Scene && m_bShowMeshCards && source.View && !cards.empty())

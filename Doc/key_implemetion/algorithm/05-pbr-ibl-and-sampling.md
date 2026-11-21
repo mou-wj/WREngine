@@ -69,6 +69,8 @@ LUT 中 Fc=(1-VdotH)^5，Gvis=(G·VdotH)/(NdotH·NdotV)，预分离出 F0 的两
 
 roughness×(MipCount-1) 选 specular mip；法线方向查 diffuse cube，反射方向查 specular cube，NdotV/roughness 查 LUT，再用 kd=(1-F)(1-metallic) 混合。
 
+GIViewer 反射分支复用同一 `GetIBLSpecularWeight`，让屏幕命中、离屏近似与预滤波环境共享接收面的 Fresnel 和 LUT 权重。延迟 IBL 在该分支只输出漫反射，最终镜面贡献由 `ReflectionResolve` 写入，避免两次合成。 [混合反射算法](21-hybrid-reflections.md)
+
 当前 GBuffer A=BaseColor.rgb/Metallic，B=encoded normal.rgb/Roughness，C=Specular/AO/ShadingModelId/空余；法线用 N×0.5+0.5 编码，模型 ID 除 255 写入再还原。延迟重建把 Emissive 置零，没有独立 Emissive 通道，不能写成完整材质信息无损恢复。
 
 计算预算约为输出 texel 数乘采样数；cube 六面和所有 mip 都要计入。GPU Dispatch 按线程组向上取整后必须边界检查，源码入口已有对应尺寸判断。CPU 上传的 SampleCount 不等于 Shader 实际使用数：这些分支当前有固定 256/128 常量。

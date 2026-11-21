@@ -103,6 +103,7 @@ namespace Renderer
     BEGIN_SHADER_PARAMETER_STRUCT(StaticMeshMaterialDefferedShadingCSParameters)
         SHADER_PARAMETER(Core::Float4x4, InvViewProj)
         SHADER_PARAMETER(Core::Float3, CameraPos)
+        SHADER_PARAMETER(uint32_t, bDeferSpecularIBL)
         SHADER_PARAMETER(Core::Float2, ScreenSize)
         SHADER_PARAMETER_STRUCT_REFERENCE(SceneShaderParameters, Scene)
         SHADER_PARAMETER_STRUCT_REFERENCE(GBufferTextureParameters, GBuffer)

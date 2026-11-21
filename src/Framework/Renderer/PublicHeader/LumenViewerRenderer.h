@@ -33,7 +33,15 @@ namespace Renderer
         ProbeTemporalDiffuse,
         ProbeHistoryValidity,
         ProbeHistoryWeight,
-        ProbeReprojectionError
+        ProbeReprojectionError,
+        ReflectionComposite,
+        ReflectionRayDirection,
+        ReflectionScreenHit,
+        ReflectionSDFHit,
+        ReflectionSource,
+        ReflectionRoughness,
+        ReflectionRadiance,
+        ReflectionContribution
     };
 
     enum class ELumenViewerCardView : uint32_t
