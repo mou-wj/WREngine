@@ -3,7 +3,7 @@
 #include "Math.hpp"
 #include "RenderGraphResource.h"
 
-namespace Engine { class SceneView; }
+namespace Engine { class SceneView; class SceneInterface; }
 namespace RenderCore { class RenderGraphBuilder; }
 
 namespace Renderer
@@ -24,7 +24,8 @@ namespace Renderer
         Scattering,
         Transmittance,
         Density,
-        Froxels
+        Froxels,
+        DirectLighting
     };
 
     struct VolumeRenderSettings
@@ -34,11 +35,12 @@ namespace Renderer
         float MaxDistance = 45.0f;
         EVolumeView View = EVolumeView::Composite;
         uint32_t DebugSlice = 16;
+        uint32_t LightMask = 7; // Directional, Point, Spot in bits 0 through 2.
         bool bEnabled = true;
     };
 
     // The caller supplies one full-size perspective view and a transferable, linear scene color.
     RENDERER_API void AddVolumePasses(RenderCore::RenderGraphBuilder& builder, const Engine::SceneView& view,
         RenderCore::RenderGraphTextureRef sceneDepth, RenderCore::RenderGraphTextureRef sceneColor,
-        const VolumeRenderSettings& settings);
+        const VolumeRenderSettings& settings, Engine::SceneInterface* scene = nullptr);
 }

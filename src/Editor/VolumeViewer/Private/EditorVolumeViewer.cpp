@@ -35,10 +35,14 @@ namespace Editor
                     m_Scene->RemovePrimitive(mesh.get());
                 }
                 m_Scene->RemoveLight(m_Directional.get());
+                m_Scene->RemoveLight(m_Point.get());
+                m_Scene->RemoveLight(m_Spot.get());
                 m_Scene->FlushPendingUpdates();
                 m_Meshes.clear();
                 m_Assets.clear();
                 m_Directional.reset();
+                m_Point.reset();
+                m_Spot.reset();
                 m_Scene.reset();
             }
         }
@@ -87,6 +91,15 @@ namespace Editor
             {
                 InitializeScene();
             }
+            if (m_Directional->GetIntensity() != LightIntensities.X || m_Point->GetIntensity() != LightIntensities.Y ||
+                m_Spot->GetIntensity() != LightIntensities.Z)
+            {
+                WaitForDraw();
+                m_Directional->SetIntensity(LightIntensities.X);
+                m_Point->SetIntensity(LightIntensities.Y);
+                m_Spot->SetIntensity(LightIntensities.Z);
+                m_Scene->FlushPendingUpdates();
+            }
             if (!m_Color || m_Color->GetRHI()->GetDesc().Width != width || m_Color->GetRHI()->GetDesc().Height != height)
             {
                 WaitForDraw();
@@ -121,9 +134,9 @@ namespace Editor
             view.FrameIndex = m_FrameIndex++;
             view.FrameTimeSeconds = ImGui::GetTime();
             view.Flags = Engine::VF_EnableShadows;
-            view.DrawExtensions.push_back({[settings = Settings](auto& graph, const auto& currentView, auto color, auto depth)
+            view.DrawExtensions.push_back({[settings = Settings, scene = m_Scene.get()](auto& graph, const auto& currentView, auto color, auto depth)
             {
-                Renderer::AddVolumePasses(graph, currentView, depth, color, settings);
+                Renderer::AddVolumePasses(graph, currentView, depth, color, settings, scene);
             }});
             Engine::SceneViewFamily family;
             family.Scene = m_Scene.get();
@@ -134,6 +147,7 @@ namespace Editor
         }
 
         Renderer::VolumeRenderSettings Settings;
+        Core::Float3 LightIntensities{3, 20, 45};
 
     private:
         Core::Float3 OrbitDirection() const
@@ -175,9 +189,28 @@ namespace Editor
             m_Directional = std::make_unique<Engine::DirectionalLightComponent>();
             m_Directional->SetDirection({0.5f, -1.0f, -0.6f});
             m_Directional->SetColor({1.0f, 0.91f, 0.79f});
-            m_Directional->SetIntensity(3.0f);
+            m_Directional->SetIntensity(LightIntensities.X);
             m_Directional->SetCastShadow(true);
             m_Scene->AddLight(m_Directional.get());
+
+            m_Point = std::make_unique<Engine::PointLightComponent>();
+            m_Point->SetWorldLocation({2.1f, 1.8f, 0.4f});
+            m_Point->SetColor({0.4f, 0.65f, 1.0f});
+            m_Point->SetIntensity(LightIntensities.Y);
+            m_Point->SetAttenuationRadius(6.0f);
+            m_Point->SetCastShadow(true);
+            m_Scene->AddLight(m_Point.get());
+
+            m_Spot = std::make_unique<Engine::SpotLightComponent>();
+            m_Spot->SetWorldLocation({-2.8f, 4.0f, -0.3f});
+            m_Spot->SetDirection({0.45f, -1.0f, 0.3f});
+            m_Spot->SetColor({1.0f, 0.45f, 0.24f});
+            m_Spot->SetIntensity(LightIntensities.Z);
+            m_Spot->SetAttenuationRadius(10.0f);
+            m_Spot->SetInnerConeAngle(13.0f);
+            m_Spot->SetOuterConeAngle(22.0f);
+            m_Spot->SetCastShadow(true);
+            m_Scene->AddLight(m_Spot.get());
             m_Scene->FlushPendingUpdates();
             ResetCamera();
         }
@@ -186,6 +219,8 @@ namespace Editor
         std::vector<std::shared_ptr<Engine::StaticMeshAsset>> m_Assets;
         std::vector<std::unique_ptr<Engine::StaticMeshComponent>> m_Meshes;
         std::unique_ptr<Engine::DirectionalLightComponent> m_Directional;
+        std::unique_ptr<Engine::PointLightComponent> m_Point;
+        std::unique_ptr<Engine::SpotLightComponent> m_Spot;
         std::unique_ptr<RenderCore::RenderTexture> m_Color;
         Engine::Camera m_Camera;
         Core::Float3 m_Focus{0, 0.8f, 0};
@@ -230,7 +265,7 @@ namespace Editor
             auto& settings = m_Preview->Settings;
             ImGui::Checkbox("Enable volume", &settings.bEnabled);
             ImGui::SameLine();
-            const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels"};
+            const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels", "Direct lighting"};
             int mode = static_cast<int>(settings.View);
             ImGui::SetNextItemWidth(170.0f);
             if (ImGui::Combo("View", &mode, views, IM_ARRAYSIZE(views)))
@@ -245,7 +280,19 @@ namespace Editor
                 ImGui::ColorEdit3("Scattering coefficient", &settings.Medium.Scattering.X, ImGuiColorEditFlags_Float);
                 ImGui::ColorEdit3("Absorption coefficient", &settings.Medium.Absorption.X, ImGuiColorEditFlags_Float);
                 ImGui::ColorEdit3("Emission per unit", &settings.Medium.Emission.X, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+                ImGui::SliderFloat("Anisotropy", &settings.Medium.Anisotropy, -0.95f, 0.95f, "%.2f");
                 ImGui::SliderFloat("Range", &settings.MaxDistance, 2.0f, 100.0f, "%.1f");
+            }
+            if (ImGui::CollapsingHeader("Lights"))
+            {
+                ImGui::CheckboxFlags("Directional contribution", &settings.LightMask, 1u);
+                ImGui::SameLine();
+                ImGui::CheckboxFlags("Point contribution", &settings.LightMask, 2u);
+                ImGui::SameLine();
+                ImGui::CheckboxFlags("Spot contribution", &settings.LightMask, 4u);
+                ImGui::SliderFloat("Directional intensity", &m_Preview->LightIntensities.X, 0.0f, 10.0f);
+                ImGui::SliderFloat("Point intensity", &m_Preview->LightIntensities.Y, 0.0f, 60.0f);
+                ImGui::SliderFloat("Spot intensity", &m_Preview->LightIntensities.Z, 0.0f, 100.0f);
             }
             if (settings.View == Renderer::EVolumeView::Density || settings.View == Renderer::EVolumeView::Froxels)
             {

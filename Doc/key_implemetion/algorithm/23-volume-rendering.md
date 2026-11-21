@@ -20,8 +20,14 @@ T *= t
 
 光学厚度接近零时积分因子使用 `d × (1 - σ_t × d / 2)`，因此无消光的自发光也能正确累积。合成写 RGB `L + T × sceneColor`，保留背景 Alpha。 [积分](../../../shaders/volume/VolumeIntegrate.sf) · [合成](../../../shaders/volume/VolumeComposite.sf)
 
+## 单次散射与光源注入
+
+在 Scene 更新后，`BindVolumeLights` 读取已启用的场景代理，将光色、强度、范围和锥角余弦打包为四个四分量向量。数据保存在 RDG 上传 Pass 的值捕获中，经 RHI staging 在提交时上传。光源类型过滤只影响体积注入。方向与世界位置从 Froxel 的屏幕中心和对数层中心恢复。
+
+`VolumeInjectLighting` 遍历光源，按平行光方向、点光距离或聚光范围和锥角计算入射量，并复用 `LocalLightAttenuation` 与 `SpotLightAttenuation`。令 `μ = dot(toLight, cameraRay)`。Henyey–Greenstein 相函数为 `(1-g²)/(4π(1+g²-2gμ)^(3/2))`。正 g 在光向相机传播时加强前向散射。g 为零时固定为 1/(4π)。光照图记录乘过相函数的 RGB，积分写源项 `σ_s × (direct + ambient) + emission`。 [单次散射 Shader](../../../shaders/volume/VolumeLighting.sf) · [通用衰减](../../../shaders/core/ShadingCommon.sf)
+
 ## 图资源与边界
 
 `VolumeInjectMedium` 写图集 UAV。积分读取图集和不透明深度，写两张屏幕纹理。合成读取场景颜色及两张积分图，写独立结果。最后通过 `VolumeCopyComposite` 的 TransferSrc/Dest 声明复制回颜色目标，避免在同一个 Pass 对该颜色同时绑定 SRV 和 UAV。无效或禁用范围直接跳过。纹理生命周期由 Builder 管理，预览颜色由 Viewer 持有并沿最后访问 Fence 释放。
 
-介质图集的逻辑空间为 `ceil(W/8) × ceil(H/8) × 32 × 3 × 16` 字节。另有两张积分图和一张合成图，各 16 B/像素。第一版每像素最多 32 次迭代，XY 用最近 Tile。要求输入为全尺寸透视视图与可写入复制目标的线性颜色，近平面之前和最大距离之外省略介质。
+介质图集的逻辑空间为 `ceil(W/8) × ceil(H/8) × 32 × 3 × 16` 字节，光照图占同尺寸单组切片。另有两张积分图和一张合成图，各 16 B/像素。第一版每像素最多 32 次迭代，XY 用最近 Tile。要求输入为全尺寸透视视图与可写入复制目标的线性颜色，近平面之前和最大距离之外省略介质。

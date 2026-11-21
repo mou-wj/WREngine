@@ -27,3 +27,13 @@ uint2 VolumeAddress(uint3 cell, uint slab)
     uint slice = cell.z + slab * FroxelSize.z;
     return cell.xy + uint2(slice % AtlasColumns, slice / AtlasColumns) * FroxelSize.xy;
 }
+
+float3 VolumeFroxelCenter(uint3 cell, out float viewDepth, out float3 ray)
+{
+    float2 minimum = float2(cell.xy * TileSize);
+    float2 maximum = min(minimum + TileSize, float2(ScreenSize));
+    float2 pixel = (minimum + maximum) * 0.5;
+    ray = normalize(VolumeWorldPosition(pixel, 0) - CameraPosition);
+    viewDepth = VolumeSliceDepth(float(cell.z) + 0.5);
+    return CameraPosition + ray * (viewDepth / max(dot(ray, CameraForward), 1e-4));
+}

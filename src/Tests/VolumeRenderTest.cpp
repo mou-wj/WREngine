@@ -1,7 +1,9 @@
 #include "TestBase.h"
 #include "../Framework/Renderer/Private/Volume/VolumeRendering.h"
+#include "../Framework/Renderer/Private/Scene.h"
 #include "Camera.h"
 #include "GlobalShader.h"
+#include "LightComponent.h"
 #include "RenderGraphBuilder.h"
 #include "RHIPipelineStateCache.h"
 #include "SceneView.h"
@@ -41,7 +43,7 @@ namespace Test
             }
         }
 
-        Pixels Render(const VolumeRenderSettings& settings, float surfaceDistance)
+        Pixels Render(const VolumeRenderSettings& settings, float surfaceDistance, Engine::SceneInterface* scene = nullptr)
         {
             Engine::Camera camera;
             camera.SetPosition({0, 0, 0});
@@ -85,7 +87,7 @@ namespace Test
                 GRHIApi->UpdateTexture(cmd, upload->Color->GetRHITexture(), background.data(), region);
                 GRHIApi->UpdateTexture(cmd, upload->Depth->GetRHITexture(), sceneDepth.data(), region);
             });
-            AddVolumePasses(graph, view, upload->Depth, upload->Color, settings);
+            AddVolumePasses(graph, view, upload->Depth, upload->Color, settings, scene);
 
             auto* read = graph.AllocateParameter<VolumeTestRead>();
             read->Color = upload->Color;
@@ -132,6 +134,7 @@ namespace Test
             GRHIApi = CreateTestRHIApi();
             GRHIApi->Init();
             GTransientResourceAllocator.InitRHI();
+            InitGlobalRenderResource();
             auto& shaders = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::Global];
             const auto registered = shaders;
             std::erase_if(shaders, [](const auto& shader) { return !shader.first.starts_with("Volume"); });
@@ -144,6 +147,7 @@ namespace Test
             GShaderMap.Clear();
             RHIPipelineStateCache::ClearAll();
             GTransientResourceAllocator.ReleaseRHI();
+            ReleaseGlobalRenderResource();
             GRHIApi->Shutdown();
             delete GRHIApi;
             GRHIApi = nullptr;
@@ -181,6 +185,63 @@ namespace Test
             settings.Medium.Emission = {0.5f, 0, 0};
             RequireNear(Render(settings, 2)[Center].X, 0.19f, "emission accumulates without extinction");
             std::cout << "VOLUME_RENDER_TEST_OK near=" << nearPixel.X << " far=" << farPixel.X << " sky=" << skyPixel.X << std::endl;
+
+            Engine::DirectionalLightComponent directional;
+            directional.SetDirection({0, 0, 1});
+            directional.SetColor({1, 0, 0});
+            directional.SetIntensity(6.0f);
+            Engine::PointLightComponent point;
+            point.SetWorldLocation({0, 0, -4});
+            point.SetColor({0, 1, 0});
+            point.SetIntensity(12.0f);
+            point.SetAttenuationRadius(3.0f);
+            Engine::SpotLightComponent spot;
+            spot.SetWorldLocation({0, 0, -0.2f});
+            spot.SetDirection({0, 0, -1});
+            spot.SetColor({0, 0, 1});
+            spot.SetIntensity(24.0f);
+            spot.SetAttenuationRadius(7.0f);
+            spot.SetInnerConeAngle(23.0f);
+            spot.SetOuterConeAngle(32.0f);
+            Renderer::Scene scene;
+            scene.AddLight(&directional);
+            scene.AddLight(&point);
+            scene.AddLight(&spot);
+            scene.FlushPendingUpdates();
+
+            settings.View = EVolumeView::DirectLighting;
+            settings.Medium.Scattering = {1, 1, 1};
+            settings.Medium.Emission = {};
+            settings.LightMask = 1;
+            const auto isotropic = Render(settings, 6, &scene)[Center];
+            RequireNear(isotropic.X, (6.0f / (4.0f * 3.14159265f)) * (1.0f - std::exp(-0.2f * 5.9f)),
+                "directional light has isotropic 1/(4 pi) phase");
+            settings.Medium.Anisotropy = 0.55f;
+            const auto forward = Render(settings, 6, &scene)[Center];
+            if (forward.X < isotropic.X * 2.0f)
+            {
+                throw std::runtime_error("Forward anisotropy must increase the light along the view ray.");
+            }
+            settings.Medium.Anisotropy = 0;
+            settings.LightMask = 2;
+            const auto radial = Render(settings, 6, &scene)[Center];
+            RequireNear(Render(settings, 0.4f, &scene)[Center].Y, 0.0f, "point light has finite radius");
+            settings.LightMask = 4;
+            const auto cone = Render(settings, 6, &scene);
+            const float outsideCone = cone[Center + Width / 2].Z;
+            std::cout << "VOLUME_LIGHTING_READBACK isotropic=" << isotropic.X << " forward=" << forward.X <<
+                " point=" << radial.Y << " spot=" << cone[Center].Z << " edge=" << outsideCone << std::endl;
+            if (radial.Y < 0.05f || cone[Center].Z < 0.1f || cone[Center].Z <= outsideCone * 1.5f)
+            {
+                throw std::runtime_error("Local lights did not produce a point falloff and a bounded spot cone.");
+            }
+            RequireNear(radial.X, 0.0f, "point mask ignores directional light");
+            RequireNear(cone[Center].Y, 0.0f, "spot mask ignores point light");
+            std::cout << "VOLUME_LIGHTING_TEST_OK" << std::endl;
+            scene.RemoveLight(&directional);
+            scene.RemoveLight(&point);
+            scene.RemoveLight(&spot);
+            scene.FlushPendingUpdates();
         }
     };
 

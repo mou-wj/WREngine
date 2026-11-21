@@ -1,9 +1,12 @@
 #include "VolumeRendering.h"
 #include "GlobalShader.h"
+#include "LightSceneProxy.h"
 #include "RenderGraphBuilder.h"
 #include "RHIPipelineStateCache.h"
+#include "Scene.h"
 #include "SceneView.h"
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 namespace Renderer
@@ -27,11 +30,32 @@ namespace Renderer
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, MediumOutput)
     END_SHADER_PARAMETER_STRUCT(VolumeMediumParameters)
 
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeLightData)
+        SHADER_PARAMETER(Core::Float4, ColorIntensity)
+        SHADER_PARAMETER(Core::Float4, PositionRadius)
+        SHADER_PARAMETER(Core::Float4, DirectionInnerCos)
+        SHADER_PARAMETER(Core::Float4, ConeType)
+    END_SHADER_PARAMETER_STRUCT(VolumeLightData)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeLightingParameters)
+        SHADER_PARAMETER_STRUCT_REFERENCE(VolumeGridParameters, Grid)
+        SHADER_PARAMETER(uint32_t, LightCount)
+        SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(VolumeLightData, SceneLights)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, Medium)
+        SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, LightingOutput)
+    END_SHADER_PARAMETER_STRUCT(VolumeLightingParameters)
+
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeLightUpload)
+        RDG_BUFFER_ACCESS(Buffer, ERHIResourceAccess::TransferDest)
+    END_SHADER_PARAMETER_STRUCT(VolumeLightUpload)
+
     BEGIN_SHADER_PARAMETER_STRUCT(VolumeIntegrateParameters)
         SHADER_PARAMETER_STRUCT_REFERENCE(VolumeGridParameters, Grid)
         SHADER_PARAMETER(Core::Float3, AmbientRadiance)
+        SHADER_PARAMETER(uint32_t, IntegrationMode)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float>, SceneDepth)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, Medium)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, DirectVolumeLighting)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, ScatteringOutput)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, TransmittanceOutput)
     END_SHADER_PARAMETER_STRUCT(VolumeIntegrateParameters)
@@ -66,6 +90,13 @@ namespace Renderer
         static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VolumeIntegrateParameters::GetMetaData(); }
     };
 
+    class VolumeLightingCS : public GlobalShader
+    {
+    public:
+        DECLARE_GLOBAL_SHADER_TYPE(VolumeLightingCS)
+        static const ShaderParametersMetadata* GetShaderParameterMetadata() { return VolumeLightingParameters::GetMetaData(); }
+    };
+
     class VolumeCompositeCS : public GlobalShader
     {
     public:
@@ -75,6 +106,7 @@ namespace Renderer
 
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeMediumCS, "VolumeMediumCS", "/volume/VolumeMedium.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeIntegrateCS, "VolumeIntegrateCS", "/volume/VolumeIntegrate.sf", "MainCS", ERHIShaderFrequency::Compute);
+    IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeLightingCS, "VolumeLightingCS", "/volume/VolumeLighting.sf", "MainCS", ERHIShaderFrequency::Compute);
     IMPLEMENT_GLOBAL_SHADER_TYPE(VolumeCompositeCS, "VolumeCompositeCS", "/volume/VolumeComposite.sf", "MainCS", ERHIShaderFrequency::Compute);
 
     namespace
@@ -116,10 +148,69 @@ namespace Renderer
         {
             return {color.X, color.Y, color.Z, alpha};
         }
+
+        void BindVolumeLights(RenderGraphBuilder& builder, Scene* scene, uint32_t mask, VolumeLightingParameters& params)
+        {
+            std::vector<VolumeLightData> lights;
+            if (scene)
+            {
+                using namespace Engine;
+                scene->ForEachLight([&](LightSceneProxy* proxy)
+                {
+                    VolumeLightData light{};
+                    light.ColorIntensity = Pack(proxy->GetColor(), proxy->GetIntensity());
+                    if (proxy->GetLightType() == ELightType::Directional && (mask & 1u))
+                    {
+                        light.DirectionInnerCos = Pack(static_cast<DirectionalLightSceneProxy*>(proxy)->GetDirection(), 0);
+                    }
+                    else if (proxy->GetLightType() == ELightType::Point && (mask & 2u))
+                    {
+                        light.ConeType.Y = 1.0f;
+                        light.PositionRadius = Pack(proxy->GetPosition(),
+                            static_cast<PointLightSceneProxy*>(proxy)->GetAttenuationRadius());
+                    }
+                    else if (proxy->GetLightType() == ELightType::Spot && (mask & 4u))
+                    {
+                        const auto* spot = static_cast<SpotLightSceneProxy*>(proxy);
+                        light.ConeType = {std::cos(spot->GetOuterConeAngle()), 2.0f, 0, 0};
+                        light.PositionRadius = Pack(spot->GetPosition(), spot->GetAttenuationRadius());
+                        light.DirectionInnerCos = Pack(spot->GetDirection(), std::cos(spot->GetInnerConeAngle()));
+                    }
+                    else
+                    {
+                        return;
+                    }
+                    lights.push_back(light);
+                });
+            }
+            params.LightCount = static_cast<uint32_t>(lights.size());
+            if (lights.empty())
+            {
+                lights.emplace_back();
+            }
+            RenderGraphBufferDesc desc{};
+            desc.Stride = sizeof(VolumeLightData);
+            desc.Size = lights.size() * desc.Stride;
+            desc.Usage = ERHIBufferUsageFlag::ShaderResource | ERHIBufferUsageFlag::Structured | ERHIBufferUsageFlag::TransferDst;
+            auto* upload = builder.AllocateParameter<VolumeLightUpload>();
+            upload->Buffer = builder.CreateBuffer("Volume.SceneLights", desc);
+            builder.AddPass("VolumeUploadLights", VolumeLightUpload::GetMetaData(), upload, EPassFlag::Graphic,
+                [upload, lights = std::move(lights)](RHICommandListBase& cmd)
+                {
+                    GRHIApi->UpdateBuffer(cmd, upload->Buffer->GetRHIBuffer(), lights.data(),
+                        {0, uint32_t(lights.size() * sizeof(VolumeLightData))});
+                });
+            RenderGraphBufferSRVDesc view{};
+            view.Buffer = upload->Buffer;
+            view.Stride = desc.Stride;
+            view.NumElements = std::max(1u, params.LightCount);
+            params.SceneLights = builder.CreateBufferSRV("Volume.SceneLights.SRV", view);
+        }
     }
 
     void AddVolumePasses(RenderGraphBuilder& builder, const Engine::SceneView& view,
-        RenderGraphTextureRef sceneDepth, RenderGraphTextureRef sceneColor, const VolumeRenderSettings& settings)
+        RenderGraphTextureRef sceneDepth, RenderGraphTextureRef sceneColor, const VolumeRenderSettings& settings,
+        Engine::SceneInterface* sceneInterface)
     {
         if (!settings.bEnabled || settings.MaxDistance <= view.NearClip)
         {
@@ -159,6 +250,15 @@ namespace Renderer
         mediumParams->MediumOutput = MakeUAV(builder, medium);
         AddCompute<VolumeMediumCS>(builder, "VolumeInjectMedium", mediumParams, volumeGroups);
 
+        desc.Height = froxelSize.Y * DivideRoundUp(froxelSize.Z, atlasColumns);
+        const auto directLighting = builder.CreateTexture("Volume.DirectLighting", desc);
+        auto* lightingParams = builder.AllocateParameter<VolumeLightingParameters>();
+        lightingParams->Grid = grid;
+        BindVolumeLights(builder, dynamic_cast<Scene*>(sceneInterface), settings.LightMask, *lightingParams);
+        lightingParams->Medium = medium;
+        lightingParams->LightingOutput = MakeUAV(builder, directLighting);
+        AddCompute<VolumeLightingCS>(builder, "VolumeInjectLighting", lightingParams, volumeGroups);
+
         desc.Width = colorDesc.Width;
         desc.Height = colorDesc.Height;
         const auto scattering = builder.CreateTexture("Volume.Scattering", desc);
@@ -166,8 +266,10 @@ namespace Renderer
         auto* integrate = builder.AllocateParameter<VolumeIntegrateParameters>();
         integrate->Grid = grid;
         integrate->AmbientRadiance = settings.AmbientRadiance;
+        integrate->IntegrationMode = static_cast<uint32_t>(settings.View);
         integrate->SceneDepth = sceneDepth;
         integrate->Medium = medium;
+        integrate->DirectVolumeLighting = directLighting;
         integrate->ScatteringOutput = MakeUAV(builder, scattering);
         integrate->TransmittanceOutput = MakeUAV(builder, transmittance);
         AddCompute<VolumeIntegrateCS>(builder, "VolumeIntegrate", integrate, screenGroups);
