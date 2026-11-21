@@ -17,9 +17,37 @@
 
 namespace Editor
 {
+    namespace
+    {
+        void DrawMediumControls(Renderer::VolumeMedium& medium)
+        {
+            ImGui::ColorEdit3("Scattering coefficient", &medium.Scattering.X, ImGuiColorEditFlags_Float);
+            ImGui::ColorEdit3("Absorption coefficient", &medium.Absorption.X, ImGuiColorEditFlags_Float);
+            ImGui::ColorEdit3("Emission per unit", &medium.Emission.X, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+            ImGui::SliderFloat("Anisotropy", &medium.Anisotropy, -0.95f, 0.95f, "%.2f");
+        }
+    }
+
     class VolumeViewerPreview final : public Engine::RenderTarget
     {
     public:
+        VolumeViewerPreview()
+        {
+            Renderer::LocalVolume box;
+            box.Position = {-0.8f, 0.8f, -0.6f};
+            box.RotationDegrees = {0, 24, 0};
+            box.HalfExtent = {2.3f, 1.0f, 2.6f};
+            box.Medium.Density = 0.28f;
+            Settings.LocalVolumes.push_back(box);
+
+            Renderer::LocalVolume sphere;
+            sphere.Shape = Renderer::EVolumeShape::Sphere;
+            sphere.Position = {1.5f, 0.9f, 0.7f};
+            sphere.HalfExtent = {2.1f, 1.3f, 1.6f};
+            sphere.Medium.Density = 0.32f;
+            sphere.Medium.Scattering = {0.32f, 0.58f, 0.86f};
+            Settings.LocalVolumes.push_back(sphere);
+        }
         ~VolumeViewerPreview() { Reset(); }
 
         RenderCore::RenderTexture* GetRenderTarget() override { return m_Color.get(); }
@@ -265,7 +293,8 @@ namespace Editor
             auto& settings = m_Preview->Settings;
             ImGui::Checkbox("Enable volume", &settings.bEnabled);
             ImGui::SameLine();
-            const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels", "Direct lighting", "Light visibility"};
+            const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels", "Direct lighting",
+                "Light visibility", "Local overlap"};
             int mode = static_cast<int>(settings.View);
             ImGui::SetNextItemWidth(170.0f);
             if (ImGui::Combo("View", &mode, views, IM_ARRAYSIZE(views)))
@@ -277,10 +306,7 @@ namespace Editor
             ImGui::SliderFloat("Density", &settings.Medium.Density, 0.0f, 0.4f, "%.3f");
             if (ImGui::CollapsingHeader("Medium"))
             {
-                ImGui::ColorEdit3("Scattering coefficient", &settings.Medium.Scattering.X, ImGuiColorEditFlags_Float);
-                ImGui::ColorEdit3("Absorption coefficient", &settings.Medium.Absorption.X, ImGuiColorEditFlags_Float);
-                ImGui::ColorEdit3("Emission per unit", &settings.Medium.Emission.X, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
-                ImGui::SliderFloat("Anisotropy", &settings.Medium.Anisotropy, -0.95f, 0.95f, "%.2f");
+                DrawMediumControls(settings.Medium);
                 ImGui::SliderFloat("Range", &settings.MaxDistance, 2.0f, 100.0f, "%.1f");
             }
             if (ImGui::CollapsingHeader("Lights"))
@@ -295,8 +321,44 @@ namespace Editor
                 ImGui::SliderFloat("Point intensity", &m_Preview->LightIntensities.Y, 0.0f, 60.0f);
                 ImGui::SliderFloat("Spot intensity", &m_Preview->LightIntensities.Z, 0.0f, 100.0f);
             }
+            if (ImGui::CollapsingHeader("Local volumes"))
+            {
+                if (ImGui::Button("Add box"))
+                {
+                    settings.LocalVolumes.emplace_back();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Add sphere"))
+                {
+                    settings.LocalVolumes.emplace_back().Shape = Renderer::EVolumeShape::Sphere;
+                }
+                for (size_t index = 0; index < settings.LocalVolumes.size(); ++index)
+                {
+                    auto& local = settings.LocalVolumes[index];
+                    ImGui::PushID(static_cast<int>(index));
+                    const char* label = local.Shape == Renderer::EVolumeShape::Box ? "Box" : "Sphere";
+                    const bool bExpanded = ImGui::TreeNode(label);
+                    bool bRemove = false;
+                    if (bExpanded)
+                    {
+                        ImGui::DragFloat3("Position", &local.Position.X, 0.05f);
+                        ImGui::DragFloat3("Rotation (degrees)", &local.RotationDegrees.X, 1.0f);
+                        ImGui::DragFloat3("Half extents", &local.HalfExtent.X, 0.05f, 0.02f, 50.0f);
+                        ImGui::DragFloat("Density", &local.Medium.Density, 0.005f, 0.0f, 2.0f);
+                        DrawMediumControls(local.Medium);
+                        bRemove = ImGui::Button("Remove volume");
+                        ImGui::TreePop();
+                    }
+                    ImGui::PopID();
+                    if (bRemove)
+                    {
+                        settings.LocalVolumes.erase(settings.LocalVolumes.begin() + index);
+                        break;
+                    }
+                }
+            }
             if (settings.View == Renderer::EVolumeView::Density || settings.View == Renderer::EVolumeView::Froxels ||
-                settings.View == Renderer::EVolumeView::LightVisibility)
+                settings.View == Renderer::EVolumeView::LightVisibility || settings.View == Renderer::EVolumeView::LocalOverlap)
             {
                 int slice = settings.DebugSlice;
                 ImGui::SliderInt("Slice", &slice, 0, 31);

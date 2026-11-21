@@ -6,6 +6,7 @@
 #include "Scene.h"
 #include "SceneShaderParameters.h"
 #include "SceneView.h"
+#include "Transform.hpp"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -23,11 +24,20 @@ namespace Renderer
         SHADER_PARAMETER(Core::Float4, VolumeCameraAxis)
     END_SHADER_PARAMETER_STRUCT(VolumeGridParameters)
 
+    BEGIN_SHADER_PARAMETER_STRUCT(VolumeLocalData)
+        SHADER_PARAMETER(Core::Mat4, WorldToLocal)
+        SHADER_PARAMETER(Core::Float4, LocalScattering)
+        SHADER_PARAMETER(Core::Float4, LocalAbsorption)
+        SHADER_PARAMETER(Core::Float4, LocalEmission)
+    END_SHADER_PARAMETER_STRUCT(VolumeLocalData)
+
     BEGIN_SHADER_PARAMETER_STRUCT(VolumeMediumParameters)
         SHADER_PARAMETER_STRUCT_REFERENCE(VolumeGridParameters, Grid)
         SHADER_PARAMETER(Core::Float4, MediumScattering)
         SHADER_PARAMETER(Core::Float4, MediumAbsorption)
         SHADER_PARAMETER(Core::Float4, MediumEmission)
+        SHADER_PARAMETER(uint32_t, LocalCount)
+        SHADER_PARAMETER_RDG_STRUCTURED_BUFFER(VolumeLocalData, LocalVolumes)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, MediumOutput)
     END_SHADER_PARAMETER_STRUCT(VolumeMediumParameters)
 
@@ -341,6 +351,30 @@ namespace Renderer
         mediumParams->MediumScattering = Pack(settings.Medium.Scattering, settings.Medium.Anisotropy);
         mediumParams->MediumAbsorption = Pack(settings.Medium.Absorption, settings.Medium.Density);
         mediumParams->MediumEmission = Pack(settings.Medium.Emission, 0);
+        std::vector<VolumeLocalData> localData;
+        localData.reserve(settings.LocalVolumes.size());
+        for (const auto& local : settings.LocalVolumes)
+        {
+            if (local.HalfExtent.X < 1e-3f || local.HalfExtent.Y < 1e-3f || local.HalfExtent.Z < 1e-3f ||
+                local.Medium.Density <= 0.0f)
+            {
+                continue;
+            }
+            const auto transform = Core::MakeTransformMatrix(local.Position, local.RotationDegrees, local.HalfExtent);
+            const float determinant = Core::Determinant(transform);
+            if (!std::isfinite(determinant) || determinant <= 1e-9f)
+            {
+                continue;
+            }
+            VolumeLocalData packed{};
+            packed.WorldToLocal = Core::Inverse(transform);
+            packed.LocalScattering = Pack(local.Medium.Scattering, local.Medium.Anisotropy);
+            packed.LocalAbsorption = Pack(local.Medium.Absorption, local.Medium.Density);
+            packed.LocalEmission = Pack(local.Medium.Emission, static_cast<float>(local.Shape));
+            localData.push_back(packed);
+        }
+        mediumParams->LocalCount = static_cast<uint32_t>(localData.size());
+        mediumParams->LocalVolumes = UploadVolumeRecords(builder, "Volume.LocalMedia", std::move(localData));
         mediumParams->MediumOutput = MakeUAV(builder, medium);
         AddCompute<VolumeMediumCS>(builder, "VolumeInjectMedium", mediumParams, volumeGroups);
 

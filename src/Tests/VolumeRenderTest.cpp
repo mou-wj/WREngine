@@ -331,6 +331,42 @@ namespace Test
             RequireNear(unblocked.Z, cone[Center].Z, "shadow toggle restores spot radiance");
             std::cout << "VOLUME_SHADOW_TEST_OK" << std::endl;
 
+            Renderer::LocalVolume box;
+            box.Position = {0, 0, -3};
+            box.RotationDegrees = {20, 40, 0};
+            box.HalfExtent = {8, 7, 6};
+            box.Medium.Density = 0.2f;
+            box.Medium.Scattering = {0.5f, 0.5f, 0.5f};
+            box.Medium.Absorption = {0.5f, 0.5f, 0.5f};
+            auto sphere = box;
+            sphere.Shape = EVolumeShape::Sphere;
+            sphere.RotationDegrees = {0, 10, 0};
+            sphere.Medium.Density = 0.3f;
+            sphere.Medium.Scattering = {0.25f, 0.25f, 0.25f};
+            sphere.Medium.Absorption = {0.25f, 0.25f, 0.25f};
+            settings.LocalVolumes = {box, sphere};
+            settings.Medium.Density = 0.1f;
+            settings.Medium.Scattering = {0.5f, 0.5f, 0.5f};
+            settings.View = EVolumeView::Transmittance;
+            const auto overlapT = Render(settings, 6, &scene)[Center];
+            RequireNear(overlapT.X, std::exp(-0.4f * 5.9f), "overlapping box, ellipsoid and global extinction add");
+            settings.View = EVolumeView::LocalOverlap;
+            RequireNear(Render(settings, 6, &scene)[Center].X, 0.535f, "overlap slice contains two local volumes");
+            settings.View = EVolumeView::DirectLighting;
+            const auto localLit = Render(settings, 6, &scene)[Center];
+            if (localLit.X <= 0.05f || localLit.Y <= 0.01f || localLit.Z <= 0.03f)
+            {
+                throw std::runtime_error("Local media must participate in direct scattering from all three lights.");
+            }
+            settings.bShadows = true;
+            RequireNear(Render(settings, 6, &scene)[Center].X, 0, "local media respect the existing light shadow");
+            settings.View = EVolumeView::Transmittance;
+            settings.LocalVolumes.pop_back();
+            RequireNear(Render(settings, 6, &scene)[Center].X, std::exp(-0.25f * 5.9f), "removing the sphere leaves the box");
+            settings.LocalVolumes.front().Position.X = 100;
+            RequireNear(Render(settings, 6, &scene)[Center].X, std::exp(-0.05f * 5.9f), "moving the box leaves only global fog");
+            std::cout << "VOLUME_LOCAL_TEST_OK overlap=" << overlapT.X << std::endl;
+
             // The fixture textures are borrowed sampler inputs, outside the scene allocator.
             scene.ForEachLight([&](Engine::LightSceneProxy* proxy) { scene.GetLightShadowInfo(proxy).Allocation = {}; });
             scene.RemoveLight(&directional);

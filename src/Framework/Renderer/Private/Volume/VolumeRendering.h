@@ -2,6 +2,7 @@
 
 #include "Math.hpp"
 #include "RenderGraphResource.h"
+#include <vector>
 
 namespace Engine { class SceneView; class SceneInterface; }
 namespace RenderCore { class RenderGraphBuilder; }
@@ -18,6 +19,17 @@ namespace Renderer
         float Anisotropy = 0.0f;
     };
 
+    enum class EVolumeShape : uint32_t { Box, Sphere };
+
+    struct LocalVolume
+    {
+        EVolumeShape Shape = EVolumeShape::Box;
+        Core::Float3 Position{0, 0, 0};
+        Core::Float3 RotationDegrees{0, 0, 0};
+        Core::Float3 HalfExtent{1, 1, 1};
+        VolumeMedium Medium;
+    };
+
     enum class EVolumeView : uint32_t
     {
         Composite,
@@ -26,12 +38,14 @@ namespace Renderer
         Density,
         Froxels,
         DirectLighting,
-        LightVisibility
+        LightVisibility,
+        LocalOverlap
     };
 
     struct VolumeRenderSettings
     {
         VolumeMedium Medium;
+        std::vector<LocalVolume> LocalVolumes;
         Core::Float3 AmbientRadiance{0.24f, 0.28f, 0.32f};
         float MaxDistance = 45.0f;
         EVolumeView View = EVolumeView::Composite;
