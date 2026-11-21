@@ -64,6 +64,11 @@ namespace Editor
     {
         m_OnOpenGIViewer = std::move(callback);
     }
+
+    void EditorViewToolbar::SetOnOpenVolumeViewer(std::function<void()> callback)
+    {
+        m_OnOpenVolumeViewer = std::move(callback);
+    }
     void EditorViewToolbar::Draw()
     {
         const auto& geometry = GetGeometry();
@@ -132,7 +137,13 @@ namespace Editor
                         m_OnOpenGIViewer();
                     }
                     ImGui::EndDisabled();
-                    ImGui::TextDisabled("Inspect mesh");
+                    ImGui::SameLine();
+                    ImGui::BeginDisabled(!m_OnOpenVolumeViewer);
+                    if (ImGui::Button("Volume\nviewer", {86, 44}))
+                    {
+                        m_OnOpenVolumeViewer();
+                    }
+                    ImGui::EndDisabled();
                     ImGui::EndGroup();
                     ImGui::SameLine(0, 24);
                     ImGui::BeginGroup();

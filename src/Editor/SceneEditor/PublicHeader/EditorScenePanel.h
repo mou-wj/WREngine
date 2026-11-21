@@ -31,6 +31,7 @@ namespace Editor
         void SetOnOpenVirtualGeometryViewer(std::function<void()> callback);
         void SetOnOpenTextureViewer(std::function<void()> callback);
         void SetOnOpenGIViewer(std::function<void()> callback);
+        void SetOnOpenVolumeViewer(std::function<void()> callback);
         void Draw() override;
     private:
         EditorScene& m_Scene;
@@ -38,6 +39,7 @@ namespace Editor
         std::function<void()> m_OnOpenVirtualGeometryViewer;
         std::function<void()> m_OnOpenTextureViewer;
         std::function<void()> m_OnOpenGIViewer;
+        std::function<void()> m_OnOpenVolumeViewer;
     };
 
     class SCENEEDITOR_API EditorScenePanel final : public ImGUISlate::ImPanelWidget

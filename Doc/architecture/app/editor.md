@@ -19,6 +19,7 @@
 | [VirtualGeometryViewer](../../../src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h) | 独立虚拟几何预览和生成层检查，调用 Renderer 的 Visibility、Resolve 和延迟光照 Pass |
 | [TextureViewer / EditorTextureViewer](../../../src/Editor/TextureViewer/PublicHeader/EditorTextureViewer.h) | 多来源纹理列表、二维画布、Mip/立方体面/数组层检查，来源由宿主回调提供 |
 | [GIViewer / EditorGIViewer](../../../src/Editor/GIViewer/PublicHeader/EditorGIViewer.h) | 独立 Lumen 阶段预览和可视化；通过 Renderer 的 GIViewerRenderer 构图，不接入主场景绘制 |
+| [VolumeViewer / EditorVolumeViewer](../../../src/Editor/VolumeViewer/PublicHeader/EditorVolumeViewer.h) | 独立的参与介质测试窗口，拥有预览场景、相机和颜色目标 |
 
 ## 依赖和模块协作
 

@@ -8,6 +8,7 @@
 #include "EditorVirtualGeometryViewer.h"
 #include "EditorTextureViewer.h"
 #include "EditorGIViewer.h"
+#include "EditorVolumeViewer.h"
 #include "Widgets/ImFileDialogWidget.h"
 #include "AssetManager.h"
 #include "StaticMeshAsset.h"
@@ -243,6 +244,8 @@ namespace Editor
             return GIViewerSource{m_Scene->GetSceneInterface(), m_Scene->GetCurrentView()};
         });
         m_ViewToolbar->SetOnOpenGIViewer([this] { m_GIViewer->Open(); });
+        m_VolumeViewer = std::make_unique<EditorVolumeViewer>();
+        m_ViewToolbar->SetOnOpenVolumeViewer([this] { m_VolumeViewer->Open(); });
         m_ViewToolbar->SetOnOpenMeshViewer([this] {
             std::string selected;
             for (const auto& object:m_Scene->GetObjects())
@@ -286,6 +289,7 @@ namespace Editor
         m_Window->AddWidget(m_VirtualGeometryViewer.get(), {});
         m_Window->AddWidget(m_TextureViewer.get(),{});
         m_Window->AddWidget(m_GIViewer.get(), {});
+        m_Window->AddWidget(m_VolumeViewer.get(), {});
         m_Window->Show();
         std::cout << "[Editor] Initialized Scene / Assets / Material panels" << std::endl;
         return true;
@@ -300,6 +304,7 @@ namespace Editor
         m_VirtualGeometryViewer.reset();
         m_TextureViewer.reset();
         m_GIViewer.reset();
+        m_VolumeViewer.reset();
         m_ProjectDialog.reset(); m_MenuWidget.reset(); m_NodePanel.reset();
         m_LeftSplitter.reset();
         m_RightSplitter.reset();

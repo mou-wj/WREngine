@@ -21,6 +21,7 @@ namespace Editor
     class EditorVirtualGeometryViewer;
     class EditorTextureViewer;
     class EditorGIViewer;
+    class EditorVolumeViewer;
     struct TextureViewerSource;
 
     class EDITOR_API EditorApplication final : public SlateCore::ApplicationBase
@@ -60,6 +61,7 @@ namespace Editor
         std::unique_ptr<EditorVirtualGeometryViewer> m_VirtualGeometryViewer;
         std::unique_ptr<EditorTextureViewer> m_TextureViewer;
         std::unique_ptr<EditorGIViewer> m_GIViewer;
+        std::unique_ptr<EditorVolumeViewer> m_VolumeViewer;
         std::unique_ptr<ImGUISlate::ImWidget> m_MenuWidget;
         std::unique_ptr<ImGUISlate::ImFileDialogWidget> m_ProjectDialog;
         std::shared_ptr<ImGUISlate::ImMainWindow> m_Window;
