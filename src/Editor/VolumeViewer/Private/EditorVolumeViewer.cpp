@@ -1,6 +1,7 @@
 #include "EditorVolumeViewer.h"
 #include "../../../Framework/Renderer/Private/Volume/AtmosphereRender.h"
 #include "../../../Framework/Renderer/Private/Volume/VolumeRendering.h"
+#include "../../../Framework/Renderer/Private/Volume/WaterRender.h"
 #include "Camera.h"
 #include "EngineGlobal.h"
 #include "EnvironmentLightResourceManager.h"
@@ -199,15 +200,32 @@ namespace Editor
                     local.DensityField.Texture = m_DemoDensity.get();
                 }
             }
-            view.DrawExtensions.push_back({[this, volume = std::move(frameSettings), atmosphere = Atmosphere](
+            auto water = Water;
+            if (water.bEnabled && bAnimateWater)
+            {
+                m_WaterTime += ImGui::GetIO().DeltaTime;
+            }
+            water.TimeSeconds = static_cast<float>(m_WaterTime);
+            view.DrawExtensions.push_back({[this, volume = std::move(frameSettings), atmosphere = Atmosphere, water](
                 RenderCore::RenderGraphBuilder& graph, const Engine::SceneView& sceneView, RenderCore::RenderGraphTextureRef color,
                 RenderCore::RenderGraphTextureRef depth)
             {
-                if (atmosphere.bEnabled)
+                if (atmosphere.bEnabled || water.bEnabled)
                 {
                     const auto lighting = Renderer::PrepareAtmosphere(graph, atmosphere, m_Scene.get());
+                    const bool bAtmosphereDebug = atmosphere.bEnabled && atmosphere.View != Renderer::EAtmosphereView::Composite;
+                    if (water.bEnabled && !bAtmosphereDebug)
+                    {
+                        depth = Renderer::AddWaterPass(graph, sceneView, color, depth, water, lighting, m_Scene.get());
+                        if (water.View != Renderer::EWaterView::Composite)
+                        {
+                            m_History.Invalidate();
+                            Stats = {};
+                            return;
+                        }
+                    }
                     Renderer::AddAtmospherePass(graph, sceneView, color, depth, atmosphere, lighting);
-                    if (atmosphere.View != Renderer::EAtmosphereView::Composite)
+                    if (bAtmosphereDebug)
                     {
                         m_History.Invalidate();
                         Stats = {};
@@ -254,6 +272,7 @@ namespace Editor
 
         Renderer::VolumeRenderSettings Settings;
         Renderer::AtmosphereRenderSettings Atmosphere;
+        Renderer::WaterRenderSettings Water;
         Renderer::VolumeRenderStats Stats;
         Core::Float3 LightIntensities{3, 20, 45};
         float SunElevation = 52.0f;
@@ -261,6 +280,7 @@ namespace Editor
         double CompletedFrameMilliseconds = 0;
         bool bMeasureCompletedFrame = false;
         bool bAnimateDensity = false;
+        bool bAnimateWater = true;
 
     private:
         Core::Float3 OrbitDirection() const
@@ -349,6 +369,7 @@ namespace Editor
         float m_Distance = 12.0f;
         uint64_t m_FrameIndex = 0;
         double m_DensityTime = 0;
+        double m_WaterTime = 0;
         bool m_bOrbiting = false;
         bool m_bPanning = false;
     };
@@ -404,6 +425,32 @@ namespace Editor
             ImGui::DragFloat3("Rayleigh / km", &atmosphere.RayleighScattering.X, 0.0002f, 0.0f, 1.0f, "%.5f");
             ImGui::DragFloat3("Mie / km", &atmosphere.MieScattering.X, 0.0002f, 0.0f, 1.0f, "%.5f");
             ImGui::DragFloat3("Absorption / km", &atmosphere.Absorption.X, 0.0002f, 0.0f, 1.0f, "%.5f");
+        }
+        if (ImGui::CollapsingHeader("Water"))
+        {
+            auto& water = m_Preview->Water;
+            ImGui::Checkbox("Enable water", &water.bEnabled);
+            ImGui::Checkbox("Animate waves", &m_Preview->bAnimateWater);
+            const char* views[] = {"Composite", "Normals", "Reflection", "Refraction", "Thickness"};
+            int view = static_cast<int>(water.View);
+            if (ImGui::Combo("Water view", &view, views, IM_ARRAYSIZE(views)))
+            {
+                water.View = static_cast<Renderer::EWaterView>(view);
+            }
+            ImGui::DragFloat3("Water position", &water.Position.X, 0.05f);
+            ImGui::DragFloat2("Water half extent", &water.HalfExtent.X, 0.1f, 0.1f, 80.0f);
+            ImGui::SliderFloat("Water yaw", &water.YawDegrees, -180.0f, 180.0f, "%.1f deg");
+            ImGui::SliderFloat("Wave direction", &water.WaveDirectionDegrees, -180.0f, 180.0f, "%.1f deg");
+            ImGui::SliderFloat("Wave amplitude", &water.WaveAmplitude, 0.0f, 0.5f, "%.3f");
+            ImGui::SliderFloat("Wave frequency", &water.WaveFrequency, 0.02f, 2.0f, "%.2f");
+            ImGui::SliderFloat("Wave speed", &water.WaveSpeed, 0.0f, 5.0f, "%.2f");
+            ImGui::SliderFloat("Normal strength", &water.NormalStrength, 0.0f, 3.0f);
+            ImGui::ColorEdit3("Water color", &water.BodyColor.X, ImGuiColorEditFlags_Float);
+            ImGui::DragFloat3("Water absorption", &water.Absorption.X, 0.01f, 0.0f, 4.0f);
+            ImGui::SliderFloat("Water roughness", &water.Roughness, 0.05f, 1.0f);
+            ImGui::SliderFloat("Reflection strength", &water.ReflectionStrength, 0.0f, 1.0f);
+            ImGui::SliderFloat("Refraction strength", &water.RefractionStrength, 0.0f, 1.0f);
+            ImGui::DragFloat("Depth limit", &water.MaxThickness, 0.1f, 0.1f, 80.0f);
         }
         if (ImGui::CollapsingHeader("Quality and timing"))
         {

@@ -1,0 +1,172 @@
+#include "/Generated/ShaderParameters/VolumeWaterParameters.sf"
+#include "/core/ShadingCommon.sf"
+#include "/volume/AtmosphereScattering.sf"
+#include "/volume/WaterSurface.sf"
+
+static const float WaterIor = 1.333;
+static const float WaterF0 = ((WaterIor - 1.0) / (WaterIor + 1.0)) * ((WaterIor - 1.0) / (WaterIor + 1.0));
+
+float3 ReconstructWaterWorld(float2 uv, float deviceDepth)
+{
+    float2 ndc = uv * float2(2, -2) + float2(-1, 1);
+    float4 world = mul(WaterInverseViewProjection, float4(ndc, deviceDepth, 1));
+    return world.xyz / world.w;
+}
+
+float3 ShadeWaterLights(float3 position, float3 normal, float3 toEye)
+{
+    float3 lighting = 0.0;
+    float roughness = WaterBody.w;
+    float nDotV = saturate(dot(normal, toEye));
+    if (nDotV <= 0.0)
+    {
+        return lighting;
+    }
+    [loop]
+    for (uint i = 0; i < WaterViewSettings.w; ++i)
+    {
+        VolumeWaterLight light = WaterLights[i];
+        uint type = uint(light.TypeOuterCos.x);
+        float3 toLight = -light.DirectionInnerCos.xyz;
+        float3 incident = max(light.ColorIntensity.rgb, 0.0) * light.ColorIntensity.w;
+        if (type != 0)
+        {
+            float3 offset = light.PositionRadius.xyz - position;
+            float distance = length(offset);
+            if (distance <= 1e-4 || distance >= light.PositionRadius.w)
+            {
+                continue;
+            }
+            toLight = offset / distance;
+            incident *= LocalLightAttenuation(distance, light.PositionRadius.w);
+            if (type == 2)
+            {
+                float cone = dot(-light.DirectionInnerCos.xyz, toLight);
+                incident *= SpotLightAttenuation(cone, light.DirectionInnerCos.w, light.TypeOuterCos.y);
+            }
+        }
+        else if (AtmosphereSun.w > 0.0 && dot(toLight, AtmosphereSun.xyz) > 0.9995)
+        {
+            incident *= TransmittanceToSun(AtmospherePlanetPosition(position));
+        }
+
+        float nDotL = saturate(dot(normal, toLight));
+        if (nDotL > 0.0)
+        {
+            float3 halfVector = normalize(toEye + toLight);
+            float distribution = DistributionGGX(normal, halfVector, roughness);
+            float visibility = GeometrySmith(normal, toEye, toLight, roughness);
+            float3 fresnel = FresnelSchlick(saturate(dot(halfVector, toEye)), WaterF0.xxx);
+            lighting += incident * distribution * visibility * fresnel / max(4.0 * nDotV, 1e-4);
+        }
+    }
+    return lighting;
+}
+
+float3 ReflectWater(float3 position, float3 direction)
+{
+    if (AtmosphereSun.w > 0.0)
+    {
+        // Direct GGX already accounts for the sun disk. Sample the scattering lobe for the environment.
+        float3 lookup = normalize(lerp(direction, float3(0, 1, 0), WaterBody.w * WaterBody.w * 0.7));
+        float3 transmittance;
+        return IntegrateAtmosphere(AtmospherePlanetPosition(position), lookup, 1e9, 16, true, false, transmittance);
+    }
+    if (WaterOptics.w > 0.0)
+    {
+        return WaterEnvironment.SampleLevel(WaterSampler, direction, WaterBody.w * WaterOptics.z).rgb;
+    }
+    return lerp(float3(0.35, 0.42, 0.52), float3(0.12, 0.25, 0.43), saturate(direction.y));
+}
+
+float3 RefractWater(float3 position, float3 ray, float3 normal, float3 background, bool hasOpaqueSurface, float opaqueDistance,
+    float hitDistance, out float thickness)
+{
+    thickness = hasOpaqueSurface ? min(opaqueDistance - hitDistance, WaterAbsorption.w) : WaterAbsorption.w;
+    float3 behind = background;
+    if (WaterOptics.y > 0.0 && hasOpaqueSurface)
+    {
+        float3 deflected = refract(ray, normal, 1.0 / WaterIor);
+        float3 samplePosition = position + thickness * normalize(lerp(ray, deflected, WaterOptics.y));
+        float4 clip = mul(WaterViewProjection, float4(samplePosition, 1));
+        float2 uv = clip.xy / max(clip.w, 1e-5) * float2(0.5, -0.5) + 0.5;
+        if (clip.w > 0.0 && all(uv >= 0.0) && all(uv < 1.0))
+        {
+            uint2 samplePixel = uint2(uv * float2(WaterViewSettings.xy));
+            float sampledDepth = SceneDepth.Load(int3(samplePixel, 0));
+            float3 geometry = ReconstructWaterWorld((float2(samplePixel) + 0.5) / float2(WaterViewSettings.xy), sampledDepth);
+            float2 local = ToWaterLocal(geometry.xz - WaterPosition.xz);
+            float surfaceY = WaterPosition.y + EvaluateWaterWave(local).x;
+            if (!IsBackgroundDepth(sampledDepth) && all(abs(local) <= WaterExtentAndRotation.xy) && geometry.y <= surfaceY &&
+                dot(geometry - position, ray) > 0.01)
+            {
+                behind = SceneColor.Load(int3(samplePixel, 0)).rgb;
+                thickness = min(length(geometry - position), WaterAbsorption.w);
+            }
+        }
+    }
+    float3 transmittance = exp(-max(WaterAbsorption.rgb, 0.0) * thickness);
+    return lerp(max(WaterBody.rgb, 0.0), behind, transmittance);
+}
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= WaterViewSettings.xy))
+    {
+        return;
+    }
+    float4 background = SceneColor.Load(int3(pixel, 0));
+    float sceneDepth = SceneDepth.Load(int3(pixel, 0));
+    bool hasOpaqueSurface = !IsBackgroundDepth(sceneDepth);
+    sceneDepth = hasOpaqueSurface ? sceneDepth : 1.0;
+    float2 uv = (float2(pixel) + 0.5) / float2(WaterViewSettings.xy);
+    float3 eye = WaterCamera.xyz;
+    float3 nearOffset = ReconstructWaterWorld(uv, 0.0) - eye;
+    float3 ray = normalize(nearOffset);
+    float opaqueDistance = length(ReconstructWaterWorld(uv, sceneDepth) - eye);
+    float hitDistance;
+    float3 normal;
+    if (!IntersectWater(eye, ray, length(nearOffset), opaqueDistance, hitDistance, normal))
+    {
+        WaterColorOutput[pixel] = background;
+        WaterDepthOutput[pixel] = float4(sceneDepth, 0.0, 0.0, 0.0);
+        return;
+    }
+
+    float3 position = eye + ray * hitDistance;
+    float4 clip = mul(WaterViewProjection, float4(position, 1.0));
+    WaterDepthOutput[pixel] = float4(min(sceneDepth, saturate(clip.z / clip.w)), 0.0, 0.0, 0.0);
+    float3 result = normal * 0.5 + 0.5;
+    uint mode = WaterViewSettings.z;
+    if (mode != 1)
+    {
+        float thickness;
+        float3 transmitted = RefractWater(position, ray, normal, background.rgb, hasOpaqueSurface, opaqueDistance, hitDistance, thickness);
+        float fresnel = FresnelSchlick(saturate(dot(normal, -ray)), WaterF0.xxx).x * WaterOptics.x;
+        float3 reflection = 0.0;
+        if (fresnel > 0.0 && (mode == 0 || mode == 2))
+        {
+            reflection = ReflectWater(position, reflect(ray, normal)) * fresnel;
+        }
+        if (mode == 0)
+        {
+            result = transmitted * (1.0 - fresnel) + reflection +
+                ShadeWaterLights(position, normal, -ray) * WaterOptics.x;
+        }
+        else if (mode == 2)
+        {
+            result = reflection;
+        }
+        else if (mode == 3)
+        {
+            result = transmitted;
+        }
+        else
+        {
+            result = saturate(thickness / WaterAbsorption.w);
+        }
+    }
+    WaterColorOutput[pixel] = float4(result, background.a);
+}

@@ -1,0 +1,107 @@
+float2 ToWaterLocal(float2 v)
+{
+    float2 basis = WaterExtentAndRotation.zw;
+    return float2(dot(v, basis), dot(v, float2(-basis.y, basis.x)));
+}
+
+float2 ToWaterWorld(float2 v)
+{
+    float2 basis = WaterExtentAndRotation.zw;
+    return float2(dot(v, float2(basis.x, -basis.y)), dot(v, basis.yx));
+}
+
+float3 WaterWaveTerm(float2 location, float2 direction, float amplitude, float frequency, float speed, float phaseOffset)
+{
+    float k = 2.0 * PI * frequency;
+    float phase = k * (dot(location, direction) - WaterWave.w * speed) + phaseOffset;
+    return float3(amplitude * sin(phase), (amplitude * k * cos(phase)) * direction);
+}
+
+float3 EvaluateWaterWave(float2 location)
+{
+    float2 direction = WaterFlow.xy;
+    float2 perpendicular = float2(-direction.y, direction.x);
+    return WaterWaveTerm(location, direction, WaterWave.x, WaterWave.y, WaterWave.z, 0.0) +
+        WaterWaveTerm(location, direction * 0.6 + perpendicular * 0.8, WaterWave.x * 0.42, WaterWave.y * 1.67, WaterWave.z * 0.83, 1.1) +
+        WaterWaveTerm(location, direction * 0.8 - perpendicular * 0.6, WaterWave.x * 0.15, WaterWave.y * 2.45, WaterWave.z * 0.7, 2.7);
+}
+
+bool ClipWaterAxis(float origin, float direction, float extent, inout float2 interval)
+{
+    if (abs(direction) < 1e-6)
+    {
+        return abs(origin) <= extent;
+    }
+    float2 crossings = (float2(-extent, extent) - origin) / direction;
+    interval.x = max(interval.x, min(crossings.x, crossings.y));
+    interval.y = min(interval.y, max(crossings.x, crossings.y));
+    return interval.y >= interval.x;
+}
+
+float WaterHeightError(float3 origin, float3 ray, float distance)
+{
+    float3 location = origin + ray * distance;
+    return location.y - EvaluateWaterWave(location.xz).x;
+}
+
+bool IntersectWater(float3 eye, float3 ray, float nearDistance, float opaqueDistance, out float hitDistance, out float3 normal)
+{
+    hitDistance = 0.0;
+    normal = float3(0, 1, 0);
+    if (ray.y >= -1e-5 || eye.y <= WaterPosition.y)
+    {
+        return false;
+    }
+    float3 origin = eye - WaterPosition.xyz;
+    origin.xz = ToWaterLocal(origin.xz);
+    float3 localRay = float3(0, ray.y, 0);
+    localRay.xz = ToWaterLocal(ray.xz);
+    float2 interval = float2(nearDistance, opaqueDistance - 1e-4);
+    if (!ClipWaterAxis(origin.x, localRay.x, WaterExtentAndRotation.x, interval) ||
+        !ClipWaterAxis(origin.z, localRay.z, WaterExtentAndRotation.y, interval))
+    {
+        return false;
+    }
+    if (WaterWave.x <= 1e-5)
+    {
+        hitDistance = -origin.y / localRay.y;
+        return hitDistance >= interval.x && hitDistance <= interval.y;
+    }
+    if (!ClipWaterAxis(origin.y, localRay.y, WaterWave.x * 1.57 + 1e-4, interval))
+    {
+        return false;
+    }
+    uint segments = uint(clamp(ceil((interval.y - interval.x) * length(localRay.xz) * WaterWave.y * 8.0), 6.0, 32.0));
+    float front = interval.x;
+    float frontError = WaterHeightError(origin, localRay, front);
+    [loop]
+    for (uint i = 1; i <= segments; ++i)
+    {
+        float back = lerp(interval.x, interval.y, float(i) / float(segments));
+        float backError = WaterHeightError(origin, localRay, back);
+        if (frontError >= 0.0 && backError <= 0.0)
+        {
+            [unroll]
+            for (uint j = 0; j < 7; ++j)
+            {
+                float middle = (front + back) * 0.5;
+                if (WaterHeightError(origin, localRay, middle) > 0.0)
+                {
+                    front = middle;
+                }
+                else
+                {
+                    back = middle;
+                }
+            }
+            hitDistance = (front + back) * 0.5;
+            float2 surfaceGradient = EvaluateWaterWave(origin.xz + localRay.xz * hitDistance).yz;
+            float2 gradient = ToWaterWorld(surfaceGradient) * WaterFlow.z;
+            normal = normalize(float3(-gradient.x, 1.0, -gradient.y));
+            return true;
+        }
+        front = back;
+        frontError = backError;
+    }
+    return false;
+}

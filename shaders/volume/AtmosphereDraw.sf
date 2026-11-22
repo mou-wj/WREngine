@@ -17,7 +17,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     }
     float4 background = SceneColor.Load(int3(pixel, 0));
     float depth = SceneDepth.Load(int3(pixel, 0));
-    bool sky = depth >= 1.0;
+    bool sky = IsBackgroundDepth(depth);
     if (!sky && AtmosphereViewSettings.w == 0)
     {
         AtmosphereOutput[pixel] = background;
@@ -28,7 +28,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     float3 ray = normalize(ReconstructAtmosphereWorld(ndc, 0.0) - camera);
     float maxDistance = sky ? 1e9 : length(ReconstructAtmosphereWorld(ndc, depth) - camera) * Planet.z;
     float3 transmittance;
-    float3 scattered = IntegrateAtmosphere(AtmospherePlanetPosition(camera), ray, maxDistance, sky ? 24u : 10u, sky, transmittance);
+    float3 scattered = IntegrateAtmosphere(AtmospherePlanetPosition(camera), ray, maxDistance, sky ? 24u : 10u, sky, true, transmittance);
     float3 result = sky ? scattered : background.rgb * transmittance + scattered;
     if (AtmosphereViewSettings.z != 0)
     {

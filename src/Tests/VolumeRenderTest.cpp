@@ -1,6 +1,7 @@
 #include "TestBase.h"
 #include "../Framework/Renderer/Private/Volume/AtmosphereRender.h"
 #include "../Framework/Renderer/Private/Volume/VolumeRendering.h"
+#include "../Framework/Renderer/Private/Volume/WaterRender.h"
 #include "../Framework/Renderer/Private/Scene.h"
 #include "Camera.h"
 #include "DistanceFieldMgr.h"
@@ -44,6 +45,11 @@ namespace Test
             VolumeRenderHistory* History = nullptr;
             VolumeRenderStats* Stats = nullptr;
             const AtmosphereRenderSettings* Atmosphere = nullptr;
+            const WaterRenderSettings* Water = nullptr;
+            float CameraY = 0.0f;
+            float CameraSlope = 0.0f;
+            bool bColorRamp = false;
+            float BackgroundDepth = 1.0f;
         };
 
         // Native timestamps stay in the benchmark. Split physical queues need profiling on both queues.
@@ -231,8 +237,8 @@ namespace Test
             double timeSeconds = 0, const VolumeTestFrame& frame = {})
         {
             Engine::Camera camera;
-            camera.SetPosition({frame.CameraX, 0, 0});
-            camera.SetTarget({frame.CameraX, 0, -1});
+            camera.SetPosition({frame.CameraX, frame.CameraY, 0});
+            camera.SetTarget({frame.CameraX, frame.CameraY + frame.CameraSlope, -1});
             camera.SetUp({0, 1, 0});
             camera.SetPerspective(Core::DegToRad(45.0f), float(Width) / Height, 0.1f, 100.0f);
             Engine::SceneView view;
@@ -268,13 +274,22 @@ namespace Test
 
             Pixels background;
             background.fill({0.8f, 0.4f, 0.2f, 1.0f});
+            if (frame.bColorRamp)
+            {
+                for (uint32_t row = 0; row < Height; ++row)
+                {
+                    std::fill_n(background.begin() + row * Width, Width, Core::Float4{float(row) / Height, 0.4f, 0.2f, 1.0f});
+                }
+            }
+            const auto forward = Core::Normalize(Core::Float3{0, frame.CameraSlope, -1});
+            const auto depthAt = [&](float distance) { return camera.WorldToNdc(camera.GetPosition() + forward * distance).Z; };
             std::array<float, Width * Height> sceneDepth;
-            sceneDepth.fill(surfaceDistance > 0.0f ? camera.WorldToNdc({0, 0, -surfaceDistance}).Z : 1.0f);
+            sceneDepth.fill(surfaceDistance > 0.0f ? depthAt(surfaceDistance) : frame.BackgroundDepth);
             if (frame.bNearCenter)
             {
                 for (uint32_t row = 0; row < Height; ++row)
                 {
-                    sceneDepth[row * Width + Width / 2] = camera.WorldToNdc({frame.CameraX, 0, -2}).Z;
+                    sceneDepth[row * Width + Width / 2] = depthAt(2);
                 }
             }
             graph.AddPass("VolumeTestUpload", VolumeTestUpload::GetMetaData(), upload, EPassFlag::Graphic, [&](RHICommandListBase& cmd)
@@ -283,12 +298,18 @@ namespace Test
                 GRHIApi->UpdateTexture(cmd, upload->Color->GetRHITexture(), background.data(), region);
                 GRHIApi->UpdateTexture(cmd, upload->Depth->GetRHITexture(), sceneDepth.data(), region);
             });
-            if (frame.Atmosphere && frame.Atmosphere->bEnabled)
+            RenderGraphTextureRef effectiveDepth = upload->Depth;
+            if ((frame.Atmosphere && frame.Atmosphere->bEnabled) || (frame.Water && frame.Water->bEnabled))
             {
-                const auto atmosphere = PrepareAtmosphere(graph, *frame.Atmosphere, scene);
-                AddAtmospherePass(graph, view, upload->Color, upload->Depth, *frame.Atmosphere, atmosphere);
+                const auto atmosphereSettings = frame.Atmosphere ? *frame.Atmosphere : AtmosphereRenderSettings{};
+                const auto atmosphere = PrepareAtmosphere(graph, atmosphereSettings, scene);
+                if (frame.Water)
+                {
+                    effectiveDepth = AddWaterPass(graph, view, upload->Color, effectiveDepth, *frame.Water, atmosphere, scene);
+                }
+                AddAtmospherePass(graph, view, upload->Color, effectiveDepth, atmosphereSettings, atmosphere);
             }
-            AddVolumePasses(graph, view, upload->Depth, upload->Color, settings, scene, frame.History, frame.Stats);
+            AddVolumePasses(graph, view, effectiveDepth, upload->Color, settings, scene, frame.History, frame.Stats);
 
             return ExecuteAndRead(graph, upload->Color, color);
         }
@@ -718,6 +739,8 @@ namespace Test
             {
                 throw std::runtime_error("Daylight over the horizon must show blue Rayleigh scattering.");
             }
+            const auto roundedSky = Render(volume, 0, nullptr, 0, {.Atmosphere = &atmosphere, .BackgroundDepth = std::nextafter(1.0f, 0.0f)});
+            RequireNear(roundedSky[upper].Z, day[upper].Z, "far-plane skybox rounding preserves sky shading");
             atmosphere.SunDirection = {0, 0.03f, -1};
             const auto dusk = render(0);
             if (!(dusk[Center].X > 0.02f && dusk[Center].X > 1.4f * dusk[Center].Z))
@@ -748,6 +771,87 @@ namespace Test
     };
 
     REGISTER_RENDER_TEST("VolumeAtmosphereTest", VolumeAtmosphereTest);
+
+    class VolumeWaterTest final : public VolumeRenderTest
+    {
+    public:
+        void Run() override
+        {
+            VolumeRenderSettings volume;
+            volume.bEnabled = false;
+            WaterRenderSettings water;
+            water.bEnabled = true;
+            water.Position = {0, 0, 0};
+            water.WaveAmplitude = 0;
+            water.HalfExtent = {10, 12};
+            water.MaxThickness = 8;
+            water.RefractionStrength = 0;
+            water.View = EWaterView::Thickness;
+            const auto render = [&](float depth, float slope = -0.5f, bool bRamp = false, Engine::SceneInterface* scene = nullptr)
+            {
+                return Render(volume, depth, scene, 0, {.Water = &water, .CameraY = 2, .CameraSlope = slope, .bColorRamp = bRamp});
+            };
+            RequireNear(render(2)[Center].X, 0.8f, "opaque foreground prevents water from shading that pixel");
+            const float shallow = render(6)[Center].X;
+            const float deep = render(10)[Center].X;
+            RequireNear(shallow, (6.0f - std::sqrt(20.0f)) / 8.0f, "shallow thickness stops at the opaque bed");
+            RequireNear(deep, (10.0f - std::sqrt(20.0f)) / 8.0f, "deep thickness follows the opaque bed");
+
+            water.View = EWaterView::Reflection;
+            const float steepReflection = render(0, -1.5f)[Center].Z;
+            const float grazingReflection = render(0, -0.26f)[Center].Z;
+            if (!(steepReflection > 0.0f && grazingReflection > steepReflection * 2.0f))
+            {
+                throw std::runtime_error("Water Fresnel response must increase at grazing incidence.");
+            }
+
+            water.View = EWaterView::Refraction;
+            const float shallowRed = render(6)[Center].X;
+            const float deepRed = render(10)[Center].X;
+            if (!(shallowRed > deepRed + 0.1f))
+            {
+                throw std::runtime_error("Longer water paths must absorb more red light.");
+            }
+            const auto absorption = water.Absorption;
+            water.Absorption = {};
+            const float straight = render(9, -0.5f, true)[Center].X;
+            water.RefractionStrength = 1;
+            const float refracted = render(9, -0.5f, true)[Center].X;
+            if (std::abs(refracted - straight) < 0.04f)
+            {
+                throw std::runtime_error("Refracted rays did not sample a different submerged location.");
+            }
+            water.Absorption = absorption;
+
+            water.WaveAmplitude = 0.15f;
+            water.View = EWaterView::Normals;
+            const auto firstNormal = render(8)[Center];
+            water.TimeSeconds = 1.0f;
+            const auto nextNormal = render(8)[Center];
+            if (std::abs(firstNormal.X - nextNormal.X) + std::abs(firstNormal.Z - nextNormal.Z) < 0.04f)
+            {
+                throw std::runtime_error("Water surface normal must follow animated waves.");
+            }
+
+            water.WaveAmplitude = 0;
+            water.View = EWaterView::Composite;
+            volume.bEnabled = true;
+            volume.View = EVolumeView::Transmittance;
+            volume.Medium.Density = 0.2f;
+            volume.Medium.Absorption = {1, 1, 1};
+            volume.Medium.Scattering = {};
+            const float beforeWater = render(10)[Center].X;
+            water.bEnabled = false;
+            const float beforeBed = render(10)[Center].X;
+            RequireNear(beforeWater, std::exp(-0.2f * (std::sqrt(20.0f) - 0.1f)), "fog terminates at the water interface");
+            RequireNear(beforeBed, std::exp(-0.2f * 9.9f), "disabled water restores opaque depth");
+            std::cout << "VOLUME_WATER_TEST_OK shallow=" << shallow << " deep=" << deep << " fresnel=" << steepReflection <<
+                "->" << grazingReflection << " refraction=" << straight << "->" << refracted <<
+                " fogT=" << beforeWater << " bedT=" << beforeBed << std::endl;
+        }
+    };
+
+    REGISTER_RENDER_TEST("VolumeWaterTest", VolumeWaterTest);
 
     template<bool bOptimized, uint32_t WidthInPixels = 960, uint32_t HeightInPixels = 540>
     class VolumeBenchmark final : public VolumeRenderTest
@@ -959,11 +1063,29 @@ namespace Test
             view.InvViewProjectionMatrix = camera.GetInverseViewProjectionMatrix();
             view.Flags = Engine::VF_EnableShadows;
 
-            const auto render = [&](const VolumeRenderSettings* settings, VolumeRenderHistory* history = nullptr, uint64_t frame = 0)
+            const auto render = [&](const VolumeRenderSettings* settings, VolumeRenderHistory* history = nullptr, uint64_t frame = 0,
+                const AtmosphereRenderSettings* atmosphere = nullptr, const WaterRenderSettings* water = nullptr)
             {
                 auto drawView = view;
                 drawView.FrameIndex = frame;
-                if (settings)
+                if (atmosphere)
+                {
+                    drawView.DrawExtensions.push_back({[&, atmosphere, water, settings, history](RenderGraphBuilder& graph,
+                        const Engine::SceneView& draw, RenderGraphTextureRef color, RenderGraphTextureRef depth)
+                    {
+                        const auto lighting = PrepareAtmosphere(graph, *atmosphere, scene.get());
+                        if (water)
+                        {
+                            depth = AddWaterPass(graph, draw, color, depth, *water, lighting, scene.get());
+                        }
+                        AddAtmospherePass(graph, draw, color, depth, *atmosphere, lighting);
+                        if (settings)
+                        {
+                            AddVolumePasses(graph, draw, depth, color, *settings, scene.get(), history);
+                        }
+                    }});
+                }
+                else if (settings)
                 {
                     drawView.DrawExtensions.push_back(MakeVolumeDrawExtension(*settings, scene.get(), history));
                 }
@@ -1019,10 +1141,37 @@ namespace Test
             history.Release();
             settings.View = EVolumeView::HistoryWeight;
             RequireNear(render(&settings, &history, 3)[Center].X, 0, "reopened deferred preview starts with clean history");
+
+            AtmosphereRenderSettings atmosphere;
+            atmosphere.bEnabled = true;
+            WaterRenderSettings water;
+            water.bEnabled = true;
+            water.Position.Y = -0.5f;
+            water.WaveAmplitude = 0;
+            water.Position.Z = 2;
+            const size_t lowerEdge = (Height - 1) * Width + 1;
+            const size_t upperEdge = 1;
+            const auto atmosphereOnly = render(nullptr, nullptr, 0, &atmosphere);
+            const auto atmosphereAndWater = render(nullptr, nullptr, 0, &atmosphere, &water);
+            RequireNear(atmosphereAndWater[upperEdge].Z, atmosphereOnly[upperEdge].Z,
+                "water keeps sky unchanged where the ray misses the interface");
+            if (!std::isfinite(atmosphereAndWater[lowerEdge].Z) ||
+                std::abs(atmosphereAndWater[lowerEdge].Z - atmosphereOnly[lowerEdge].Z) < 0.02f)
+            {
+                throw std::runtime_error("The deferred water surface must reflect the atmosphere and compose with the scene.");
+            }
+            settings.View = EVolumeView::Composite;
+            const auto layered = render(&settings, nullptr, 0, &atmosphere, &water);
+            if (!std::isfinite(layered[lowerEdge].Z) || std::abs(layered[lowerEdge].Z - atmosphereAndWater[lowerEdge].Z) < 0.01f)
+            {
+                throw std::runtime_error("Atmosphere, water, and volume must participate in the same deferred preview.");
+            }
             std::cout << "VOLUME_PIPELINE_TEST_OK baseline=" << base[Center].X << " composite=" << composite[Center].X <<
                 " foregroundT=" << transmittance[Center].X << " skyT=" << transmittance[0].X <<
                 " indirect=" << indirect[Center].X << " historyWeight=" << historyWeight <<
-                " optimizedComposite=" << optimized[Center].X << std::endl;
+                " optimizedComposite=" << optimized[Center].X <<
+                " skyWaterFog=" << atmosphereOnly[lowerEdge].Z << "->" << atmosphereAndWater[lowerEdge].Z <<
+                "->" << layered[lowerEdge].Z << std::endl;
 
             scene->RemovePrimitive(&mesh);
             scene->RemoveLight(&directional);

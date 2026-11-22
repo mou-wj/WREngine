@@ -30,6 +30,10 @@
 
 在左侧展开 **Atmosphere** 并勾选 **Enable atmosphere**。**Sun elevation** 和 **Sun azimuth** 同时改变天空采样和预览场景的主定向光。**Aerial perspective** 控制几何上的雾化和透射。场景太小时可调大 **Km / scene unit** 来观察距离差异。**In-scattering** 和 **Transmittance** 分别查看大气自身的辐射和透射率。 [大气计算](../key_implemetion/algorithm/24-atmosphere-and-water.md#大气光学模型)
 
+## 水面预览
+
+在左侧展开 **Water**，勾选 **Enable water**。**Animate waves** 默认开启，取消勾选会停在当前波形。可调整位置、范围、旋转、波向、振幅、频率、速度，以及水色、吸收和粗糙度。**Water view** 提供 **Composite**、**Normals**、**Reflection**、**Refraction** 和 **Thickness**。大气和水面都选 **Composite** 时可联看天空、水面与雾。选择大气调试图时只显示大气调试结果，选择水面调试图时跳过后续大气和雾的合成。 [波面与光照](../key_implemetion/algorithm/24-atmosphere-and-water.md#水面求交与动态法线)
+
 ## 验证范围
 
 隔离 Debug 构建验证了模块链接、Launcher 启动及 VolumeViewer。展开画质和局部介质控件时，右侧边界和主积分尺寸保持一致。固定相机时，多次截图中的默认雾形和光斑位置一致。以下像素测试另外验证了预览使用的实际渲染链路。Launcher 日志仍有已有的 Vulkan Shader 模块诊断。
@@ -47,6 +51,10 @@
 时空用例中，三个后端均以稀疏重建保留落在采样点之间的细前景，读回透射率约 0.68386。相机平移时保留历史，新遮挡拒绝历史，改变介质参数、实际光源强度和场景版本均重置历史。静止噪声介质以相同抖动序列测量，17×9 像素用例的帧间透射率变化 RMS 从 0.03334 降为 0.00381。
 
 `Tests.exe -test=VolumeAtmosphereTest -rhi=<Vulkan|DirectX12|OpenGL>` 在三个后端均正常退出。白天高空蓝通道约为 0.247，太阳降至地平线附近时红通道约为 1.783、蓝通道约为 0.015。测试还对照了行星遮住太阳、禁用大气及关闭几何大气透视时的输出。几何位置从 2 个场景单位移到 8 个时，蓝光透射率由约 0.970 降为 0.887。
+
+`Tests.exe -test=VolumeWaterTest -rhi=<Vulkan|DirectX12|OpenGL>` 在三个后端均正常退出。测试对照了有效水域、前景遮挡、波浪动画、深浅吸收和折射偏移。掠视的反射亮度从约 0.0091 升至 0.1245。开启水面后，中心像素的雾透射率约为 0.417，积分到池底时约为 0.138。Vulkan 完整渲染图用例同时启用大气、水面和雾，水面像素的蓝通道依次为 0.035、0.183、0.354，水面未覆盖的上沿保留天空结果。
+
+从隔离 Debug 目录以 `Langcher.exe -app=Editor` 启动，实际打开 VolumeViewer，观察了太阳高度变化、动态波面和高光、几何遮挡、反射调试视图与三项效果同屏。修正远平面深度判断后，原先出现在天空左上角的灰块消失。
 
 `VolumePipelineTest -rhi=Vulkan` 通过实际延迟渲染、网格、三种灯光、场景阴影、天空和 3D 局部密度纹理验证离屏合成。参考合成中心红通道约 0.470699，优化合成约 0.471276。稳定的第二帧历史权重为 0.85，释放历史后的帧为 0。关闭 IBL 后间接散射降为零，未注册扩展时的前景读回保持一致。测试正常退出，完整 Renderer 初始化仍输出已有 SPIR-V 校验及旧 Shader 编译诊断。
 

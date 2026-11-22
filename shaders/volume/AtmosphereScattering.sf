@@ -1,6 +1,12 @@
 #include "/Generated/ShaderParameters/VolumeAtmosphereLight.sf"
 #include "/volume/AtmosphereModel.sf"
 
+bool IsBackgroundDepth(float depth)
+{
+    // The rasterized far-plane skybox can round a few float steps below the clear value.
+    return depth >= 0.99999988;
+}
+
 float3 TransmittanceToSun(float3 position)
 {
     float radius = max(length(position), Planet.x);
@@ -17,7 +23,7 @@ float3 TransmittanceToSun(float3 position)
     return AtmosphereTransmittance.SampleLevel(AtmosphereSampler, texel, 0).rgb;
 }
 
-float3 IntegrateAtmosphere(float3 origin, float3 ray, float maxDistance, uint steps, bool sky,
+float3 IntegrateAtmosphere(float3 origin, float3 ray, float maxDistance, uint steps, bool sky, bool sunDisk,
     out float3 transmittance)
 {
     transmittance = 1.0;
@@ -67,7 +73,7 @@ float3 IntegrateAtmosphere(float3 origin, float3 ray, float maxDistance, uint st
         float sunlight = saturate(dot(normalize(surface), AtmosphereSun.xyz));
         scattering += transmittance * TransmittanceToSun(surface) * sunlight * float3(0.12, 0.11, 0.095) / AtmospherePi;
     }
-    else if (sky)
+    else if (sky && sunDisk)
     {
         float disk = smoothstep(0.999978, 0.999991, mu);
         scattering += transmittance * (6.0 * disk);
