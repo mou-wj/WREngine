@@ -1,3 +1,4 @@
+#include "/core/ShadingModel.sf"
 #include "/Generated/ShaderParameters/ScreenProbePlacementParameters.sf"
 #include "/Generated/ShaderParameters/GBufferInputParameters.sf"
 #include "/GI/ScreenProbeGeometry.sf"
@@ -37,7 +38,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     float4 gbufferB = GBufferB.SampleLevel(PointSampler, uv, 0);
     float4 gbufferC = GBufferC.SampleLevel(PointSampler, uv, 0);
 
-    bool valid = depth < 0.999999 && uint(gbufferC.b * 255.0 + 0.5) == 1u;
+    bool valid = depth < 0.999999 && IsLitShadingModel(DecodeShadingModel(gbufferC.b));
     float3 worldPosition = valid ? ReconstructGIPosition(pixel, depth, ScreenSize, InvViewProj) : 0.0;
     float3 normal = valid ? normalize(gbufferB.rgb * 2.0 - 1.0) : float3(0, 1, 0);
     ScreenProbeRecord probe = (ScreenProbeRecord)0;

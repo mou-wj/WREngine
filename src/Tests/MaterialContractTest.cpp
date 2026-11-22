@@ -43,7 +43,14 @@ public:
         auto asset = MaterialAsset::Create((directory/"source.json").generic_string(),"ContractFixture",std::make_unique<Material>());
         auto* material = asset->GetMaterial();
         material->SetShadingModel(EShadingModel::Lit);
-        CheckMaterial(material->GetParameterDefinitions().size() == 17,"Incomplete Surface parameter declarations");
+        CheckMaterial(material->GetParameterDefinitions().size() == 20,"Incomplete Surface parameter declarations");
+        CheckMaterial(ParseShadingModel("Lit") == EShadingModel::Lit && ParseShadingModel("Unlit") == EShadingModel::Unlit,
+                      "Legacy shading model names changed");
+        for (uint8_t id = 0; id < uint8_t(EShadingModel::COUNT_MAX); ++id)
+        {
+            const auto model = static_cast<EShadingModel>(id);
+            CheckMaterial(ParseShadingModel(GetShadingModelName(model)) == model, "Shading model name did not round-trip");
+        }
         auto original = material->GetRenderProxyShared();
         CheckMaterial(std::abs(ScalarValue(*original,"Metallic")-0.8f)<0.0001f,"Legacy metallic default changed");
         CheckMaterial(std::abs(ScalarValue(*original,"Roughness")-0.2f)<0.0001f,"Legacy roughness default changed");

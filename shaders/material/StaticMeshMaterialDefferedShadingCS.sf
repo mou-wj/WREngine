@@ -1,16 +1,14 @@
 #include "/core/ShadingContext.sf"
-#define SHADINGMODEL_UNLIT 0
-#define SHADINGMODEL_LIT 1
-#include "/Generated/ShaderParameters/StaticMeshMaterialDefferedShadingCSParameters.sf"
-#include "/core/GBufferParametersHelper.sf"
-#include "/Generated/ShaderParameters/GBufferTextureParameters.sf"
 #include "/core/ShadingCommon.sf"
+#include "/Generated/ShaderParameters/GBufferTextureParameters.sf"
 #if IS_IBL
 #include "/core/EnvIBLParametersHelper.sf"
-#else 
+#else
+// Scene storage buffers need early binding indices for OpenGL.
 #include "/core/SceneParametersHelper.sf"
-
 #endif
+#include "/Generated/ShaderParameters/StaticMeshMaterialDefferedShadingCSParameters.sf"
+#include "/core/GBufferParametersHelper.sf"
 
 [numthreads(8,8,1)]
 void MainCS(uint3 DTid : SV_DispatchThreadID)
@@ -27,44 +25,29 @@ void MainCS(uint3 DTid : SV_DispatchThreadID)
     float3 viewDir = normalize(CameraPos - Context.WorldPosition);
     Context.ViewDirection = viewDir;
     MaterialData Material = ReconstructMaterialData(UV);
-    uint ShadingModelId = GetShadingModelId(UV);
-    float3 Lighting  = Material.BaseColor.rgb;
-#if  IS_IBL
-    // =====================================================
-    // IBL
-    // =====================================================
-     float3 N = normalize(Material.NormalTS);
-    
-     float3 V = normalize(Context.ViewDirection);
-    
-     float3 R = reflect(-V,N);
-    
-     float NdotV = saturate(dot(N, V));
-#endif
-    switch(ShadingModelId)
+    uint ShadingModelId = Material.ShadingModel;
+    if (ShadingModelId > SHADINGMODEL_LIT && IsLitShadingModel(ShadingModelId))
     {
-        case SHADINGMODEL_LIT:
-#if IS_IBL
-            Lighting = CalculateIBLShading(Material, N, R, NdotV, bDeferSpecularIBL == 0u);
-#else
-            Lighting = EvaluateSceneLighting(Context, Material);
-#endif  
-
-            break;
-        case SHADINGMODEL_UNLIT:
-            break;
-        default:
-            break;
+        Material.ShadingModelData = GBufferD.Load(int3(PixelPos, 0));
     }
-
-    
-
+    float3 lighting = Material.BaseColor;
+    bool isLit = IsLitShadingModel(ShadingModelId);
 #if IS_IBL
-    if (bDeferSpecularIBL == 0u || ShadingModelId == SHADINGMODEL_LIT)
+    float4 direct = DirectLighting.Load(int3(PixelPos, 0));
+    if (isLit)
     {
-        OutputColor[PixelPos] += float4(Lighting, 1);
+        float3 normal = normalize(Material.NormalTS);
+        float3 reflection = reflect(-viewDir, normal);
+        float nDotV = saturate(dot(normal, viewDir));
+        lighting = CalculateIBLShading(Material, normal, reflection, nDotV,
+            bDeferSpecularIBL == 0u || !UsesDefaultSpecular(ShadingModelId));
     }
+    OutputColor[PixelPos] = bDeferSpecularIBL == 0u || isLit ? direct + float4(lighting, 1) : direct;
 #else
-    OutputColor[PixelPos] = float4(Lighting, 1);
+    if (isLit)
+    {
+        lighting = EvaluateSceneLighting(Context, Material);
+    }
+    OutputColor[PixelPos] = float4(lighting, 1);
 #endif
 }

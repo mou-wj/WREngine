@@ -74,7 +74,10 @@ void Material::SetBlendMode(EBlendMode mode)
 }
 void Material::SetShadingModel(EShadingModel model)
 {
-    if (model != EShadingModel::Lit && model != EShadingModel::Unlit) throw std::invalid_argument("Invalid material shading model");
+    if (model >= EShadingModel::COUNT_MAX)
+    {
+        throw std::invalid_argument("Invalid material shading model");
+    }
     if (m_ShadingModel == model) return;
     m_ShadingModel = model;
     ++m_Revision; ++m_Revisions.Compilation; ++m_Revisions.RenderState;

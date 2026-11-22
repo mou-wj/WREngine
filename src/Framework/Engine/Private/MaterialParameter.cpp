@@ -1,4 +1,5 @@
 #include "MaterialParameter.h"
+#include "MaterialCore.h"
 #include "TextureAsset.h"
 #include <cmath>
 #include <stdexcept>
@@ -28,6 +29,9 @@ const std::vector<MaterialParameterDefinition>& GetSurfaceMaterialParameterDefin
         {"UVTiling", S::Custom, T::Vector, "UV", "UVTiling", std::array<float,4>{1,1,0,0}},
         {"UVOffset", S::Custom, T::Vector, "UV", "UVOffset", std::array<float,4>{0,0,0,0}},
         {"AlphaCutoff", S::Custom, T::Scalar, "Surface", "AlphaCutoff", 0.5f},
+        {"SubsurfaceColor", S::Custom, T::Vector, "Subsurface", "SubsurfaceTintRadius", std::array<float,4>{1.0f,0.42f,0.28f,1.0f}, true, EShadingModel::Subsurface},
+        {"SubsurfaceStrength", S::Custom, T::Scalar, "Subsurface", "SubsurfaceTintRadius", 0.65f, true, EShadingModel::Subsurface},
+        {"SubsurfaceRadius", S::Custom, T::Scalar, "Subsurface", "SubsurfaceTintRadius", 0.55f, true, EShadingModel::Subsurface},
         {"BaseColor", S::BaseColor, T::Texture, "Textures", "BaseColorTexture", std::shared_ptr<TextureAsset>{}},
         {"Normal", S::Normal, T::Texture, "Textures", "NormalTexture", std::shared_ptr<TextureAsset>{}},
         {"Opacity", S::Custom, T::Texture, "Textures", "OpacityTexture", std::shared_ptr<TextureAsset>{}},

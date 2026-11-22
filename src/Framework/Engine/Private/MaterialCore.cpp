@@ -7,6 +7,34 @@
 using namespace RenderCore;
 namespace Engine {
 
+    namespace
+    {
+        constexpr const char* ShadingModelNames[] = {"Unlit", "Lit", "Subsurface"};
+        static_assert(std::size(ShadingModelNames) == static_cast<size_t>(EShadingModel::COUNT_MAX));
+    }
+
+    const char* GetShadingModelName(EShadingModel model)
+    {
+        const auto index = static_cast<size_t>(model);
+        if (index >= std::size(ShadingModelNames))
+        {
+            throw std::invalid_argument("Invalid material shading model");
+        }
+        return ShadingModelNames[index];
+    }
+
+    EShadingModel ParseShadingModel(std::string_view name)
+    {
+        for (size_t index = 0; index < std::size(ShadingModelNames); ++index)
+        {
+            if (name == ShadingModelNames[index])
+            {
+                return static_cast<EShadingModel>(index);
+            }
+        }
+        throw std::invalid_argument("Unknown material shading model: " + std::string(name));
+    }
+
     void ModifyShaderCompilerEnvironment(
         const MaterialPermutationParameters& parameters,
         RenderCore::ShaderCompilerEnvironment& outEnvironment) {

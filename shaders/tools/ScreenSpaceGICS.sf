@@ -1,6 +1,4 @@
 #include "/core/ShadingContext.sf"
-#define SHADINGMODEL_UNLIT 0
-#define SHADINGMODEL_LIT 1
 #include "/Generated/ShaderParameters/ScreenSpaceGIParameters.sf"
 #include "/core/GBufferParametersHelper.sf"
 #include "/Generated/ShaderParameters/GBufferTextureParameters.sf"
@@ -316,10 +314,13 @@ void MainCS(uint3 DTid : SV_DispatchThreadID)
     float3 diffuseGI = 0.0;
     float3 specularGI = 0.0;
 
-    if (ShadingModelId == SHADINGMODEL_LIT)
+    if (IsLitShadingModel(ShadingModelId))
     {
         diffuseGI = ScreenSpaceDiffuseGI(worldPos, N, UV, baseColor);
-        specularGI = ScreenSpaceSpecularReflection(worldPos, N, V, UV, roughness);
+        if (UsesDefaultSpecular(ShadingModelId))
+        {
+            specularGI = ScreenSpaceSpecularReflection(worldPos, N, V, UV, roughness);
+        }
     }
     else
     {

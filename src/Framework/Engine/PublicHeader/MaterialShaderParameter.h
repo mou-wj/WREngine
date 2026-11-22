@@ -75,6 +75,8 @@ namespace Engine
             float,
             AlphaCutoff)
 
+        SHADER_PARAMETER(Core::Float4, SubsurfaceTintRadius)
+
     END_SHADER_PARAMETER_STRUCT(
     MaterialUniformData)
 

@@ -246,7 +246,9 @@ void VertexFactoryFillShadingContext(
 #if VF_SUPPORTS_TANGENT
     float3 N = normalize(Input.TangentToWorld2.xyz);
     float3 T = normalize(Input.TangentToWorld0.xyz);
-    float3 B = normalize(cross(N, T) * Input.TangentToWorld0.w);
+    // Primitive meshes can store zero handedness. Treat it as the positive basis.
+    float handedness = Input.TangentToWorld0.w < 0.0 ? -1.0 : 1.0;
+    float3 B = normalize(cross(N, T)) * handedness;
 
     Context.WorldNormal = N;
     Context.TangentToWorld = float3x3(T, B, N);

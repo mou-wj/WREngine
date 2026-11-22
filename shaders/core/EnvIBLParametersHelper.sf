@@ -22,7 +22,13 @@ float3 SampleIBLSpecular(float3 direction, float roughness)
 
 float3 CalculateIBLShading(MaterialData material, float3 normal, float3 mirrorDirection, float nDotV, bool bIncludeSpecular)
 {
-    float3 diffuse = IBLDiffuseMap.SampleLevel(LinearClampIBLSampler, normal, 0).rgb * material.BaseColor;
+    float3 irradiance = IBLDiffuseMap.SampleLevel(LinearClampIBLSampler, normal, 0).rgb;
+    if (material.ShadingModel == SHADINGMODEL_SUBSURFACE)
+    {
+        float3 opposite = IBLDiffuseMap.SampleLevel(LinearClampIBLSampler, -normal, 0).rgb;
+        irradiance = lerp(irradiance, opposite, material.ShadingModelData.rgb * material.ShadingModelData.a * 0.45);
+    }
+    float3 diffuse = irradiance * material.BaseColor;
     diffuse *= (1.0 - GetIBLFresnel(material, nDotV)) * (1.0 - material.Metallic);
     if (!bIncludeSpecular)
     {

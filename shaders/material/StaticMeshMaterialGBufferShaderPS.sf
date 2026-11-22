@@ -1,50 +1,9 @@
 #include "/Generated/VertexFactory.sf"
-#include "/core/GBufferCommon.sf"
-#define SHADINGMODEL_UNLIT   0
-#define SHADINGMODEL_LIT 1
-#include "/core/MaterialParametersHelper.sf"
+#include "/core/MaterialGBufferHelper.sf"
 
-FGBufferOutput MainPS(VertexFactoryVSToPS Input) : SV_Target0
+FGBufferOutput MainPS(VertexFactoryVSToPS input)
 {
-    FGBufferOutput Out = (FGBufferOutput)0;
-    /*
-    ===========================================================================
-        Reconstruct Stable Shading Semantic
-    ===========================================================================
-    */
-
-    ShadingContext Context;
-
-    VertexFactoryFillShadingContext(
-        Input,
-        Context);
-
-    /*
-    ===========================================================================
-        Material Evaluation
-    ===========================================================================
-    */
-
-    float3 BaseColor = float3(1.0, 0.7, 0.3);
-
-#if MATERIAL_SHADING_MODEL == SHADINGMODEL_LIT
-
-    MaterialData Material = BuildMaterialData(Context.UV0);
-    if(!HasMaterialTexture(MATERIAL_TEXTURE_NORMAL)){
-        Material.NormalTS = Context.WorldNormal;
-    }
-    WriteBaseColor(Out, Material.BaseColor);
-    WriteMetallic(Out, Material.Metallic);
-    WriteNormal(Out, Material.NormalTS);
-    WriteRoughness(Out, Material.Roughness);
-    WriteSpecular(Out, Material.Specular);
-    WriteAO(Out, Material.AmbientOcclusion);
-    WriteShadingModelId(Out, SHADINGMODEL_LIT);
-
-#elif MATERIAL_SHADING_MODEL == SHADINGMODEL_UNLIT
-    float2 uv = GetMaterialUV(Context.UV0);
-    WriteBaseColor(Out, SampleBaseColor(uv) + SampleEmissive(uv));
-    WriteShadingModelId(Out, SHADINGMODEL_UNLIT);
-#endif
-    return Out;
+    ShadingContext context;
+    VertexFactoryFillShadingContext(input, context);
+    return EvaluateMaterialGBuffer(context, 0.0, 0.0, true);
 }

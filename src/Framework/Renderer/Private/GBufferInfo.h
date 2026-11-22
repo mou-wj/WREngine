@@ -26,6 +26,7 @@ namespace Renderer
         GBS_Velocity,
         GBS_Depth,
         GBS_ShadingModelId,
+        GBS_ShadingModelData,
 
         GBS_Num
     };

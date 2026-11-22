@@ -13,6 +13,7 @@
 
 
 #include "/core/ShadingContext.sf"
+#include "/core/ShadingModel.sf"
 
 //=============================================================================
 // Helper
@@ -152,7 +153,8 @@ float3 SampleNormalTS(
 MaterialData BuildMaterialData(
     float2 UV, float2 uvGradientX = 0, float2 uvGradientY = 0)
 {
-    MaterialData M;
+    MaterialData M = (MaterialData)0;
+    M.ShadingModel = MATERIAL_SHADING_MODEL;
     uvGradientX *= UVTiling;
     uvGradientY *= UVTiling;
 
@@ -183,5 +185,8 @@ MaterialData BuildMaterialData(
     M.NormalTS =
         SampleNormalTS(UV, uvGradientX, uvGradientY);
 
+#if MATERIAL_SHADING_MODEL == SHADINGMODEL_SUBSURFACE
+    M.ShadingModelData = SubsurfaceTintRadius;
+#endif
     return M;
 }

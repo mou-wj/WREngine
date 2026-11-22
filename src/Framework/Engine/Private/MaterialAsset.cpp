@@ -40,9 +40,7 @@ bool MaterialAsset::Load()
         else if (blend == "Translucent") material->SetBlendMode(EBlendMode::Translucent);
         else throw std::runtime_error("Unknown blendMode: " + blend);
         const auto shading = data.value("shadingModel", std::string("Unlit"));
-        if (shading == "Lit") material->SetShadingModel(EShadingModel::Lit);
-        else if (shading == "Unlit") material->SetShadingModel(EShadingModel::Unlit);
-        else throw std::runtime_error("Unknown shadingModel: " + shading);
+        material->SetShadingModel(ParseShadingModel(shading));
 
         const auto cull = data.value("cullMode",std::string("Back"));
         if (cull == "None") material->SetCullMode(RHI::ERHICullMode::None);
@@ -108,7 +106,7 @@ bool MaterialAsset::SaveToFile(const std::string& path) const
         case EBlendMode::Masked: data["blendMode"] = "Masked"; break;
         case EBlendMode::Translucent: data["blendMode"] = "Translucent"; break;
         }
-        data["shadingModel"] = m_MaterialPtr->GetShadingModel() == EShadingModel::Lit ? "Lit" : "Unlit";
+        data["shadingModel"] = GetShadingModelName(m_MaterialPtr->GetShadingModel());
         data["staticParameters"]["twoSided"] = m_MaterialPtr->IsTwoSided();
         switch (m_MaterialPtr->GetCullMode())
         {

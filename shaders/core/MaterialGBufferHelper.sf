@@ -1,19 +1,28 @@
 #include "/core/GBufferCommon.sf"
 #include "/core/MaterialParametersHelper.sf"
 
-FGBufferOutput EvaluateMaterialGBuffer(ShadingContext context, float2 uvGradientX = 0, float2 uvGradientY = 0)
+FGBufferOutput EvaluateMaterialGBuffer(ShadingContext context, float2 uvGradientX = 0, float2 uvGradientY = 0, bool legacyRasterNormal = false)
 {
     MaterialData material = BuildMaterialData(context.UV0, uvGradientX, uvGradientY);
     FGBufferOutput output = (FGBufferOutput)0;
-#if MATERIAL_SHADING_MODEL == 1
-    float3 worldNormal = normalize(mul(material.NormalTS, context.TangentToWorld));
+#if MATERIAL_SHADING_MODEL != SHADINGMODEL_UNLIT
+    float3 worldNormal = HasMaterialTexture(MATERIAL_TEXTURE_NORMAL) ?
+        normalize(mul(material.NormalTS, context.TangentToWorld)) : context.WorldNormal;
+#if MATERIAL_SHADING_MODEL == SHADINGMODEL_LIT
+    // Keep the legacy raster Lit normal representation. Compute resolve already uses a world-space normal.
+    if (legacyRasterNormal)
+    {
+        worldNormal = HasMaterialTexture(MATERIAL_TEXTURE_NORMAL) ? material.NormalTS : context.WorldNormal;
+    }
+#endif
     WriteBaseColor(output, material.BaseColor);
     WriteMetallic(output, material.Metallic);
     WriteNormal(output, worldNormal);
     WriteRoughness(output, material.Roughness);
     WriteSpecular(output, material.Specular);
     WriteAO(output, material.AmbientOcclusion);
-    WriteShadingModelId(output, 1);
+    WriteShadingModelId(output, material.ShadingModel);
+    output.GBufferD = material.ShadingModelData;
 #else
     WriteBaseColor(output, material.BaseColor + material.EmissiveColor);
     WriteShadingModelId(output, 0);

@@ -3,6 +3,7 @@
 #include "TextureAsset.h"
 #include "RenderGraphBuilder.h"
 #include "RenderResource.h"
+#include <algorithm>
 #include <stdexcept>
 
 using namespace RHI;
@@ -33,6 +34,14 @@ void BuildShaderParameters(const MaterialRenderProxy* proxy, RenderGraphBuilder&
     out.UniformData.UVTiling = {tiling[0],tiling[1]};
     out.UniformData.UVOffset = {offset[0],offset[1]};
     out.UniformData.AlphaCutoff = scalar("AlphaCutoff");
+    if (proxy->GetShadingModel() == EShadingModel::Subsurface)
+    {
+        const auto subsurface = vector("SubsurfaceColor");
+        const auto saturate = [](float value) { return std::clamp(value, 0.0f, 1.0f); };
+        const float strength = saturate(scalar("SubsurfaceStrength"));
+        out.UniformData.SubsurfaceTintRadius = {saturate(subsurface[0]) * strength, saturate(subsurface[1]) * strength,
+            saturate(subsurface[2]) * strength, saturate(scalar("SubsurfaceRadius"))};
+    }
     out.TextureData.TextureMask = 0;
     const auto texture = [&](const char* name, uint32_t bit, const RenderTextureSP& fallback) {
         auto asset = std::get<std::shared_ptr<TextureAsset>>(proxy->GetParameter(name,EMaterialParameterType::Texture)->GetValueVariant());

@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <variant>
@@ -11,6 +12,7 @@
 
 namespace Engine {
 class TextureAsset;
+enum class EShadingModel : uint8_t;
 enum class EMaterialParameterType : uint8_t { Scalar, Vector, Texture, Int };
 enum class EMaterialParameterSemantic : uint8_t { BaseColor, Roughness, Metallic, Normal, Custom };
 struct FScalarType { using Type = float; static constexpr auto ValueType = EMaterialParameterType::Scalar; };
@@ -89,6 +91,7 @@ struct MaterialParameterDefinition
     std::string ShaderBinding;
     MaterialParameterValue DefaultValue;
     bool bInstanceEditable = true;
+    std::optional<EShadingModel> ShadingModel;
 };
 using MaterialParameterMap = std::unordered_map<MaterialParameterKey, std::unique_ptr<MaterialParameter>, MaterialParameterKeyHash>;
 ENGINE_API std::string CanonicalMaterialParameterName(const std::string& name);

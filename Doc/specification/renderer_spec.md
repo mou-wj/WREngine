@@ -1,5 +1,11 @@
 # Renderer 功能与使用约定
 
+## 材质着色模型
+
+MaterialEditor 的 **Shading model** 修改母材质的模型。网格实例继承该模型，可独立修改对应分组的参数。**Default Lit** 在现有材质和工程文件中仍保存为 `Lit`。**Subsurface** 分组可调整散射色、散射强度与半径。把强度设为零可对照散射带来的变化。 [编码与算法](../key_implemetion/algorithm/05-pbr-ibl-and-sampling.md#运行时取值与-gbuffer)
+
+`MaterialShadingModelTest` 使用同一球体和相机分别渲染四种光照，读回中心区域检查材质与实例覆盖，并输出 `MaterialShadingModels.ppm`。Vulkan Debug 下，散射对方向光、点光、聚光及非均匀环境光的最大线性 RGB 差值分别为 0.0874、0.2030、0.2922、0.0675。Vulkan、OpenGL 与 DirectX12 上用 `MaterialShaderCompilationTest` 检查前向、GBuffer 及两个延迟光照变体的原生 Shader 编译。
+
 ## Virtual Geometry 场景绘制入口
 
 ### 入口与职责

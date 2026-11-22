@@ -123,6 +123,7 @@ namespace Renderer {
         sceneRenderer->SceneTextures.GBufferA = gbuffers[0];
         sceneRenderer->SceneTextures.GBufferB = gbuffers[1];
         sceneRenderer->SceneTextures.GBufferC = gbuffers[2];
+        sceneRenderer->SceneTextures.GBufferD = gbuffers[3];
 		sceneRenderer->BuildSceneLightShadowMap(sceneRenderer->Scene,builder);
         sceneRenderer->UploadShadowMapInfo(sceneRenderer->Scene,builder);
         sceneRenderer->Build(builder);

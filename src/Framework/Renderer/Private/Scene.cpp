@@ -1017,10 +1017,10 @@ namespace Renderer {
                 }
 
                 DirectionalLightData
-                    data;
+                    data{};
                 data.Common.Color = proxy->GetColor();
                 data.Common.Intensity = proxy->GetIntensity();
-                data.Common.LightId = lightIndex;
+                data.LightId = lightIndex;
                 m_LightIndexs[proxy] = lightIndex;
                 lightIndex++;
                 auto dirProxy = dynamic_cast<DirectionalLightSceneProxy*>(proxy);
@@ -1075,11 +1075,11 @@ namespace Renderer {
                 }
 
                 PointLightData
-                    data;
+                    data{};
                 data.Common.Color = proxy->GetColor();
                 data.Common.Intensity = proxy->GetIntensity();
                 data.Position = proxy->GetPosition();
-                data.Common.LightId = lightIndex;
+                data.LightId = lightIndex;
                 m_LightIndexs[proxy] = lightIndex;
                 lightIndex++;
                 auto pointLightProxy = dynamic_cast<PointLightSceneProxy*>(proxy);
@@ -1136,10 +1136,10 @@ namespace Renderer {
                 }
 
                 SpotLightData
-                    data;
+                    data{};
                 data.Common.Color = proxy->GetColor();
                 data.Common.Intensity = proxy->GetIntensity();
-                data.Common.LightId = lightIndex;
+                data.LightId = lightIndex;
                 m_LightIndexs[proxy] = lightIndex;
                 lightIndex++;
                 data.Position = proxy->GetPosition();

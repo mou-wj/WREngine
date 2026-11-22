@@ -1,0 +1,20 @@
+// Encoded as an 8-bit ID in GBufferC.b. Keep in sync with Engine::EShadingModel.
+#define SHADINGMODEL_UNLIT 0
+#define SHADINGMODEL_LIT 1
+#define SHADINGMODEL_SUBSURFACE 2
+#define SHADINGMODEL_COUNT 3
+
+uint DecodeShadingModel(float encoded)
+{
+    return uint(encoded * 255.0 + 0.5);
+}
+
+bool IsLitShadingModel(uint model)
+{
+    return model >= SHADINGMODEL_LIT && model < SHADINGMODEL_COUNT;
+}
+
+bool UsesDefaultSpecular(uint model)
+{
+    return model == SHADINGMODEL_LIT || model == SHADINGMODEL_SUBSURFACE;
+}

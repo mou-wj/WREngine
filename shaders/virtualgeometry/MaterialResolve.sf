@@ -131,4 +131,5 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     ResolveGBufferA[pixel] = result.GBufferA;
     ResolveGBufferB[pixel] = result.GBufferB;
     ResolveGBufferC[pixel] = result.GBufferC;
+    ResolveGBufferD[pixel] = result.GBufferD;
 }

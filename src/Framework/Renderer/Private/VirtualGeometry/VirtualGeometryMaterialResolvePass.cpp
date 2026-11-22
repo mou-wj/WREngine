@@ -20,6 +20,7 @@ namespace Renderer
     SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, ResolveGBufferA)
     SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, ResolveGBufferB)
     SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, ResolveGBufferC)
+    SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, ResolveGBufferD)
     SHADER_PARAMETER(Core::Int2, ViewOrigin)
     SHADER_PARAMETER(Core::Int2, ViewSize)
     END_SHADER_PARAMETER_STRUCT(VirtualGeometryResolveTargets)
@@ -135,8 +136,13 @@ namespace Renderer
         const auto width = visibility->VirtualGeometryVisibilityTexture->GetDesc().Width;
         const auto height = visibility->VirtualGeometryVisibilityTexture->GetDesc().Height;
         const auto layout = CreateGBufferInfo({});
-        RenderGraphTextureRef buffers[] = {gbufferA, gbufferB, gbufferC};
-        for (uint32_t i = 0; i < 3; ++i)
+        RenderGraphTextureDesc modelDataDesc = gbufferC->GetDesc();
+        modelDataDesc.Format = layout.Targets[3].TargetFormat;
+        auto* clear = builder.AllocateParameter<VirtualGeometryResolveTargets>();
+        const auto prefix = "VirtualGeometryResolve." + std::to_string(reinterpret_cast<uintptr_t>(clear));
+        auto gbufferD = builder.CreateTexture(prefix + ".ModelData", modelDataDesc);
+        RenderGraphTextureRef buffers[] = {gbufferA, gbufferB, gbufferC, gbufferD};
+        for (uint32_t i = 0; i < std::size(buffers); ++i)
         {
             const auto& desc = buffers[i]->GetDesc();
             if (desc.Width != width || desc.Height != height || desc.Format != layout.Targets[i].TargetFormat ||
@@ -145,14 +151,12 @@ namespace Renderer
                 throw std::invalid_argument("Virtual geometry resolve requires matching UAV GBuffer targets");
             }
         }
-        auto* clear = builder.AllocateParameter<VirtualGeometryResolveTargets>();
-        const auto prefix = "VirtualGeometryResolve." + std::to_string(reinterpret_cast<uintptr_t>(clear));
-        RenderGraphTextureRef targets[] = {gbufferA, gbufferB, gbufferC};
-        RenderGraphTextureUAVRef* slots[] = {&clear->ResolveGBufferA, &clear->ResolveGBufferB, &clear->ResolveGBufferC};
-        for (uint32_t i = 0; i < 3; ++i)
+        RenderGraphTextureUAVRef* slots[] = {
+            &clear->ResolveGBufferA, &clear->ResolveGBufferB, &clear->ResolveGBufferC, &clear->ResolveGBufferD};
+        for (uint32_t i = 0; i < std::size(buffers); ++i)
         {
             RenderGraphTextureUAVDesc desc;
-            desc.Texture = targets[i];
+            desc.Texture = buffers[i];
             *slots[i] = builder.CreateTextureUAV(prefix + ".Target" + std::to_string(i), desc);
         }
         clear->ViewOrigin = {view.Viewport.X, view.Viewport.Y};
@@ -229,7 +233,7 @@ namespace Renderer
                 cmd.Dispatch((params->Targets.ViewSize.X + 7) / 8, (params->Targets.ViewSize.Y + 7) / 8, 1);
             });
         }
-        return {gbufferA, gbufferB, gbufferC};
+        return {gbufferA, gbufferB, gbufferC, gbufferD};
     }
 
     void AddVirtualGeometryDeferredShadingPass(RenderGraphBuilder& builder, const Engine::SceneView& view, Scene* scene,
@@ -248,7 +252,9 @@ namespace Renderer
             throw std::invalid_argument("Deferred shading requires a UAV scene color target");
         }
         RenderGraphTextureUAVDesc uav;
-        uav.Texture = target;
+        const bool bApplyIBL = scene->GetGPUResourceInfo().LightResourceInfo.IBLSpecularTexture != nullptr;
+        const auto directColor = bApplyIBL ? builder.CreateTexture(prefix + ".Direct", target->GetDesc()) : target;
+        uav.Texture = directColor;
         params->GBuffer.OutputColor = builder.CreateTextureUAV(prefix + ".UAV", uav);
         params->InvViewProj = view.InvViewProjectionMatrix;
         params->CameraPos = view.CameraWorldPos;
@@ -256,6 +262,7 @@ namespace Renderer
         params->GBuffer.GBufferInput.GBufferA = material.GBufferA;
         params->GBuffer.GBufferInput.GBufferB = material.GBufferB;
         params->GBuffer.GBufferInput.GBufferC = material.GBufferC;
+        params->GBuffer.GBufferD = material.GBufferD;
         params->GBuffer.GBufferInput.Depth = depth;
         params->GBuffer.GBufferInput.PointSampler = GlobalSampler.get();
         // Independent consumers do not pass through the main scene renderer's preparation stages.
@@ -263,10 +270,15 @@ namespace Renderer
         SceneRenderer::UpdateCascadeShadowInfo(scene, builder, view);
         BuildShaderParameters(scene, builder, params->Scene);
         AddStaticMeshDefferedShadingPass(builder, params, false);
-        if (scene->GetGPUResourceInfo().LightResourceInfo.IBLSpecularTexture)
+        if (bApplyIBL)
         {
-            BuildEvnIBLLightParameters(scene, builder, params->EnvIBLParameters);
-            AddStaticMeshDefferedShadingPass(builder, params, true);
+            auto* ibl = builder.AllocateParameter<StaticMeshMaterialDefferedShadingCSParameters>();
+            *ibl = *params;
+            ibl->DirectLighting = directColor;
+            uav.Texture = target;
+            ibl->GBuffer.OutputColor = builder.CreateTextureUAV(prefix + ".IBL.UAV", uav);
+            BuildEvnIBLLightParameters(scene, builder, ibl->EnvIBLParameters);
+            AddStaticMeshDefferedShadingPass(builder, ibl, true);
         }
     }
 } // namespace Renderer

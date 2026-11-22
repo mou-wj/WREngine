@@ -33,7 +33,7 @@ Material 到所属资产仍为弱引用。渲染快照不反向强引用 Materia
 
 ## 3. 参数契约与属性面板
 
-`GetParameterDefinitions()` 返回内置 Surface 的参数声明，包含名称、语义、类型、分组、Shader 绑定名、默认值及实例可编辑性。当前共 17 项：BaseColor 向量、EmissiveColor、Opacity、OpacityMask、Metallic、Roughness、Specular、AmbientOcclusion、NormalIntensity、UVTiling、UVOffset、AlphaCutoff，以及 BaseColor / Normal / Opacity / ORM / Emissive 五种纹理。
+`GetParameterDefinitions()` 返回内置 Surface 的参数声明，包含名称、语义、类型、分组、Shader 绑定名、默认值及实例可编辑性。通用项包括 BaseColor 向量、EmissiveColor、Opacity、OpacityMask、Metallic、Roughness、Specular、AmbientOcclusion、NormalIntensity、UVTiling、UVOffset、AlphaCutoff，以及 BaseColor / Normal / Opacity / ORM / Emissive 五种纹理。着色模型参数使用同一声明和实例覆盖机制，MaterialEditor 按母材质当前模型显示对应参数。
 
 键由名称、语义、显式类型构成，不再使用 `typeid().name()`。BaseColor 向量与 BaseColor 纹理可以共存，属性面板必须使用名称和类型共同定位参数。UV 的向量接口使用四个 float，Shader 绑定取前两个分量。
 
@@ -91,7 +91,7 @@ Renderer 通过快照读取 BlendMode、ShadingModel、剔除配置和参数，�
 
 TextureMask 与 MaterialParametersHelper.sf 一致：BaseColor=bit0、Opacity=bit1、Normal=bit2、ORM=bit3、Emissive=bit4。Forward / Deferred 不再强制 Lit，Unlit 使用材质的 BaseColor 与 Emissive 输入。
 
-当前支持 Opaque 的 Lit / Unlit 与上述剔除策略。Masked / Translucent 可被加载和保存以表达资产状态，前向和延迟 Surface Pass 在构建时通过 ValidateSurfacePass 明确拒绝未实现的绘制模式。该校验不再放进编译资源中。Opacity、AlphaCutoff 等字段接通不表示透明 / 遮罩 Pass 已实现；延迟渲染也尚无独立 Emissive GBuffer 通道。后续编辑器应按实际 Pass 能力展示提示。
+Opaque 支持 Unlit、Default Lit 和 Subsurface。材质与工程保存保留原来的 `Lit` 名称。扩展模型通过独立 GBuffer 附件交给既有的延迟光照与 IBL Pass。Masked / Translucent 可被加载和保存，前向和延迟 Surface Pass 在构建时通过 ValidateSurfacePass 拒绝未实现的模式。延迟渲染尚无独立 Emissive GBuffer 通道。 [GBuffer 编码与算法](../key_implemetion/algorithm/05-pbr-ibl-and-sampling.md#运行时取值与-gbuffer)
 
 ## 7. 保存与后续编辑器
 

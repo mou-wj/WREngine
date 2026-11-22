@@ -248,6 +248,7 @@ namespace Renderer
         sceneRenderer->SceneTextures.GBufferA = gbuffers[0];
         sceneRenderer->SceneTextures.GBufferB = gbuffers[1];
         sceneRenderer->SceneTextures.GBufferC = gbuffers[2];
+        sceneRenderer->SceneTextures.GBufferD = gbuffers[3];
         sceneRenderer->BuildSceneLightShadowMap(scene, builder);
         sceneRenderer->UploadShadowMapInfo(scene, builder);
         RenderCore::RenderGraphTextureRef reflectionBase = nullptr;

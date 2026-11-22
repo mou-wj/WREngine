@@ -97,6 +97,7 @@ namespace Renderer
     BEGIN_SHADER_PARAMETER_STRUCT(GBufferTextureParameters)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, OutputColor)
         SHADER_PARAMETER_STRUCT_REFERENCE(GBufferInputParameters, GBufferInput)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, GBufferD)
     END_SHADER_PARAMETER_STRUCT(GBufferTextureParameters)
 
 
@@ -108,6 +109,7 @@ namespace Renderer
         SHADER_PARAMETER_STRUCT_REFERENCE(SceneShaderParameters, Scene)
         SHADER_PARAMETER_STRUCT_REFERENCE(GBufferTextureParameters, GBuffer)
         SHADER_PARAMETER_STRUCT_REFERENCE(SceneEvnIBLLightParameters, EnvIBLParameters)
+        SHADER_PARAMETER_RDG_TEXTURE(Texture2D, DirectLighting)
     END_SHADER_PARAMETER_STRUCT(StaticMeshMaterialDefferedShadingCSParameters)
 
     class StaticMeshMaterialDefferedShadingCS : public MaterialShader
@@ -124,10 +126,7 @@ namespace Renderer
 
         DECLARE_MATERIAL_SHADER_TYPE(StaticMeshMaterialDefferedShadingCS);
 
-        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
-        {
-            return true;
-        }
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters);
         static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment);
 
         static const RenderCore::ShaderParametersMetadata* GetShaderParameterMetadata()

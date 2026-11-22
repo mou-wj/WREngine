@@ -153,6 +153,16 @@ namespace Renderer
         "MainPS",
         ERHIShaderFrequency::Fragment
     )
+    bool StaticMeshMaterialDefferedShadingCS::ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
+    {
+        const auto& material = static_cast<const MaterialShaderPermutationParameters&>(parameters);
+        if (material.MaterialParams.ShadingModel != EShadingModel::Lit)
+        {
+            return false;
+        }
+        return true;
+    }
+
     void StaticMeshMaterialDefferedShadingCS::ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
     {
         const MaterialShaderPermutationParameters& meshParams =

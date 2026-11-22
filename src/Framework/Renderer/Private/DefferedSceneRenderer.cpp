@@ -29,10 +29,11 @@ namespace Renderer {
     {
         auto sceneColorTargetTexture = SceneTextures.SceneColor;
         RenderTargetBindingSlots renderTargetBindingSlots;
-        renderTargetBindingSlots.NumColorRenderTargets = 3;
+        renderTargetBindingSlots.NumColorRenderTargets = CreateGBufferInfo({}).NumTargets;
         renderTargetBindingSlots[0].Texture = SceneTextures.GBufferA;
         renderTargetBindingSlots[1].Texture = SceneTextures.GBufferB;
         renderTargetBindingSlots[2].Texture = SceneTextures.GBufferC;
+        renderTargetBindingSlots[3].Texture = SceneTextures.GBufferD;
         renderTargetBindingSlots.DepthStencil.Texture = SceneTextures.SceneDepth;
         AddClearRenderTargetsPass(builder, renderTargetBindingSlots);
 
@@ -161,8 +162,7 @@ namespace Renderer {
                     // Set the color blend attachment state.
                     RHI::RHIColorBlendAttachmentDesc blendAttachDesc;
                     blendAttachDesc.bBlendEnable = false;
-                    std::vector<RHI::RHIColorBlendAttachmentDesc> attachments = { blendAttachDesc,blendAttachDesc,blendAttachDesc };
-                    blendDesc.Attachments = attachments;
+                    blendDesc.Attachments.assign(gbufferInfo.NumTargets, blendAttachDesc);
                     auto colorBlendState = RHIPipelineStateCache::GetOrCreateColorBlendState(blendDesc);
                     pipelineDesc.ColorBlendState = colorBlendState;
                 }
@@ -188,6 +188,8 @@ namespace Renderer {
                 params->pixelParameters.renderTargetSlots[1].Action = ERenderTargetActions::Load_Store;
                 params->pixelParameters.renderTargetSlots[2].Texture = SceneTextures.GBufferC;
                 params->pixelParameters.renderTargetSlots[2].Action = ERenderTargetActions::Load_Store;
+                params->pixelParameters.renderTargetSlots[3].Texture = SceneTextures.GBufferD;
+                params->pixelParameters.renderTargetSlots[3].Action = ERenderTargetActions::Load_Store;
                 params->pixelParameters.renderTargetSlots.DepthStencil.Texture = SceneTextures.SceneDepth;
                 params->pixelParameters.renderTargetSlots.DepthStencil.DepthAction = ERenderTargetActions::Load_Store;
                 if (supportInstance) {
@@ -255,6 +257,7 @@ namespace Renderer {
             paramss->GBuffer.GBufferInput.GBufferA = SceneTextures.GBufferA;
             paramss->GBuffer.GBufferInput.GBufferB = SceneTextures.GBufferB;
             paramss->GBuffer.GBufferInput.GBufferC = SceneTextures.GBufferC;
+            paramss->GBuffer.GBufferD = SceneTextures.GBufferD;
             paramss->GBuffer.GBufferInput.Depth = SceneTextures.SceneDepth;
             
             //创建一个临时的color用于输出deferred shading的结果
@@ -262,22 +265,24 @@ namespace Renderer {
             colorDesc = SceneTextures.SceneColor->GetDesc();
             auto defferedColor = builder.CreateTexture("defferedColor", colorDesc);
 
+            const bool bApplyIBL = !bDeferSpecular ||
+                (Scene->GetGPUResourceInfo().LightResourceInfo.IBLDiffuseTexture && sceneEnvMap);
+            const auto directColor = bApplyIBL ? SceneTextures.SceneColor : defferedColor;
             RenderGraphTextureUAVDesc uavDesc;
-            uavDesc.Texture = defferedColor;
-
-
-            
-            auto sceneColorUAV = builder.CreateTextureUAV("sceneColorUAV", uavDesc);
-            paramss->GBuffer.OutputColor = sceneColorUAV;
+            uavDesc.Texture = directColor;
+            paramss->GBuffer.OutputColor = builder.CreateTextureUAV("DeferredDirect.UAV", uavDesc);
             paramss->GBuffer.GBufferInput.PointSampler = GlobalSampler.get();
             BuildShaderParameters(Scene, builder, paramss->Scene);
-            BuildEvnIBLLightParameters(Scene, builder, paramss->EnvIBLParameters);
-			AddStaticMeshDefferedShadingPass(builder, paramss, false);
-            //构建生成屏幕空间反射的深度
-            
-            if (!bDeferSpecular || (Scene->GetGPUResourceInfo().LightResourceInfo.IBLDiffuseTexture && sceneEnvMap))
+            AddStaticMeshDefferedShadingPass(builder, paramss, false);
+            if (bApplyIBL)
             {
-                AddStaticMeshDefferedShadingPass(builder, paramss, true);
+                auto* ibl = builder.AllocateParameter<StaticMeshMaterialDefferedShadingCSParameters>();
+                *ibl = *paramss;
+                ibl->DirectLighting = directColor;
+                uavDesc.Texture = defferedColor;
+                ibl->GBuffer.OutputColor = builder.CreateTextureUAV("DeferredIBL.UAV", uavDesc);
+                BuildEvnIBLLightParameters(Scene, builder, ibl->EnvIBLParameters);
+                AddStaticMeshDefferedShadingPass(builder, ibl, true);
             }
             if (bDeferSpecular)
             {

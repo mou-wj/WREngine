@@ -3,6 +3,7 @@
 #include "RHIApi.h"
 #include "HashHelper.hpp"
 #include "EngineExport.h"
+#include <string_view>
 #include <unordered_map>
 namespace RenderCore {
     class VertexFactoryType;
@@ -17,9 +18,13 @@ namespace Engine {
 
     enum class EShadingModel : uint8_t {
         Unlit = 0,
-        Lit,
+        Lit = 1,
+        Subsurface = 2,
         COUNT_MAX
     };
+
+    ENGINE_API const char* GetShadingModelName(EShadingModel model);
+    ENGINE_API EShadingModel ParseShadingModel(std::string_view name);
 
     struct MaterialPermutationParameters
     {

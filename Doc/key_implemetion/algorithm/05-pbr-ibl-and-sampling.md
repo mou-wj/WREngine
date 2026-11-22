@@ -71,7 +71,17 @@ roughness×(MipCount-1) 选 specular mip；法线方向查 diffuse cube，反射
 
 GIViewer 反射分支复用同一 `GetIBLSpecularWeight`，让屏幕命中、离屏近似与预滤波环境共享接收面的 Fresnel 和 LUT 权重。延迟 IBL 在该分支只输出漫反射，最终镜面贡献由 `ReflectionResolve` 写入，避免两次合成。 [混合反射算法](21-hybrid-reflections.md)
 
-当前 GBuffer A=BaseColor.rgb/Metallic，B=encoded normal.rgb/Roughness，C=Specular/AO/ShadingModelId/空余；法线用 N×0.5+0.5 编码，模型 ID 除 255 写入再还原。延迟重建把 Emissive 置零，没有独立 Emissive 通道，不能写成完整材质信息无损恢复。
+GBuffer A 为 BaseColor.rgb/Metallic，B 为编码法线.rgb/Roughness，C 为 Specular/AO/ShadingModelId/空余。这三张附件的格式和通道保持原有约定。D 为 RGBA8 UNorm，每像素增加 4 字节，通过 C.b 模型 ID 决定含义。整数 ID 除以 255 写入，读回乘以 255 并四舍五入。延迟重建时，光照材质的 Emissive 为零。普通网格光栅及 Virtual Geometry 的材质恢复共用 GBuffer 输出规则，复用现有的延迟直接光照和 IBL Pass。 [附件布局](../../../src/Framework/Renderer/Private/GBufferInfo.cpp) · [材质写入](../../../shaders/core/MaterialGBufferHelper.sf)
+
+| ID | 模型 | D.rgb | D.a |
+| --- | --- | --- | --- |
+| 0 | Unlit | 0 | 0 |
+| 1 | Default Lit | 0 | 0 |
+| 2 | Subsurface | 逐通道散射比例，即散射色乘以散射强度 | 归一化散射半径 |
+
+### Subsurface
+
+设表面法线 N 和入射光方向 L 的夹角余弦为 x。原漫反射用 max(0,x)，包裹光照用 clamp((x+r)/(1+r),0,1)/(1+r)。半径 r 在 0 到 1 内控制包裹到背光侧的范围，末尾的除法将该因子在 x∈[-1,1] 的积分归一到与原余弦相同。用 D.rgb 逐通道混合两种漫反射权重，继续使用原有 GGX 高光及阴影可见性。IBL 对正反法线采样的漫反射辐照度作有界插值，镜面反射复用 Default Lit。半径表示角度扩展程度，场景单位和网格厚度不参与运算。 [直接光照](../../../shaders/core/ShadingCommon.sf) · [环境光](../../../shaders/core/EnvIBLParametersHelper.sf) · [实时散射近似](https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-16-real-time-approximations-subsurface-scattering)
 
 计算预算约为输出 texel 数乘采样数；cube 六面和所有 mip 都要计入。GPU Dispatch 按线程组向上取整后必须边界检查，源码入口已有对应尺寸判断。CPU 上传的 SampleCount 不等于 Shader 实际使用数：这些分支当前有固定 256/128 常量。
 

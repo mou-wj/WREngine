@@ -10,4 +10,5 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     ResolveGBufferA[pixel] = 0;
     ResolveGBufferB[pixel] = 0;
     ResolveGBufferC[pixel] = 0;
+    ResolveGBufferD[pixel] = 0;
 }

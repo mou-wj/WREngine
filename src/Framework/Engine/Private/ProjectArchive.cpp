@@ -340,7 +340,7 @@ namespace Engine
                 const char* blend = material->GetBlendMode()==EBlendMode::Opaque ? "Opaque" : material->GetBlendMode()==EBlendMode::Masked ? "Masked" : "Translucent";
                 const char* cull = material->GetCullMode()==RHI::ERHICullMode::None ? "None" : material->GetCullMode()==RHI::ERHICullMode::Front ? "Front" : "Back";
                 Data["materials"].push_back({{"id",id}, {"name",asset->GetName()}, {"blend",blend}, {"cull",cull}, {"twoSided",material->IsTwoSided()},
-                    {"shading",material->GetShadingModel()==EShadingModel::Lit ? "Lit" : "Unlit"}, {"parameters",Parameters(*material)}});
+                    {"shading",GetShadingModelName(material->GetShadingModel())}, {"parameters",Parameters(*material)}});
                 return id;
             }
             uint64_t Mesh(const std::shared_ptr<StaticMeshAsset>& asset)
@@ -528,9 +528,9 @@ namespace Engine
         {
             auto material=std::make_unique<Material>(); const auto blend=record.at("blend").get<std::string>(), shading=record.at("shading").get<std::string>(), cull=record.at("cull").get<std::string>();
             Require(blend=="Opaque" || blend=="Masked" || blend=="Translucent","unknown blend mode");
-            Require(shading=="Lit" || shading=="Unlit","unknown shading model"); Require(cull=="None" || cull=="Front" || cull=="Back","unknown cull mode");
+            Require(cull=="None" || cull=="Front" || cull=="Back","unknown cull mode");
             material->SetBlendMode(blend=="Opaque" ? EBlendMode::Opaque : blend=="Masked" ? EBlendMode::Masked : EBlendMode::Translucent);
-            material->SetShadingModel(shading=="Lit" ? EShadingModel::Lit : EShadingModel::Unlit);
+            material->SetShadingModel(ParseShadingModel(shading));
             material->SetCullMode(cull=="None" ? RHI::ERHICullMode::None : cull=="Front" ? RHI::ERHICullMode::Front : RHI::ERHICullMode::Back);
             material->SetTwoSided(record.at("twoSided").get<bool>()); RestoreParameters(*material,record.at("parameters"),textures);
             Insert(materials,record.at("id"),MaterialAsset::Create("",record.at("name").get<std::string>(),std::move(material)));

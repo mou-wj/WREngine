@@ -15,6 +15,13 @@
 namespace Editor
 {
     using Controls = ImGUISlate::ImPropertyControls;
+
+    namespace
+    {
+        constexpr const char* ShadingModels[] = {"All models", "Unlit", "Default Lit", "Subsurface"};
+        static_assert(IM_ARRAYSIZE(ShadingModels) == 1 + int(Engine::EShadingModel::COUNT_MAX));
+    }
+
     EditorMaterialPanel::EditorMaterialPanel(MaterialEditorCallbacks callbacks)
         : EditorMaterialPanel(std::move(callbacks), std::filesystem::path(Core::GetProjectDir()) / "resources/material") {}
 
@@ -205,9 +212,8 @@ namespace Editor
         ImGui::SameLine();
         if (ImGui::Button("Refresh"))
             try { m_Library.Refresh(); } catch (const std::exception& error) { m_Status = error.what(); }
-        const char* models[] = {"All models", "Lit", "Unlit"};
         ImGui::SetNextItemWidth(110);
-        Controls::Choice("##ShadingFilter", m_ShadingFilter, models, 3);
+        Controls::Choice("##ShadingFilter", m_ShadingFilter, ShadingModels, IM_ARRAYSIZE(ShadingModels));
         ImGui::SameLine();
         ImGui::SetNextItemWidth(105);
         ImGui::SliderFloat("Tile size", &m_TileWidth, 72, 160, "%.0f");
@@ -262,9 +268,10 @@ namespace Editor
                 if (m_SelectedMaterial && std::filesystem::path(m_SelectedMaterial->GetPath()) == entry.Path)
                 {
                     color = std::get<std::array<float, 4>>(m_SelectedMaterial->GetMaterial()->GetParameter("BaseColor", Engine::EMaterialParameterType::Vector)->GetValueVariant());
-                    model = m_SelectedMaterial->GetMaterial()->GetShadingModel() == Engine::EShadingModel::Lit ? "Lit" : "Unlit";
+                    model = Engine::GetShadingModelName(m_SelectedMaterial->GetMaterial()->GetShadingModel());
                 }
-                if (m_ShadingFilter && model != models[m_ShadingFilter]) continue;
+                if (m_ShadingFilter && model != Engine::GetShadingModelName(static_cast<Engine::EShadingModel>(m_ShadingFilter - 1))) continue;
+                if (model == "Lit") model = ShadingModels[1 + int(Engine::EShadingModel::Lit)];
                 if (!search.empty() && lower(entry.Name + " " + entry.Category).find(search) == std::string::npos) continue;
                 cards.push_back({MaterialLibrary::PathText(entry.Path), entry.Name, model, color});
             }
@@ -317,23 +324,31 @@ namespace Editor
                 base->SetCullMode(cull == 0 ? RHI::ERHICullMode::None : cull == 1 ? RHI::ERHICullMode::Front : RHI::ERHICullMode::Back);
                 NotifyChanged(true);
             }
-            const char* models[] = {"Unlit", "Lit"};
             int model = static_cast<int>(base->GetShadingModel());
-            if (Controls::Choice("Shading model", model, models, 2))
+            if (Controls::Choice("Shading model", model, ShadingModels + 1, IM_ARRAYSIZE(ShadingModels) - 1))
             { base->SetShadingModel(static_cast<Engine::EShadingModel>(model)); NotifyChanged(true); }
         }
 
         const auto proxy = material->GetRenderProxyShared();
         const auto& definitions = material->GetParameterDefinitions();
+        const auto model = proxy->GetShadingModel();
+        if (!m_bEditAsset)
+        {
+            ImGui::Text("Shading model: %s", ShadingModels[1 + int(model)]);
+        }
         std::vector<std::string> groups;
         for (const auto& definition : definitions)
-            if (std::find(groups.begin(), groups.end(), definition.Group) == groups.end()) groups.push_back(definition.Group);
+            if ((!definition.ShadingModel || *definition.ShadingModel == model) &&
+                std::find(groups.begin(), groups.end(), definition.Group) == groups.end())
+            {
+                groups.push_back(definition.Group);
+            }
         for (const auto& group : groups)
         {
             if (!ImGui::CollapsingHeader(group.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) continue;
             for (const auto& definition : definitions)
             {
-                if (definition.Group != group) continue;
+                if (definition.Group != group || (definition.ShadingModel && *definition.ShadingModel != model)) continue;
                 ImGui::PushID(definition.Name.c_str());
                 ImGui::PushID(static_cast<int>(definition.Type));
                 auto value = proxy->GetParameter(definition.Name, definition.Type)->GetValueVariant();

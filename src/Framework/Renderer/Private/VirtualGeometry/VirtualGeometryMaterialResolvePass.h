@@ -10,6 +10,7 @@ namespace Renderer
         RenderCore::RenderGraphTextureRef GBufferA = nullptr;
         RenderCore::RenderGraphTextureRef GBufferB = nullptr;
         RenderCore::RenderGraphTextureRef GBufferC = nullptr;
+        RenderCore::RenderGraphTextureRef GBufferD = nullptr;
     };
 
     RENDERER_API VirtualGeometryMaterialResolveOutput AddVirtualGeometryMaterialResolvePass(

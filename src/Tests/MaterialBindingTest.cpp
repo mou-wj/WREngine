@@ -100,8 +100,9 @@ public:
         auto factory = factories.find("LocalVertexFactory");
         if (factory == factories.end()) throw std::runtime_error("LocalVertexFactory is not registered");
         Material material;
-        for (auto model : { EShadingModel::Lit, EShadingModel::Unlit })
+        for (uint8_t id = 0; id < uint8_t(EShadingModel::COUNT_MAX); ++id)
         {
+            const auto model = static_cast<EShadingModel>(id);
             material.SetShadingModel(model);
             auto resource = material.GetResource();
             for (const char* name : { "StaticMeshMaterialShaderVS", "StaticMeshMaterialShaderPS", "StaticMeshMaterialGBufferShaderPS" })
@@ -123,13 +124,31 @@ public:
                     throw std::runtime_error("A dynamic parameter edit did not reuse the compiled shader");
             }
         }
+        const auto& materialShaders = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::Material];
+        auto deferred = materialShaders.find("StaticMeshMaterialDefferedShadingCS");
+        if (deferred == materialShaders.end())
+        {
+            throw std::runtime_error("Deferred material shading shader is not registered");
+        }
+        for (uint32_t permutation = 0; permutation < 2; ++permutation)
+        {
+            MaterialShaderKey key;
+            key.ShaderType = static_cast<MaterialShaderType*>(deferred->second);
+            key.PermutationId = permutation;
+            key.MaterialParameter.ShadingModel = EShadingModel::Lit;
+            auto* shader = GMaterialShaderMap.GetShader(key);
+            if (!shader || !shader->GetRHIShader())
+            {
+                throw std::runtime_error("Deferred material light permutation did not produce an RHI shader");
+            }
+        }
         material.SetBlendMode(EBlendMode::Masked);
         bool rejected = false;
         try { material.GetRenderProxy()->ValidateSurfacePass(); }
         catch (const std::runtime_error&) { rejected=true; }
         if (!rejected) throw std::runtime_error("Unsupported masked rendering was accepted");
         GMeshMaterialShaderMap.Clear();
-        std::cout << "Lit/Unlit forward and GBuffer shader compilation, RHI shader creation and dynamic-value cache reuse passed" << std::endl;
+        std::cout << "Surface model forward and GBuffer shader compilation, RHI shader creation and dynamic-value cache reuse passed" << std::endl;
     }
 };
 REGISTER_RENDER_TEST("MaterialShaderCompilationTest",MaterialShaderCompilationTest);

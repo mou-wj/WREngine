@@ -1,3 +1,4 @@
+#include "/core/ShadingModel.sf"
 #include "/Generated/ShaderParameters/ReflectionTraceParameters.sf"
 #include "/Generated/ShaderParameters/ReflectionViewParameters.sf"
 #include "/Generated/ShaderParameters/GBufferInputParameters.sf"
@@ -167,7 +168,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     uint model = uint(GBufferC.Load(int3(pixel, 0)).b * 255.0 + 0.5);
     float4 normalRoughness = GBufferB.Load(int3(pixel, 0));
     float3 unpackedNormal = normalRoughness.rgb * 2.0 - 1.0;
-    if (depth < 0.999999 && model == 1u && dot(unpackedNormal, unpackedNormal) > 1e-6)
+    if (depth < 0.999999 && UsesDefaultSpecular(model) && dot(unpackedNormal, unpackedNormal) > 1e-6)
     {
         float3 position = ReconstructGIPosition(pixel, depth, ReflectionSize, InverseViewProjection);
         float3 normal = normalize(unpackedNormal);

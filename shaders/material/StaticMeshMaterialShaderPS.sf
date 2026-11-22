@@ -1,12 +1,11 @@
-#include "/Generated/VertexFactory.sf"
-
-#define SHADINGMODEL_UNLIT   0
-#define SHADINGMODEL_LIT 1
-#include "/Generated/ShaderParameters/StaticMeshMaterialShaderPSParameters.sf"
-#include "/core/MaterialParametersHelper.sf"
-#if MATERIAL_SHADING_MODEL == SHADINGMODEL_LIT
+#include "/core/ShadingModel.sf"
+#include "/core/ShadingContext.sf"
+#if MATERIAL_SHADING_MODEL != SHADINGMODEL_UNLIT
+// Keep structured lighting buffer bindings within the OpenGL range.
 #include "/core/SceneParametersHelper.sf"
-#endif 
+#endif
+#include "/Generated/VertexFactory.sf"
+#include "/core/MaterialParametersHelper.sf"
 
 float4 MainPS(VertexFactoryVSToPS Input) : SV_Target0
 {
@@ -30,12 +29,18 @@ float4 MainPS(VertexFactoryVSToPS Input) : SV_Target0
 
     float3 BaseColor = float3(1.0, 0.7, 0.3);
 
-#if MATERIAL_SHADING_MODEL == SHADINGMODEL_LIT
+#if MATERIAL_SHADING_MODEL != SHADINGMODEL_UNLIT
 
     MaterialData Material = BuildMaterialData(Context.UV0);
-    if(!HasMaterialTexture(MATERIAL_TEXTURE_NORMAL)){
+#if MATERIAL_SHADING_MODEL == SHADINGMODEL_LIT
+    if (!HasMaterialTexture(MATERIAL_TEXTURE_NORMAL))
+    {
         Material.NormalTS = Context.WorldNormal;
     }
+#else
+    Material.NormalTS = HasMaterialTexture(MATERIAL_TEXTURE_NORMAL) ?
+        normalize(mul(Material.NormalTS, Context.TangentToWorld)) : Context.WorldNormal;
+#endif
     float3 Lighting = EvaluateSceneLighting(Context,Material);
     return float4(Lighting, 1.0);
 

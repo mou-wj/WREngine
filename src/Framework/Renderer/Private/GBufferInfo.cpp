@@ -31,11 +31,12 @@ namespace Renderer {
                 RHI::ERHIFormat::R8G8B8A8_UNorm,
                 "GBufferC");
 
-        info.NumTargets = 3;
+        info.Targets[3] = FGBufferTarget(RHI::ERHIFormat::R8G8B8A8_UNorm, "GBufferD");
+        info.NumTargets = 4;
 
         if (params.bHasVelocity)
         {
-            info.Targets[3] =
+            info.Targets[4] =
                 FGBufferTarget(
                     RHI::ERHIFormat::R16G16_Float,
                     "Velocity");
@@ -61,6 +62,8 @@ namespace Renderer {
         info.Slots[GBS_ShadingModelId] =
             FGBufferItem(GBS_ShadingModelId, 2, 2, 1);
 
+        info.Slots[GBS_ShadingModelData] = FGBufferItem(GBS_ShadingModelData, 3, 0, 4);
+
         if (params.bHasSpecular)
         {
             info.Slots[GBS_Specular] =
@@ -76,7 +79,7 @@ namespace Renderer {
         if (params.bHasVelocity)
         {
             info.Slots[GBS_Velocity] =
-                FGBufferItem(GBS_Velocity, 3, 0, 2);
+                FGBufferItem(GBS_Velocity, 4, 0, 2);
         }
 
         return info;

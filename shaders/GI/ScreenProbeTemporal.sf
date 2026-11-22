@@ -1,3 +1,4 @@
+#include "/core/ShadingModel.sf"
 #include "/Generated/ShaderParameters/ScreenProbeTemporalParameters.sf"
 #include "/Generated/ShaderParameters/GBufferInputParameters.sf"
 #include "/GI/ScreenProbeGeometry.sf"
@@ -6,7 +7,7 @@ float4 ReadCurrentGeometry(int2 pixel)
 {
     float depth = Depth.Load(int3(pixel, 0)).r;
     uint model = uint(GBufferC.Load(int3(pixel, 0)).b * 255.0 + 0.5);
-    if (depth >= 0.999999 || model != 1u)
+    if (depth >= 0.999999 || !IsLitShadingModel(model))
     {
         return float4(0, 0, 0, -1);
     }

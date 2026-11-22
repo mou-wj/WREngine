@@ -1,3 +1,4 @@
+#include "/core/ShadingModel.sf"
 #include "/Generated/ShaderParameters/ScreenProbeIntegrationParameters.sf"
 #include "/Generated/ShaderParameters/GBufferInputParameters.sf"
 #include "/GI/ScreenProbeGeometry.sf"
@@ -133,7 +134,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     float3 indirect = 0.0;
     float confidence = 0.0;
 
-    if (depth < 0.999999 && shadingModel == 1u)
+    if (depth < 0.999999 && IsLitShadingModel(shadingModel))
     {
         float3 position = ReconstructGIPosition(pixel, depth, ScreenSize, InvViewProj);
         float footprint = GIPixelFootprint(pixel, depth, ScreenSize, InvViewProj, position);

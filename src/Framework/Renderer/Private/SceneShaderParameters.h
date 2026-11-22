@@ -9,17 +9,17 @@ namespace RenderCore {
 
 namespace Renderer {
 
+    // Keep each vector on a 16-byte boundary and the record stride a multiple of 16 for std430.
     BEGIN_SHADER_PARAMETER_STRUCT(LightCommonData)
         SHADER_PARAMETER(Core::Float3,Color)
         SHADER_PARAMETER(float,Intensity)
-        SHADER_PARAMETER(uint32_t, LightId)
     END_SHADER_PARAMETER_STRUCT(LightCommonData)
 
     BEGIN_SHADER_PARAMETER_STRUCT(DirectionalLightData)
 
         SHADER_PARAMETER_STRUCT_INCLUDE( LightCommonData, Common )
         SHADER_PARAMETER(Core::Float3,Direction)
-        
+        SHADER_PARAMETER(uint32_t, LightId)
     END_SHADER_PARAMETER_STRUCT(DirectionalLightData)
 
 
@@ -27,6 +27,9 @@ namespace Renderer {
         SHADER_PARAMETER_STRUCT_INCLUDE(LightCommonData,Common)
         SHADER_PARAMETER(Core::Float3,Position)
         SHADER_PARAMETER(float,Radius)
+        SHADER_PARAMETER(uint32_t, LightId)
+        SHADER_PARAMETER(uint32_t, Padding0)
+        SHADER_PARAMETER(Core::UInt2, Padding1)
     END_SHADER_PARAMETER_STRUCT(PointLightData)
 
     BEGIN_SHADER_PARAMETER_STRUCT(SpotLightData)
@@ -36,7 +39,11 @@ namespace Renderer {
         SHADER_PARAMETER(Core::Float3,Direction)
         SHADER_PARAMETER(float,InnerConeCos)
         SHADER_PARAMETER(float,OuterConeCos)
+        SHADER_PARAMETER(uint32_t, LightId)
+        SHADER_PARAMETER(Core::UInt2, Padding)
     END_SHADER_PARAMETER_STRUCT(SpotLightData)
+
+    static_assert(sizeof(DirectionalLightData) == 32 && sizeof(PointLightData) == 48 && sizeof(SpotLightData) == 64);
 
     BEGIN_SHADER_PARAMETER_STRUCT(SceneLightParameters)
         SHADER_PARAMETER(uint32_t,DirectionalLightCount)

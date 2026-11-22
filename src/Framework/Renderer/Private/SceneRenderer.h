@@ -18,6 +18,7 @@ namespace Renderer {
         RenderCore::RenderGraphTextureRef GBufferA;
         RenderCore::RenderGraphTextureRef GBufferB;
         RenderCore::RenderGraphTextureRef GBufferC;
+        RenderCore::RenderGraphTextureRef GBufferD;
 
         // Optional auxiliary targets.
         RenderCore::RenderGraphTextureRef Velocity;

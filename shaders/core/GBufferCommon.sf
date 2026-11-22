@@ -3,6 +3,7 @@ struct FGBufferOutput
     float4 GBufferA : SV_Target0;
     float4 GBufferB : SV_Target1;
     float4 GBufferC : SV_Target2;
+    float4 GBufferD : SV_Target3;
 };
 
 

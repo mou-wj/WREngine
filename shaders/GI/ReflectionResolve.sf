@@ -66,7 +66,7 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     uint model = uint(GBufferC.Load(int3(pixel, 0)).b * 255.0 + 0.5);
     float2 uv = (float2(pixel) + 0.5) / float2(ReflectionSize);
     MaterialData material = ReconstructMaterialData(uv);
-    if (depth >= 0.999999 || model != 1u || dot(material.NormalTS, material.NormalTS) <= 1e-6)
+    if (depth >= 0.999999 || !UsesDefaultSpecular(model) || dot(material.NormalTS, material.NormalTS) <= 1e-6)
     {
         ReflectionOutput[pixel] = float4(ReflectionView == 0u ? deferred : 0.0, 1.0);
         return;
