@@ -12,7 +12,11 @@ Vulkan Debug 的清漆对照覆盖三类直接光源及非均匀 IBL，并分别
 
 Vulkan Debug 用 +0.85、−0.85 和 0.0 对比相同材质实例。三类直接光照下，两种方向的最大 RGB 差值为 0.419、0.965 和 1.395，在低频 IBL 下约为 0.00117。三个后端的原生 Shader 编译及 Vulkan 编辑器启动、正常退出通过。
 
+**Cloth** 分组提供绒面颜色与强度。布料按介电材质计算，基础色与粗糙度控制底层和织物反射。增加绒面强度可加强掠射方向的柔和反射。
+
 `MaterialShadingModelTest` 使用同一球体和相机分别渲染四种光照，读回中心区域检查材质与实例覆盖，并输出 `MaterialShadingModels.ppm`。Vulkan Debug 下，散射对方向光、点光、聚光及非均匀环境光的最大线性 RGB 差值分别为 0.0874、0.2030、0.2922、0.0675。Vulkan、OpenGL 与 DirectX12 上用 `MaterialShaderCompilationTest` 检查前向、GBuffer 及两个延迟光照变体的原生 Shader 编译。
+
+六模型对照按 Unlit、Default Lit、Subsurface、Clear Coat、Anisotropic、Cloth 排列。Cloth 在三类直射光与 IBL 下均随绒面颜色和强度变化。五种受光模型均通过 Vulkan 中同场遮挡体的方向光阴影测试及法线贴图对照。材质契约、Virtual Geometry 材质解析、Surface Cache 直接光照及体积合成回归成功退出。OpenGL 与 DirectX12 的验证范围为相关 Shader 编译。
 
 ## Virtual Geometry 场景绘制入口
 

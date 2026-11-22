@@ -18,7 +18,7 @@ namespace Editor
 
     namespace
     {
-        constexpr const char* ShadingModels[] = {"All models", "Unlit", "Default Lit", "Subsurface", "Clear Coat", "Anisotropic"};
+        constexpr const char* ShadingModels[] = {"All models", "Unlit", "Default Lit", "Subsurface", "Clear Coat", "Anisotropic", "Cloth"};
         static_assert(IM_ARRAYSIZE(ShadingModels) == 1 + int(Engine::EShadingModel::COUNT_MAX));
     }
 
@@ -349,6 +349,10 @@ namespace Editor
             for (const auto& definition : definitions)
             {
                 if (definition.Group != group || (definition.ShadingModel && *definition.ShadingModel != model)) continue;
+                if (model == Engine::EShadingModel::Cloth && definition.Name == "Metallic")
+                {
+                    continue;
+                }
                 ImGui::PushID(definition.Name.c_str());
                 ImGui::PushID(static_cast<int>(definition.Type));
                 auto value = proxy->GetParameter(definition.Name, definition.Type)->GetValueVariant();

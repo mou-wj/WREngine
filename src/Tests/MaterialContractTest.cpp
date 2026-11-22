@@ -43,7 +43,7 @@ public:
         auto asset = MaterialAsset::Create((directory/"source.json").generic_string(),"ContractFixture",std::make_unique<Material>());
         auto* material = asset->GetMaterial();
         material->SetShadingModel(EShadingModel::Lit);
-        CheckMaterial(material->GetParameterDefinitions().size() == 23,"Incomplete Surface parameter declarations");
+        CheckMaterial(material->GetParameterDefinitions().size() == 25,"Incomplete Surface parameter declarations");
         CheckMaterial(ParseShadingModel("Lit") == EShadingModel::Lit && ParseShadingModel("Unlit") == EShadingModel::Unlit,
                       "Legacy shading model names changed");
         for (uint8_t id = 0; id < uint8_t(EShadingModel::COUNT_MAX); ++id)

@@ -22,6 +22,7 @@ namespace Engine {
         Subsurface = 2,
         ClearCoat = 3,
         Anisotropic = 4,
+        Cloth = 5,
         COUNT_MAX
     };
 

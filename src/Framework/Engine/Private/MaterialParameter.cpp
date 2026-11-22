@@ -35,6 +35,8 @@ const std::vector<MaterialParameterDefinition>& GetSurfaceMaterialParameterDefin
         {"ClearCoatStrength", S::Custom, T::Scalar, "Clear Coat", "ShadingModelData", 0.85f, true, EShadingModel::ClearCoat},
         {"ClearCoatRoughness", S::Custom, T::Scalar, "Clear Coat", "ShadingModelData", 0.18f, true, EShadingModel::ClearCoat},
         {"Anisotropy", S::Custom, T::Scalar, "Anisotropic", "ShadingModelData", 0.65f, true, EShadingModel::Anisotropic},
+        {"SheenColor", S::Custom, T::Vector, "Cloth", "ShadingModelData", std::array<float,4>{0.95f,0.72f,0.56f,1.0f}, true, EShadingModel::Cloth},
+        {"SheenStrength", S::Custom, T::Scalar, "Cloth", "ShadingModelData", 0.65f, true, EShadingModel::Cloth},
         {"BaseColor", S::BaseColor, T::Texture, "Textures", "BaseColorTexture", std::shared_ptr<TextureAsset>{}},
         {"Normal", S::Normal, T::Texture, "Textures", "NormalTexture", std::shared_ptr<TextureAsset>{}},
         {"Opacity", S::Custom, T::Texture, "Textures", "OpacityTexture", std::shared_ptr<TextureAsset>{}},

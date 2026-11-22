@@ -101,7 +101,8 @@ namespace Test
             {
                 for (float channel : {pixel.X, pixel.Y, pixel.Z})
                 {
-                    const float display = std::pow(std::clamp(channel, 0.0f, 1.0f), 1.0f / 2.2f);
+                    const float radiance = std::max(0.0f, channel);
+                    const float display = std::pow(radiance / (1.0f + radiance), 1.0f / 2.2f);
                     file.put(static_cast<char>(uint8_t(display * 255.0f + 0.5f)));
                 }
             }
@@ -149,6 +150,7 @@ namespace Test
             const auto skin = MakeMaterial(EShadingModel::Subsurface);
             const auto lacquer = MakeMaterial(EShadingModel::ClearCoat);
             const auto brushed = MakeMaterial(EShadingModel::Anisotropic);
+            const auto fabric = MakeMaterial(EShadingModel::Cloth);
             StaticMeshComponent mesh;
             mesh.SetStaticMesh(sphere->GetMesh());
             mesh.SetMaterial(0, lit->GetMaterial());
@@ -288,8 +290,60 @@ namespace Test
                 const float grainEffect = CenterDifference(isotropic, alongTangent);
                 Require(directionEffect > 0.0005f && grainEffect > 0.0005f, "Anisotropy did not respond to direction or strength");
                 std::cout << " anisotropyDirectionEffect=" << directionEffect << " anisotropyStrengthEffect=" << grainEffect << std::endl;
+
+                mesh.SetMaterial(0, fabric->GetMaterial());
+                auto* cloth = mesh.GetOrCreateMaterialInstance(0);
+                const auto sheen = render();
+                cloth->SetParameter("SheenColor", std::array<float, 4>{0.1f, 0.35f, 1.0f, 1.0f});
+                const auto dyedFibers = render();
+                cloth->SetParameter("SheenStrength", 0.0f);
+                const auto matte = render();
+                const float clothEffect = CenterDifference(sheen, matte);
+                const float sheenColorEffect = CenterDifference(sheen, dyedFibers);
+                Require(clothEffect > 0.001f && sheenColorEffect > 0.0005f, "Cloth did not respond to sheen color and strength");
+                mesh.ResetMaterialInstance(0);
+                Require(CenterDifference(sheen, render()) < 0.001f, "Clearing sheen overrides did not restore the material");
+                std::cout << " clothEffect=" << clothEffect << " sheenColorEffect=" << sheenColorEffect << std::endl;
             }
 
+            for (auto* light : lights)
+            {
+                light->SetEnabled(light == &directional);
+            }
+
+            auto normalDesc = environmentDesc;
+            normalDesc.Width = normalDesc.Height = 1;
+            auto normalImage = std::make_shared<RenderTexture>(normalDesc);
+            normalImage->InitRHIResource();
+            const std::array<uint8_t, 4> angledNormal{212, 128, 222, 255};
+            normalImage->UploadData(angledNormal.data(), 0, 0);
+            const auto normalAsset = TextureAsset::Create("AngledTestNormal", normalImage);
+
+            const auto cube = StaticMeshAsset::CreateShape(EBasicMeshShape::Cube);
+            StaticMeshComponent blocker;
+            blocker.SetStaticMesh(cube->GetMesh());
+            blocker.SetWorldLocation({-1.6f, 0.6f, 1.45f});
+            blocker.SetWorldScale({0.85f, 0.85f, 0.85f});
+            blocker.SetMaterial(0, lit->GetMaterial());
+            scene->AddPrimitive(&blocker);
+            for (auto model : {lit, skin, lacquer, brushed, fabric})
+            {
+                directional.SetCastShadow(false);
+                mesh.SetMaterial(0, model->GetMaterial());
+                const auto unshadowed = render();
+                auto* instance = mesh.GetOrCreateMaterialInstance(0);
+                instance->SetParameter("Normal", normalAsset);
+                const float normalEffect = CenterDifference(unshadowed, render());
+                mesh.ResetMaterialInstance(0);
+                directional.SetCastShadow(true);
+                const float shadowEffect = CenterDifference(unshadowed, render());
+                std::cout << " model=" << GetShadingModelName(model->GetMaterial()->GetShadingModel())
+                    << " normalEffect=" << normalEffect << " shadowEffect=" << shadowEffect << std::endl;
+                Require(normalEffect > 0.001f, "Lit model ignored the normal texture");
+                Require(shadowEffect > 0.001f, "Lit model ignored directional shadows");
+            }
+            directional.SetCastShadow(false);
+            scene->RemovePrimitive(&blocker);
             for (auto* light : lights)
             {
                 light->SetEnabled(true);
@@ -305,7 +359,7 @@ namespace Test
                 object->SetStaticMesh(sphere->GetMesh());
                 object->SetWorldScale({0.75f, 0.75f, 0.75f});
                 object->SetMaterial(0, materials.back()->GetMaterial());
-                object->SetWorldLocation({(float(id) - 0.5f * float(count - 1)) * 1.8f, 0, 0});
+                object->SetWorldLocation({(float(id) - 0.5f * float(count - 1)) * 1.65f, 0, 0});
                 scene->AddPrimitive(object.get());
             }
             SaveComparison(render());

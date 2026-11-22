@@ -53,6 +53,12 @@ void BuildShaderParameters(const MaterialRenderProxy* proxy, RenderGraphBuilder&
         const float anisotropy = std::clamp(scalar("Anisotropy"), -1.0f, 1.0f);
         out.UniformData.ShadingModelData.Z = (std::round(anisotropy * 127.0f) + 128.0f) / 255.0f;
     }
+    else if (proxy->GetShadingModel() == EShadingModel::Cloth)
+    {
+        const auto sheen = vector("SheenColor");
+        const float strength = saturate(scalar("SheenStrength"));
+        out.UniformData.ShadingModelData = {saturate(sheen[0]) * strength, saturate(sheen[1]) * strength, saturate(sheen[2]) * strength, 0.0f};
+    }
     out.TextureData.TextureMask = 0;
     const auto texture = [&](const char* name, uint32_t bit, const RenderTextureSP& fallback) {
         auto asset = std::get<std::shared_ptr<TextureAsset>>(proxy->GetParameter(name,EMaterialParameterType::Texture)->GetValueVariant());

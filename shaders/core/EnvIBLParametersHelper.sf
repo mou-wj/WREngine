@@ -66,5 +66,14 @@ float3 CalculateIBLShading(MaterialData material, float3 normal, float3 mirrorDi
             lighting += strength * SampleIBLSpecular(mirrorDirection, coat.Roughness) * GetIBLSpecularWeight(coat, nDotV);
         }
     }
+    if (material.ShadingModel == SHADINGMODEL_CLOTH)
+    {
+        float3 sheen = material.ShadingModelData.rgb * ClothSheenWeight(nDotV);
+        lighting *= 1.0 - sheen;
+        if (bIncludeSpecular)
+        {
+            lighting += sheen * SampleIBLSpecular(mirrorDirection, max(0.5, material.Roughness)) * 0.5;
+        }
+    }
     return lighting;
 }

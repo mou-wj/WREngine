@@ -80,6 +80,7 @@ GBuffer A 为 BaseColor.rgb/Metallic，B 为编码法线.rgb/Roughness，C 为 S
 | 2 | Subsurface | 逐通道散射比例，即散射色乘以散射强度 | 归一化散射半径 |
 | 3 | Clear Coat | R 清漆强度，G 清漆粗糙度，B 为零 | 0 |
 | 4 | Anisotropic | RG 八面体编码的世界空间切线，B 带偏移的有符号强度 | 0 |
+| 5 | Cloth | RGB 为绒面颜色乘以强度 | 0 |
 
 ### Subsurface
 
@@ -94,6 +95,10 @@ GBuffer A 为 BaseColor.rgb/Metallic，B 为编码法线.rgb/Roughness，C 为 S
 GBuffer 写入前，把顶点工厂的切线投影到着色法线 N 的平面。退化时选取与 N 不平行的轴构造切线。八面体编码将该单位向量存入 D.rg，读取后再次投影以消除法线和切线的独立量化误差。D.b 保存 `(round(a · 127) + 128) / 255`，其中 a 是 [−1,1] 的各向异性强度，编码保留精确的零值。
 
 采用各向异性 GGX，令 `aspect = sqrt(1 − 0.9 · |a|)`，两个轴的粗糙度参数是 `r² / aspect` 和 `r² · aspect`，负值交换两轴。两个参数各有 0.002 的下限。当半角向量 H 在切线、副切线和法线上的投影依次为 hₜ、hᵦ、hₙ，分布函数为 `1 / [π αₜ αᵦ ((hₜ/αₜ)² + (hᵦ/αᵦ)² + hₙ²)²]`。遮蔽使用各向异性 Smith 相关可见性。IBL 沿较宽的方向采样两个偏移反射向量并平均，查表仍复用原有 GGX 积分。零强度恢复原 BRDF 和单方向环境采样。各光源求值为常数开销，非零强度比基础 IBL 多采样一次。 [编码](../../../shaders/core/ShadingModel.sf) · [直接光照](../../../shaders/core/ShadingCommon.sf) · [环境光](../../../shaders/core/EnvIBLParametersHelper.sf) · [Filament 各向异性模型](https://google.github.io/filament/Filament.html#materialsystem/anisotropicmodel)
+
+### Cloth
+
+以介电 PBR 为底层。取 α=max(r²,0.02)，应用 Charlie 分布 `(2 + 1/α) · (1 − (N·H)²)^(1/(2α)) / (2π)`；可见性采用 Neubelt 的 `1 / [4 (NoL + NoV − NoL·NoV)]`。法线背向观察或光源时不求值，并给可见性分母设下限。为给绒面高光留出能量，用与入射和观察夹角有关的有界逐通道权重衰减底层。该衰减是实时近似。IBL 采用同样的底层衰减及较宽的立方图采样来近似绒面环境反射。 [直接光照](../../../shaders/core/ShadingCommon.sf) · [环境光](../../../shaders/core/EnvIBLParametersHelper.sf) · [Filament 布料模型](https://google.github.io/filament/Filament.html#materialsystem/clothmodel)
 
 计算预算约为输出 texel 数乘采样数；cube 六面和所有 mip 都要计入。GPU Dispatch 按线程组向上取整后必须边界检查，源码入口已有对应尺寸判断。CPU 上传的 SampleCount 不等于 Shader 实际使用数：这些分支当前有固定 256/128 常量。
 
