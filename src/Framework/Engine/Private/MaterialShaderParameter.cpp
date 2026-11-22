@@ -4,6 +4,7 @@
 #include "RenderGraphBuilder.h"
 #include "RenderResource.h"
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 using namespace RHI;
@@ -46,6 +47,11 @@ void BuildShaderParameters(const MaterialRenderProxy* proxy, RenderGraphBuilder&
     else if (proxy->GetShadingModel() == EShadingModel::ClearCoat)
     {
         out.UniformData.ShadingModelData = {saturate(scalar("ClearCoatStrength")), saturate(scalar("ClearCoatRoughness")), 0.0f, 0.0f};
+    }
+    else if (proxy->GetShadingModel() == EShadingModel::Anisotropic)
+    {
+        const float anisotropy = std::clamp(scalar("Anisotropy"), -1.0f, 1.0f);
+        out.UniformData.ShadingModelData.Z = (std::round(anisotropy * 127.0f) + 128.0f) / 255.0f;
     }
     out.TextureData.TextureMask = 0;
     const auto texture = [&](const char* name, uint32_t bit, const RenderTextureSP& fallback) {

@@ -20,6 +20,22 @@ float3 SampleIBLSpecular(float3 direction, float roughness)
     return IBLSpecularMap.SampleLevel(LinearClampIBLSampler, direction, roughness * float(mipCount - 1)).rgb;
 }
 
+float3 SampleAnisotropicIBL(MaterialData material, float3 normal, float3 mirrorDirection)
+{
+    float anisotropy = DecodeShadingAnisotropy(material.ShadingModelData.b);
+    if (anisotropy == 0.0)
+    {
+        return SampleIBLSpecular(mirrorDirection, material.Roughness);
+    }
+    float3 tangent = DecodeShadingTangent(material.ShadingModelData.rg, normal);
+    float3 wideAxis = anisotropy < 0.0 ? cross(normal, tangent) : tangent;
+    float3 projectedAxis = wideAxis - mirrorDirection * dot(wideAxis, mirrorDirection);
+    float3 spread = projectedAxis * (abs(anisotropy) * material.Roughness);
+    float narrowRoughness = material.Roughness * sqrt(1.0 - 0.5 * abs(anisotropy));
+    return 0.5 * (SampleIBLSpecular(normalize(mirrorDirection - spread), narrowRoughness) +
+        SampleIBLSpecular(normalize(mirrorDirection + spread), narrowRoughness));
+}
+
 float3 CalculateIBLShading(MaterialData material, float3 normal, float3 mirrorDirection, float nDotV, bool bIncludeSpecular)
 {
     float3 irradiance = IBLDiffuseMap.SampleLevel(LinearClampIBLSampler, normal, 0).rgb;
@@ -33,7 +49,9 @@ float3 CalculateIBLShading(MaterialData material, float3 normal, float3 mirrorDi
     float3 lighting = diffuse;
     if (bIncludeSpecular)
     {
-        lighting += SampleIBLSpecular(mirrorDirection, material.Roughness) * GetIBLSpecularWeight(material, nDotV);
+        float3 specular = material.ShadingModel == SHADINGMODEL_ANISOTROPIC ?
+            SampleAnisotropicIBL(material, normal, mirrorDirection) : SampleIBLSpecular(mirrorDirection, material.Roughness);
+        lighting += specular * GetIBLSpecularWeight(material, nDotV);
     }
     if (material.ShadingModel == SHADINGMODEL_CLEAR_COAT && material.ShadingModelData.r > 0.0)
     {

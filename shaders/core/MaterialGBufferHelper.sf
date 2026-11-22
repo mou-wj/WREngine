@@ -15,6 +15,9 @@ FGBufferOutput EvaluateMaterialGBuffer(ShadingContext context, float2 uvGradient
         worldNormal = HasMaterialTexture(MATERIAL_TEXTURE_NORMAL) ? material.NormalTS : context.WorldNormal;
     }
 #endif
+#if MATERIAL_SHADING_MODEL == SHADINGMODEL_ANISOTROPIC
+    SetAnisotropicShadingFrame(material, context, worldNormal);
+#endif
     WriteBaseColor(output, material.BaseColor);
     WriteMetallic(output, material.Metallic);
     WriteNormal(output, worldNormal);

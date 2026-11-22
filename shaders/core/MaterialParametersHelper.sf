@@ -188,3 +188,9 @@ MaterialData BuildMaterialData(
     M.ShadingModelData = ShadingModelData;
     return M;
 }
+
+void SetAnisotropicShadingFrame(inout MaterialData material, ShadingContext context, float3 normal)
+{
+    float3 tangent = ProjectShadingTangent(normal, context.TangentToWorld[0]);
+    material.ShadingModelData.rg = EncodeShadingTangent(tangent);
+}

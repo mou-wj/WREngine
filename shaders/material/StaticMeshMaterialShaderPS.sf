@@ -41,6 +41,9 @@ float4 MainPS(VertexFactoryVSToPS Input) : SV_Target0
     Material.NormalTS = HasMaterialTexture(MATERIAL_TEXTURE_NORMAL) ?
         normalize(mul(Material.NormalTS, Context.TangentToWorld)) : Context.WorldNormal;
 #endif
+#if MATERIAL_SHADING_MODEL == SHADINGMODEL_ANISOTROPIC
+    SetAnisotropicShadingFrame(Material, Context, normalize(Material.NormalTS));
+#endif
     float3 Lighting = EvaluateSceneLighting(Context,Material);
     return float4(Lighting, 1.0);
 

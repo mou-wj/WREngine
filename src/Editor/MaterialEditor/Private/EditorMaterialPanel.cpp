@@ -18,7 +18,7 @@ namespace Editor
 
     namespace
     {
-        constexpr const char* ShadingModels[] = {"All models", "Unlit", "Default Lit", "Subsurface", "Clear Coat"};
+        constexpr const char* ShadingModels[] = {"All models", "Unlit", "Default Lit", "Subsurface", "Clear Coat", "Anisotropic"};
         static_assert(IM_ARRAYSIZE(ShadingModels) == 1 + int(Engine::EShadingModel::COUNT_MAX));
     }
 
@@ -354,7 +354,11 @@ namespace Editor
                 auto value = proxy->GetParameter(definition.Name, definition.Type)->GetValueVariant();
                 bool changed = false;
                 if (auto* scalar = std::get_if<float>(&value))
-                    changed = Controls::Scalar(definition.Name.c_str(), *scalar, 0.01f, 0, definition.Name == "NormalIntensity" ? 4.0f : 1.0f);
+                {
+                    const float minimum = definition.Name == "Anisotropy" ? -1.0f : 0.0f;
+                    const float maximum = definition.Name == "NormalIntensity" ? 4.0f : 1.0f;
+                    changed = Controls::Scalar(definition.Name.c_str(), *scalar, 0.01f, minimum, maximum);
+                }
                 else if (auto* vector = std::get_if<std::array<float, 4>>(&value))
                     changed = group == "UV" ? Controls::Vector4(definition.Name.c_str(), *vector) : Controls::Color(definition.Name.c_str(), *vector);
                 else if (auto* texture = std::get_if<std::shared_ptr<Engine::TextureAsset>>(&value))

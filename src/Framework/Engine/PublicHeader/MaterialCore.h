@@ -21,6 +21,7 @@ namespace Engine {
         Lit = 1,
         Subsurface = 2,
         ClearCoat = 3,
+        Anisotropic = 4,
         COUNT_MAX
     };
 

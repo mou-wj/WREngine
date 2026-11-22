@@ -79,6 +79,7 @@ GBuffer A 为 BaseColor.rgb/Metallic，B 为编码法线.rgb/Roughness，C 为 S
 | 1 | Default Lit | 0 | 0 |
 | 2 | Subsurface | 逐通道散射比例，即散射色乘以散射强度 | 归一化散射半径 |
 | 3 | Clear Coat | R 清漆强度，G 清漆粗糙度，B 为零 | 0 |
+| 4 | Anisotropic | RG 八面体编码的世界空间切线，B 带偏移的有符号强度 | 0 |
 
 ### Subsurface
 
@@ -87,6 +88,12 @@ GBuffer A 为 BaseColor.rgb/Metallic，B 为编码法线.rgb/Roughness，C 为 S
 ### Clear Coat
 
 透明介电层的法向反射率为 0.04。直接光照先用 Schlick 得到入射方向与观察方向的 Fresnel 系数 F，再用两个透射系数 `1 − strength · F` 的乘积衰减基础层。外层用独立粗糙度和 GGX 计算高光，沿用该光源的阴影与衰减。环境光以观察方向近似两次穿越，用清漆粗糙度单独采样预滤波立方图，复用环境 BRDF 查表。两个方向的穿越、预滤波和粗糙度最小值均为实时近似。外层使用基础层的法线，镜面颜色由介电 Fresnel 决定。 [直接光照](../../../shaders/core/ShadingCommon.sf) · [环境光](../../../shaders/core/EnvIBLParametersHelper.sf) · [Filament 清漆模型](https://google.github.io/filament/Filament.html#materialsystem/clearcoatmodel)
+
+### Anisotropic
+
+GBuffer 写入前，把顶点工厂的切线投影到着色法线 N 的平面。退化时选取与 N 不平行的轴构造切线。八面体编码将该单位向量存入 D.rg，读取后再次投影以消除法线和切线的独立量化误差。D.b 保存 `(round(a · 127) + 128) / 255`，其中 a 是 [−1,1] 的各向异性强度，编码保留精确的零值。
+
+采用各向异性 GGX，令 `aspect = sqrt(1 − 0.9 · |a|)`，两个轴的粗糙度参数是 `r² / aspect` 和 `r² · aspect`，负值交换两轴。两个参数各有 0.002 的下限。当半角向量 H 在切线、副切线和法线上的投影依次为 hₜ、hᵦ、hₙ，分布函数为 `1 / [π αₜ αᵦ ((hₜ/αₜ)² + (hᵦ/αᵦ)² + hₙ²)²]`。遮蔽使用各向异性 Smith 相关可见性。IBL 沿较宽的方向采样两个偏移反射向量并平均，查表仍复用原有 GGX 积分。零强度恢复原 BRDF 和单方向环境采样。各光源求值为常数开销，非零强度比基础 IBL 多采样一次。 [编码](../../../shaders/core/ShadingModel.sf) · [直接光照](../../../shaders/core/ShadingCommon.sf) · [环境光](../../../shaders/core/EnvIBLParametersHelper.sf) · [Filament 各向异性模型](https://google.github.io/filament/Filament.html#materialsystem/anisotropicmodel)
 
 计算预算约为输出 texel 数乘采样数；cube 六面和所有 mip 都要计入。GPU Dispatch 按线程组向上取整后必须边界检查，源码入口已有对应尺寸判断。CPU 上传的 SampleCount 不等于 Shader 实际使用数：这些分支当前有固定 256/128 常量。
 

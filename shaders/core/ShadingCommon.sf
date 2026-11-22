@@ -272,9 +272,56 @@ float3 EvaluateClearCoat(MaterialData material, float3 normal, float3 view, floa
     return base * transmission + (strength * specular * nDotL).xxx;
 }
 
+float AnisotropicProjectedLength(float3 direction, float3 normal, float3 tangent, float3 bitangent, float2 alpha)
+{
+    float2 local = float2(dot(direction, tangent), dot(direction, bitangent)) * alpha;
+    return length(float3(local, saturate(dot(direction, normal))));
+}
+
+float3 EvaluateAnisotropicLighting(MaterialData material, float3 normal, float3 view, float3 light, float anisotropy)
+{
+    float nDotV = dot(normal, view);
+    float nDotL = dot(normal, light);
+    if (nDotV <= 0.0 || nDotL <= 0.0)
+    {
+        return 0.0;
+    }
+
+    float3 tangent = DecodeShadingTangent(material.ShadingModelData.rg, normal);
+    float3 bitangent = cross(normal, tangent);
+    float roughnessSquared = max(material.Roughness * material.Roughness, 0.002);
+    float aspect = sqrt(1.0 - 0.9 * abs(anisotropy));
+    float2 alpha = max(float2(roughnessSquared / aspect, roughnessSquared * aspect), 0.002);
+    if (anisotropy < 0.0)
+    {
+        alpha = alpha.yx;
+    }
+
+    float3 halfVector = normalize(view + light);
+    float2 projectedHalf = float2(dot(halfVector, tangent), dot(halfVector, bitangent)) / alpha;
+    float nDotH = saturate(dot(normal, halfVector));
+    float denominator = dot(projectedHalf, projectedHalf) + nDotH * nDotH;
+    float distribution = rcp(max(PI * alpha.x * alpha.y * denominator * denominator, 1e-7));
+    float viewLength = AnisotropicProjectedLength(view, normal, tangent, bitangent, alpha);
+    float lightLength = AnisotropicProjectedLength(light, normal, tangent, bitangent, alpha);
+    float visibility = 0.5 / max(nDotL * viewLength + nDotV * lightLength, 1e-5);
+    float3 reflectivity = lerp(0.04.xxx, material.BaseColor, material.Metallic);
+    float3 fresnel = FresnelSchlick(saturate(dot(halfVector, view)), reflectivity);
+    float3 diffuse = (1.0 - fresnel) * (1.0 - material.Metallic) * LambertDiffuse(material.BaseColor);
+    return (diffuse + distribution * visibility * fresnel) * nDotL;
+}
+
 float3 EvaluateMaterialLighting(MaterialData material, float3 normal, float3 view, float3 light,
     float3 color, float intensity)
 {
+    if (material.ShadingModel == SHADINGMODEL_ANISOTROPIC)
+    {
+        float anisotropy = DecodeShadingAnisotropy(material.ShadingModelData.b);
+        if (anisotropy != 0.0)
+        {
+            return EvaluateAnisotropicLighting(material, normal, view, light, anisotropy) * color * intensity;
+        }
+    }
     if (material.ShadingModel == SHADINGMODEL_CLEAR_COAT)
     {
         float3 base = EvaluatePBRLighting(material, normal, view, light, 1.0.xxx, 1.0);

@@ -148,6 +148,7 @@ namespace Test
             const auto lit = MakeMaterial(EShadingModel::Lit);
             const auto skin = MakeMaterial(EShadingModel::Subsurface);
             const auto lacquer = MakeMaterial(EShadingModel::ClearCoat);
+            const auto brushed = MakeMaterial(EShadingModel::Anisotropic);
             StaticMeshComponent mesh;
             mesh.SetStaticMesh(sphere->GetMesh());
             mesh.SetMaterial(0, lit->GetMaterial());
@@ -274,6 +275,19 @@ namespace Test
                 mesh.ResetMaterialInstance(0);
                 Require(CenterDifference(coated, render()) < 0.001f, "Clearing coat overrides did not restore the material");
                 std::cout << " coatEffect=" << coatEffect << " coatRoughnessEffect=" << roughnessEffect << std::endl;
+
+                mesh.SetMaterial(0, brushed->GetMaterial());
+                auto* grain = mesh.GetOrCreateMaterialInstance(0);
+                grain->SetParameter("Anisotropy", 0.85f);
+                const auto alongTangent = render();
+                grain->SetParameter("Anisotropy", -0.85f);
+                const auto alongBitangent = render();
+                grain->SetParameter("Anisotropy", 0.0f);
+                const auto isotropic = render();
+                const float directionEffect = CenterDifference(alongTangent, alongBitangent);
+                const float grainEffect = CenterDifference(isotropic, alongTangent);
+                Require(directionEffect > 0.0005f && grainEffect > 0.0005f, "Anisotropy did not respond to direction or strength");
+                std::cout << " anisotropyDirectionEffect=" << directionEffect << " anisotropyStrengthEffect=" << grainEffect << std::endl;
             }
 
             for (auto* light : lights)

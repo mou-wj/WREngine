@@ -8,6 +8,10 @@ MaterialEditor 的 **Shading model** 修改母材质的模型。网格实例继�
 
 Vulkan Debug 的清漆对照覆盖三类直接光源及非均匀 IBL，并分别读回调整粗糙度、关闭清漆、清除实例覆盖后的画面。四种光照均出现参数响应，清除覆盖复现初始画面。三个后端的材质 Shader 编译检查及 Vulkan 编辑器启动、正常退出通过。
 
+**Anisotropic** 分组的强度范围为 −1 到 1。正值沿切线展宽高光，负值沿副切线展宽。设为零时使用原各向同性 BRDF。高光方向取决于网格顶点切线，使用法线贴图时将切线重新投影到着色法线的平面。
+
+Vulkan Debug 用 +0.85、−0.85 和 0.0 对比相同材质实例。三类直接光照下，两种方向的最大 RGB 差值为 0.419、0.965 和 1.395，在低频 IBL 下约为 0.00117。三个后端的原生 Shader 编译及 Vulkan 编辑器启动、正常退出通过。
+
 `MaterialShadingModelTest` 使用同一球体和相机分别渲染四种光照，读回中心区域检查材质与实例覆盖，并输出 `MaterialShadingModels.ppm`。Vulkan Debug 下，散射对方向光、点光、聚光及非均匀环境光的最大线性 RGB 差值分别为 0.0874、0.2030、0.2922、0.0675。Vulkan、OpenGL 与 DirectX12 上用 `MaterialShaderCompilationTest` 检查前向、GBuffer 及两个延迟光照变体的原生 Shader 编译。
 
 ## Virtual Geometry 场景绘制入口

@@ -3,7 +3,8 @@
 #define SHADINGMODEL_LIT 1
 #define SHADINGMODEL_SUBSURFACE 2
 #define SHADINGMODEL_CLEAR_COAT 3
-#define SHADINGMODEL_COUNT 4
+#define SHADINGMODEL_ANISOTROPIC 4
+#define SHADINGMODEL_COUNT 5
 
 uint DecodeShadingModel(float encoded)
 {
@@ -18,4 +19,38 @@ bool IsLitShadingModel(uint model)
 bool UsesDefaultSpecular(uint model)
 {
     return model == SHADINGMODEL_LIT || model == SHADINGMODEL_SUBSURFACE;
+}
+
+float3 ProjectShadingTangent(float3 normal, float3 tangent)
+{
+    tangent -= normal * dot(normal, tangent);
+    float lengthSquared = dot(tangent, tangent);
+    if (lengthSquared > 1e-6)
+    {
+        return tangent * rsqrt(lengthSquared);
+    }
+    float3 axis = abs(normal.z) < 0.999 ? float3(0, 0, 1) : float3(1, 0, 0);
+    return normalize(cross(axis, normal));
+}
+
+float2 EncodeShadingTangent(float3 tangent)
+{
+    tangent /= dot(abs(tangent), 1.0.xxx);
+    float2 signXY = step(0.0, tangent.xy) * 2.0 - 1.0;
+    float2 oct = tangent.z < 0.0 ? (1.0 - abs(tangent.yx)) * signXY : tangent.xy;
+    return oct * 0.5 + 0.5;
+}
+
+float3 DecodeShadingTangent(float2 encoded, float3 normal)
+{
+    float2 oct = 2.0 * encoded - 1.0;
+    float3 tangent = float3(oct, 1.0 - abs(oct.x) - abs(oct.y));
+    float fold = saturate(-tangent.z);
+    tangent.xy -= (step(0.0, tangent.xy) * 2.0 - 1.0) * fold;
+    return ProjectShadingTangent(normal, tangent);
+}
+
+float DecodeShadingAnisotropy(float encoded)
+{
+    return clamp((round(encoded * 255.0) - 128.0) / 127.0, -1.0, 1.0);
 }
