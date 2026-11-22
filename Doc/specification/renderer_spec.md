@@ -4,6 +4,10 @@
 
 MaterialEditor 的 **Shading model** 修改母材质的模型。网格实例继承该模型，可独立修改对应分组的参数。**Default Lit** 在现有材质和工程文件中仍保存为 `Lit`。**Subsurface** 分组可调整散射色、散射强度与半径。把强度设为零可对照散射带来的变化。 [编码与算法](../key_implemetion/algorithm/05-pbr-ibl-and-sampling.md#运行时取值与-gbuffer)
 
+**Clear Coat** 分组提供清漆强度和粗糙度。将强度设为零可检查基础层。粗糙度增加时，清漆高光展宽，基础层保留独立粗糙度。
+
+Vulkan Debug 的清漆对照覆盖三类直接光源及非均匀 IBL，并分别读回调整粗糙度、关闭清漆、清除实例覆盖后的画面。四种光照均出现参数响应，清除覆盖复现初始画面。三个后端的材质 Shader 编译检查及 Vulkan 编辑器启动、正常退出通过。
+
 `MaterialShadingModelTest` 使用同一球体和相机分别渲染四种光照，读回中心区域检查材质与实例覆盖，并输出 `MaterialShadingModels.ppm`。Vulkan Debug 下，散射对方向光、点光、聚光及非均匀环境光的最大线性 RGB 差值分别为 0.0874、0.2030、0.2922、0.0675。Vulkan、OpenGL 与 DirectX12 上用 `MaterialShaderCompilationTest` 检查前向、GBuffer 及两个延迟光照变体的原生 Shader 编译。
 
 ## Virtual Geometry 场景绘制入口

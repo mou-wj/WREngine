@@ -147,6 +147,7 @@ namespace Test
             const auto sphere = StaticMeshAsset::CreateShape(EBasicMeshShape::Sphere);
             const auto lit = MakeMaterial(EShadingModel::Lit);
             const auto skin = MakeMaterial(EShadingModel::Subsurface);
+            const auto lacquer = MakeMaterial(EShadingModel::ClearCoat);
             StaticMeshComponent mesh;
             mesh.SetStaticMesh(sphere->GetMesh());
             mesh.SetMaterial(0, lit->GetMaterial());
@@ -246,7 +247,7 @@ namespace Test
                 RenderGraphBuilder parametersGraph;
                 MaterialShaderParameters parameters{};
                 BuildShaderParameters(instance->GetRenderProxy(), parametersGraph, parameters);
-                Require(parameters.UniformData.SubsurfaceTintRadius.X == 0.0f, "Instance override was not bound to the material");
+                Require(parameters.UniformData.ShadingModelData.X == 0.0f, "Instance override was not bound to the material");
                 const auto noStrength = render();
                 instance->ResetParameter("SubsurfaceStrength", EMaterialParameterType::Scalar);
                 instance->SetParameter("SubsurfaceRadius", 0.0f);
@@ -259,7 +260,20 @@ namespace Test
                 Require(CenterDifference(noStrength, render()) < 0.001f, "Zero strength and zero radius must both remove scattering");
                 mesh.ResetMaterialInstance(0);
                 Require(CenterDifference(wrapped, render()) < 0.001f, "Clearing instance override must restore the shared response");
-                std::cout << " subsurfaceDifference=" << difference;
+                mesh.SetMaterial(0, lacquer->GetMaterial());
+                auto* coat = mesh.GetOrCreateMaterialInstance(0);
+                const auto coated = render();
+                coat->SetParameter("ClearCoatRoughness", 0.65f);
+                const auto roughCoat = render();
+                coat->SetParameter("ClearCoatStrength", 0.0f);
+                const auto bare = render();
+                const float coatEffect = CenterDifference(coated, bare);
+                const float roughnessEffect = CenterDifference(coated, roughCoat);
+                Require(coatEffect > 0.001f, "Clear coat layer did not respond to strength");
+                Require(roughnessEffect > 0.0002f, "Clear coat lobe did not respond to roughness");
+                mesh.ResetMaterialInstance(0);
+                Require(CenterDifference(coated, render()) < 0.001f, "Clearing coat overrides did not restore the material");
+                std::cout << " coatEffect=" << coatEffect << " coatRoughnessEffect=" << roughnessEffect << std::endl;
             }
 
             for (auto* light : lights)

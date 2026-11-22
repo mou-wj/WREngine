@@ -78,10 +78,15 @@ GBuffer A 为 BaseColor.rgb/Metallic，B 为编码法线.rgb/Roughness，C 为 S
 | 0 | Unlit | 0 | 0 |
 | 1 | Default Lit | 0 | 0 |
 | 2 | Subsurface | 逐通道散射比例，即散射色乘以散射强度 | 归一化散射半径 |
+| 3 | Clear Coat | R 清漆强度，G 清漆粗糙度，B 为零 | 0 |
 
 ### Subsurface
 
 设表面法线 N 和入射光方向 L 的夹角余弦为 x。原漫反射用 max(0,x)，包裹光照用 clamp((x+r)/(1+r),0,1)/(1+r)。半径 r 在 0 到 1 内控制包裹到背光侧的范围，末尾的除法将该因子在 x∈[-1,1] 的积分归一到与原余弦相同。用 D.rgb 逐通道混合两种漫反射权重，继续使用原有 GGX 高光及阴影可见性。IBL 对正反法线采样的漫反射辐照度作有界插值，镜面反射复用 Default Lit。半径表示角度扩展程度，场景单位和网格厚度不参与运算。 [直接光照](../../../shaders/core/ShadingCommon.sf) · [环境光](../../../shaders/core/EnvIBLParametersHelper.sf) · [实时散射近似](https://developer.nvidia.com/gpugems/gpugems/part-iii-materials/chapter-16-real-time-approximations-subsurface-scattering)
+
+### Clear Coat
+
+透明介电层的法向反射率为 0.04。直接光照先用 Schlick 得到入射方向与观察方向的 Fresnel 系数 F，再用两个透射系数 `1 − strength · F` 的乘积衰减基础层。外层用独立粗糙度和 GGX 计算高光，沿用该光源的阴影与衰减。环境光以观察方向近似两次穿越，用清漆粗糙度单独采样预滤波立方图，复用环境 BRDF 查表。两个方向的穿越、预滤波和粗糙度最小值均为实时近似。外层使用基础层的法线，镜面颜色由介电 Fresnel 决定。 [直接光照](../../../shaders/core/ShadingCommon.sf) · [环境光](../../../shaders/core/EnvIBLParametersHelper.sf) · [Filament 清漆模型](https://google.github.io/filament/Filament.html#materialsystem/clearcoatmodel)
 
 计算预算约为输出 texel 数乘采样数；cube 六面和所有 mip 都要计入。GPU Dispatch 按线程组向上取整后必须边界检查，源码入口已有对应尺寸判断。CPU 上传的 SampleCount 不等于 Shader 实际使用数：这些分支当前有固定 256/128 常量。
 

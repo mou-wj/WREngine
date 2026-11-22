@@ -20,6 +20,7 @@ namespace Engine {
         Unlit = 0,
         Lit = 1,
         Subsurface = 2,
+        ClearCoat = 3,
         COUNT_MAX
     };
 

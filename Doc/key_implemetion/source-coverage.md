@@ -63,15 +63,15 @@
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
-| [shaders/core/EnvIBLParametersHelper.sf](../../shaders/core/EnvIBLParametersHelper.sf) | 38 | 算法、渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
+| [shaders/core/EnvIBLParametersHelper.sf](../../shaders/core/EnvIBLParametersHelper.sf) | 52 | 算法、渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/GBufferCommon.sf](../../shaders/core/GBufferCommon.sf) | 61 | 接口/配置/基础辅助 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/GBufferParametersHelper.sf](../../shaders/core/GBufferParametersHelper.sf) | 65 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/GlobalDefine.sf](../../shaders/core/GlobalDefine.sf) | 10 | 接口/配置/基础辅助 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md) |
 | [shaders/core/GlobalDistanceFieldHelper.sf](../../shaders/core/GlobalDistanceFieldHelper.sf) | 170 | 内存、渲染 | [04-distance-fields-and-jump-flood](algorithm/04-distance-fields-and-jump-flood.md) |
-| [shaders/core/MaterialParametersHelper.sf](../../shaders/core/MaterialParametersHelper.sf) | 192 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) / [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
+| [shaders/core/MaterialParametersHelper.sf](../../shaders/core/MaterialParametersHelper.sf) | 190 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) / [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
 | [shaders/core/Sample.sf](../../shaders/core/Sample.sf) | 167 | 算法 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/SceneParametersHelper.sf](../../shaders/core/SceneParametersHelper.sf) | 191 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
-| [shaders/core/ShadingCommon.sf](../../shaders/core/ShadingCommon.sf) | 424 | 算法 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
+| [shaders/core/ShadingCommon.sf](../../shaders/core/ShadingCommon.sf) | 454 | 算法 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/ShadingContext.sf](../../shaders/core/ShadingContext.sf) | 34 | 接口/配置/基础辅助 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [shaders/core/ShadowParametersHelper.sf](../../shaders/core/ShadowParametersHelper.sf) | 276 | 渲染 | [06-shadow-mapping-and-cascades](algorithm/06-shadow-mapping-and-cascades.md) |
 | [shaders/editor/MeshViewer.sf](../../shaders/editor/MeshViewer.sf) | 61 | 算法、渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
@@ -177,7 +177,7 @@
 | [shaders/volume/AtmosphereTransmittance.sf](../../shaders/volume/AtmosphereTransmittance.sf) | 32 | 算法、渲染 | [Volume](algorithm/24-atmosphere-and-water.md) |
 | [shaders/volume/WaterDraw.sf](../../shaders/volume/WaterDraw.sf) | 172 | 算法、渲染 | [Volume](algorithm/24-atmosphere-and-water.md) |
 | [shaders/volume/WaterSurface.sf](../../shaders/volume/WaterSurface.sf) | 107 | 算法、渲染 | [Volume](algorithm/24-atmosphere-and-water.md) |
-| [shaders/core/ShadingModel.sf](../../shaders/core/ShadingModel.sf) | 20 | Rendering | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) |
+| [shaders/core/ShadingModel.sf](../../shaders/core/ShadingModel.sf) | 21 | Rendering | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) |
 
 ## src/Application（13 个文件）
 
@@ -328,8 +328,8 @@
 | [src/Framework/Engine/Private/Material.cpp](../../src/Framework/Engine/Private/Material.cpp) | 172 | 渲染 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Engine/Private/MaterialAsset.cpp](../../src/Framework/Engine/Private/MaterialAsset.cpp) | 148 | 接口/配置/基础辅助 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
 | [src/Framework/Engine/Private/MaterialCore.cpp](../../src/Framework/Engine/Private/MaterialCore.cpp) | 325 | 渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) / [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) |
-| [src/Framework/Engine/Private/MaterialParameter.cpp](../../src/Framework/Engine/Private/MaterialParameter.cpp) | 90 | 接口/配置/基础辅助 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
-| [src/Framework/Engine/Private/MaterialShaderParameter.cpp](../../src/Framework/Engine/Private/MaterialShaderParameter.cpp) | 60 | 渲染 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Framework/Engine/Private/MaterialParameter.cpp](../../src/Framework/Engine/Private/MaterialParameter.cpp) | 92 | 接口/配置/基础辅助 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Framework/Engine/Private/MaterialShaderParameter.cpp](../../src/Framework/Engine/Private/MaterialShaderParameter.cpp) | 65 | 渲染 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Engine/Private/PrimitiveComponent.cpp](../../src/Framework/Engine/Private/PrimitiveComponent.cpp) | 95 | 接口/配置/基础辅助 | [架构：engine](../architecture/engine.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Engine/Private/ProjectArchive.cpp](../../src/Framework/Engine/Private/ProjectArchive.cpp) | 645 | 并发、内存、算法、渲染 | [10-project-snapshots](performance/10-project-snapshots.md) / [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) |
 | [src/Framework/Engine/Private/PrimitiveSceneProxy.cpp](../../src/Framework/Engine/Private/PrimitiveSceneProxy.cpp) | 22 | 接口/配置/基础辅助 | [架构：engine](../architecture/engine.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
@@ -363,7 +363,7 @@
 | [src/Framework/Engine/PublicHeader/LocalVertexFactory.h](../../src/Framework/Engine/PublicHeader/LocalVertexFactory.h) | 91 | 渲染 | [08-mesh-import-and-geometry](algorithm/08-mesh-import-and-geometry.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Engine/PublicHeader/Material.h](../../src/Framework/Engine/PublicHeader/Material.h) | 148 | 接口/配置/基础辅助 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Engine/PublicHeader/MaterialAsset.h](../../src/Framework/Engine/PublicHeader/MaterialAsset.h) | 31 | 接口/配置/基础辅助 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
-| [src/Framework/Engine/PublicHeader/MaterialCore.h](../../src/Framework/Engine/PublicHeader/MaterialCore.h) | 400 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Framework/Engine/PublicHeader/MaterialCore.h](../../src/Framework/Engine/PublicHeader/MaterialCore.h) | 401 | 内存、渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Engine/PublicHeader/MaterialParameter.h](../../src/Framework/Engine/PublicHeader/MaterialParameter.h) | 102 | 渲染 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Engine/PublicHeader/MaterialShaderParameter.h](../../src/Framework/Engine/PublicHeader/MaterialShaderParameter.h) | 170 | 渲染 | [05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Engine/PublicHeader/PrimitiveComponent.h](../../src/Framework/Engine/PublicHeader/PrimitiveComponent.h) | 89 | 接口/配置/基础辅助 | [架构：engine](../architecture/engine.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
@@ -734,7 +734,7 @@
 | [src/Tests/ScreenProbeFilterTest.cpp](../../src/Tests/ScreenProbeFilterTest.cpp) | 262 | 测试、GPU 读回 | [GI 时空滤波](algorithm/20-gi-temporal-spatial-filter.md) |
 | [src/Tests/SurfaceCacheDirectLightingTest.cpp](../../src/Tests/SurfaceCacheDirectLightingTest.cpp) | 399 | 并发/内存/算法/渲染 | [16-surface-cache-material](algorithm/16-surface-cache-material.md) / [12-surface-cache-material](performance/12-surface-cache-material.md) |
 | [src/Tests/VolumeRenderTest.cpp](../../src/Tests/VolumeRenderTest.cpp) | 1191 | 测试、GPU 读回 | [Volume](algorithm/23-volume-rendering.md) / [天空大气与水面](algorithm/24-atmosphere-and-water.md) |
-| [src/Tests/MaterialShadingModelTest.cpp](../../src/Tests/MaterialShadingModelTest.cpp) | 304 | Rendering | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) |
+| [src/Tests/MaterialShadingModelTest.cpp](../../src/Tests/MaterialShadingModelTest.cpp) | 318 | Rendering | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) |
 
 ## 后续维护
 

@@ -2,7 +2,8 @@
 #define SHADINGMODEL_UNLIT 0
 #define SHADINGMODEL_LIT 1
 #define SHADINGMODEL_SUBSURFACE 2
-#define SHADINGMODEL_COUNT 3
+#define SHADINGMODEL_CLEAR_COAT 3
+#define SHADINGMODEL_COUNT 4
 
 uint DecodeShadingModel(float encoded)
 {

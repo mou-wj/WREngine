@@ -248,9 +248,39 @@ float3 EvaluatePBRLighting(
 
 
 
+float ClearCoatTransmission(float cosine, float strength)
+{
+    return 1.0 - strength * FresnelSchlick(saturate(cosine), 0.04.xxx).x;
+}
+
+float3 EvaluateClearCoat(MaterialData material, float3 normal, float3 view, float3 light, float3 base)
+{
+    float strength = material.ShadingModelData.r;
+    float nDotL = saturate(dot(normal, light));
+    float nDotV = saturate(dot(normal, view));
+    if (strength <= 0.0 || nDotL <= 0.0 || nDotV <= 0.0)
+    {
+        return base;
+    }
+
+    float roughness = max(material.ShadingModelData.g, 0.045);
+    float3 halfVector = normalize(view + light);
+    float fresnel = FresnelSchlick(saturate(dot(halfVector, view)), 0.04.xxx).x;
+    float specular = DistributionGGX(normal, halfVector, roughness) * GeometrySmith(normal, view, light, roughness) *
+        fresnel / max(4.0 * nDotL * nDotV, 1e-5);
+    float transmission = ClearCoatTransmission(nDotV, strength) * ClearCoatTransmission(nDotL, strength);
+    return base * transmission + (strength * specular * nDotL).xxx;
+}
+
 float3 EvaluateMaterialLighting(MaterialData material, float3 normal, float3 view, float3 light,
     float3 color, float intensity)
 {
+    if (material.ShadingModel == SHADINGMODEL_CLEAR_COAT)
+    {
+        float3 base = EvaluatePBRLighting(material, normal, view, light, 1.0.xxx, 1.0);
+        return EvaluateClearCoat(material, normal, view, light, base) * color * intensity;
+    }
+
     float3 base = EvaluatePBRLighting(material, normal, view, light, color, intensity);
     if (material.ShadingModel == SHADINGMODEL_SUBSURFACE && material.ShadingModelData.a > 0.0 &&
         any(material.ShadingModelData.rgb > 0.0) && dot(normal, view) > 0.0)

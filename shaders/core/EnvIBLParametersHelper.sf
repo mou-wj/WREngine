@@ -30,9 +30,23 @@ float3 CalculateIBLShading(MaterialData material, float3 normal, float3 mirrorDi
     }
     float3 diffuse = irradiance * material.BaseColor;
     diffuse *= (1.0 - GetIBLFresnel(material, nDotV)) * (1.0 - material.Metallic);
-    if (!bIncludeSpecular)
+    float3 lighting = diffuse;
+    if (bIncludeSpecular)
     {
-        return diffuse;
+        lighting += SampleIBLSpecular(mirrorDirection, material.Roughness) * GetIBLSpecularWeight(material, nDotV);
     }
-    return diffuse + SampleIBLSpecular(mirrorDirection, material.Roughness) * GetIBLSpecularWeight(material, nDotV);
+    if (material.ShadingModel == SHADINGMODEL_CLEAR_COAT && material.ShadingModelData.r > 0.0)
+    {
+        float strength = material.ShadingModelData.r;
+        float transmission = ClearCoatTransmission(nDotV, strength);
+        lighting *= transmission * transmission;
+        if (bIncludeSpecular)
+        {
+            MaterialData coat = material;
+            coat.Metallic = 0.0;
+            coat.Roughness = max(material.ShadingModelData.g, 0.045);
+            lighting += strength * SampleIBLSpecular(mirrorDirection, coat.Roughness) * GetIBLSpecularWeight(coat, nDotV);
+        }
+    }
+    return lighting;
 }

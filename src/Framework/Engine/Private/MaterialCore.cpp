@@ -9,7 +9,7 @@ namespace Engine {
 
     namespace
     {
-        constexpr const char* ShadingModelNames[] = {"Unlit", "Lit", "Subsurface"};
+        constexpr const char* ShadingModelNames[] = {"Unlit", "Lit", "Subsurface", "ClearCoat"};
         static_assert(std::size(ShadingModelNames) == static_cast<size_t>(EShadingModel::COUNT_MAX));
     }
 

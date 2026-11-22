@@ -18,7 +18,7 @@ namespace Editor
 
     namespace
     {
-        constexpr const char* ShadingModels[] = {"All models", "Unlit", "Default Lit", "Subsurface"};
+        constexpr const char* ShadingModels[] = {"All models", "Unlit", "Default Lit", "Subsurface", "Clear Coat"};
         static_assert(IM_ARRAYSIZE(ShadingModels) == 1 + int(Engine::EShadingModel::COUNT_MAX));
     }
 
