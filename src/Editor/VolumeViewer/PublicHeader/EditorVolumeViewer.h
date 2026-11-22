@@ -17,6 +17,8 @@ namespace Editor
         bool HitTest(float x, float y) const override;
 
     private:
+        void DrawOptions();
+
         std::unique_ptr<VolumeViewerPreview> m_Preview;
         SlateCore::WidgetGeometry m_WindowGeometry{};
         bool m_bOpen = false;

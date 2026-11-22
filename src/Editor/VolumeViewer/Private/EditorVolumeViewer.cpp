@@ -36,7 +36,6 @@ namespace Editor
         VolumeViewerPreview()
         {
             Settings.bSpatialReconstruction = true;
-            Settings.bJitter = true;
             Renderer::LocalVolume box;
             box.Position = {-0.8f, 0.8f, -0.6f};
             box.RotationDegrees = {0, 24, 0};
@@ -221,7 +220,7 @@ namespace Editor
             Settings.FroxelTileSize = 8;
             Settings.FroxelSliceCount = 32;
             Settings.bSpatialReconstruction = bOptimized;
-            Settings.bJitter = bOptimized;
+            Settings.bJitter = false;
             Settings.HistoryWeight = bOptimized ? 0.85f : 0.0f;
             if (!bOptimized)
             {
@@ -234,7 +233,7 @@ namespace Editor
         Core::Float3 LightIntensities{3, 20, 45};
         double CompletedFrameMilliseconds = 0;
         bool bMeasureCompletedFrame = false;
-        bool bAnimateDensity = true;
+        bool bAnimateDensity = false;
 
     private:
         Core::Float3 OrbitDirection() const
@@ -338,6 +337,141 @@ namespace Editor
             x < m_WindowGeometry.X + m_WindowGeometry.Width && y < m_WindowGeometry.Y + m_WindowGeometry.Height;
     }
 
+    void EditorVolumeViewer::DrawOptions()
+    {
+        ImGui::PushItemWidth(140.0f);
+        if (ImGui::Button("Reset camera"))
+        {
+            m_Preview->ResetCamera();
+        }
+        ImGui::TextDisabled("RMB orbit   MMB pan   Wheel zoom");
+        auto& settings = m_Preview->Settings;
+        ImGui::Checkbox("Enable volume", &settings.bEnabled);
+        const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels", "Direct lighting",
+            "Light visibility", "Local overlap", "Indirect lighting", "Density sources", "History weight"};
+        int mode = static_cast<int>(settings.View);
+        ImGui::SetNextItemWidth(170.0f);
+        if (ImGui::Combo("View", &mode, views, IM_ARRAYSIZE(views)))
+        {
+            settings.View = static_cast<Renderer::EVolumeView>(mode);
+        }
+        ImGui::SliderFloat("Global density", &settings.Medium.Density, 0.0f, 0.4f, "%.3f");
+        if (ImGui::CollapsingHeader("Quality and timing"))
+        {
+            if (ImGui::Button("Reference preset"))
+            {
+                m_Preview->SetQualityPreset(false);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Optimized preset"))
+            {
+                m_Preview->SetQualityPreset(true);
+            }
+            if (ImGui::Button("Measure completed frame"))
+            {
+                m_Preview->bMeasureCompletedFrame = true;
+            }
+            ImGui::Checkbox("Depth-aware reconstruction", &settings.bSpatialReconstruction);
+            ImGui::Checkbox("Froxel jitter", &settings.bJitter);
+            ImGui::SliderFloat("History weight", &settings.HistoryWeight, 0.0f, 0.95f, "%.2f");
+            int tileSize = int(settings.FroxelTileSize);
+            int slices = int(settings.FroxelSliceCount);
+            ImGui::SliderInt("Tile pixels", &tileSize, 4, 16);
+            ImGui::SliderInt("Depth slices", &slices, 16, 64);
+            settings.FroxelTileSize = uint32_t(tileSize);
+            settings.FroxelSliceCount = uint32_t(slices);
+            const auto& stats = m_Preview->Stats;
+            ImGui::Text("Froxels %u x %u x %u", stats.FroxelSize.X, stats.FroxelSize.Y, stats.FroxelSize.Z);
+            ImGui::Text("Primary rays %u x %u", stats.IntegrationSize.X, stats.IntegrationSize.Y);
+            constexpr double bytesPerMiB = 1024.0 * 1024.0;
+            ImGui::TextWrapped("Image payload %.1f MiB transient + %.1f MiB history",
+                stats.TransientBytes / bytesPerMiB, stats.HistoryBytes / bytesPerMiB);
+            ImGui::TextWrapped("Completed frame %.2f ms (CPU + queue wait)", m_Preview->CompletedFrameMilliseconds);
+        }
+        if (ImGui::CollapsingHeader("Medium"))
+        {
+            DrawMediumControls(settings.Medium);
+            ImGui::SliderFloat("Range", &settings.MaxDistance, 2.0f, 100.0f, "%.1f");
+        }
+        if (ImGui::CollapsingHeader("Lights"))
+        {
+            ImGui::Checkbox("Volume shadows", &settings.bShadows);
+            ImGui::Checkbox("Use sky environment", &settings.bUseSkyEnvironment);
+            ImGui::SliderFloat("Sky intensity", &settings.EnvironmentIntensity, 0.0f, 5.0f);
+            ImGui::CheckboxFlags("Directional contribution", &settings.LightMask, 1u);
+            ImGui::CheckboxFlags("Point contribution", &settings.LightMask, 2u);
+            ImGui::CheckboxFlags("Spot contribution", &settings.LightMask, 4u);
+            ImGui::SliderFloat("Directional intensity", &m_Preview->LightIntensities.X, 0.0f, 10.0f);
+            ImGui::SliderFloat("Point intensity", &m_Preview->LightIntensities.Y, 0.0f, 60.0f);
+            ImGui::SliderFloat("Spot intensity", &m_Preview->LightIntensities.Z, 0.0f, 100.0f);
+        }
+        if (ImGui::CollapsingHeader("Local volumes"))
+        {
+            ImGui::Checkbox("Animate density", &m_Preview->bAnimateDensity);
+            if (ImGui::Button("Add box"))
+            {
+                settings.LocalVolumes.emplace_back();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add sphere"))
+            {
+                settings.LocalVolumes.emplace_back().Shape = Renderer::EVolumeShape::Sphere;
+            }
+            for (size_t index = 0; index < settings.LocalVolumes.size(); ++index)
+            {
+                auto& local = settings.LocalVolumes[index];
+                ImGui::PushID(static_cast<int>(index));
+                const char* label = local.Shape == Renderer::EVolumeShape::Box ? "Box" : "Sphere";
+                const bool bExpanded = ImGui::TreeNode(label);
+                bool bRemove = false;
+                if (bExpanded)
+                {
+                    ImGui::DragFloat3("Position", &local.Position.X, 0.05f);
+                    ImGui::DragFloat3("Rotation (degrees)", &local.RotationDegrees.X, 1.0f);
+                    ImGui::DragFloat3("Half extents", &local.HalfExtent.X, 0.05f, 0.02f, 50.0f);
+                    ImGui::DragFloat("Density", &local.Medium.Density, 0.005f, 0.0f, 2.0f);
+                    auto& field = local.DensityField;
+                    int densityMode = static_cast<int>(field.Mode);
+                    const char* densityModes[] = {"Uniform", "Procedural noise", "3D texture"};
+                    if (ImGui::Combo("Density source", &densityMode, densityModes, IM_ARRAYSIZE(densityModes)))
+                    {
+                        field.Mode = static_cast<Renderer::EVolumeDensityMode>(densityMode);
+                    }
+                    if (field.Mode != Renderer::EVolumeDensityMode::Uniform)
+                    {
+                        ImGui::DragFloat3("Density offset", &field.Offset.X, 0.01f);
+                        ImGui::DragFloat3("Density velocity", &field.Velocity.X, 0.01f);
+                        ImGui::DragFloat("Density scale", &field.Scale, 0.01f, 0.0f, 4.0f);
+                        ImGui::DragFloat("Density bias", &field.Bias, 0.01f, -1.0f, 1.0f);
+                        ImGui::DragFloat("Density threshold", &field.Threshold, 0.01f, 0.0f, 1.0f);
+                        if (field.Mode == Renderer::EVolumeDensityMode::Noise)
+                        {
+                            ImGui::DragFloat("Noise frequency", &field.Frequency, 0.1f, 0.01f, 32.0f);
+                        }
+                    }
+                    DrawMediumControls(local.Medium);
+                    bRemove = ImGui::Button("Remove volume");
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+                if (bRemove)
+                {
+                    settings.LocalVolumes.erase(settings.LocalVolumes.begin() + index);
+                    break;
+                }
+            }
+        }
+        if (settings.View == Renderer::EVolumeView::Density || settings.View == Renderer::EVolumeView::Froxels ||
+            settings.View == Renderer::EVolumeView::LightVisibility || settings.View == Renderer::EVolumeView::LocalOverlap ||
+            settings.View == Renderer::EVolumeView::DensitySources)
+        {
+            int slice = settings.DebugSlice;
+            ImGui::SliderInt("Slice", &slice, 0, int(settings.FroxelSliceCount) - 1);
+            settings.DebugSlice = uint32_t(slice);
+        }
+        ImGui::PopItemWidth();
+    }
+
     void EditorVolumeViewer::Draw()
     {
         if (!m_bOpen)
@@ -345,149 +479,21 @@ namespace Editor
             return;
         }
         ImGui::SetNextWindowSize({1000, 650}, ImGuiCond_FirstUseEver);
-        m_bVisible = ImGui::Begin("Volume Viewer", &m_bOpen);
+        m_bVisible = ImGui::Begin("Volume Viewer", &m_bOpen, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         const auto position = ImGui::GetWindowPos();
         const auto windowSize = ImGui::GetWindowSize();
         m_WindowGeometry = {position.x, position.y, windowSize.x, windowSize.y};
         if (m_bOpen && m_bVisible)
         {
-            if (ImGui::Button("Reset camera"))
+            const float optionsWidth = std::min(342.0f, ImGui::GetContentRegionAvail().x * 0.38f);
+            if (ImGui::BeginChild("Volume options", {optionsWidth, 0}, ImGuiChildFlags_Borders,
+                ImGuiWindowFlags_AlwaysVerticalScrollbar | ImGuiWindowFlags_HorizontalScrollbar))
             {
-                m_Preview->ResetCamera();
+                DrawOptions();
             }
+            ImGui::EndChild();
             ImGui::SameLine();
-            ImGui::TextDisabled("Right drag: orbit   Middle drag: pan   Wheel: zoom");
-            auto& settings = m_Preview->Settings;
-            ImGui::Checkbox("Enable volume", &settings.bEnabled);
-            ImGui::SameLine();
-            const char* views[] = {"Composite", "Scattering", "Transmittance", "Density", "Froxels", "Direct lighting",
-                "Light visibility", "Local overlap", "Indirect lighting", "Density sources", "History weight"};
-            int mode = static_cast<int>(settings.View);
-            ImGui::SetNextItemWidth(170.0f);
-            if (ImGui::Combo("View", &mode, views, IM_ARRAYSIZE(views)))
-            {
-                settings.View = static_cast<Renderer::EVolumeView>(mode);
-            }
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(130.0f);
-            ImGui::SliderFloat("Density", &settings.Medium.Density, 0.0f, 0.4f, "%.3f");
-            if (ImGui::CollapsingHeader("Quality and timing"))
-            {
-                if (ImGui::Button("Reference preset"))
-                {
-                    m_Preview->SetQualityPreset(false);
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Optimized preset"))
-                {
-                    m_Preview->SetQualityPreset(true);
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Measure completed frame"))
-                {
-                    m_Preview->bMeasureCompletedFrame = true;
-                }
-                ImGui::Checkbox("Depth-aware reconstruction", &settings.bSpatialReconstruction);
-                ImGui::SameLine();
-                ImGui::Checkbox("Froxel jitter", &settings.bJitter);
-                ImGui::SliderFloat("History weight", &settings.HistoryWeight, 0.0f, 0.95f, "%.2f");
-                int tileSize = int(settings.FroxelTileSize);
-                int slices = int(settings.FroxelSliceCount);
-                ImGui::SliderInt("Tile pixels", &tileSize, 4, 16);
-                ImGui::SliderInt("Depth slices", &slices, 16, 64);
-                settings.FroxelTileSize = uint32_t(tileSize);
-                settings.FroxelSliceCount = uint32_t(slices);
-                const auto& stats = m_Preview->Stats;
-                ImGui::Text("Froxels %u x %u x %u | Primary rays %u x %u", stats.FroxelSize.X, stats.FroxelSize.Y,
-                    stats.FroxelSize.Z, stats.IntegrationSize.X, stats.IntegrationSize.Y);
-                constexpr double bytesPerMiB = 1024.0 * 1024.0;
-                ImGui::Text("Image payload %.1f MiB transient + %.1f MiB history",
-                    stats.TransientBytes / bytesPerMiB, stats.HistoryBytes / bytesPerMiB);
-                ImGui::TextDisabled("Completed frame %.2f ms (CPU + queue wait)", m_Preview->CompletedFrameMilliseconds);
-            }
-            if (ImGui::CollapsingHeader("Medium"))
-            {
-                DrawMediumControls(settings.Medium);
-                ImGui::SliderFloat("Range", &settings.MaxDistance, 2.0f, 100.0f, "%.1f");
-            }
-            if (ImGui::CollapsingHeader("Lights"))
-            {
-                ImGui::Checkbox("Volume shadows", &settings.bShadows);
-                ImGui::Checkbox("Use sky environment", &settings.bUseSkyEnvironment);
-                ImGui::SliderFloat("Sky intensity", &settings.EnvironmentIntensity, 0.0f, 5.0f);
-                ImGui::CheckboxFlags("Directional contribution", &settings.LightMask, 1u);
-                ImGui::SameLine();
-                ImGui::CheckboxFlags("Point contribution", &settings.LightMask, 2u);
-                ImGui::SameLine();
-                ImGui::CheckboxFlags("Spot contribution", &settings.LightMask, 4u);
-                ImGui::SliderFloat("Directional intensity", &m_Preview->LightIntensities.X, 0.0f, 10.0f);
-                ImGui::SliderFloat("Point intensity", &m_Preview->LightIntensities.Y, 0.0f, 60.0f);
-                ImGui::SliderFloat("Spot intensity", &m_Preview->LightIntensities.Z, 0.0f, 100.0f);
-            }
-            if (ImGui::CollapsingHeader("Local volumes"))
-            {
-                ImGui::Checkbox("Animate density", &m_Preview->bAnimateDensity);
-                if (ImGui::Button("Add box"))
-                {
-                    settings.LocalVolumes.emplace_back();
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Add sphere"))
-                {
-                    settings.LocalVolumes.emplace_back().Shape = Renderer::EVolumeShape::Sphere;
-                }
-                for (size_t index = 0; index < settings.LocalVolumes.size(); ++index)
-                {
-                    auto& local = settings.LocalVolumes[index];
-                    ImGui::PushID(static_cast<int>(index));
-                    const char* label = local.Shape == Renderer::EVolumeShape::Box ? "Box" : "Sphere";
-                    const bool bExpanded = ImGui::TreeNode(label);
-                    bool bRemove = false;
-                    if (bExpanded)
-                    {
-                        ImGui::DragFloat3("Position", &local.Position.X, 0.05f);
-                        ImGui::DragFloat3("Rotation (degrees)", &local.RotationDegrees.X, 1.0f);
-                        ImGui::DragFloat3("Half extents", &local.HalfExtent.X, 0.05f, 0.02f, 50.0f);
-                        ImGui::DragFloat("Density", &local.Medium.Density, 0.005f, 0.0f, 2.0f);
-                        auto& field = local.DensityField;
-                        int densityMode = static_cast<int>(field.Mode);
-                        const char* densityModes[] = {"Uniform", "Procedural noise", "3D texture"};
-                        if (ImGui::Combo("Density source", &densityMode, densityModes, IM_ARRAYSIZE(densityModes)))
-                        {
-                            field.Mode = static_cast<Renderer::EVolumeDensityMode>(densityMode);
-                        }
-                        if (field.Mode != Renderer::EVolumeDensityMode::Uniform)
-                        {
-                            ImGui::DragFloat3("Density offset", &field.Offset.X, 0.01f);
-                            ImGui::DragFloat3("Density velocity", &field.Velocity.X, 0.01f);
-                            ImGui::DragFloat("Density scale", &field.Scale, 0.01f, 0.0f, 4.0f);
-                            ImGui::DragFloat("Density bias", &field.Bias, 0.01f, -1.0f, 1.0f);
-                            ImGui::DragFloat("Density threshold", &field.Threshold, 0.01f, 0.0f, 1.0f);
-                            if (field.Mode == Renderer::EVolumeDensityMode::Noise)
-                            {
-                                ImGui::DragFloat("Noise frequency", &field.Frequency, 0.1f, 0.01f, 32.0f);
-                            }
-                        }
-                        DrawMediumControls(local.Medium);
-                        bRemove = ImGui::Button("Remove volume");
-                        ImGui::TreePop();
-                    }
-                    ImGui::PopID();
-                    if (bRemove)
-                    {
-                        settings.LocalVolumes.erase(settings.LocalVolumes.begin() + index);
-                        break;
-                    }
-                }
-            }
-            if (settings.View == Renderer::EVolumeView::Density || settings.View == Renderer::EVolumeView::Froxels ||
-                settings.View == Renderer::EVolumeView::LightVisibility || settings.View == Renderer::EVolumeView::LocalOverlap ||
-                settings.View == Renderer::EVolumeView::DensitySources)
-            {
-                int slice = settings.DebugSlice;
-                ImGui::SliderInt("Slice", &slice, 0, int(settings.FroxelSliceCount) - 1);
-                settings.DebugSlice = uint32_t(slice);
-            }
+
             const auto available = ImGui::GetContentRegionAvail();
             if (available.x >= 16.0f && available.y >= 16.0f)
             {

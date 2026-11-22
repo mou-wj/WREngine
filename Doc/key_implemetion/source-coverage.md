@@ -258,9 +258,9 @@
 | [src/Editor/VirtualGeometryViewer/Private/VirtualGeometryViewerModule.cpp](../../src/Editor/VirtualGeometryViewer/Private/VirtualGeometryViewerModule.cpp) | 15 | 接口/配置 | [架构：editor](../architecture/app/editor.md) |
 | [src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h](../../src/Editor/VirtualGeometryViewer/PublicHeader/EditorVirtualGeometryViewer.h) | 59 | 接口/内存 | [virtualgeometryviewer_spec](../specification/virtualgeometryviewer_spec.md) |
 | [src/Editor/VolumeViewer/CMakeLists.txt](../../src/Editor/VolumeViewer/CMakeLists.txt) | 9 | 渲染、接口 | [Volume](../specification/volumeviewer_spec.md) |
-| [src/Editor/VolumeViewer/Private/EditorVolumeViewer.cpp](../../src/Editor/VolumeViewer/Private/EditorVolumeViewer.cpp) | 506 | 渲染、接口 | [Volume](../specification/volumeviewer_spec.md) |
+| [src/Editor/VolumeViewer/Private/EditorVolumeViewer.cpp](../../src/Editor/VolumeViewer/Private/EditorVolumeViewer.cpp) | 512 | 渲染、接口 | [Volume](../specification/volumeviewer_spec.md) |
 | [src/Editor/VolumeViewer/Private/VolumeViewerModule.cpp](../../src/Editor/VolumeViewer/Private/VolumeViewerModule.cpp) | 17 | 渲染、接口 | [Volume](../specification/volumeviewer_spec.md) |
-| [src/Editor/VolumeViewer/PublicHeader/EditorVolumeViewer.h](../../src/Editor/VolumeViewer/PublicHeader/EditorVolumeViewer.h) | 25 | 渲染、接口 | [Volume](../specification/volumeviewer_spec.md) |
+| [src/Editor/VolumeViewer/PublicHeader/EditorVolumeViewer.h](../../src/Editor/VolumeViewer/PublicHeader/EditorVolumeViewer.h) | 27 | 渲染、接口 | [Volume](../specification/volumeviewer_spec.md) |
 
 ## src/Framework（1 个文件）
 

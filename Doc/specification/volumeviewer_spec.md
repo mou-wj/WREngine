@@ -2,7 +2,7 @@
 
 在编辑器的 View 栏选择 **Volume viewer**。窗口内置地面、球体、两个遮挡物以及平行光、点光和聚光，可以在未打开工程时使用。视图支持右键环绕、中键平移、滚轮缩放和 **Reset camera**。关闭窗口后可从 View 栏重新打开。同一应用的主视口和 GIViewer 各自拥有独立的渲染输入。
 
-预览场景使用 Engine 的基础网格和灯光组件。VolumeViewer 持有组件、资产引用、相机及颜色目标，经既有 RenderInterface 构建延迟渲染图。颜色目标随窗口内容区尺寸变化，按比例限制在 1280×720 以内。ImGui 在图形提交后采样这个纹理。关闭帧先停止提交预览图片，关闭或调整尺寸时才按纹理记录的最后访问 Fence 等待，再释放或替换目标。
+预览场景使用 Engine 的基础网格和灯光组件。VolumeViewer 持有组件、资产引用、相机及颜色目标，经既有 RenderInterface 构建延迟渲染图。左侧设置栏独立滚动，右侧预览使用窗口分配给它的空间，展开设置只改变左栏内容。颜色目标按右侧预览尺寸分配，按比例限制在 1280×720 以内。ImGui 在图形提交后采样这个纹理。关闭帧先停止提交预览图片，关闭或调整尺寸时才按纹理记录的最后访问 Fence 等待，再释放或替换目标。
 
 基础预览使用既有的 GBuffer、场景深度、表面光照和颜色 Pass。测试场景及参数由界面模块持有，介质参数的类型由 Renderer 的 Volume 目录定义。 [预览入口](../../src/Editor/VolumeViewer/Private/EditorVolumeViewer.cpp) · [介质参数](../../src/Framework/Renderer/Private/Volume/VolumeRendering.h)
 
@@ -16,19 +16,19 @@
 
 **Local volumes** 初始包含一个盒体和一个椭球，可新增、删除及编辑变换与介质。**Local overlap** 按覆盖数量着色，白线标记该切片中数量变化的边界。**Density** 显示局部与全局密度之和。 [覆盖与叠加规则](../key_implemetion/algorithm/23-volume-rendering.md#局部介质)
 
-初始盒体使用程序噪声，椭球使用内置 16³ 密度纹理。每个局部介质可通过 **Density source** 切换来源，编辑坐标偏移、速度、密度缩放和阈值。**Animate density** 可暂停或继续移动密度场。选择 **Density sources** 并移动 **Slice**，红、绿、蓝分别表示噪声、均匀介质和纹理的密度。多种源覆盖同一个 Froxel 时会混合显示。 [密度定义](../key_implemetion/algorithm/23-volume-rendering.md#非均匀密度)
+初始盒体使用程序噪声，椭球使用内置 16³ 密度纹理。每个局部介质可通过 **Density source** 切换来源，编辑坐标偏移、速度、密度缩放和阈值。密度场初始静止，勾选 **Animate density** 后按设置的速度移动。**Global density** 只控制全局介质。选择 **Density sources** 并移动 **Slice**，红、绿、蓝分别表示噪声、均匀介质和纹理的密度。多种源覆盖同一个 Froxel 时会混合显示。 [密度定义](../key_implemetion/algorithm/23-volume-rendering.md#非均匀密度)
 
 **Indirect lighting** 显示体积中的低频环境散射。可切换 **Use sky environment** 和 **Sky intensity**，天空输入来自预览场景的现有 IBL 环境。主场景需要显式将 `MakeVolumeDrawExtension` 注册到符合输入要求的 SceneView。 [合成约定](../key_implemetion/algorithm/23-volume-rendering.md#天空环境与合成位置)
 
 ### 画质与耗时对照
 
-**Quality and timing** 可独立设置 Tile 像素宽度、深度层数、稀疏重建、Froxel 抖动及最大历史权重。两个预设会恢复相同的相机、积分配置和密度动画时间，以便对比。**Reference preset** 使用逐像素积分。**Optimized preset** 使用稀疏积分、抖动和时域重投影。**History weight** 以灰度显示混合权重。黑色可表示重置、遮挡变化，或该像素回退到本帧精确积分。
+**Quality and timing** 可独立设置 Tile 像素宽度、深度层数、稀疏重建、Froxel 抖动及最大历史权重。两个预设会恢复相同的相机、积分配置和密度动画时间，并固定 Froxel 采样位置，以便对比。**Reference preset** 使用逐像素积分。**Optimized preset** 使用稀疏积分和时域重投影。需要观察逐帧采样效果时可勾选 **Froxel jitter**。**History weight** 以灰度显示混合权重。黑色可表示重置、遮挡变化，或该像素回退到本帧精确积分。
 
 面板列出 Froxel 维度、主积分射线网格及体积纹理逻辑容量。**Measure completed frame** 测量一次预览的 CPU 提交和队列等待，可能包含场景着色、同步及驱动开销。OpenGL 的队列完成点表示工作线程处理完成。Vulkan 的独立基准提供 GPU 时间戳采样。 [历史与重建实现](../key_implemetion/algorithm/23-volume-rendering.md#稀疏积分和深度感知重建)
 
 ## 验证范围
 
-隔离 Debug 构建验证了模块链接、Launcher 启动、首帧提交和 View 栏入口。Nsight 的系统防火墙提示遮挡编辑器，界面验证停在工具栏。以下像素测试另外验证了预览使用的实际渲染链路。Launcher 日志仍有已有的 Vulkan Shader 模块诊断。
+隔离 Debug 构建验证了模块链接、Launcher 启动及 VolumeViewer。展开画质和局部介质控件时，右侧边界和主积分尺寸保持一致。固定相机时，多次截图中的默认雾形和光斑位置一致。以下像素测试另外验证了预览使用的实际渲染链路。Launcher 日志仍有已有的 Vulkan Shader 模块诊断。
 
 `Tests.exe -test=VolumeRenderTest -rhi=<Vulkan|DirectX12|OpenGL>` 读回 2 和 10 世界单位深度的透射率分别约为 0.683861、0.138070，天空到 20 单位的透射率约为 0.018686。三个后端正常退出，并通过 RGB 消光、合成、清除密度和零消光自发光检查。
 
@@ -46,7 +46,7 @@
 
 ### 固定场景性能
 
-在 Debug 构建目录中运行 `Tests.exe -test=VolumeBenchmarkReference -rhi=Vulkan` 与 `Tests.exe -test=VolumeBenchmarkOptimized -rhi=Vulkan`。在名称末尾加 `1080p` 可以选择 1920×1080。两路径使用相同的相机、介质、遮挡区、Tile 大小和积分层数。预热 8 帧后取 72 帧均值，重复运行三次，下表取中位数。Vulkan 的图形和计算指向同一原生队列时，从整个体积图提交的前后采样硬件时间戳。跨度包含提交间的空闲，适合对照这两种完整路径。
+在 Debug 构建目录中运行 `Tests.exe -test=VolumeBenchmarkReference -rhi=Vulkan` 与 `Tests.exe -test=VolumeBenchmarkOptimized -rhi=Vulkan`。在名称末尾加 `1080p` 可以选择 1920×1080。两路径使用相同的相机、介质、遮挡区、Tile 大小和积分层数。独立优化基准启用 Froxel 抖动。预热 8 帧后取 72 帧均值，重复运行三次，下表取中位数。Vulkan 的图形和计算指向同一原生队列时，从整个体积图提交的前后采样硬件时间戳。跨度包含提交间的空闲，适合对照这两种完整路径。
 
 | 分辨率 | Vulkan 队列跨度（参考 → 优化） | 主积分射线（参考 → 优化） | 临时与历史纹理合计（参考 → 优化） |
 | --- | --- | --- | --- |
