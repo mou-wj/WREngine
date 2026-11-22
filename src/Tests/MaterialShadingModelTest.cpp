@@ -15,6 +15,10 @@
 #include "Shape.h"
 #include "StaticMeshAsset.h"
 #include "StaticMeshComponent.h"
+#include "TransparencyRender.h"
+#include "../Framework/Renderer/Private/Volume/AtmosphereRender.h"
+#include "../Framework/Renderer/Private/Volume/WaterRender.h"
+#include "../Framework/Renderer/Private/Volume/VolumeRendering.h"
 #include "TextureAsset.h"
 #include "Viewport.h"
 #include <algorithm>
@@ -48,7 +52,7 @@ namespace Test
                 desc.Height = Height;
                 desc.Format = ERHIFormat::R32G32B32A32_Float;
                 desc.Usage = ERHITextureCreateFlag::RenderTarget | ERHITextureCreateFlag::ShaderResource |
-                    ERHITextureCreateFlag::UAV | ERHITextureCreateFlag::TransferSrc;
+                    ERHITextureCreateFlag::UAV | ERHITextureCreateFlag::TransferSrc | ERHITextureCreateFlag::TransferDest;
                 return desc;
             }
 
@@ -93,9 +97,9 @@ namespace Test
             return MaterialAsset::Create("", GetShadingModelName(model), std::move(material));
         }
 
-        void SaveComparison(const Pixels& pixels)
+        void SaveComparison(const Pixels& pixels, const char* path = "MaterialShadingModels.ppm")
         {
-            std::ofstream file("MaterialShadingModels.ppm", std::ios::binary);
+            std::ofstream file(path, std::ios::binary);
             file << "P6\n" << Width << " " << Height << "\n255\n";
             for (const auto& pixel : pixels)
             {
@@ -109,10 +113,10 @@ namespace Test
         }
     }
 
-    class MaterialShadingModelTest final : public TestBase
+    class MaterialSceneTestBase : public TestBase
     {
     public:
-        ~MaterialShadingModelTest() override
+        ~MaterialSceneTestBase() override
         {
             if (m_bReady)
             {
@@ -142,6 +146,16 @@ namespace Test
             GRHIApi = nullptr;
         }
 
+    protected:
+        std::shared_ptr<Renderer::RenderModule> m_Renderer;
+
+    private:
+        bool m_bReady = false;
+    };
+
+    class MaterialShadingModelTest final : public MaterialSceneTestBase
+    {
+    public:
         void Run() override
         {
             MaterialTestTarget target;
@@ -377,10 +391,278 @@ namespace Test
             std::cout << "\nMATERIAL_SHADING_MODEL_TEST_OK visibleModels=" << count << std::endl;
         }
 
-    private:
-        std::shared_ptr<Renderer::RenderModule> m_Renderer;
-        bool m_bReady = false;
     };
 
     REGISTER_RENDER_TEST("MaterialShadingModelTest", MaterialShadingModelTest);
+
+    class MaterialTransparencyTest final : public MaterialSceneTestBase
+    {
+    public:
+        void Run() override
+        {
+            constexpr auto center = Height / 2 * Width + Width / 2;
+            const auto unlit = [](Core::Float3 color, EBlendMode mode, float opacity)
+            {
+                auto asset = MakeMaterial(EShadingModel::Unlit);
+                auto* material = asset->GetMaterial();
+                material->SetBlendMode(mode);
+                material->SetParameter("BaseColor", std::array<float, 4>{color.X, color.Y, color.Z, 1});
+                material->SetParameter("Opacity", opacity);
+                return asset;
+            };
+            const auto nearColor = unlit({1, 0, 0}, EBlendMode::Translucent, 0.5f);
+            const auto farColor = unlit({0, 0, 1}, EBlendMode::Translucent, 0.5f);
+            const auto background = unlit({0.2f, 0.4f, 0.6f}, EBlendMode::Opaque, 1);
+            const auto plane = StaticMeshAsset::CreateShape(EBasicMeshShape::Plane);
+            StaticMeshComponent farPlane, nearPlane, wall;
+            for (auto* component : {&farPlane, &nearPlane, &wall})
+            {
+                component->SetStaticMesh(plane->GetMesh());
+                component->SetWorldRotation({90.0f, 0, 0});
+            }
+            nearPlane.SetMaterial(0, nearColor->GetMaterial());
+            farPlane.SetMaterial(0, farColor->GetMaterial());
+            wall.SetMaterial(0, background->GetMaterial());
+            wall.SetWorldLocation({0, 0, -1});
+            wall.SetWorldScale({5, 5, 5});
+            nearPlane.SetWorldLocation({0, 0, 1});
+            farPlane.SetWorldLocation({0, 0, 0});
+
+            Camera camera;
+            camera.SetPosition({0, 0, 5});
+            camera.SetTarget({0, 0, 0});
+            camera.SetUp({0, 1, 0});
+            camera.SetPerspective(Core::DegToRad(39.0f), float(Width) / Height, 0.1f, 40);
+            SceneView view;
+            view.Viewport = {0, 0, Width, Height};
+            view.RenderTargetWidth = float(Width);
+            view.RenderTargetHeight = float(Height);
+            view.CameraWorldPos = camera.GetPosition();
+            view.CameraWorldDir = {0, 0, -1};
+            view.NearClip = camera.GetNearPlane();
+            view.FarClip = camera.GetFarPlane();
+            view.ViewMatrix = camera.GetViewMatrix();
+            view.ProjectionMatrix = camera.GetProjectionMatrix();
+            view.ViewProjectionMatrix = camera.GetViewProjectionMatrix();
+            view.InvViewProjectionMatrix = camera.GetInverseViewProjectionMatrix();
+            view.Flags = VF_EnableShadows;
+
+            MaterialTestTarget target;
+            std::unique_ptr<SceneInterface> scene(m_Renderer->AllocateScene());
+            scene->AddPrimitive(&wall);
+            const auto render = [&]()
+            {
+                scene->FlushPendingUpdates();
+                SceneViewFamily family;
+                family.Scene = scene.get();
+                family.RenderTarget = &target;
+                family.AddView(view);
+                family.BuildAllViews();
+                m_Renderer->BeginRender(&family);
+                Pixels pixels(Width * Height);
+                target.GetRenderTarget()->ReadData(pixels.data(), 0, 0);
+                return pixels;
+            };
+
+            const auto check = [](const Core::Float4& value, Core::Float3 expected, const char* label)
+            {
+                std::cout << label << " actual rgb=" << value.X << "," << value.Y << "," << value.Z << std::endl;
+                Require(std::abs(value.X - expected.X) < 0.008f && std::abs(value.Y - expected.Y) < 0.008f &&
+                    std::abs(value.Z - expected.Z) < 0.008f, label);
+            };
+
+            const auto baseline = render()[center];
+            // The existing deferred IBL path effectively doubles an Unlit surface's color.
+            check(baseline, {0.4f, 0.8f, 1.2f}, "Opaque background");
+            scene->AddPrimitive(&nearPlane);
+            scene->AddPrimitive(&farPlane);
+            const auto sorted = render()[center];
+            check(sorted, {0.60f, 0.20f, 0.55f}, "Sort independently of registration order");
+            Require(std::abs(sorted.W - baseline.W) < 0.001f, "Alpha blending modified scene alpha");
+            nearPlane.SetWorldLocation({0, 0, -0.5f});
+            check(render()[center], {0.35f, 0.20f, 0.80f}, "Moving mesh changes sort order");
+
+            nearPlane.SetWorldLocation({0, 0, 1});
+            nearColor->GetMaterial()->SetBlendMode(EBlendMode::Additive);
+            check(render()[center], {0.70f, 0.40f, 1.10f}, "Additive retains destination color");
+            nearPlane.SetWorldLocation({0, 0, -2});
+            farPlane.SetWorldLocation({0, 0, -3});
+            check(render()[center], {baseline.X, baseline.Y, baseline.Z}, "Opaque depth blocks both blends");
+
+            scene->RemovePrimitive(&farPlane);
+            nearPlane.SetWorldLocation({0, 0, 1});
+            nearColor->GetMaterial()->SetBlendMode(EBlendMode::Translucent);
+            auto* optics = nearPlane.GetOrCreateMaterialInstance(0);
+            optics->SetParameter("Opacity", 1.0f);
+            optics->SetParameter("Transmission", 1.0f);
+            optics->SetParameter("Thickness", 1.0f);
+            optics->SetParameter("IndexOfRefraction", 1.0f);
+            optics->SetParameter("Absorption", std::array<float, 4>{std::log(2.0f), 0, 0, 0});
+            check(render()[center], {0.20f, 0.80f, 1.20f}, "Beer-Lambert per channel");
+
+            optics->SetParameter("IndexOfRefraction", 1.6f);
+            nearPlane.SetWorldRotation({78.0f, 0.0f, 0.0f});
+            auto& settings = scene->GetSceneSetting();
+            settings.TransparencyView = ETransparencyView::Refraction;
+            const auto displaced = render()[center];
+            optics->SetParameter("RefractionStrength", 0.0f);
+            const auto centered = render()[center];
+            Require(displaced.Y > 0.02f && centered.Y < 0.001f, "Refraction strength did not change projected screen displacement");
+            settings.TransparencyView = ETransparencyView::SortOrder;
+            Require(render()[center].X > 0.9f, "Sort order debug view did not display the nearest draw");
+            settings.TransparencyView = ETransparencyView::Classification;
+            Require(render()[center].Z > 0.9f, "Classification debug view did not identify Alpha");
+            settings.TransparencyView = ETransparencyView::Composite;
+
+            const auto stripeColor = unlit({0.9f, 0.14f, 0.18f}, EBlendMode::Opaque, 1);
+            StaticMeshComponent stripe;
+            stripe.SetStaticMesh(plane->GetMesh());
+            stripe.SetWorldRotation({90.0f, 0, 0});
+            stripe.SetWorldLocation({0.5f, 0, -0.5f});
+            stripe.SetWorldScale({0.5f, 1, 2});
+            stripe.SetMaterial(0, stripeColor->GetMaterial());
+            scene->AddPrimitive(&stripe);
+            nearPlane.SetWorldRotation({90.0f, 0, 0});
+            optics->SetParameter("IndexOfRefraction", 1.0f);
+            optics->SetParameter("Absorption", std::array<float, 4>{0, 0, 0, 0});
+            optics->SetParameter("RefractionStrength", 1.0f);
+            optics->SetParameter("Roughness", 0.0f);
+            const auto sharp = render();
+            optics->SetParameter("Roughness", 1.0f);
+            const auto blurred = render();
+            Require(CenterDifference(sharp, blurred) > 0.05f, "Roughness did not filter the transmitted edge");
+            optics->SetParameter("Roughness", 0.0f);
+            optics->SetParameter("IndexOfRefraction", 2.5f);
+            nearPlane.SetWorldRotation({90.0f, 35.0f, 0.0f});
+            optics->SetParameter("Thickness", 24.0f);
+            optics->SetParameter("RefractionStrength", 0.0f);
+            const auto unshifted = render();
+            optics->SetParameter("RefractionStrength", 1.0f);
+            settings.TransparencyView = ETransparencyView::Refraction;
+            const auto edgeDisplacement = render();
+            Require(edgeDisplacement[center].X > 0.7f, "Offscreen refraction fixture needs a large displacement");
+            settings.TransparencyView = ETransparencyView::Composite;
+            const auto borderFallback = render();
+            check(borderFallback[center], {unshifted[center].X, unshifted[center].Y, unshifted[center].Z},
+                "Offscreen refraction falls back to the unshifted pixel");
+            scene->RemovePrimitive(&stripe);
+            nearPlane.SetWorldRotation({78.0f, 0.0f, 0.0f});
+            optics->SetParameter("Thickness", 1.0f);
+
+            auto depthDesc = RHITextureDesc{};
+            depthDesc.Width = Width;
+            depthDesc.Height = Height;
+            depthDesc.Format = ERHIFormat::R32G32B32A32_Float;
+            depthDesc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest;
+            RenderTexture occluderDepth(depthDesc);
+            occluderDepth.InitRHIResource();
+            const Pixels nearDepth(Width * Height, {0.25f, 0, 0, 0});
+            occluderDepth.UploadData(nearDepth.data(), 0, 0);
+            view.Flags |= VF_ExternalTransparencyPass;
+            view.DrawExtensions.push_back({[&](RenderGraphBuilder& graph, const SceneView& currentView,
+                RenderGraphTextureRef color, RenderGraphTextureRef depth)
+            {
+                auto effective = graph.RegisterExternalTexture("Test.EffectiveDepth", &occluderDepth);
+                Renderer::AddTransparencyPasses(graph, *scene, currentView, color, depth, effective);
+            }});
+            check(render()[center], {baseline.X, baseline.Y, baseline.Z}, "Effective water depth blocks farther geometry");
+            view.DrawExtensions.clear();
+
+            // Run the same ordering as Volume Viewer with actual water, aerial perspective and froxel passes.
+            view.DrawExtensions.push_back({[&](RenderGraphBuilder& graph, const SceneView& currentView,
+                RenderGraphTextureRef color, RenderGraphTextureRef depth)
+            {
+                Renderer::AtmosphereRenderSettings atmosphere{};
+                atmosphere.bEnabled = true;
+                Renderer::WaterRenderSettings water{};
+                water.bEnabled = true;
+                water.Position.Y = -0.4f;
+                Renderer::VolumeRenderSettings volume{};
+                volume.View = Renderer::EVolumeView::Composite;
+                const auto light = Renderer::PrepareAtmosphere(graph, atmosphere, scene.get());
+                const auto effective = Renderer::AddWaterPass(graph, currentView, color, depth, water, light, scene.get());
+                Renderer::AddAtmospherePass(graph, currentView, color, effective, atmosphere, light);
+                Renderer::AddTransparencyPasses(graph, *scene, currentView, color, depth, effective);
+                Renderer::AddVolumePasses(graph, currentView, effective, color, volume, scene.get());
+            }});
+            const auto integrated = render();
+            Require(std::isfinite(integrated[center].X) && integrated[center].X > 0, "Water/atmosphere/volume composition is invalid");
+            SaveComparison(integrated, "MaterialTransparency.ppm");
+            view.DrawExtensions.clear();
+            view.Flags &= ~VF_ExternalTransparencyPass;
+
+            const auto plastic = MakeMaterial(EShadingModel::Lit);
+            plastic->GetMaterial()->SetBlendMode(EBlendMode::Translucent);
+            plastic->GetMaterial()->SetParameter("Opacity", 0.85f);
+            nearPlane.SetMaterial(0, plastic->GetMaterial());
+            nearPlane.SetWorldRotation({90.0f, 0.0f, 0.0f});
+            DirectionalLightComponent directional;
+            directional.SetDirection({0.8f, -0.3f, -0.5f});
+            directional.SetIntensity(3);
+            PointLightComponent point;
+            point.SetWorldLocation({-2, 1, 3});
+            point.SetIntensity(8);
+            point.SetAttenuationRadius(9);
+            SpotLightComponent spot;
+            spot.SetWorldLocation({2, 1, 3});
+            spot.SetDirection({-2, -1, -2});
+            spot.SetIntensity(10);
+            spot.SetAttenuationRadius(9);
+            SkyLightComponent sky;
+            auto& environments = EnvironmentLightResourceManager::Get();
+            RHITextureDesc environmentDesc{};
+            environmentDesc.Width = 4;
+            environmentDesc.Height = 2;
+            environmentDesc.Format = ERHIFormat::R8G8B8A8_UNorm;
+            environmentDesc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest;
+            auto environment = std::make_shared<RenderTexture>(environmentDesc);
+            environment->InitRHIResource();
+            std::array<std::array<uint8_t, 4>, 8> skyPixels;
+            skyPixels.fill({156, 124, 100, 255});
+            environment->UploadData(skyPixels.data(), 0, 0);
+            const auto skyAsset = TextureAsset::Create("TransparencyTestSky", environment);
+            environments.ApplyEnvironment(sky, environments.Build(skyAsset));
+            const std::array<LightComponent*, 4> lights{&directional, &point, &spot, &sky};
+            for (auto* light : lights)
+            {
+                light->SetEnabled(false);
+                light->SetCastShadow(false);
+                scene->AddLight(light);
+            }
+            const auto dark = render();
+            for (auto* light : lights)
+            {
+                light->SetEnabled(true);
+                const float difference = CenterDifference(dark, render());
+                std::cout << "Transparent light " << int(light->GetLightType()) << " effect=" << difference << std::endl;
+                Require(difference > 0.01f, "Transparent PBR surface did not respond to a scene light");
+                light->SetEnabled(false);
+            }
+
+            const auto caster = StaticMeshAsset::CreateShape(EBasicMeshShape::Cube);
+            StaticMeshComponent occluder;
+            occluder.SetStaticMesh(caster->GetMesh());
+            occluder.SetWorldLocation({-1.44f, 0.54f, 1.9f});
+            occluder.SetWorldScale({0.58f, 0.58f, 0.58f});
+            occluder.SetMaterial(0, background->GetMaterial());
+            scene->AddPrimitive(&occluder);
+            directional.SetEnabled(true);
+            const auto unshadowed = render();
+            directional.SetCastShadow(true);
+            Require(CenterDifference(unshadowed, render()) > 0.01f, "Transparent surface did not receive the opaque shadow");
+            scene->RemovePrimitive(&occluder);
+            for (auto* light : lights)
+            {
+                scene->RemoveLight(light);
+            }
+            scene->RemovePrimitive(&wall);
+            scene->RemovePrimitive(&nearPlane);
+            scene->FlushPendingUpdates();
+            environments.ApplyEnvironment(sky, {});
+            environments.ReleaseUnused();
+            std::cout << "MATERIAL_TRANSPARENCY_TEST_OK" << std::endl;
+        }
+    };
+
+    REGISTER_RENDER_TEST("MaterialTransparencyTest", MaterialTransparencyTest);
 }

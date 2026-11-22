@@ -1,4 +1,5 @@
 #include "EditorScenePanel.h"
+#include "SceneInterface.h"
 #include "EditorScene.h"
 #include "StaticMeshComponent.h"
 #include "imgui.h"
@@ -147,6 +148,17 @@ namespace Editor
                     ImGui::EndGroup();
                     ImGui::SameLine(0, 24);
                     ImGui::BeginGroup();
+                    if (auto* scene = m_Scene.GetSceneInterface())
+                    {
+                        const char* views[] = {"Composite", "Classification", "Sort order", "Refraction"};
+                        auto& setting = scene->GetSceneSetting().TransparencyView;
+                        int selected = static_cast<int>(setting);
+                        ImGui::SetNextItemWidth(135);
+                        if (ImGui::Combo("Transparency", &selected, views, IM_ARRAYSIZE(views)))
+                        {
+                            setting = static_cast<Engine::ETransparencyView>(selected);
+                        }
+                    }
                     ImGui::TextDisabled("Viewport controls");
                     ImGui::TextUnformatted("Left click: select / clear | Light diamond: select light\n"
                         "Right drag: orbit | Middle drag: pan\nWheel: zoom");

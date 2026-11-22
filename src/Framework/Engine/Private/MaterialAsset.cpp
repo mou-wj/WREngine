@@ -35,10 +35,7 @@ bool MaterialAsset::Load()
         if (data.value("version", 1) != 1) throw std::runtime_error("Unsupported material schema version");
         auto material = std::make_unique<Material>();
         const auto blend = data.value("blendMode", std::string("Opaque"));
-        if (blend == "Opaque") material->SetBlendMode(EBlendMode::Opaque);
-        else if (blend == "Masked") material->SetBlendMode(EBlendMode::Masked);
-        else if (blend == "Translucent") material->SetBlendMode(EBlendMode::Translucent);
-        else throw std::runtime_error("Unknown blendMode: " + blend);
+        material->SetBlendMode(ParseBlendMode(blend));
         const auto shading = data.value("shadingModel", std::string("Unlit"));
         material->SetShadingModel(ParseShadingModel(shading));
 
@@ -100,12 +97,7 @@ bool MaterialAsset::SaveToFile(const std::string& path) const
         nlohmann::json data;
         data["version"] = 1;
         data["name"] = m_Name;
-        switch (m_MaterialPtr->GetBlendMode())
-        {
-        case EBlendMode::Opaque: data["blendMode"] = "Opaque"; break;
-        case EBlendMode::Masked: data["blendMode"] = "Masked"; break;
-        case EBlendMode::Translucent: data["blendMode"] = "Translucent"; break;
-        }
+        data["blendMode"] = GetBlendModeName(m_MaterialPtr->GetBlendMode());
         data["shadingModel"] = GetShadingModelName(m_MaterialPtr->GetShadingModel());
         data["staticParameters"]["twoSided"] = m_MaterialPtr->IsTwoSided();
         switch (m_MaterialPtr->GetCullMode())

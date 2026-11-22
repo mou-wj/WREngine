@@ -12,6 +12,7 @@
 #include "Shape.h"
 #include "StaticMeshAsset.h"
 #include "StaticMeshComponent.h"
+#include "TransparencyRender.h"
 #include "Viewport.h"
 #include "imgui.h"
 #include <algorithm>
@@ -187,7 +188,7 @@ namespace Editor
                 m_DensityTime += ImGui::GetIO().DeltaTime;
             }
             view.FrameTimeSeconds = m_DensityTime;
-            view.Flags = Engine::VF_EnableShadows;
+            view.Flags = Engine::VF_EnableShadows | Engine::VF_ExternalTransparencyPass;
             auto frameSettings = Settings;
             for (auto& local : frameSettings.LocalVolumes)
             {
@@ -210,6 +211,7 @@ namespace Editor
                 RenderCore::RenderGraphBuilder& graph, const Engine::SceneView& sceneView, RenderCore::RenderGraphTextureRef color,
                 RenderCore::RenderGraphTextureRef depth)
             {
+                const auto opaqueDepth = depth;
                 if (atmosphere.bEnabled || water.bEnabled)
                 {
                     const auto lighting = Renderer::PrepareAtmosphere(graph, atmosphere, m_Scene.get());
@@ -232,6 +234,7 @@ namespace Editor
                         return;
                     }
                 }
+                Renderer::AddTransparencyPasses(graph, *m_Scene, sceneView, color, opaqueDepth, depth);
                 Renderer::AddVolumePasses(graph, sceneView, depth, color, volume, m_Scene.get(), &m_History, &Stats);
             }});
             Engine::SceneViewFamily family;

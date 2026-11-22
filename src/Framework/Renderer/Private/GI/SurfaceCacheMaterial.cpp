@@ -259,6 +259,11 @@ namespace Renderer
                 const auto* material = component->GetMaterial(slot);
                 instance.Materials.push_back(material ? material->GetRenderProxyShared() : nullptr);
             }
+            if (std::all_of(instance.Materials.begin(), instance.Materials.end(), [](const auto& material)
+                { return material && IsTransparentBlend(material->GetBlendMode()); }))
+            {
+                return;
+            }
             result.push_back(std::move(instance));
         });
         return result;
@@ -291,6 +296,10 @@ namespace Renderer
             {
                 const uint32_t slot = section.MaterialIndex < 0 ? 0 : uint32_t(section.MaterialIndex);
                 Require(slot < instance.Materials.size() && instance.Materials[slot], "missing section material");
+                if (IsTransparentBlend(instance.Materials[slot]->GetBlendMode()))
+                {
+                    continue;
+                }
                 instance.Materials[slot]->ValidateSurfacePass();
                 const auto* normalParameter = instance.Materials[slot]->GetParameter("Normal", EMaterialParameterType::Texture);
                 const auto normalTexture = std::get<std::shared_ptr<TextureAsset>>(normalParameter->GetValueVariant());
@@ -467,6 +476,10 @@ namespace Renderer
             for (const auto section : lod.Sections)
             {
                 auto material = instance.Materials[section.MaterialIndex < 0 ? 0 : section.MaterialIndex];
+                if (IsTransparentBlend(material->GetBlendMode()))
+                {
+                    continue;
+                }
                 MeshMaterialShaderKey key;
                 key.VF = &LocalVertexFactory::StaticType;
                 key.VertexFactoryFlags = lod.VertexFactory->GetVertexFactoryFlags();

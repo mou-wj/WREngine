@@ -35,6 +35,14 @@ DrawExtensions 是视图拥有的值容器，SceneViewFamily::AddView 的复制�
 
 2026-10-28 已通过真实 Renderer 的 Vulkan 扩展回调/纹理读回检查，默认 Launcher 亦已启动。只读深度附件仍触发既有 Vulkan RenderPass 布局不一致，DirectX12/OpenGL 的 Renderer 启动未完成；具体检查与限制见 [验证记录](../../dev/bugfix/故障与修复记录-2026-10-28.md)。这些结果不代表三后端全部通过。
 
+## 半透明快照与附件
+
+`AddTransparencyPasses` 在当前构图线程收集区段，读取场景设置并解析不可变材质代理。绘制闭包复制区段、PSO 与 Shader 引用，材质代理由区段值保存，网格缓冲区仍由现有静态网格资源拥有。每个透明图元只在当前图使用，关闭视图时没有跨帧快照待清理。无透明区段时不创建资源或 Pass。 [Pass 实现](../../../src/Framework/Renderer/Private/TransparencyRender.cpp)
+
+仅当存在透射区段或指定了水面有效深度时，`Transparency.SnapshotBackground` 读取最终背景颜色和对应深度的 SRV，写一张 RGBA32F 瞬态纹理。每像素 16 字节，1920×1080 约 31.6 MiB。RGB 是线性背景，A 是原始窗口深度。后续透明 Pass 读取此快照、加载并写回场景 RGB。快照读写和颜色附件均在参数元数据里声明，RDG 负责在 Compute 与 Graphics 提交之间插入资源转换及 Fence，并按首次使用和最后使用分配、回收快照。没有额外的 CPU 等待。
+
+深度附件沿现有 Load_Store RenderPass 的附件布局绑定。PSO 禁用深度写入，原深度内容继续供后续 Pass 使用。水面有效深度不兼作深度附件，通过快照判断是否遮挡。每个区段建立一条渲染图 Pass，排序后按同一颜色附件读写形成依赖。此实现的额外提交成本与可见透明区段数成正比。 [排序与混合](../algorithm/25-transparency-rendering.md)
+
 ## Execute 的真实顺序
 
 ```mermaid

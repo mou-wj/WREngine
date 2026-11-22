@@ -15,36 +15,20 @@ namespace Renderer {
         out.LightParameters.PointLightCount = sceneLightResourceInfo.PointLightCount;
         out.LightParameters.SpotLightCount = sceneLightResourceInfo.SpotLightCount;
         out.LightParameters.DirectionalLightCount = sceneLightResourceInfo.DirectionalLightCount;
-        if (sceneLightResourceInfo.PointLightBuffer) {
-            auto rdgB = builder.RegisterExternalBuffer(
-                "PointLights",
-                sceneLightResourceInfo.PointLightBuffer.get());
-            RenderCore::RenderGraphBufferSRVDesc srvDesc;
-            srvDesc.NumElements = 1;
-            srvDesc.Stride = sceneLightResourceInfo.PointLightBuffer->GetRHI()->GetDesc().Size;
-            srvDesc.Buffer = rdgB;
-            out.LightParameters.PointLights = builder.CreateBufferSRV("PointLightsSRV", srvDesc);
-        }
-        if (sceneLightResourceInfo.SpotLightBuffer) {
-            auto rdgB = builder.RegisterExternalBuffer(
-                "SpotLights",
-                sceneLightResourceInfo.SpotLightBuffer.get());
-            RenderCore::RenderGraphBufferSRVDesc srvDesc;
-            srvDesc.NumElements = 1;
-            srvDesc.Stride = sceneLightResourceInfo.SpotLightBuffer->GetRHI()->GetDesc().Size;
-            srvDesc.Buffer = rdgB;
-            out.LightParameters.SpotLights = builder.CreateBufferSRV("SpotLightsSRV", srvDesc);
-        }
-        if (sceneLightResourceInfo.DirectionalLightBuffer) {
-            auto rdgB = builder.RegisterExternalBuffer(
-                "DirectionalLights",
-                sceneLightResourceInfo.DirectionalLightBuffer.get());
-            RenderCore::RenderGraphBufferSRVDesc srvDesc;
-            srvDesc.NumElements = 1;
-            srvDesc.Stride = sceneLightResourceInfo.DirectionalLightBuffer->GetRHI()->GetDesc().Size;
-            srvDesc.Buffer = rdgB;
-            out.LightParameters.DirectionalLights = builder.CreateBufferSRV("DirectionalLightsSRV", srvDesc);
-        }
+        // A light count of zero prevents reads, but APIs still require the descriptor to be bound.
+        const auto bindLights = [&](const char* name, const RenderCore::RenderBufferSP& buffer)
+        {
+            auto* source = buffer ? buffer.get() : RenderCore::GlobalEmptyBuffer.get();
+            auto rdg = builder.RegisterExternalBuffer(name, source);
+            RenderCore::RenderGraphBufferSRVDesc srv{};
+            srv.NumElements = 1;
+            srv.Stride = source->GetRHI()->GetDesc().Size;
+            srv.Buffer = rdg;
+            return builder.CreateBufferSRV(std::string(name) + "SRV", srv);
+        };
+        out.LightParameters.PointLights = bindLights("PointLights", sceneLightResourceInfo.PointLightBuffer);
+        out.LightParameters.SpotLights = bindLights("SpotLights", sceneLightResourceInfo.SpotLightBuffer);
+        out.LightParameters.DirectionalLights = bindLights("DirectionalLights", sceneLightResourceInfo.DirectionalLightBuffer);
         out.LightParameters.LinearClampSampler = RenderCore::GlobalSampler.get();
         //填充阴影参数
         out.LightShadowParameters.NearestSampler = RenderCore::GlobalNearestSampler.get();

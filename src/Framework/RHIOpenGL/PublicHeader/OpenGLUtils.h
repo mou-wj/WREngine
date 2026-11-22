@@ -5,6 +5,11 @@
 
 namespace RHIOpenGL
 {
+    inline GLenum GetDestinationColorBlendFactor(RHI::ERHIColorBlendMode mode)
+    {
+        return mode == RHI::ERHIColorBlendMode::Additive ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA;
+    }
+
     GLbitfield ConvertRHIAccessToGLBarrier(RHI::ERHIResourceAccess access);
     [[noreturn]] void ThrowRayTracingUnsupported();
     GLenum ConvertRHICompareOpToGL(RHI::ERHICompareOp op);

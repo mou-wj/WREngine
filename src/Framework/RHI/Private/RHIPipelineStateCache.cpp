@@ -187,14 +187,18 @@ size_t RHIPipelineStateCache::HashRasterizerState(const RHIRasterizerStateDesc& 
 }
 
 size_t RHIPipelineStateCache::HashColorBlendState(const RHIColorBlendStateDesc& desc) {
-    size_t hash = std::hash<bool>()(desc.bLogicOpEnable);
-    hash ^= std::hash<int>()(static_cast<int>(desc.Attachments.size()));
-    for (const auto& attachment : desc.Attachments) {
-        hash ^= std::hash<bool>()(attachment.bBlendEnable);
-        hash ^= std::hash<uint32_t>()(attachment.ColorWriteMask);
+    size_t hash = 0;
+    HashCombine(hash, desc.bLogicOpEnable);
+    HashCombine(hash, desc.Attachments.size());
+    for (const auto& attachment : desc.Attachments)
+    {
+        HashCombine(hash, attachment.bBlendEnable);
+        HashCombine(hash, attachment.ColorWriteMask);
+        HashCombine(hash, static_cast<uint8_t>(attachment.BlendMode));
     }
-    for (int i = 0; i < 4; ++i) {
-        hash ^= std::hash<float>()(desc.BlendConstants[i]);
+    for (float value : desc.BlendConstants)
+    {
+        HashCombine(hash, value);
     }
     return hash;
 }

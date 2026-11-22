@@ -308,7 +308,7 @@ namespace RHIDirectX12
                 rtDesc.BlendEnable = attachment.bBlendEnable ? TRUE : FALSE;
                 rtDesc.LogicOpEnable = FALSE;
                 rtDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-                rtDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+                rtDesc.DestBlend = GetDestinationColorBlendFactor(attachment.BlendMode);
                 rtDesc.BlendOp = D3D12_BLEND_OP_ADD;
                 rtDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
                 rtDesc.DestBlendAlpha = D3D12_BLEND_ZERO;

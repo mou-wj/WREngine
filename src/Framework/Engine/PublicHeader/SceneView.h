@@ -52,7 +52,8 @@ namespace Engine {
     enum ViewFlags : uint32_t {
         VF_None = 0,
         VF_EnableShadows = 1 << 0,
-        VF_EnablePostFX = 1 << 1
+        VF_EnablePostFX = 1 << 1,
+        VF_ExternalTransparencyPass = 1 << 2
     };
 
     /*

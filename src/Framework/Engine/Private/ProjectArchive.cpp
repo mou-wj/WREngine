@@ -337,7 +337,7 @@ namespace Engine
                 if (const auto found = m_MaterialIds.find(asset.get()); found != m_MaterialIds.end()) return found->second;
                 const auto* material = asset->GetMaterial(); Require(material, "unloaded material");
                 const uint64_t id = m_MaterialIds.size() + 1; m_MaterialIds.emplace(asset.get(), id);
-                const char* blend = material->GetBlendMode()==EBlendMode::Opaque ? "Opaque" : material->GetBlendMode()==EBlendMode::Masked ? "Masked" : "Translucent";
+                const char* blend = GetBlendModeName(material->GetBlendMode());
                 const char* cull = material->GetCullMode()==RHI::ERHICullMode::None ? "None" : material->GetCullMode()==RHI::ERHICullMode::Front ? "Front" : "Back";
                 Data["materials"].push_back({{"id",id}, {"name",asset->GetName()}, {"blend",blend}, {"cull",cull}, {"twoSided",material->IsTwoSided()},
                     {"shading",GetShadingModelName(material->GetShadingModel())}, {"parameters",Parameters(*material)}});
@@ -529,7 +529,7 @@ namespace Engine
             auto material=std::make_unique<Material>(); const auto blend=record.at("blend").get<std::string>(), shading=record.at("shading").get<std::string>(), cull=record.at("cull").get<std::string>();
             Require(blend=="Opaque" || blend=="Masked" || blend=="Translucent","unknown blend mode");
             Require(cull=="None" || cull=="Front" || cull=="Back","unknown cull mode");
-            material->SetBlendMode(blend=="Opaque" ? EBlendMode::Opaque : blend=="Masked" ? EBlendMode::Masked : EBlendMode::Translucent);
+            material->SetBlendMode(ParseBlendMode(blend));
             material->SetShadingModel(ParseShadingModel(shading));
             material->SetCullMode(cull=="None" ? RHI::ERHICullMode::None : cull=="Front" ? RHI::ERHICullMode::Front : RHI::ERHICullMode::Back);
             material->SetTwoSided(record.at("twoSided").get<bool>()); RestoreParameters(*material,record.at("parameters"),textures);

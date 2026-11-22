@@ -139,7 +139,7 @@ SceneRenderer
 
 [RenderModule::BeginRender](../../../src/Framework/Renderer/Private/RenderModule.cpp) 开始时复制场景的 SceneSetting，在 `sceneRenderer->Build(builder)` 之后遍历 `views->GetViews()`，先按设置加入目标光源 Hint，再遍历每个视图的 `DrawExtensions`；全部视图扩展构图后，最后为各视图加入网格。非空 `Callback` 接收当前 Builder、当前 SceneView、`SceneTextures.SceneColor` 和 `SceneTextures.SceneDepth`。调用顺序为视图顺序、列表顺序；GPU 执行顺序仍由 Pass 声明的资源依赖决定。光源提示在变换工具等上层叠加之前，网格在这些扩展之后；颜色/深度附件声明建立实际依赖，不能仅凭 lambda 调用顺序假定 GPU 顺序。
 
-这是当前场景主体结束后的固定扩展点，扩展与场景使用同一个 Builder，并在统一的 `builder.Execute()` 前完成构图。扩展可通过公开的 RenderCore 接口声明参数、申请图内资源和添加 Pass。叠加颜色通常使用 Load_Store，深度是否测试、写入须与具体绘制及访问声明一致；回调本身不会自动声明附件访问。不增加额外队列提交、Present 或等待。
+这是当前场景主体结束后的固定扩展点。Forward Transparency 默认位于不透明光照和天空之后、视图叠加之前。VolumeViewer 按视图标记跳过默认调用，再用现有场景扩展选择水面与大气之后的透明顺序。扩展与场景使用同一个 Builder，并在统一的 `builder.Execute()` 前完成构图。扩展可通过公开的 RenderCore 接口声明参数、申请图内资源和添加 Pass。叠加颜色通常使用 Load_Store，深度是否测试、写入须与具体绘制及访问声明一致；回调本身不会自动声明附件访问。不增加额外队列提交、Present 或等待。 [半透明数据流](../../specification/renderer_spec.md#半透明绘制)
 
 接口与列表定义在 Engine 的 [SceneView.h](../../../src/Framework/Engine/PublicHeader/SceneView.h)，具体工具的回调由上层填入。当前没有多个渲染阶段的 hook，也没有颜色替换返回值；将来添加后处理时需明确叠加点与颜色处理的先后。生命周期与注册示例见 [RDG 核心实现](../../key_implemetion/performance/03-rdg-execution-and-state.md)。
 

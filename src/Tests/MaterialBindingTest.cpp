@@ -105,7 +105,7 @@ public:
             const auto model = static_cast<EShadingModel>(id);
             material.SetShadingModel(model);
             auto resource = material.GetResource();
-            for (const char* name : { "StaticMeshMaterialShaderVS", "StaticMeshMaterialShaderPS", "StaticMeshMaterialGBufferShaderPS" })
+            for (const char* name : { "StaticMeshMaterialShaderVS", "StaticMeshMaterialShaderPS", "StaticMeshMaterialGBufferShaderPS", "TransparencyMaterialPS" })
             {
                 auto type = shaderTypes.find(name);
                 if (type == shaderTypes.end()) throw std::runtime_error(std::string("Missing material shader: ")+name);

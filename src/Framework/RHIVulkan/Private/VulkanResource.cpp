@@ -1392,7 +1392,7 @@ VulkanColorBlendState::VulkanColorBlendState(VulkanDevice* device, const RHIColo
         attachmentState.colorWriteMask = attachmentDesc.ColorWriteMask; // TODO: Support other write masks
         // RHI currently exposes alpha blending as a switch, matching the other backends.
         attachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        attachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        attachmentState.dstColorBlendFactor = GetDestinationColorBlendFactor(attachmentDesc.BlendMode);
         attachmentState.colorBlendOp = VK_BLEND_OP_ADD;
         attachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
         attachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;

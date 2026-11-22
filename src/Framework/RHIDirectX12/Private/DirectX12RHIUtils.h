@@ -9,6 +9,11 @@
 
 namespace RHIDirectX12
 {
+    inline D3D12_BLEND GetDestinationColorBlendFactor(RHI::ERHIColorBlendMode mode)
+    {
+        return mode == RHI::ERHIColorBlendMode::Additive ? D3D12_BLEND_ONE : D3D12_BLEND_INV_SRC_ALPHA;
+    }
+
     std::vector<uint32_t> TextureViewSubresources(const RHI::RHITextureDesc& desc, uint32_t mip, uint32_t mipCount,
                                                   uint32_t slice, uint32_t sliceCount);
     inline void CheckDX12(HRESULT result, const char* operation)

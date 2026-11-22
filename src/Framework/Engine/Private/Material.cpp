@@ -65,7 +65,7 @@ Material::Material()
 }
 void Material::SetBlendMode(EBlendMode mode)
 {
-    if (mode != EBlendMode::Opaque && mode != EBlendMode::Masked && mode != EBlendMode::Translucent)
+    if (mode != EBlendMode::Opaque && mode != EBlendMode::Masked && !IsTransparentBlend(mode))
         throw std::invalid_argument("Invalid material blend mode");
     if (m_RenderState.BlendMode == mode) return;
     m_RenderState.BlendMode = mode;

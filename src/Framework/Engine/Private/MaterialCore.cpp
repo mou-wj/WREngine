@@ -13,6 +13,28 @@ namespace Engine {
         static_assert(std::size(ShadingModelNames) == static_cast<size_t>(EShadingModel::COUNT_MAX));
     }
 
+    namespace
+    {
+        constexpr const char* BlendModeNames[] = {"Opaque", "Masked", "Translucent", "Additive"};
+    }
+
+    const char* GetBlendModeName(EBlendMode mode)
+    {
+        return BlendModeNames[static_cast<uint8_t>(mode)];
+    }
+
+    EBlendMode ParseBlendMode(std::string_view name)
+    {
+        for (size_t i = 0; i < std::size(BlendModeNames); ++i)
+        {
+            if (name == BlendModeNames[i])
+            {
+                return static_cast<EBlendMode>(i);
+            }
+        }
+        throw std::invalid_argument("Unknown blend mode: " + std::string(name));
+    }
+
     const char* GetShadingModelName(EShadingModel model)
     {
         const auto index = static_cast<size_t>(model);

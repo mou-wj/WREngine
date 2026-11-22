@@ -13,7 +13,8 @@ namespace Engine {
     enum class EBlendMode : uint8_t {
         Opaque,
         Masked,
-        Translucent
+        Translucent,
+        Additive
     };
 
     enum class EShadingModel : uint8_t {
@@ -25,6 +26,13 @@ namespace Engine {
         Cloth = 5,
         COUNT_MAX
     };
+
+    ENGINE_API const char* GetBlendModeName(EBlendMode mode);
+    ENGINE_API EBlendMode ParseBlendMode(std::string_view name);
+    inline bool IsTransparentBlend(EBlendMode mode)
+    {
+        return mode == EBlendMode::Translucent || mode == EBlendMode::Additive;
+    }
 
     ENGINE_API const char* GetShadingModelName(EShadingModel model);
     ENGINE_API EShadingModel ParseShadingModel(std::string_view name);

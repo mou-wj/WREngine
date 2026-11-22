@@ -399,11 +399,13 @@ enum class ERHIShaderFrequency
     };
 
 
+    enum class ERHIColorBlendMode : uint8_t { Alpha, Additive };
+
     struct RHI_API RHIColorBlendAttachmentDesc
     {
         bool bBlendEnable = false;
         uint32_t ColorWriteMask = 0xF; // RGBA
-        // 可扩展BlendFactor/BlendOp等
+        ERHIColorBlendMode BlendMode = ERHIColorBlendMode::Alpha;
     };
 
     struct RHI_API RHIColorBlendStateDesc

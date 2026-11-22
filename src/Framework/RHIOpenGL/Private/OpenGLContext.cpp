@@ -252,7 +252,7 @@ namespace RHIOpenGL
             {
                 glEnablei(GL_BLEND,i);
                 glBlendEquationSeparatei(i,GL_FUNC_ADD,GL_FUNC_ADD);
-                glBlendFuncSeparatei(i,GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA,GL_ONE,GL_ZERO);
+                glBlendFuncSeparatei(i, GL_SRC_ALPHA, GetDestinationColorBlendFactor(attachment->BlendMode), GL_ONE, GL_ZERO);
             }
             else glDisablei(GL_BLEND,i);
             const uint32_t mask=attachment ? attachment->ColorWriteMask : 0xF;

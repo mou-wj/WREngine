@@ -91,7 +91,7 @@ Renderer 通过快照读取 BlendMode、ShadingModel、剔除配置和参数，�
 
 TextureMask 与 MaterialParametersHelper.sf 一致：BaseColor=bit0、Opacity=bit1、Normal=bit2、ORM=bit3、Emissive=bit4。Forward / Deferred 不再强制 Lit，Unlit 使用材质的 BaseColor 与 Emissive 输入。
 
-Opaque 支持 Unlit、Default Lit、Subsurface、Clear Coat、Anisotropic 和 Cloth。材质与工程保存保留原来的 `Lit` 名称。扩展模型通过独立 GBuffer 附件交给既有的延迟光照与 IBL Pass。Masked / Translucent 可被加载和保存，前向和延迟 Surface Pass 在构建时通过 ValidateSurfacePass 拒绝未实现的模式。延迟渲染尚无独立 Emissive GBuffer 通道。 [GBuffer 编码与算法](../key_implemetion/algorithm/05-pbr-ibl-and-sampling.md#运行时取值与-gbuffer)
+Opaque 支持 Unlit、Default Lit、Subsurface、Clear Coat、Anisotropic 和 Cloth。材质与工程保存保留原来的 `Lit` 名称。扩展模型通过独立 GBuffer 附件交给既有的延迟光照与 IBL Pass。Translucent 和 Additive 按材质混合状态进入独立 Forward Transparency Pass，材质实例继承模式并可覆盖透明参数。Masked 保留加载和保存支持，依赖 Opaque 的消费者继续通过 ValidateSurfacePass 验证输入。延迟渲染尚无独立 Emissive GBuffer 通道。 [GBuffer 编码与算法](../key_implemetion/algorithm/05-pbr-ibl-and-sampling.md#运行时取值与-gbuffer) · [透明材质设置](../specification/renderer_spec.md#半透明绘制)
 
 ## 7. 保存与后续编辑器
 

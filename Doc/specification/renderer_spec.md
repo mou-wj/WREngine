@@ -18,6 +18,18 @@ Vulkan Debug 用 +0.85、−0.85 和 0.0 对比相同材质实例。三类直接
 
 六模型对照按 Unlit、Default Lit、Subsurface、Clear Coat、Anisotropic、Cloth 排列。Cloth 在三类直射光与 IBL 下均随绒面颜色和强度变化。五种受光模型均通过 Vulkan 中同场遮挡体的方向光阴影测试及法线贴图对照。材质契约、Virtual Geometry 材质解析、Surface Cache 直接光照及体积合成回归成功退出。OpenGL 与 DirectX12 的验证范围为相关 Shader 编译。
 
+## 半透明绘制
+
+MaterialEditor 可在母材质上选择 **Opaque**、**Translucent** 或 **Additive**。节点的材质实例继承 Blend Mode，可独立覆盖 Opacity、Transmission、IndexOfRefraction、Thickness、Absorption 和 RefractionStrength。制作玻璃时使用 Translucent、较高 Transmission、较低 Roughness 与约 1.5 的 IOR；Opacity 控制像素表面覆盖率，Transmission 控制已覆盖区域内有多少能量进入材质透射。Thickness 为场景单位，Absorption 的 RGB 是每单位长度的线性吸收系数。Additive 使用 Opacity 缩放额外发光或表面光照。
+
+主视图的 **Transparency** 选择器提供 Composite、Classification、Sort order 和 Refraction。分类视图以蓝色表示 Alpha、橙色表示 Additive。顺序视图以蓝到红表示从早到晚提交的顺序。折射视图用红、绿通道显示两个屏幕轴的偏移量，蓝通道显示 Transmission。
+
+默认顺序为不透明延迟光照和天空 → 可选折射快照 → 有序透明绘制 → 编辑器叠加。VolumeViewer 在水面与大气之后调用透明 Pass，提供水面有效深度，再沿用现有体积合成。体积积分终点继续使用不透明或水面深度；透明表面没有单独积分。实时透明表面使用三类场景光、已有阴影和 IBL。GIViewer 的 Surface Cache 跳过透明区段，透明表面从前向光照获得环境间接项。
+
+Masked 保留资产与工程序列化能力。当前透明功能覆盖 Alpha 与 Additive；像素级 Masked 深度与阴影是独立的后续能力。投影近似、复杂层叠及缓存限制见 [排序与折射](../key_implemetion/algorithm/25-transparency-rendering.md)。
+
+`MaterialTransparencyTest` 在 Vulkan Debug 下读回线性场景颜色，检验相反注册顺序、变更深度后的排序、Additive、保留场景 Alpha、不透明及水面深度遮挡、Beer–Lambert、折射偏移、粗糙边缘和屏幕外回退。测试也分别启用平行光、点光、聚光和环境光，对照接收阴影，再用实际水面、大气和 Froxel Pass 验证合成。Vulkan、OpenGL、DirectX12 通过透明材质 Shader 编译。OpenGL 的全场景测试止于已有深度金字塔扩展与全局缓冲布局错误，DirectX12 在首次场景颜色读回前以访问异常退出。 [验证入口](../../src/Tests/MaterialShadingModelTest.cpp)
+
 ## Virtual Geometry 场景绘制入口
 
 ### 入口与职责

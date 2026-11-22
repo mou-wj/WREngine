@@ -31,4 +31,6 @@ struct MaterialData
     float3 NormalTS;
     uint ShadingModel;
     float4 ShadingModelData;
+    float Transmission;
+    float IndexOfRefraction;
 };

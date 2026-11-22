@@ -4,6 +4,11 @@
 #include <vulkan/vulkan.h>
 using namespace RHI;
 namespace RHIVulkan {
+    inline VkBlendFactor GetDestinationColorBlendFactor(RHI::ERHIColorBlendMode mode)
+    {
+        return mode == RHI::ERHIColorBlendMode::Additive ? VK_BLEND_FACTOR_ONE : VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    }
+
 
     VkFormat TransformFormatFrom(ERHIFormat format);
 

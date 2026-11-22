@@ -3,7 +3,7 @@
 
 float3 GetIBLFresnel(MaterialData material, float nDotV)
 {
-    float3 f0 = lerp(0.04.xxx, material.BaseColor, material.Metallic);
+    float3 f0 = lerp(GetSurfaceDielectricF0(material).xxx, material.BaseColor, material.Metallic);
     return FresnelSchlickRoughness(nDotV, f0, material.Roughness);
 }
 
@@ -45,7 +45,7 @@ float3 CalculateIBLShading(MaterialData material, float3 normal, float3 mirrorDi
         irradiance = lerp(irradiance, opposite, material.ShadingModelData.rgb * material.ShadingModelData.a * 0.45);
     }
     float3 diffuse = irradiance * material.BaseColor;
-    diffuse *= (1.0 - GetIBLFresnel(material, nDotV)) * (1.0 - material.Metallic);
+    diffuse *= (1.0 - GetIBLFresnel(material, nDotV)) * (1.0 - material.Metallic) * (1.0 - material.Transmission);
     float3 lighting = diffuse;
     if (bIncludeSpecular)
     {
@@ -62,6 +62,7 @@ float3 CalculateIBLShading(MaterialData material, float3 normal, float3 mirrorDi
         {
             MaterialData coat = material;
             coat.Metallic = 0.0;
+            coat.IndexOfRefraction = 0.0;
             coat.Roughness = max(material.ShadingModelData.g, 0.045);
             lighting += strength * SampleIBLSpecular(mirrorDirection, coat.Roughness) * GetIBLSpecularWeight(coat, nDotV);
         }

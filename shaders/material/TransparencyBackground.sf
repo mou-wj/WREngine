@@ -1,0 +1,12 @@
+#include "/Generated/ShaderParameters/TransparencyBackgroundParameters.sf"
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    if (any(thread.xy >= TransparencyTargetSize))
+    {
+        return;
+    }
+    int3 coord = int3(thread.xy, 0);
+    TransparencyBackgroundOutput[thread.xy] = float4(TransparencySourceColor.Load(coord).rgb, TransparencySourceDepth.Load(coord).r);
+}

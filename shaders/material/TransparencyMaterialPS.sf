@@ -1,0 +1,126 @@
+#include "/core/ShadingModel.sf"
+#include "/core/ShadingContext.sf"
+#if MATERIAL_SHADING_MODEL != SHADINGMODEL_UNLIT
+#include "/core/SceneParametersHelper.sf"
+#include "/core/EnvIBLParametersHelper.sf"
+#else
+#include "/core/ShadingCommon.sf"
+#endif
+#include "/Generated/VertexFactory.sf"
+#include "/core/MaterialParametersHelper.sf"
+#include "/Generated/ShaderParameters/TransparencyPixelParameters.sf"
+
+float3 ReadRefractionTap(float2 pixel, float surfaceDepth, float3 fallback)
+{
+    float2 viewMin = TransparencyViewport.xy;
+    float2 viewMax = viewMin + TransparencyViewport.zw;
+    if (any(pixel < viewMin) || any(pixel >= viewMax))
+    {
+        return fallback;
+    }
+
+    float4 sampled = TransparencyBackground.Load(int3(int2(pixel), 0));
+    return sampled.a + 1e-5 >= surfaceDepth ? sampled.rgb : fallback;
+}
+
+float3 SampleRefraction(ShadingContext context, MaterialData material, float3 normal, float3 view, float3 pixel,
+    out float2 displacement)
+{
+    float ior = material.IndexOfRefraction;
+    float3 transmitted = refract(-view, normal, rcp(ior));
+    float distanceInMedium = TransparencyOptics.z / max(0.1, abs(dot(normal, transmitted)));
+    // Approximate a single slab by projecting the offset from its unrefracted exit point.
+    float3 displaced = context.WorldPosition + (transmitted + view) * (distanceInMedium * TransparencyOptics.w);
+    float4 clip = mul(ViewProjection, float4(displaced, 1.0));
+    float2 exitPixel = pixel.xy;
+    if (clip.w > 1e-5)
+    {
+        float2 uv = (clip.xy / clip.w) * float2(0.5, -0.5) + 0.5;
+        exitPixel = TransparencyViewport.xy + uv * TransparencyViewport.zw;
+    }
+    displacement = (exitPixel - pixel.xy) * TransparencyPixelSize;
+
+    float3 centerColor = TransparencyBackground.Load(int3(int2(pixel.xy), 0)).rgb;
+    float2 spread = float2(1.0, 1.0) * (3.0 * material.Roughness * material.Roughness * TransparencyOptics.w);
+    float3 background = 0.25 * (ReadRefractionTap(exitPixel + float2(spread.x, spread.y), pixel.z, centerColor) +
+        ReadRefractionTap(exitPixel + float2(spread.x, -spread.y), pixel.z, centerColor) +
+        ReadRefractionTap(exitPixel + float2(-spread.x, spread.y), pixel.z, centerColor) +
+        ReadRefractionTap(exitPixel - spread, pixel.z, centerColor));
+    float3 absorption = exp(-TransparencyAbsorption * distanceInMedium);
+    return background * absorption;
+}
+
+float4 MainPS(VertexFactoryVSToPS input, float4 screenPosition : SV_Position) : SV_Target0
+{
+    float3 pixel = screenPosition.xyz;
+    if (TransparencyUseEffectiveDepth != 0)
+    {
+        float depth = TransparencyBackground.Load(int3(int2(pixel.xy), 0)).a;
+        if (pixel.z > depth)
+        {
+            return 0.0; // Zero coverage leaves the scene color and depth intact.
+        }
+    }
+
+    if (TransparencyDebugView == 1)
+    {
+        return TransparencySortRank < 0.0 ? float4(1.0, 0.45, 0.05, 1.0) : float4(0.1, 0.65, 1.0, 1.0);
+    }
+    if (TransparencyDebugView == 2)
+    {
+        float nearOrder = abs(TransparencySortRank);
+        return float4(nearOrder, 0.15, 1.0 - nearOrder, 1.0);
+    }
+
+    ShadingContext context;
+    VertexFactoryFillShadingContext(input, context);
+    MaterialData material = BuildMaterialData(context.UV0);
+    material.Transmission = TransparencyOptics.y;
+    material.IndexOfRefraction = TransparencyOptics.x;
+    float3 normal = HasMaterialTexture(MATERIAL_TEXTURE_NORMAL) ?
+        normalize(mul(material.NormalTS, context.TangentToWorld)) : normalize(context.WorldNormal);
+    float3 view = normalize(context.ViewDirection);
+    // The material's layer is thin. A two-sided back face uses the incident side's orientation.
+    normal *= dot(normal, view) < 0.0 ? -1.0 : 1.0;
+    float nDotV = saturate(dot(normal, view));
+    material.NormalTS = normal;
+#if MATERIAL_SHADING_MODEL == SHADINGMODEL_ANISOTROPIC
+    SetAnisotropicShadingFrame(material, context, normal);
+#endif
+
+    float3 color = 0.0;
+    float3 transmissionWeight = 1.0 - material.Metallic;
+    if (TransparencyDebugView == 0)
+    {
+#if MATERIAL_SHADING_MODEL == SHADINGMODEL_UNLIT
+        color = material.BaseColor * (1.0 - material.Transmission) + material.EmissiveColor;
+#else
+        color = EvaluateSceneLighting(context, material) +
+            CalculateIBLShading(material, normal, reflect(-view, normal), nDotV, true);
+        float fresnel = material.IndexOfRefraction == 1.0 ?
+            0.0 : FresnelSchlick(nDotV, GetSurfaceDielectricF0(material).xxx).x;
+        transmissionWeight *= 1.0 - fresnel;
+        if (material.ShadingModel == SHADINGMODEL_CLEAR_COAT)
+        {
+            float transmission = ClearCoatTransmission(nDotV, material.ShadingModelData.r);
+            transmissionWeight *= transmission * transmission;
+        }
+        if (material.ShadingModel == SHADINGMODEL_CLOTH)
+        {
+            transmissionWeight *= 1.0 - material.ShadingModelData.rgb * ClothSheenWeight(nDotV);
+        }
+#endif
+    }
+
+    float2 displacement = 0.0;
+    if (material.Transmission > 0.0 && material.Metallic < 1.0)
+    {
+        float3 filtered = SampleRefraction(context, material, normal, view, pixel, displacement);
+        color += filtered * (material.Transmission * transmissionWeight);
+    }
+    if (TransparencyDebugView == 3)
+    {
+        return float4(saturate(abs(displacement) * 16.0), saturate(material.Transmission), 1.0);
+    }
+    return float4(color, saturate(material.Opacity));
+}

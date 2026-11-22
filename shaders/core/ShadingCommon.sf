@@ -165,6 +165,17 @@ float3 FresnelSchlickRoughness(
 // BRDF
 // ============================================================================
 
+float GetSurfaceDielectricF0(MaterialData material)
+{
+    if (material.IndexOfRefraction < 1.0)
+    {
+        return 0.04;
+    }
+
+    float ratio = (material.IndexOfRefraction - 1.0) / (material.IndexOfRefraction + 1.0);
+    return ratio * ratio * saturate(material.Specular) * 2.0;
+}
+
 float3 EvaluatePBRLighting(
     MaterialData Material,
     float3 N,
@@ -193,7 +204,7 @@ float3 EvaluatePBRLighting(
     // Base reflectivity
     float3 F0 =
         lerp(
-            0.04.xxx,
+            GetSurfaceDielectricF0(Material).xxx,
             Material.BaseColor,
             Material.Metallic);
 
@@ -231,7 +242,7 @@ float3 EvaluatePBRLighting(
     // Diffuse
     float3 KD =
         (1.0 - F) *
-        (1.0 - Material.Metallic);
+        (1.0 - Material.Metallic) * (1.0 - Material.Transmission);
 
     float3 Diffuse =
         KD * LambertDiffuse(Material.BaseColor);
@@ -305,9 +316,9 @@ float3 EvaluateAnisotropicLighting(MaterialData material, float3 normal, float3 
     float viewLength = AnisotropicProjectedLength(view, normal, tangent, bitangent, alpha);
     float lightLength = AnisotropicProjectedLength(light, normal, tangent, bitangent, alpha);
     float visibility = 0.5 / max(nDotL * viewLength + nDotV * lightLength, 1e-5);
-    float3 reflectivity = lerp(0.04.xxx, material.BaseColor, material.Metallic);
+    float3 reflectivity = lerp(GetSurfaceDielectricF0(material).xxx, material.BaseColor, material.Metallic);
     float3 fresnel = FresnelSchlick(saturate(dot(halfVector, view)), reflectivity);
-    float3 diffuse = (1.0 - fresnel) * (1.0 - material.Metallic) * LambertDiffuse(material.BaseColor);
+    float3 diffuse = (1.0 - fresnel) * (1.0 - material.Metallic) * (1.0 - material.Transmission) * LambertDiffuse(material.BaseColor);
     return (diffuse + distribution * visibility * fresnel) * nDotL;
 }
 
@@ -367,8 +378,8 @@ float3 EvaluateMaterialLighting(MaterialData material, float3 normal, float3 vie
         // Normalized wrap redistributes diffuse energy towards the terminator.
         float wrapped = saturate((nDotL + radius) / (1.0 + radius)) / (1.0 + radius);
         float3 halfVector = (view + light) * rsqrt(max(dot(view + light, view + light), 1e-8));
-        float3 f0 = lerp(0.04.xxx, material.BaseColor, material.Metallic);
-        float3 diffuseWeight = (1.0 - FresnelSchlick(saturate(dot(halfVector, view)), f0)) * (1.0 - material.Metallic);
+        float3 f0 = lerp(GetSurfaceDielectricF0(material).xxx, material.BaseColor, material.Metallic);
+        float3 diffuseWeight = (1.0 - FresnelSchlick(saturate(dot(halfVector, view)), f0)) * (1.0 - material.Metallic) * (1.0 - material.Transmission);
         float3 redistribution = material.ShadingModelData.rgb * (wrapped - saturate(nDotL));
         base += diffuseWeight * LambertDiffuse(material.BaseColor) * redistribution * color * intensity;
     }

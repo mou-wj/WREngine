@@ -182,8 +182,11 @@ namespace Editor
     {
         auto* component = m_Callbacks.GetSelectedComponent ? m_Callbacks.GetSelectedComponent() : nullptr;
         if (!component || !m_SelectedMaterial) { m_Status = "Select a mesh and a library material first."; return false; }
-        if (m_SelectedMaterial->GetMaterial()->GetBlendMode() != Engine::EBlendMode::Opaque)
-        { m_Status = "This renderer currently supports Opaque materials only."; return false; }
+        if (m_SelectedMaterial->GetMaterial()->GetBlendMode() == Engine::EBlendMode::Masked)
+        {
+            m_Status = "Masked is stored by the material system. Select a supported blend mode to assign it.";
+            return false;
+        }
         try
         {
             m_Slot = std::clamp(m_Slot, 0, std::max(0, static_cast<int>(component->GetNumMaterials()) - 1));
@@ -324,6 +327,23 @@ namespace Editor
                 base->SetCullMode(cull == 0 ? RHI::ERHICullMode::None : cull == 1 ? RHI::ERHICullMode::Front : RHI::ERHICullMode::Back);
                 NotifyChanged(true);
             }
+            if (ImGui::BeginCombo("Blend mode", Engine::GetBlendModeName(base->GetBlendMode())))
+            {
+                for (const auto blend : {Engine::EBlendMode::Opaque, Engine::EBlendMode::Translucent, Engine::EBlendMode::Additive})
+                {
+                    const bool selected = base->GetBlendMode() == blend;
+                    if (ImGui::Selectable(Engine::GetBlendModeName(blend), selected))
+                    {
+                        base->SetBlendMode(blend);
+                        NotifyChanged(true);
+                    }
+                    if (selected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
             int model = static_cast<int>(base->GetShadingModel());
             if (Controls::Choice("Shading model", model, ShadingModels + 1, IM_ARRAYSIZE(ShadingModels) - 1))
             { base->SetShadingModel(static_cast<Engine::EShadingModel>(model)); NotifyChanged(true); }
@@ -335,6 +355,7 @@ namespace Editor
         if (!m_bEditAsset)
         {
             ImGui::Text("Shading model: %s", ShadingModels[1 + int(model)]);
+            ImGui::Text("Blend mode: %s", Engine::GetBlendModeName(proxy->GetBlendMode()));
         }
         std::vector<std::string> groups;
         for (const auto& definition : definitions)
@@ -345,6 +366,10 @@ namespace Editor
             }
         for (const auto& group : groups)
         {
+            if (group == "Transparency" && proxy->GetBlendMode() != Engine::EBlendMode::Translucent)
+            {
+                continue;
+            }
             if (!ImGui::CollapsingHeader(group.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) continue;
             for (const auto& definition : definitions)
             {
@@ -359,12 +384,14 @@ namespace Editor
                 bool changed = false;
                 if (auto* scalar = std::get_if<float>(&value))
                 {
-                    const float minimum = definition.Name == "Anisotropy" ? -1.0f : 0.0f;
-                    const float maximum = definition.Name == "NormalIntensity" ? 4.0f : 1.0f;
+                    const float minimum = definition.Name == "Anisotropy" ? -1.0f : definition.Name == "IndexOfRefraction" ? 1.0f : 0.0f;
+                    const float maximum = definition.Name == "NormalIntensity" ? 4.0f :
+                        definition.Name == "IndexOfRefraction" ? 3.0f : definition.Name == "Thickness" ? 10.0f : 1.0f;
                     changed = Controls::Scalar(definition.Name.c_str(), *scalar, 0.01f, minimum, maximum);
                 }
                 else if (auto* vector = std::get_if<std::array<float, 4>>(&value))
-                    changed = group == "UV" ? Controls::Vector4(definition.Name.c_str(), *vector) : Controls::Color(definition.Name.c_str(), *vector);
+                    changed = group == "UV" || definition.Name == "Absorption" ?
+                        Controls::Vector4(definition.Name.c_str(), *vector) : Controls::Color(definition.Name.c_str(), *vector);
                 else if (auto* texture = std::get_if<std::shared_ptr<Engine::TextureAsset>>(&value))
                 {
                     ImGui::TextWrapped("%s: %s", definition.Name.c_str(), *texture ? (*texture)->GetName().c_str() : "Default");

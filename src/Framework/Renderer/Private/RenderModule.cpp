@@ -20,6 +20,7 @@
 #include "GBufferInfo.h"
 #include "Common.h"
 #include "HintRender.h"
+#include "TransparencyRender.h"
 
 #include <algorithm>
 #include <vector>
@@ -127,6 +128,13 @@ namespace Renderer {
 		sceneRenderer->BuildSceneLightShadowMap(sceneRenderer->Scene,builder);
         sceneRenderer->UploadShadowMapInfo(sceneRenderer->Scene,builder);
         sceneRenderer->Build(builder);
+        for (const auto& view : views->GetViews())
+        {
+            if ((view.Flags & VF_ExternalTransparencyPass) == 0)
+            {
+                AddTransparencyPasses(builder, *views->Scene, view, sceneColorTexture, depthText);
+            }
+        }
         // Append view-local overlays to the same graph after all scene passes.
         // Each extension must declare its texture access in its pass parameters.
         for (const auto& view : views->GetViews()) {

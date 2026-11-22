@@ -245,7 +245,7 @@ namespace Renderer {
                 auto* material =
                     mesh->GetStaticMeshComponent()->GetMaterial(section.MaterialIndex);
 
-                if (!material)
+                if (!material || IsTransparentBlend(material->GetBlendMode()))
                 {
                     continue;
                 }
