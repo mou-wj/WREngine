@@ -1,4 +1,5 @@
 #include "EditorVolumeViewer.h"
+#include "../../../Framework/Renderer/Private/Volume/AtmosphereRender.h"
 #include "../../../Framework/Renderer/Private/Volume/VolumeRendering.h"
 #include "Camera.h"
 #include "EngineGlobal.h"
@@ -132,11 +133,18 @@ namespace Editor
             {
                 InitializeScene();
             }
+            const float elevation = Core::DegToRad(SunElevation);
+            const float azimuth = Core::DegToRad(SunAzimuth);
+            const Core::Float3 toSun{std::cos(elevation) * std::sin(azimuth), std::sin(elevation),
+                std::cos(elevation) * std::cos(azimuth)};
+            const auto lightDirection = Atmosphere.bEnabled ? toSun * -1.0f : Core::Normalize(Core::Float3{0.5f, -1.0f, -0.6f});
             if (m_Directional->GetIntensity() != LightIntensities.X || m_Point->GetIntensity() != LightIntensities.Y ||
-                m_Spot->GetIntensity() != LightIntensities.Z)
+                m_Spot->GetIntensity() != LightIntensities.Z ||
+                (m_Directional->GetDirection() - lightDirection).LengthSquared() > 1e-8f)
             {
                 WaitForDraw();
                 m_Directional->SetIntensity(LightIntensities.X);
+                m_Directional->SetDirection(lightDirection);
                 m_Point->SetIntensity(LightIntensities.Y);
                 m_Spot->SetIntensity(LightIntensities.Z);
                 m_Scene->FlushPendingUpdates();
@@ -191,7 +199,23 @@ namespace Editor
                     local.DensityField.Texture = m_DemoDensity.get();
                 }
             }
-            view.DrawExtensions.push_back(Renderer::MakeVolumeDrawExtension(std::move(frameSettings), m_Scene.get(), &m_History, &Stats));
+            view.DrawExtensions.push_back({[this, volume = std::move(frameSettings), atmosphere = Atmosphere](
+                RenderCore::RenderGraphBuilder& graph, const Engine::SceneView& sceneView, RenderCore::RenderGraphTextureRef color,
+                RenderCore::RenderGraphTextureRef depth)
+            {
+                if (atmosphere.bEnabled)
+                {
+                    const auto lighting = Renderer::PrepareAtmosphere(graph, atmosphere, m_Scene.get());
+                    Renderer::AddAtmospherePass(graph, sceneView, color, depth, atmosphere, lighting);
+                    if (atmosphere.View != Renderer::EAtmosphereView::Composite)
+                    {
+                        m_History.Invalidate();
+                        Stats = {};
+                        return;
+                    }
+                }
+                Renderer::AddVolumePasses(graph, sceneView, depth, color, volume, m_Scene.get(), &m_History, &Stats);
+            }});
             Engine::SceneViewFamily family;
             family.Scene = m_Scene.get();
             family.RenderTarget = this;
@@ -229,8 +253,11 @@ namespace Editor
         }
 
         Renderer::VolumeRenderSettings Settings;
+        Renderer::AtmosphereRenderSettings Atmosphere;
         Renderer::VolumeRenderStats Stats;
         Core::Float3 LightIntensities{3, 20, 45};
+        float SunElevation = 52.0f;
+        float SunAzimuth = -40.0f;
         double CompletedFrameMilliseconds = 0;
         bool bMeasureCompletedFrame = false;
         bool bAnimateDensity = false;
@@ -356,6 +383,28 @@ namespace Editor
             settings.View = static_cast<Renderer::EVolumeView>(mode);
         }
         ImGui::SliderFloat("Global density", &settings.Medium.Density, 0.0f, 0.4f, "%.3f");
+        if (ImGui::CollapsingHeader("Atmosphere"))
+        {
+            auto& atmosphere = m_Preview->Atmosphere;
+            ImGui::Checkbox("Enable atmosphere", &atmosphere.bEnabled);
+            ImGui::Checkbox("Aerial perspective", &atmosphere.bAerialPerspective);
+            const char* views[] = {"Composite", "In-scattering", "Transmittance"};
+            int view = static_cast<int>(atmosphere.View);
+            if (ImGui::Combo("Atmosphere view", &view, views, IM_ARRAYSIZE(views)))
+            {
+                atmosphere.View = static_cast<Renderer::EAtmosphereView>(view);
+            }
+            ImGui::SliderFloat("Sun elevation", &m_Preview->SunElevation, -20.0f, 90.0f, "%.1f deg");
+            ImGui::SliderFloat("Sun azimuth", &m_Preview->SunAzimuth, -180.0f, 180.0f, "%.1f deg");
+            ImGui::SliderFloat("Sun intensity", &m_Preview->LightIntensities.X, 0.0f, 10.0f);
+            ImGui::SliderFloat("Air density", &atmosphere.Density, 0.0f, 4.0f);
+            ImGui::DragFloat("Planet radius (km)", &atmosphere.PlanetRadiusKm, 20.0f, 100.0f, 15000.0f);
+            ImGui::DragFloat("Air height (km)", &atmosphere.AtmosphereHeightKm, 1.0f, 10.0f, 150.0f);
+            ImGui::SliderFloat("Km / scene unit", &atmosphere.WorldToKm, 0.001f, 1.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+            ImGui::DragFloat3("Rayleigh / km", &atmosphere.RayleighScattering.X, 0.0002f, 0.0f, 1.0f, "%.5f");
+            ImGui::DragFloat3("Mie / km", &atmosphere.MieScattering.X, 0.0002f, 0.0f, 1.0f, "%.5f");
+            ImGui::DragFloat3("Absorption / km", &atmosphere.Absorption.X, 0.0002f, 0.0f, 1.0f, "%.5f");
+        }
         if (ImGui::CollapsingHeader("Quality and timing"))
         {
             if (ImGui::Button("Reference preset"))

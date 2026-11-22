@@ -1,4 +1,5 @@
 #include "TestBase.h"
+#include "../Framework/Renderer/Private/Volume/AtmosphereRender.h"
 #include "../Framework/Renderer/Private/Volume/VolumeRendering.h"
 #include "../Framework/Renderer/Private/Scene.h"
 #include "Camera.h"
@@ -42,6 +43,7 @@ namespace Test
             bool bNearCenter = false;
             VolumeRenderHistory* History = nullptr;
             VolumeRenderStats* Stats = nullptr;
+            const AtmosphereRenderSettings* Atmosphere = nullptr;
         };
 
         // Native timestamps stay in the benchmark. Split physical queues need profiling on both queues.
@@ -281,6 +283,11 @@ namespace Test
                 GRHIApi->UpdateTexture(cmd, upload->Color->GetRHITexture(), background.data(), region);
                 GRHIApi->UpdateTexture(cmd, upload->Depth->GetRHITexture(), sceneDepth.data(), region);
             });
+            if (frame.Atmosphere && frame.Atmosphere->bEnabled)
+            {
+                const auto atmosphere = PrepareAtmosphere(graph, *frame.Atmosphere, scene);
+                AddAtmospherePass(graph, view, upload->Color, upload->Depth, *frame.Atmosphere, atmosphere);
+            }
             AddVolumePasses(graph, view, upload->Depth, upload->Color, settings, scene, frame.History, frame.Stats);
 
             return ExecuteAndRead(graph, upload->Color, color);
@@ -694,6 +701,53 @@ namespace Test
     };
 
     REGISTER_RENDER_TEST("VolumeRenderTest", VolumeRenderTest);
+
+    class VolumeAtmosphereTest final : public VolumeRenderTest
+    {
+    public:
+        void Run() override
+        {
+            VolumeRenderSettings volume;
+            volume.bEnabled = false;
+            AtmosphereRenderSettings atmosphere;
+            atmosphere.bEnabled = true;
+            constexpr size_t upper = Width / 2;
+            const auto render = [&](float depth) { return Render(volume, depth, nullptr, 0, {.Atmosphere = &atmosphere}); };
+            const auto day = render(0);
+            if (!(day[upper].Z > day[upper].X * 1.5f && day[upper].Z > 0.025f))
+            {
+                throw std::runtime_error("Daylight over the horizon must show blue Rayleigh scattering.");
+            }
+            atmosphere.SunDirection = {0, 0.03f, -1};
+            const auto dusk = render(0);
+            if (!(dusk[Center].X > 0.02f && dusk[Center].X > 1.4f * dusk[Center].Z))
+            {
+                throw std::runtime_error("Low sun should redden the horizon.");
+            }
+            atmosphere.SunDirection = {0, -0.45f, -1};
+            const auto night = render(0);
+            RequireNear(night[upper].Y, 0.0f, "planet occludes low night sun");
+
+            atmosphere.SunDirection = {0, 0.7f, -0.7f};
+            atmosphere.WorldToKm = 0.4f;
+            atmosphere.bAerialPerspective = false;
+            RequireNear(render(8)[Center].X, 0.8f, "opaque color survives with aerial perspective disabled");
+            atmosphere.bAerialPerspective = true;
+            atmosphere.View = EAtmosphereView::Transmittance;
+            const float nearBlue = render(2)[Center].Z;
+            const float farBlue = render(8)[Center].Z;
+            if (!(nearBlue > farBlue + 0.04f && farBlue > 0.0f))
+            {
+                throw std::runtime_error("Far geometry must receive more atmospheric attenuation.");
+            }
+            atmosphere.bEnabled = false;
+            RequireNear(render(0)[upper].X, 0.8f, "disabled atmosphere preserves scene image");
+            std::cout << "VOLUME_ATMOSPHERE_TEST_OK daylightBlue=" << day[upper].Z << " duskRed=" << dusk[Center].X
+                << " duskBlue=" << dusk[Center].Z << " nearT=" << nearBlue << " farT=" << farBlue << std::endl;
+        }
+    };
+
+    REGISTER_RENDER_TEST("VolumeAtmosphereTest", VolumeAtmosphereTest);
 
     template<bool bOptimized, uint32_t WidthInPixels = 960, uint32_t HeightInPixels = 540>
     class VolumeBenchmark final : public VolumeRenderTest

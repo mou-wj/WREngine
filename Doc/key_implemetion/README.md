@@ -79,6 +79,7 @@
 | [GIViewer 混合反射](algorithm/21-hybrid-reflections.md) | 屏幕深度、Mesh SDF 与 Vulkan 硬件如何提供命中？怎样恢复交点并完成镜面着色？ |
 | [GI Voxel Lighting](algorithm/22-voxel-lighting.md) | 如何将世界探针重采样为六轴辐射，安全地进行远场查询并在必要时回退？ |
 | [Froxel 体积渲染](algorithm/23-volume-rendering.md) | 如何离散化视锥、按场景深度积分，并用空间重建和帧间历史稳定体积光？ |
+| [天空大气](algorithm/24-atmosphere-and-water.md) | 如何查表获取太阳透射率并合成天空和远处几何？ |
 
 ## 如何阅读和核查
 

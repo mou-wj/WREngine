@@ -1,0 +1,32 @@
+#include "/Generated/ShaderParameters/VolumeAtmosphereLutParameters.sf"
+#include "/volume/AtmosphereModel.sf"
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 size;
+    TransmittanceOutput.GetDimensions(size.x, size.y);
+    if (any(thread.xy >= size))
+    {
+        return;
+    }
+    float2 uv = float2(thread.xy) / float2(size - 1);
+    float radius = Planet.x + Planet.y * uv.y * uv.y;
+    float mu = lerp(AtmosphereHorizonCosine(radius), 1.0, uv.x * uv.x);
+    float3 origin = float3(0.0, radius, 0.0);
+    float3 direction = float3(sqrt(max(0.0, 1.0 - mu * mu)), mu, 0.0);
+    float2 shell;
+    AtmosphereSphereInterval(origin, direction, Planet.x + Planet.y, shell);
+    float3 opticalDepth = 0.0;
+    float front = 0.0;
+    [loop]
+    for (uint index = 0; index < 40; ++index)
+    {
+        float fraction = float(index + 1) / 40.0;
+        float back = max(shell.y, 0.0) * fraction * fraction;
+        float altitude = length(origin + direction * ((back + front) * 0.5)) - Planet.x;
+        opticalDepth += AtmosphereExtinction(AtmosphereDensity(altitude)) * (back - front);
+        front = back;
+    }
+    TransmittanceOutput[thread.xy] = float4(exp(-opticalDepth), 1.0);
+}

@@ -1,0 +1,38 @@
+#include "/Generated/ShaderParameters/VolumeAtmosphereDrawParameters.sf"
+#include "/volume/AtmosphereScattering.sf"
+
+float3 ReconstructAtmosphereWorld(float2 ndc, float deviceDepth)
+{
+    float4 projected = mul(AtmosphereInverseViewProjection, float4(ndc, deviceDepth, 1.0));
+    return projected.xyz / projected.w;
+}
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= AtmosphereViewSettings.xy))
+    {
+        return;
+    }
+    float4 background = SceneColor.Load(int3(pixel, 0));
+    float depth = SceneDepth.Load(int3(pixel, 0));
+    bool sky = depth >= 1.0;
+    if (!sky && AtmosphereViewSettings.w == 0)
+    {
+        AtmosphereOutput[pixel] = background;
+        return;
+    }
+    float2 ndc = (float2(pixel) + 0.5) / float2(AtmosphereViewSettings.xy) * float2(2, -2) + float2(-1, 1);
+    float3 camera = AtmosphereCamera.xyz;
+    float3 ray = normalize(ReconstructAtmosphereWorld(ndc, 0.0) - camera);
+    float maxDistance = sky ? 1e9 : length(ReconstructAtmosphereWorld(ndc, depth) - camera) * Planet.z;
+    float3 transmittance;
+    float3 scattered = IntegrateAtmosphere(AtmospherePlanetPosition(camera), ray, maxDistance, sky ? 24u : 10u, sky, transmittance);
+    float3 result = sky ? scattered : background.rgb * transmittance + scattered;
+    if (AtmosphereViewSettings.z != 0)
+    {
+        result = AtmosphereViewSettings.z == 1 ? scattered : transmittance;
+    }
+    AtmosphereOutput[pixel] = float4(result, background.a);
+}

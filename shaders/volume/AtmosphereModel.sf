@@ -1,0 +1,37 @@
+#include "/Generated/ShaderParameters/VolumeAtmosphereModel.sf"
+
+static const float AtmospherePi = 3.14159265359;
+
+// Distances and optical coefficients are in kilometers and reciprocal kilometers.
+bool AtmosphereSphereInterval(float3 origin, float3 direction, float radius, out float2 interval)
+{
+    float radialDistance = length(origin);
+    float projected = dot(origin, direction);
+    float discriminant = projected * projected + (radius - radialDistance) * (radius + radialDistance);
+    float root = sqrt(max(discriminant, 0.0));
+    interval = float2(-projected - root, -projected + root);
+    return discriminant >= 0.0 && interval.y > 0.0;
+}
+
+float AtmosphereHorizonCosine(float radius)
+{
+    return -sqrt(max(0.0, (radius - Planet.x) * (radius + Planet.x))) / radius;
+}
+
+float3 AtmosphereDensity(float altitude)
+{
+    float h = max(altitude, 0.0);
+    return float3(exp(-h / Rayleigh.w), exp(-h / Mie.w),
+        saturate(1.0 - abs(h / Planet.y - 0.25) / 0.15));
+}
+
+float3 AtmosphereExtinction(float3 density)
+{
+    return Rayleigh.rgb * density.x + 1.1 * Mie.rgb * density.y + AtmosphereAbsorption.rgb * density.z;
+}
+
+float3 AtmospherePlanetPosition(float3 worldPosition)
+{
+    return float3(worldPosition.x * Planet.z, Planet.x + max((worldPosition.y - Planet.w) * Planet.z, 0.001),
+        worldPosition.z * Planet.z);
+}
