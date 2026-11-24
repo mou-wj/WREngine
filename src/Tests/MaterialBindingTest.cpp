@@ -1,4 +1,5 @@
 #include "TestBase.h"
+#include <string_view>
 #include "Material.h"
 #include "MaterialShaderParameter.h"
 #include "TextureAsset.h"
@@ -105,7 +106,7 @@ public:
             const auto model = static_cast<EShadingModel>(id);
             material.SetShadingModel(model);
             auto resource = material.GetResource();
-            for (const char* name : { "StaticMeshMaterialShaderVS", "StaticMeshMaterialShaderPS", "StaticMeshMaterialGBufferShaderPS", "TransparencyMaterialPS" })
+            for (const char* name : { "StaticMeshMaterialShaderVS", "StaticMeshMaterialShaderPS", "StaticMeshMaterialGBufferShaderPS", "TransparencyMaterialPS", "MaskedDepthShaderPS" })
             {
                 auto type = shaderTypes.find(name);
                 if (type == shaderTypes.end()) throw std::runtime_error(std::string("Missing material shader: ")+name);
@@ -122,6 +123,13 @@ public:
                 material.SetParameter("Roughness",0.6f);
                 if (material.GetResource()!=resource || resource->GetMeshShader(key)!=shader)
                     throw std::runtime_error("A dynamic parameter edit did not reuse the compiled shader");
+                if (std::string_view(name) == "TransparencyMaterialPS")
+                {
+                    key.PermutationId = 1;
+                    auto* weighted = resource->GetMeshShader(key);
+                    if (!weighted || !weighted->GetRHIShader())
+                        throw std::runtime_error("Weighted transparency shader compilation failed");
+                }
             }
         }
         const auto& materialShaders = ShaderType::GetRegisterMap()[ShaderType::EShaderTypeFlag::Material];
@@ -146,7 +154,7 @@ public:
         bool rejected = false;
         try { material.GetRenderProxy()->ValidateSurfacePass(); }
         catch (const std::runtime_error&) { rejected=true; }
-        if (!rejected) throw std::runtime_error("Unsupported masked rendering was accepted");
+        if (!rejected) throw std::runtime_error("Opaque-only pass accepted a masked material");
         GMeshMaterialShaderMap.Clear();
         std::cout << "Surface model forward and GBuffer shader compilation, RHI shader creation and dynamic-value cache reuse passed" << std::endl;
     }

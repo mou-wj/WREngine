@@ -93,7 +93,7 @@ namespace RenderCore{
                 if (!output.bSuccess)
                 {
                     // 记录错误并跳过此变体
-                    LOG_ERROR("Failed to compile %s (Permutation %d)", st->Name.c_str(), permId);
+                    LOG_ERROR("Failed to compile %s (Permutation %d): %s", st->Name.c_str(), permId, output.ErrorMessage.c_str());
                     continue;
                 }
 

@@ -871,8 +871,8 @@ namespace Renderer {
 
             const Core::AABB& bounds = proxy->GetBounds().Box;
             AABBParameters data;
-            data.Min = bounds.Min;
-            data.Max = bounds.Max;
+            data.Min = Core::Float4(bounds.Min, 0.0f);
+            data.Max = Core::Float4(bounds.Max, 0.0f);
 
             m_PrimitiveGPUProxyOrder.push_back(proxy);
             boundsData.emplace_back(data);

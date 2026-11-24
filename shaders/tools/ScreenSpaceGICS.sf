@@ -1,7 +1,6 @@
 #include "/core/ShadingContext.sf"
 #include "/Generated/ShaderParameters/ScreenSpaceGIParameters.sf"
 #include "/core/GBufferParametersHelper.sf"
-#include "/Generated/ShaderParameters/GBufferTextureParameters.sf"
 #include "/core/ShadingCommon.sf"
 
 float3 ProjectWorldToScreenUVDepth(float3 worldPos)

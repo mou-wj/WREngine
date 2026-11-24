@@ -10,8 +10,8 @@
 namespace Renderer {
 
     BEGIN_SHADER_PARAMETER_STRUCT(AABBParameters)
-        SHADER_PARAMETER(Core::Float3, Min)
-        SHADER_PARAMETER(Core::Float3, Max)
+        SHADER_PARAMETER(Core::Float4, Min)
+        SHADER_PARAMETER(Core::Float4, Max)
     END_SHADER_PARAMETER_STRUCT(AABBParameters)
 
     BEGIN_SHADER_PARAMETER_STRUCT(FrustumCullParameters)

@@ -71,6 +71,12 @@ float PointTriangleDistanceSq(float3 p, float3 a, float3 b, float3 c)
     return dist * dist;
 }
 
+float3 ReadPosition(uint vertex)
+{
+    uint offset = vertex * 3;
+    return float3(VertexBuffer[offset], VertexBuffer[offset + 1], VertexBuffer[offset + 2]);
+}
+
 int3 ClampVoxelIndex(int3 id)
 {
     id.x = clamp(id.x, 0, GridResolution.x - 1);
@@ -92,9 +98,9 @@ void MainCS(uint3 DispatchThreadID : SV_DispatchThreadID)
     const uint idx1 = IndexBuffer[triId * 3 + 1];
     const uint idx2 = IndexBuffer[triId * 3 + 2];
 
-    const float3 v0 = ToVoxel(VertexBuffer[idx0].Position);
-    const float3 v1 = ToVoxel(VertexBuffer[idx1].Position);
-    const float3 v2 = ToVoxel(VertexBuffer[idx2].Position);
+    const float3 v0 = ToVoxel(ReadPosition(idx0));
+    const float3 v1 = ToVoxel(ReadPosition(idx1));
+    const float3 v2 = ToVoxel(ReadPosition(idx2));
 
     const float3 triMin = floor(min(v0, min(v1, v2)));
     const float3 triMax = ceil(max(v0, max(v1, v2)));

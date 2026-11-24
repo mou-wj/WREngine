@@ -69,7 +69,7 @@ flowchart TD
 ```
 
 - `EnqueueTask()`：异步任务，常用于按值捕获 GL handle 后删除资源。
-- `EnqueueTaskAndWait()`：投递后等待 worker 执行，常用于需要立即获得句柄、编译结果或读回数据的操作。
+- `EnqueueTaskAndWait()` 将资源创建、上传或 Shader 编译等同步任务投递给 worker。读回操作按命令列表提交。
 - worker 内部再次调用上述接口会直接执行，避免 worker 等待自己。
 - worker 未启动时，任务也会内联执行；这不保证调用线程具有有效 current context，初始化前和关闭后的调用需要约束。
 
@@ -163,7 +163,7 @@ RHIContextBase
 
 `Begin()` 清空 `_nativeCommands` 并重置 UBO 缓存；`End()` 当前为空。Draw、Dispatch、纹理复制、blit、参数绑定及 RenderPass 操作记录为函数对象，提交后由 worker 依次调用。这里的 `_nativeCommands` 是 CPU 回调列表，不是驱动提供的原生命令缓冲。
 
-图形管线绑定时创建/绑定 VAO、使用 program，并应用顶点布局、拓扑、光栅化、深度及混合状态。RenderPass 使用 `OpenGLFramebuffer` 挂接颜色/深度附件、设置 draw buffers 并按描述清理，结束时解除 framebuffer 和部分动态状态。
+图形管线绑定时创建/绑定 VAO、使用 program，并应用顶点布局、拓扑、光栅化、深度及混合状态。RenderPass 通过 `OpenGLFramebuffer` 按附件的 Mip、数组 Slice 或立方体面挂接颜色及深度，设置 draw buffers 并按描述清理，结束时解除 framebuffer 和部分动态状态。深度清理临时启用写入，结束后恢复原写入掩码。
 
 当前状态与绘制实现存在简化：深度比较使用固定的 GL_LESS，混合按各附件 bBlendEnable 启停，RGB 使用 SrcAlpha/OneMinusSrcAlpha，Alpha 使用 One/Zero，ColorWriteMask 经 glColorMaski 应用；混合因子仍未作为 RHI 可配置项暴露；Draw/DrawIndexed 把顶点/索引数量乘以 instanceCount，没有完整的原生实例化语义，部分 base vertex/first instance 参数也未落实。
 
@@ -208,9 +208,7 @@ FBO/VAO 等对象还需要按实际使用的 GL context 检查归属；不能仅
 
 ### 9.1 上传与读回
 
-UpdateTexture 按维度通过同步任务调用 glTextureSubImage1D/2D/3D，立方体面和数组切片作为层偏移；UpdateBuffer 仍用 glBufferSubData。两者当前忽略 cmdList，不会作为命令加入该列表。MapReadTexture 使用 glGetTextureSubImage 读取指定 mip/slice，MapReadBuffer 使用 glGetBufferSubData，CPU 内存由 Unmap 释放。像素传输临时设置 Pack/Unpack alignment=1 并恢复原值，避免紧密数据被默认行对齐改变；数组存储深度使用 ArraySize，3D 存储深度使用 Depth。
-
-这些接口等待的是自身任务完成，任务与 ExecuteQueue 又不共享统一 FIFO。因此在读取已提交 Draw/Dispatch 的结果之前，必须核对命令与任务的先后关系，不能只依据 cmdList 参数推导顺序。工程快照逐 mip/slice 上传读回，使用现有 worker/context，不在主线程取得 GL context；格式、状态和验证范围见 [工程快照](../../key_implemetion/performance/10-project-snapshots.md)。这不代表任意区域、多切片合并读回或所有像素格式已经完成验证。
+UpdateTexture 与 UpdateBuffer 使用 worker 的同步任务上传。MapReadTexture 与 MapReadBuffer 记录到调用方的 RHI 命令列表，按逻辑队列的提交及等待关系执行。调用方在列表提交完成后使用 CPU 数据，之后通过 Unmap 释放。工程快照逐 Mip/Slice 上传读回，像素传输仍使用紧密对齐。 [OpenGL 读回细节](../../key_implemetion/performance/02-rhi-queues-and-sync.md#opengl-的存储写入屏障和读回) · [工程快照](../../key_implemetion/performance/10-project-snapshots.md)
 
 ### 9.2 通用管理下沉，OpenGL 负责创建和回收条件
 

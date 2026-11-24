@@ -8,15 +8,11 @@
 
 namespace Engine {
 
-    BEGIN_SHADER_PARAMETER_STRUCT(SDFVertexPosition)
-        SHADER_PARAMETER(Core::Float3, Position)
-    END_SHADER_PARAMETER_STRUCT(SDFVertexPosition)
-
     BEGIN_SHADER_PARAMETER_STRUCT(DistanceFieldVoxelizeParameters)
         SHADER_PARAMETER(Core::Float4x4, WorldToVoxel)
         SHADER_PARAMETER(Core::Int3, GridResolution)
         SHADER_PARAMETER(uint32_t, PrimitiveCount)
-        SHADER_PARAMETER_RHI_STRUCTURED_BUFFER(SDFVertexPosition, VertexBuffer)
+        SHADER_PARAMETER_RHI_SRV(StructuredBuffer<float>, VertexBuffer)
         SHADER_PARAMETER_RHI_SRV(StructuredBuffer<uint>, IndexBuffer)
         SHADER_PARAMETER_RHI_UAV(RWTexture3D<float>, OutputSDFTexture)
     END_SHADER_PARAMETER_STRUCT(DistanceFieldVoxelizeParameters)
@@ -64,8 +60,10 @@ namespace Engine {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters&, RenderCore::ShaderCompilerEnvironment& environment)
         {
+            // The seed and distance images have different storage formats.
+            environment.bPreserveStorageImageFormats = true;
         }
 
         static const RenderCore::ShaderParametersMetadata* GetShaderParameterMetadata()

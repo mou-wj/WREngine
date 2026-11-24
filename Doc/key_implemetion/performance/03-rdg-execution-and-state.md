@@ -41,6 +41,8 @@ DrawExtensions 是视图拥有的值容器，SceneViewFamily::AddView 的复制�
 
 仅当存在透射区段或指定了水面有效深度时，`Transparency.SnapshotBackground` 读取最终背景颜色和对应深度的 SRV，写一张 RGBA32F 瞬态纹理。每像素 16 字节，1920×1080 约 31.6 MiB。RGB 是线性背景，A 是原始窗口深度。后续透明 Pass 读取此快照、加载并写回场景 RGB。快照读写和颜色附件均在参数元数据里声明，RDG 负责在 Compute 与 Graphics 提交之间插入资源转换及 Fence，并按首次使用和最后使用分配、回收快照。没有额外的 CPU 等待。
 
+分层折射按排序让每个透射区段读取自己的快照。RDG 依次调度前一 Graphics Pass 写场景色、Compute Pass 读场景色和当前 Graphics Pass 读快照。加权透明使用两个 RGBA16F 瞬态颜色附件，每像素合计 16 字节。收集前清零，累积使用 Load_Store，最后一个 Graphics Pass 通过 SRV 读取并写回场景 RGB。
+
 深度附件沿现有 Load_Store RenderPass 的附件布局绑定。PSO 禁用深度写入，原深度内容继续供后续 Pass 使用。水面有效深度不兼作深度附件，通过快照判断是否遮挡。每个区段建立一条渲染图 Pass，排序后按同一颜色附件读写形成依赖。此实现的额外提交成本与可见透明区段数成正比。 [排序与混合](../algorithm/25-transparency-rendering.md)
 
 ## Execute 的真实顺序

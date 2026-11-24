@@ -804,7 +804,8 @@ void ShaderCompiler::CompileToSPIRV(const std::string& preprocessedSource, const
         };
 
     addArg(L"-spirv");
-    addArg(L"-fspv-target-env=vulkan1.3");
+    // Fragment clip/discard must work without the optional Vulkan demote feature.
+    addArg(input.Frequency == ERHIShaderFrequency::Fragment ? L"-fspv-target-env=vulkan1.2" : L"-fspv-target-env=vulkan1.3");
     addArg(L"-fvk-use-dx-layout");
     addArg(L"-fvk-auto-shift-bindings");
     addArg(L"-fvk-bind-globals"); addArg(L"10"); addArg(ToWide(setId));
@@ -1076,7 +1077,8 @@ void ShaderCompiler::CompileToOpenGL(const std::string& preprocessedSource, cons
         };
 
     addArg(L"-spirv");
-    addArg(L"-fspv-target-env=vulkan1.3");
+    // Fragment clip/discard must work without the optional Vulkan demote feature.
+    addArg(input.Frequency == ERHIShaderFrequency::Fragment ? L"-fspv-target-env=vulkan1.2" : L"-fspv-target-env=vulkan1.3");
     addArg(L"-fvk-use-dx-layout");
     addArg(L"-fvk-auto-shift-bindings");
     //AddArg(L"-fvk-bind-globals"); AddArg(ToWide(std::to_string(shaderBindingOffset + 10))); AddArg(ToWide("0"));
@@ -1113,7 +1115,15 @@ void ShaderCompiler::CompileToOpenGL(const std::string& preprocessedSource, cons
         compiler.set_decoration(combined.combined_id, spv::DecorationBinding,
                                compiler.get_decoration(combined.image_id, spv::DecorationBinding));
     }
-    std::string glsl = compiler.compile();
+    std::string glsl;
+    try
+    {
+        glsl = compiler.compile();
+    }
+    catch (const spirv_cross::CompilerError& error)
+    {
+        throw std::runtime_error(input.VirtualSourceFilePath + ": " + error.what());
+    }
     
 
     // Store the generated GLSL source.
@@ -1537,7 +1547,10 @@ void ShaderCompiler::CompileHLSLToSPIRV(const std::string& preprocessedSource, c
                 i += wc;
             }
         };
-    stripImageFormat(spirvOut);
+    if (!input.Environment.bPreserveStorageImageFormats)
+    {
+        stripImageFormat(spirvOut);
+    }
     auto writeSpirvToFile = [](const std::string& filePath, const std::vector<uint32_t>& spirvData) {
         if (spirvData.empty()) {
             std::cerr << "Error: SPIR-V data is empty." << std::endl;

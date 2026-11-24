@@ -1,13 +1,13 @@
+#include "/Generated/VertexFactory.sf"
 #include "/core/ShadingModel.sf"
 #include "/core/ShadingContext.sf"
 #if MATERIAL_SHADING_MODEL != SHADINGMODEL_UNLIT
 // Keep structured lighting buffer bindings within the OpenGL range.
 #include "/core/SceneParametersHelper.sf"
 #endif
-#include "/Generated/VertexFactory.sf"
 #include "/core/MaterialParametersHelper.sf"
 
-float4 MainPS(VertexFactoryVSToPS Input) : SV_Target0
+float4 MainPS(VSOutput Input) : SV_Target0
 {
     /*
     ===========================================================================
@@ -18,8 +18,9 @@ float4 MainPS(VertexFactoryVSToPS Input) : SV_Target0
     ShadingContext Context;
 
     VertexFactoryFillShadingContext(
-        Input,
+        Input.FactoryInterpolants,
         Context);
+    ApplyMaterialOpacityMask(Context.UV0);
 
     /*
     ===========================================================================

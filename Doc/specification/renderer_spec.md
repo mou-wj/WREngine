@@ -20,15 +20,17 @@ Vulkan Debug 用 +0.85、−0.85 和 0.0 对比相同材质实例。三类直接
 
 ## 半透明绘制
 
-MaterialEditor 可在母材质上选择 **Opaque**、**Translucent** 或 **Additive**。节点的材质实例继承 Blend Mode，可独立覆盖 Opacity、Transmission、IndexOfRefraction、Thickness、Absorption 和 RefractionStrength。制作玻璃时使用 Translucent、较高 Transmission、较低 Roughness 与约 1.5 的 IOR；Opacity 控制像素表面覆盖率，Transmission 控制已覆盖区域内有多少能量进入材质透射。Thickness 为场景单位，Absorption 的 RGB 是每单位长度的线性吸收系数。Additive 使用 Opacity 缩放额外发光或表面光照。
+MaterialEditor 可在母材质上选择 **Opaque**、**Masked**、**Translucent** 或 **Additive**。节点的材质实例继承 Blend Mode，可独立覆盖 Opacity、Transmission、IndexOfRefraction、Thickness、Absorption 和 RefractionStrength。制作玻璃时使用 Translucent、较高 Transmission、较低 Roughness 与约 1.5 的 IOR；Opacity 控制像素表面覆盖率，Transmission 控制已覆盖区域内有多少能量进入材质透射。Thickness 为场景单位，Absorption 的 RGB 是每单位长度的线性吸收系数。Additive 使用 Opacity 缩放额外发光或表面光照。
 
-主视图的 **Transparency** 选择器提供 Composite、Classification、Sort order 和 Refraction。分类视图以蓝色表示 Alpha、橙色表示 Additive。顺序视图以蓝到红表示从早到晚提交的顺序。折射视图用红、绿通道显示两个屏幕轴的偏移量，蓝通道显示 Transmission。
+主视图的 **Blend method** 提供 Sorted、Weighted OIT 和 Layered refraction。Sorted 为默认。Weighted OIT 用于相交的非折射 Alpha 表面，视图中出现 Additive 或透射表面时使用 Sorted。Layered refraction 按对象排序，采集已绘制透明层参与玻璃透射。
+
+**Transparency** 提供 Composite、Classification、Sort order 和 Refraction。调试视图继续使用有序路径。分类视图以蓝色表示 Alpha、橙色表示 Additive。顺序视图以蓝到红表示从早到晚提交的顺序。折射视图用红、绿通道显示两个屏幕轴的偏移量，蓝通道显示 Transmission。
 
 默认顺序为不透明延迟光照和天空 → 可选折射快照 → 有序透明绘制 → 编辑器叠加。VolumeViewer 在水面与大气之后调用透明 Pass，提供水面有效深度，再沿用现有体积合成。体积积分终点继续使用不透明或水面深度；透明表面没有单独积分。实时透明表面使用三类场景光、已有阴影和 IBL。GIViewer 的 Surface Cache 跳过透明区段，透明表面从前向光照获得环境间接项。
 
-Masked 保留资产与工程序列化能力。当前透明功能覆盖 Alpha 与 Additive；像素级 Masked 深度与阴影是独立的后续能力。投影近似、复杂层叠及缓存限制见 [排序与折射](../key_implemetion/algorithm/25-transparency-rendering.md)。
+Masked 比较 `OpacityMask` 与 Opacity 纹理采样的乘积和 `AlphaCutoff`，低于阈值时丢弃片元。传统 GBuffer、前向不透明绘制、预深度实现及投影阴影使用相同的覆盖规则。默认延迟图由 GBuffer 写入深度。GIViewer 捕获材质时也应用该阈值。 [排序与折射](../key_implemetion/algorithm/25-transparency-rendering.md)
 
-`MaterialTransparencyTest` 在 Vulkan Debug 下读回线性场景颜色，检验相反注册顺序、变更深度后的排序、Additive、保留场景 Alpha、不透明及水面深度遮挡、Beer–Lambert、折射偏移、粗糙边缘和屏幕外回退。测试也分别启用平行光、点光、聚光和环境光，对照接收阴影，再用实际水面、大气和 Froxel Pass 验证合成。Vulkan、OpenGL、DirectX12 通过透明材质 Shader 编译。OpenGL 的全场景测试止于已有深度金字塔扩展与全局缓冲布局错误，DirectX12 在首次场景颜色读回前以访问异常退出。 [验证入口](../../src/Tests/MaterialShadingModelTest.cpp)
+`MaterialTransparencyTest` 读回线性场景颜色，分别检查排序、相交 Alpha 区段的累积、分层透射、遮罩孔洞与深度、Alpha 保留、吸收与水面遮挡，以及三类直接光源和 IBL。 [验证入口](../../src/Tests/MaterialShadingModelTest.cpp)
 
 ## Virtual Geometry 场景绘制入口
 

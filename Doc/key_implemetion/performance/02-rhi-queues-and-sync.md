@@ -72,7 +72,9 @@ Buffer UAV 必须像 Buffer SRV 一样，将视图的 Offset、NumElements×Stri
 
 OpenGLRHIApi::RHICreateTransition 将 UAV 写后消费者的屏障位存入既有 RHITransition 私有区域；EndTransitions 汇总为按值捕获的 mask，由 worker 执行 glMemoryBarrier，不捕获短生命周期 transition 指针。枚举映射在 [OpenGLUtils](../../../src/Framework/RHIOpenGL/Private/OpenGLUtils.cpp)：IndirectArgs→COMMAND，SRV→SHADER_STORAGE/TEXTURE_FETCH/UNIFORM，UAV→SHADER_STORAGE/SHADER_IMAGE_ACCESS，VertexOrIndexBuffer→VERTEX_ATTRIB_ARRAY/ELEMENT_ARRAY，传输和 CPURead→BUFFER_UPDATE/TEXTURE_UPDATE/PIXEL_BUFFER，附件→FRAMEBUFFER。由于 GL 屏障按消费者种类生效，这些位是全局类型屏障，不是假装对单个资源设置布局。
 
-GPU Group 批次之间依靠 UAV→UAV 屏障；参数生成到绘制依靠 UAV→IndirectArgs。它们保证 GPU 访问的顺序和可见性，不代表 CPU 已能读取结果。正常选择/绘制没有 CPU 等待。Viewer 的 Capture GPU 是显式诊断：在图中声明 Flags/Statistics 为 TransferSrc；Vulkan/D3D12 记录映射对应的复制并在提交完成后读取，OpenGL 在图提交完成后通过 worker 的 glGetBufferSubData 读回。映射只在该次 Capture 内使用并 Unmap，未跨帧保存 transient 指针。
+GPU Group 批次之间依靠 UAV→UAV 屏障，参数生成到绘制依靠 UAV→IndirectArgs。Viewer 的 Capture GPU 在图中声明 Flags/Statistics 为 TransferSrc，并在提交完成后读取及 Unmap。正常绘制继续异步提交。
+
+OpenGL 的 MapReadTexture 与 MapReadBuffer 为 CPU 结果分配内存，再用 AddCommand 记录 `OpenGLReadbackCommand`，由同一列表的上下文追加 native 命令。worker 先执行该列表的转换及此前工作，再用 `glGetTextureSubImage` 或 `glGetNamedBufferSubData` 填充结果。只有当前列表的 Fence 完成后，调用方才可读取和 Unmap。OpenGL 的一般 Fence 表示 worker 执行进度，读回返回 CPU 数据的保证来自两个原生读回调用，其他 GPU 命令仍沿自己的完成机制。同步的开销属于显式读回。 [读回实现](../../../src/Framework/RHIOpenGL/Private/OpenGLRHIApi.cpp)
 
 GPU Cut、紧凑列表、固定参数槽与实际开销见 [LOD 算法](../algorithm/13-virtual-geometry-lod-selection.md#gpu-依赖求值与完整-cut)。间接绘制使 GPU 决定是否产生几何，但当前 CPU 仍录制每个候选的一条命令，不能据此声称已经消除 CPU Draw 录制成本。
 

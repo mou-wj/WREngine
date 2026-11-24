@@ -97,8 +97,9 @@ namespace Engine {
 
         RHI::RHIBufferSRVCreateInfo vertexSRVDesc;
         vertexSRVDesc.Offset = 0;
-        vertexSRVDesc.NumElements = input.VertexCount;
-        vertexSRVDesc.Stride = sizeof(SDFVertexPosition);
+        // Static mesh positions contain three tightly packed floats per vertex.
+        vertexSRVDesc.NumElements = input.VertexCount * 3u;
+        vertexSRVDesc.Stride = sizeof(float);
         vertexSRVDesc.Format = RHI::ERHIFormat::Unknown;
 
         RHI::RHIBufferSRVCreateInfo indexSRVDesc;

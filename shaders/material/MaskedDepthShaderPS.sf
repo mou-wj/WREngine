@@ -1,0 +1,14 @@
+#include "/Generated/VertexFactory.sf"
+#include "/Generated/ShaderParameters/MaskedDepthShaderPSParameters.sf"
+#include "/core/MaterialParametersHelper.sf"
+
+float2 MainPS(VSOutput input) : SV_Target0
+{
+    ShadingContext context;
+    VertexFactoryFillShadingContext(input.FactoryInterpolants, context);
+    ApplyMaterialOpacityMask(context.UV0);
+    float4 clipPosition = input.FactoryInterpolants.ClipPosition;
+    float depth = bStoreRadialDepth != 0 ? distance(context.WorldPosition, ShadowCameraPosition) :
+        clipPosition.z / clipPosition.w;
+    return float2(depth, depth * depth);
+}

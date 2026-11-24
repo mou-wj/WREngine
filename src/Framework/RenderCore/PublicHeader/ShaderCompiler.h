@@ -98,6 +98,7 @@ namespace std
             HashCombine(seed, std::hash<std::string>()(input.TargetProfile));
             HashCombine(seed, std::hash<uint32_t>()(static_cast<uint32_t>(input.Flags)));
             HashCombine(seed, std::hash<int>()(input.bCompilingForPipeline ? 1 : 0));
+            HashCombine(seed, input.Environment.bPreserveStorageImageFormats);
 
             for (const auto& m : input.Environment.Definitions)
             {

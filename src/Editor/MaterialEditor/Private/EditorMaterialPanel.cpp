@@ -182,11 +182,6 @@ namespace Editor
     {
         auto* component = m_Callbacks.GetSelectedComponent ? m_Callbacks.GetSelectedComponent() : nullptr;
         if (!component || !m_SelectedMaterial) { m_Status = "Select a mesh and a library material first."; return false; }
-        if (m_SelectedMaterial->GetMaterial()->GetBlendMode() == Engine::EBlendMode::Masked)
-        {
-            m_Status = "Masked is stored by the material system. Select a supported blend mode to assign it.";
-            return false;
-        }
         try
         {
             m_Slot = std::clamp(m_Slot, 0, std::max(0, static_cast<int>(component->GetNumMaterials()) - 1));
@@ -329,7 +324,7 @@ namespace Editor
             }
             if (ImGui::BeginCombo("Blend mode", Engine::GetBlendModeName(base->GetBlendMode())))
             {
-                for (const auto blend : {Engine::EBlendMode::Opaque, Engine::EBlendMode::Translucent, Engine::EBlendMode::Additive})
+                for (const auto blend : {Engine::EBlendMode::Opaque, Engine::EBlendMode::Masked, Engine::EBlendMode::Translucent, Engine::EBlendMode::Additive})
                 {
                     const bool selected = base->GetBlendMode() == blend;
                     if (ImGui::Selectable(Engine::GetBlendModeName(blend), selected))

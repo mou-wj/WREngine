@@ -1,9 +1,10 @@
 #include "/Generated/VertexFactory.sf"
 #include "/core/MaterialGBufferHelper.sf"
 
-FGBufferOutput MainPS(VertexFactoryVSToPS input)
+FGBufferOutput MainPS(VSOutput input)
 {
     ShadingContext context;
-    VertexFactoryFillShadingContext(input, context);
+    VertexFactoryFillShadingContext(input.FactoryInterpolants, context);
+    ApplyMaterialOpacityMask(context.UV0);
     return EvaluateMaterialGBuffer(context, 0.0, 0.0, true);
 }

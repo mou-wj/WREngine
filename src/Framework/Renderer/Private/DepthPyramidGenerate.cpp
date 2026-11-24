@@ -39,25 +39,7 @@ namespace Renderer {
         const auto& sceneDepthDesc = input.SceneDepthTexture->GetDesc();
         const auto& pyramidDesc = input.DepthPyramidTexture->GetDesc();
 
-        const uint32_t maxPyramidMip = pyramidDesc.MipLevels;
-        const uint32_t mipCount = maxPyramidMip;
-
-        if (mipCount <= 1)
-        {
-            return;
-        }
-
-        RenderCore::RenderGraphTextureUAVRef pyramidMipUAV;
-
-        RenderCore::RenderGraphTextureUAVDesc mipUAVDesc;
-        mipUAVDesc.Format = pyramidDesc.Format;
-        mipUAVDesc.ArraySize = pyramidDesc.ArraySize;
-        mipUAVDesc.FirstMipSlice = 0;
-        mipUAVDesc.MipCount = mipCount;
-        mipUAVDesc.Texture = input.DepthPyramidTexture;
-        mipUAVDesc.ViewType = RHI::ERHITextureViewType::TextureView2D;
-
-        pyramidMipUAV = graphBuilder.CreateTextureUAV("DepthPyramidGenerateUAV", mipUAVDesc);
+        const uint32_t mipCount = pyramidDesc.MipLevels;
 
         std::vector<RenderCore::RenderGraphTextureUAVRef> mipUAVs;
         mipUAVs.reserve(mipCount);
@@ -78,48 +60,35 @@ namespace Renderer {
         computeDesc.ComputeShader = computeShader;
         auto* pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);
 
-        auto inputCopy = input;
-        auto* passParameter = graphBuilder.AllocateParameter<DepthPyramidGenerateParameters>();
-        *passParameter = DepthPyramidGenerateParameters{};
-        passParameter->InputDepthTexture = inputCopy.SceneDepthTexture;
-        passParameter->InDepthMipTexture = pyramidMipUAV;
-        graphBuilder.AddPass<DepthPyramidGenerateParameters>(
-            "BuildDepthPyramidPass",
-            DepthPyramidGenerateParameters::GetMetaData(),
-            passParameter,
-            RenderCore::EPassFlag::Compute,
-            [inputCopy, shader, pipelineState, mipCount, sceneDepthDesc, pyramidDesc, passParameter, mipUAVs](RHI::RHICommandListBase& rhiCmdList)
-            {
-                auto& cmd = static_cast<RHI::RHIComputeCommandList&>(rhiCmdList);
-                cmd.SetComputePipelineState(pipelineState);
+        for (uint32_t mip = 0; mip < mipCount; ++mip)
+        {
+            const uint32_t previousMip = mip > 0 ? mip - 1 : 0;
+            const auto& sourceDesc = mip == 0 ? sceneDepthDesc : pyramidDesc;
+            const uint32_t dstWidth = std::max(1u, pyramidDesc.Width >> mip);
+            const uint32_t dstHeight = std::max(1u, pyramidDesc.Height >> mip);
 
-                for (uint32_t mip = 0; mip < mipCount; ++mip)
+            auto* params = graphBuilder.AllocateParameter<DepthPyramidGenerateParameters>();
+            params->InputExtent = {int(std::max(1u, sourceDesc.Width >> previousMip)),
+                int(std::max(1u, sourceDesc.Height >> previousMip))};
+            params->OutputExtent = {int(dstWidth), int(dstHeight)};
+            params->InputMipLevel = mip;
+            params->InputDepthTexture = input.SceneDepthTexture;
+            // The shader binds two disjoint single-mip UAVs. The whole-chain intent
+            // orders each dispatch and transitions the chain for the later SRV consumer.
+            params->DepthMipChain = input.DepthPyramidTexture;
+            const auto source = mipUAVs[previousMip];
+            const auto target = mipUAVs[mip];
+            graphBuilder.AddPass("BuildDepthPyramidMip" + std::to_string(mip),
+                DepthPyramidGenerateParameters::GetMetaData(), params, RenderCore::EPassFlag::Compute,
+                [=](RHI::RHICommandListBase& list)
                 {
-                    const bool bIsFirstMip = (mip == 0u);
-                    const uint32_t srcWidth = bIsFirstMip
-                        ? std::max(1u, sceneDepthDesc.Width)
-                        : std::max(1u, pyramidDesc.Width >> (mip - 1u));
-                    const uint32_t srcHeight = bIsFirstMip
-                        ? std::max(1u, sceneDepthDesc.Height)
-                        : std::max(1u, pyramidDesc.Height >> (mip - 1u));
-                    const uint32_t dstWidth = std::max(1u, pyramidDesc.Width >> mip);
-                    const uint32_t dstHeight = std::max(1u, pyramidDesc.Height >> mip);
-
-                    DepthPyramidGenerateParameters& params = *passParameter;
-                    params.InputExtent = Core::Int2(static_cast<int>(srcWidth), static_cast<int>(srcHeight));
-                    params.OutputExtent = Core::Int2(static_cast<int>(dstWidth), static_cast<int>(dstHeight));
-                    params.InputMipLevel = mip;
-                    params.DepthSampler = RenderCore::GlobalSampler.get();
-                    params.OutDepthMipTexture = mipUAVs[mip]->GetRHIShaderResourceView();
-                    params.SrcDepthMipTexture = mipUAVs[mip > 0 ? mip - 1 : 0]->GetRHIShaderResourceView();
-
-                    SetShaderParameters(cmd, shader, &params);
-
-                    const uint32_t groupX = (dstWidth + 7u) / 8u;
-                    const uint32_t groupY = (dstHeight + 7u) / 8u;
-                    cmd.Dispatch(groupX, groupY, 1u);
-                }
-            }
-        );
+                    auto& cmd = static_cast<RHI::RHIComputeCommandList&>(list);
+                    cmd.SetComputePipelineState(pipelineState);
+                    params->SrcDepthMipTexture = source->GetRHIShaderResourceView();
+                    params->OutDepthMipTexture = target->GetRHIShaderResourceView();
+                    SetShaderParameters(cmd, shader, params);
+                    cmd.Dispatch((dstWidth + 7) / 8, (dstHeight + 7) / 8, 1);
+                });
+        }
     }
 } // namespace Renderer

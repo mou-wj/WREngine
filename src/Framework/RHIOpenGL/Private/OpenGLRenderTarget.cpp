@@ -3,6 +3,30 @@
 
 namespace RHIOpenGL
 {
+    namespace
+    {
+        void AttachSubresource(GLenum attachment, GLenum target, GLuint texture, GLint mip, GLint slice)
+        {
+            switch (target)
+            {
+            case GL_TEXTURE_2D_ARRAY:
+            case GL_TEXTURE_CUBE_MAP_ARRAY:
+            case GL_TEXTURE_3D:
+                glFramebufferTextureLayer(GL_FRAMEBUFFER, attachment, texture, mip, slice);
+                break;
+            case GL_TEXTURE_CUBE_MAP:
+                glFramebufferTexture2D(GL_FRAMEBUFFER, attachment, GL_TEXTURE_CUBE_MAP_POSITIVE_X + slice, texture, mip);
+                break;
+            case GL_TEXTURE_1D:
+                glFramebufferTexture1D(GL_FRAMEBUFFER, attachment, target, texture, mip);
+                break;
+            default:
+                glFramebufferTexture2D(GL_FRAMEBUFFER, attachment, target, texture, mip);
+                break;
+            }
+        }
+    }
+
     OpenGLFramebuffer::~OpenGLFramebuffer()
     {
         Destroy();
@@ -34,13 +58,13 @@ namespace RHIOpenGL
 
         for (uint32_t i = 0; i < m_ColorAttachmentCount; ++i)
         {
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, 0, 0);
+            glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, 0, 0);
         }
 
         if (m_bHasDepthAttachment)
         {
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
+            glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, 0, 0);
+            glFramebufferTexture(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, 0, 0);
         }
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -80,7 +104,7 @@ namespace RHIOpenGL
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-    void OpenGLFramebuffer::AttachColorTexture(GLuint texture, uint32_t index, GLenum target)
+    void OpenGLFramebuffer::AttachColorTexture(GLuint texture, uint32_t index, GLenum target, GLint mip, GLint slice)
     {
         if (m_FramebufferHandle == 0)
         {
@@ -88,7 +112,7 @@ namespace RHIOpenGL
         }
 
         Bind();
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + index, target, texture, 0);
+        AttachSubresource(GL_COLOR_ATTACHMENT0 + index, target, texture, mip, slice);
 
         if (index >= m_ColorAttachmentCount)
         {
@@ -96,7 +120,7 @@ namespace RHIOpenGL
         }
     }
 
-    void OpenGLFramebuffer::AttachDepthTexture(GLuint texture, GLenum target)
+    void OpenGLFramebuffer::AttachDepthTexture(GLuint texture, GLenum target, GLint mip, GLint slice)
     {
         if (m_FramebufferHandle == 0)
         {
@@ -104,7 +128,7 @@ namespace RHIOpenGL
         }
 
         Bind();
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, target, texture, 0);
+        AttachSubresource(GL_DEPTH_ATTACHMENT, target, texture, mip, slice);
         m_bHasDepthAttachment = true;
     }
 

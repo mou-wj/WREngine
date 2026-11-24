@@ -38,6 +38,8 @@ CompileToMetal 当前是未实现分支，不能把枚举存在当成 Metal 后�
 
 GenerateOrGetShaderPrameterMetaDataSF 必须在需要的生成头被 include 前注册内容。已有测试出现“生成头不存在”，属于注册/编译时序问题，不能通过虚构空头或删除 Shader 参数绕过。
 
+深度金字塔为有类型的 R32F 存储图像读写设置 `bPreserveStorageImageFormats`。Jump Flood 同样保留类型，使 Seed RGBA32F 与距离 R32F 使用各自的 SPIR-V 图像定义。该标志参与编译键并跳过现有格式擦除。普通 Shader 继续沿用原格式规则。片元 SPIR-V 采用 Vulkan 1.2 目标用于 `clip`，避免依赖当前设备初始化未启用的 demote 可选特性。着色器阶段联接由共同顶点输出声明保证，OpenGL 仍须保持共同 UBO 的 binding 一致。 [编译实现](../../../src/Framework/RenderCore/Private/ShaderCompiler.cpp) · [故障记录](../../dev/bugfix/故障与修复记录-2026-11-23.md)
+
 ## 打包格式不是跨版本资产格式
 
 [ShaderCompiledDataPacker.h](../../../src/Framework/RenderCore/PublicHeader/ShaderCompiledDataPacker.h) 保存阶段、定长 entry 字符串、hash，以及平台特有反射和代码。部分 Vulkan 字段使用 uint16_t，字符串也有长度上限；超大数量/偏移不应假设无损。它是当前进程和后端的传递格式，不是带版本迁移、跨 ABI 保证的长期 Shader 库。

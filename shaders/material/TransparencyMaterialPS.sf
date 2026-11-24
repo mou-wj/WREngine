@@ -1,3 +1,4 @@
+#include "/Generated/VertexFactory.sf"
 #include "/core/ShadingModel.sf"
 #include "/core/ShadingContext.sf"
 #if MATERIAL_SHADING_MODEL != SHADINGMODEL_UNLIT
@@ -6,7 +7,6 @@
 #else
 #include "/core/ShadingCommon.sf"
 #endif
-#include "/Generated/VertexFactory.sf"
 #include "/core/MaterialParametersHelper.sf"
 #include "/Generated/ShaderParameters/TransparencyPixelParameters.sf"
 
@@ -31,12 +31,13 @@ float3 SampleRefraction(ShadingContext context, MaterialData material, float3 no
     float distanceInMedium = TransparencyOptics.z / max(0.1, abs(dot(normal, transmitted)));
     // Approximate a single slab by projecting the offset from its unrefracted exit point.
     float3 displaced = context.WorldPosition + (transmitted + view) * (distanceInMedium * TransparencyOptics.w);
-    float4 clip = mul(ViewProjection, float4(displaced, 1.0));
+    float4 sourceClip = mul(ViewProjection, float4(context.WorldPosition, 1.0));
+    float4 exitClip = mul(ViewProjection, float4(displaced, 1.0));
     float2 exitPixel = pixel.xy;
-    if (clip.w > 1e-5)
+    if (sourceClip.w > 1e-5 && exitClip.w > 1e-5)
     {
-        float2 uv = (clip.xy / clip.w) * float2(0.5, -0.5) + 0.5;
-        exitPixel = TransparencyViewport.xy + uv * TransparencyViewport.zw;
+        float2 clipOffset = exitClip.xy / exitClip.w - sourceClip.xy / sourceClip.w;
+        exitPixel += clipOffset * (0.5 * TransparencyViewport.zw) * float2(1.0, TRANSPARENCY_RASTER_Y_SIGN);
     }
     displacement = (exitPixel - pixel.xy) * TransparencyPixelSize;
 
@@ -50,7 +51,7 @@ float3 SampleRefraction(ShadingContext context, MaterialData material, float3 no
     return background * absorption;
 }
 
-float4 MainPS(VertexFactoryVSToPS input, float4 screenPosition : SV_Position) : SV_Target0
+float4 ShadeTransparency(VertexFactoryVSToPS input, float4 screenPosition)
 {
     float3 pixel = screenPosition.xyz;
     if (TransparencyUseEffectiveDepth != 0)
@@ -124,3 +125,29 @@ float4 MainPS(VertexFactoryVSToPS input, float4 screenPosition : SV_Position) : 
     }
     return float4(color, saturate(material.Opacity));
 }
+
+#if WEIGHTED_TRANSPARENCY
+struct TransparencyAccumulation
+{
+    float4 Radiance : SV_Target0;
+    float4 Coverage : SV_Target1;
+};
+
+TransparencyAccumulation MainPS(VSOutput input)
+{
+    float4 shaded = ShadeTransparency(input.FactoryInterpolants, input.Position);
+    float nearDepth = 1.0 - saturate(input.Position.z);
+    float weight = shaded.a * (0.25 + 4.0 * nearDepth * nearDepth);
+    // Existing additive blending multiplies RGB by source alpha. Use unit alpha
+    // and pack both additive statistics into RGB so no new RHI blend mode is needed.
+    TransparencyAccumulation output;
+    output.Radiance = float4(shaded.rgb * weight, 1.0);
+    output.Coverage = float4(weight, -log(max(1.0 - shaded.a, 1e-4)), 0.0, 1.0);
+    return output;
+}
+#else
+float4 MainPS(VSOutput input) : SV_Target0
+{
+    return ShadeTransparency(input.FactoryInterpolants, input.Position);
+}
+#endif

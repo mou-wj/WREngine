@@ -153,6 +153,22 @@ namespace Renderer
         "MainPS",
         ERHIShaderFrequency::Fragment
     )
+    bool MaskedDepthShaderPS::ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
+    {
+        return static_cast<const MeshMaterialShaderPermutationParameters&>(parameters).VFType != nullptr;
+    }
+
+    void MaskedDepthShaderPS::ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters,
+        RenderCore::ShaderCompilerEnvironment& environment)
+    {
+        environment.SetDefine("PIXEL_SHADER", 1);
+        Engine::ModifyShaderCompilerEnvironment(
+            static_cast<const MeshMaterialShaderPermutationParameters&>(parameters).MaterialParams, environment);
+    }
+
+    IMPLEMENT_MESH_MATERIAL_SHADER_TYPE(MaskedDepthShaderPS, "MaskedDepthShaderPS",
+        "/material/MaskedDepthShaderPS.sf", "MainPS", ERHIShaderFrequency::Fragment);
+
     bool StaticMeshMaterialDefferedShadingCS::ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters)
     {
         const auto& material = static_cast<const MaterialShaderPermutationParameters&>(parameters);

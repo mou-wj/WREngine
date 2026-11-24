@@ -27,8 +27,11 @@ namespace Engine {
 
     enum class ETransparencyView : uint32_t { Composite, Classification, SortOrder, Refraction };
 
+    enum class ETransparencyMethod : uint8_t { Sorted, Weighted, LayeredRefraction };
+
     struct SceneSetting {
         ETransparencyView TransparencyView = ETransparencyView::Composite;
+        ETransparencyMethod TransparencyMethod = ETransparencyMethod::Sorted;
         bool bDrawGrid = false;
         bool bDrawLightHints = false;
         // Borrowed light to visualize; nullptr draws no light hint. Remove the

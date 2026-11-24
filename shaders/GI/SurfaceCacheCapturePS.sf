@@ -11,6 +11,7 @@ SurfaceCacheCaptureOutput MainPS(SurfaceCacheCaptureVaryings input)
 {
     ShadingContext context;
     VertexFactoryFillShadingContext(input.FactoryInterpolants, context);
+    ApplyMaterialOpacityMask(context.UV0);
     // A back-facing nearest layer blocks deeper layers but is not a valid material sample.
     // Explicit coverage avoids requiring optional Vulkan fragment-demotion capabilities.
     float coverage = dot(normalize(context.WorldNormal), CaptureNormal) > 0.05 ? 1 : 0;

@@ -777,13 +777,21 @@ namespace RHIOpenGL
                     continue;
                 }
 
-                m_CurrentFramebuffer->AttachColorTexture(glColorTexture->GetHandle(), i, GL_TEXTURE_2D);
+                const auto target = ConvertRHITextureTypeToGLTextureType(glColorTexture->GetDesc().Type);
+                m_CurrentFramebuffer->AttachColorTexture(glColorTexture->GetHandle(), i, target,
+                    colorTarget.MipIndex, colorTarget.ArraySlice);
                 drawBuffers[colorCount++] = GL_COLOR_ATTACHMENT0 + i;
             }
 
             if (colorCount > 0)
             {
                 glDrawBuffers(colorCount, drawBuffers);
+                glReadBuffer(drawBuffers[0]);
+            }
+            else
+            {
+                glDrawBuffer(GL_NONE);
+                glReadBuffer(GL_NONE);
             }
 
             if (targets.DepthStencil.Texture)
@@ -791,7 +799,9 @@ namespace RHIOpenGL
                 auto* glDepthTexture = dynamic_cast<OpenGLTexture*>(targets.DepthStencil.Texture);
                 if (glDepthTexture)
                 {
-                    m_CurrentFramebuffer->AttachDepthTexture(glDepthTexture->GetHandle(), GL_TEXTURE_2D);
+                    const auto target = ConvertRHITextureTypeToGLTextureType(glDepthTexture->GetDesc().Type);
+                    m_CurrentFramebuffer->AttachDepthTexture(glDepthTexture->GetHandle(), target,
+                        targets.DepthStencil.MipIndex, targets.DepthStencil.ArraySlice);
                 }
             }
 
@@ -852,9 +862,14 @@ namespace RHIOpenGL
                     clearStencilValue = static_cast<int>(targets.DepthStencil.ClearBinding.Stencil);
                 }
 
+                // A render-pass clear must not inherit the preceding draw's depth write mask.
+                GLboolean depthWriteMask = GL_TRUE;
+                glGetBooleanv(GL_DEPTH_WRITEMASK, &depthWriteMask);
+                glDepthMask(GL_TRUE);
                 glClearDepth(clearDepthValue);
                 glClearStencil(clearStencilValue);
                 glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+                glDepthMask(depthWriteMask);
             }
         });
     }

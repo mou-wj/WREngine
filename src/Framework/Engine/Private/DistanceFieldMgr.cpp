@@ -781,8 +781,8 @@ namespace Engine
             resolution,
             resolution,
             resolution,
-            RHI::ERHIFormat::B8G8R8_UNorm,
-            RHI::ERHITextureCreateFlag::ShaderResource | RHI::ERHITextureCreateFlag::TransferDest,
+            RHI::ERHIFormat::R32_Float,
+            RHI::ERHITextureCreateFlag::ShaderResource | RHI::ERHITextureCreateFlag::UAV,
             "SDFTexture");
         DistanceFieldJumpFlood3DPassInput input;
         input.SurfaceMaskTexture = surfaceMask;

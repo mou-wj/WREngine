@@ -158,6 +158,16 @@ namespace Editor
                         {
                             setting = static_cast<Engine::ETransparencyView>(selected);
                         }
+                        static const char* methods[]{"Sorted", "Weighted OIT", "Layered refraction"};
+                        auto& method = scene->GetSceneSetting().TransparencyMethod;
+                        int selectedMethod = static_cast<int>(method);
+                        ImGui::SetNextItemWidth(135);
+                        if (ImGui::Combo("Blend method", &selectedMethod, methods, IM_ARRAYSIZE(methods)))
+                        {
+                            method = static_cast<Engine::ETransparencyMethod>(selectedMethod);
+                        }
+                        ImGui::SetItemTooltip("Weighted OIT uses sorted blending when additive or refractive surfaces are visible."
+                            "\nLayered refraction includes previously drawn transparent surfaces.");
                     }
                     ImGui::TextDisabled("Viewport controls");
                     ImGui::TextUnformatted("Left click: select / clear | Light diamond: select light\n"

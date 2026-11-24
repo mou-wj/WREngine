@@ -253,6 +253,8 @@ namespace RHIOpenGL
 
         OpenGLQueue* GetQueue() const { return _queue; }
         const std::vector<std::function<void()>>& GetNativeCommands() const { return _nativeCommands; }
+        void EnqueueReadback(std::function<void()> readback) { _nativeCommands.emplace_back(std::move(readback)); }
+
     protected:
         std::vector<std::function<void()>> _nativeCommands;
         void UploadUniformBufferData(const RHI::RHIBatchedShaderParameters& parameter);

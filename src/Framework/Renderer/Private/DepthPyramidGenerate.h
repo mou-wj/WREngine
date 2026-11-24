@@ -14,10 +14,9 @@ namespace Renderer {
         SHADER_PARAMETER(Core::Int2, OutputExtent)
         SHADER_PARAMETER(uint32_t, InputMipLevel)
         SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float>, InputDepthTexture)
-        SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float>, InDepthMipTexture)
-        SHADER_PARAMETER_RHI_UAV(RWTexture2D<float>, SrcDepthMipTexture)
-        SHADER_PARAMETER_RHI_UAV(RWTexture2D<float>, OutDepthMipTexture)
-        SHADER_PARAMETER_SAMPLER(DepthSampler)
+        RDG_TEXTURE_ACCESS(DepthMipChain, RHI::ERHIResourceAccess::UAV)
+        SHADER_PARAMETER_RHI_UAV(DEPTH_PYRAMID_STORAGE, SrcDepthMipTexture)
+        SHADER_PARAMETER_RHI_UAV(DEPTH_PYRAMID_STORAGE, OutDepthMipTexture)
     END_SHADER_PARAMETER_STRUCT(DepthPyramidGenerateParameters)
 
     class DepthPyramidGenerateCS : public RenderCore::GlobalShader
@@ -30,8 +29,9 @@ namespace Renderer {
             return true;
         }
 
-        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters& parameters, RenderCore::ShaderCompilerEnvironment& outEnvironment)
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters&, RenderCore::ShaderCompilerEnvironment& environment)
         {
+            environment.bPreserveStorageImageFormats = true;
         }
 
         static const RenderCore::ShaderParametersMetadata* GetShaderParameterMetadata()

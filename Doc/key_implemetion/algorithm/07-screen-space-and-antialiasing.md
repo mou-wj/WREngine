@@ -12,9 +12,9 @@ HZBOcclusionTestCS 引用 `/tools/HZBOcclusionTestCS.sf`，独立 SSR 的深度�
 
 [DepthPyramidGenerateCS.sf](../../../shaders/tools/DepthPyramidGenerateCS.sf) mip0 从外部 depth 取值，后续 mip 对前一级 2×2 采样归约，边界 clamp。各级尺寸 max(1,width>>mip)，组数 ceil(size/8)。构造完整金字塔总 texel 数约 4/3 WH，计算和存储仍为 O(WH)。
 
-源码固定 min 归约且注释 reversed-Z，而主图形路径含 clear=1/Less；必须核对实际深度。若把 min 当标准 Z 下保守最远深度，会破坏遮挡/层级步进依据。
+当前主路径的窗口深度为 0 至 1，深度清理值为 1，比较函数为 Less。Min 归约选取邻域最前深度。需要保守最远深度的遮挡算法应使用与其判定匹配的归约方式。
 
-CPU 一个 RDG Pass 内循环 dispatch 各 mip，分别绑定单 mip 输入/输出视图。Pass 内相邻 dispatch 的读写可见性需要后端屏障配合，RDG 的 Pass 间分析不能自动证明它们之间已同步。
+深度金字塔使用 `R32_Float` 纹理，原场景深度仍为 `D32_Float` 深度附件。每个 Mip 调度一个 Compute Pass，同时声明整条 Mip 链的 UAV 访问，让 RDG 按写入顺序插入屏障。每个 Dispatch 分别绑定相邻的单 Mip 读写视图，Mip 0 从外部深度 SRV 读取。Shader 保留 SPIR-V 中的 `R32f` 图像格式，用于有类型存储读。
 
 HZB 的基本原理是用物体投影矩形的保守深度范围与覆盖该矩形的层级深度比较；当前 ProjectAABBToScreenSpace 忽略某些 w<=0/屏幕外角点，穿越近面或包围屏幕的盒子可能不保守，不能当通用保守裁剪。GPU Shader 还缺失，因此其接口不构成可验证完整遮挡剔除器。
 

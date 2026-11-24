@@ -42,7 +42,6 @@ namespace Renderer {
 					flags.SupportsInstanceData = true;
                     vfFlags = flags.PackedFlags;
                 }
-                meshBatch.MaterialProxy->ValidateSurfacePass();
                 const auto materialResource = meshBatch.MaterialProxy->GetResource();
                 const auto shdingMode = meshBatch.MaterialProxy->GetShadingModel();
             
@@ -123,7 +122,7 @@ namespace Renderer {
                 const auto& materialProxy = batch.MaterialProxy;
             
                 // Configure color blending.
-                if (materialProxy->GetBlendMode() == EBlendMode::Opaque)
+                if (!IsTransparentBlend(materialProxy->GetBlendMode()))
                 {
                     RHI::RHIColorBlendStateDesc blendDesc;
                     // Configure opaque color blending.

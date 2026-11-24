@@ -22,6 +22,7 @@ namespace RenderCore {
 
 
         bool bFullPrecisionInPS = false;
+        bool bPreserveStorageImageFormats = false;
 
         void Merge(const ShaderCompilerEnvironment& other)
         {
@@ -36,13 +37,15 @@ namespace RenderCore {
             }
             IncludePaths.insert(IncludePaths.end(), other.IncludePaths.begin(), other.IncludePaths.end());
             bFullPrecisionInPS |= other.bFullPrecisionInPS;
+            bPreserveStorageImageFormats |= other.bPreserveStorageImageFormats;
         }
         bool operator==(const ShaderCompilerEnvironment& other) const
         {
             return Definitions == other.Definitions &&
                 VirtualIncludes == other.VirtualIncludes &&
                 IncludePaths == other.IncludePaths &&
-                bFullPrecisionInPS == other.bFullPrecisionInPS;
+                bFullPrecisionInPS == other.bFullPrecisionInPS &&
+                bPreserveStorageImageFormats == other.bPreserveStorageImageFormats;
         }
         void SetDefine(const std::string& name, const std::string& value) { Definitions[name] = value; }
         void SetDefine(const std::string& name, int32_t value) { Definitions[name] = std::to_string(value); }

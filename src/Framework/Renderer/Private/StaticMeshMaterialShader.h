@@ -94,6 +94,25 @@ namespace Renderer
             GetShaderParameterMetadata();
     };
 
+    BEGIN_SHADER_PARAMETER_STRUCT(MaskedDepthShaderPSParameters)
+        SHADER_PARAMETER_STRUCT_REFERENCE(Engine::MaterialShaderParameters, Material)
+        SHADER_PARAMETER(Core::Float3, ShadowCameraPosition)
+        SHADER_PARAMETER(uint32_t, bStoreRadialDepth)
+    END_SHADER_PARAMETER_STRUCT(MaskedDepthShaderPSParameters)
+
+    class MaskedDepthShaderPS : public MeshMaterialShader
+    {
+    public:
+        DECLARE_MESH_MATERIAL_SHADER_TYPE(MaskedDepthShaderPS)
+
+        static bool ShouldCompilePermutation(const RenderCore::ShaderPermutationParameters& parameters);
+        static void ModifyShaderCompilerEnvironment(const RenderCore::ShaderPermutationParameters&, RenderCore::ShaderCompilerEnvironment& environment);
+        static const RenderCore::ShaderParametersMetadata* GetShaderParameterMetadata()
+        {
+            return MaskedDepthShaderPSParameters::GetMetaData();
+        }
+    };
+
     BEGIN_SHADER_PARAMETER_STRUCT(GBufferTextureParameters)
         SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, OutputColor)
         SHADER_PARAMETER_STRUCT_REFERENCE(GBufferInputParameters, GBufferInput)

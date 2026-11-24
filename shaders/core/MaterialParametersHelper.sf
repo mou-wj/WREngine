@@ -150,6 +150,17 @@ float3 SampleNormalTS(
 // Build Material
 //=============================================================================
 
+#if PIXEL_SHADER
+void ApplyMaterialOpacityMask(float2 uv)
+{
+    if (AlphaCutoff > 0.0)
+    {
+        float coverage = saturate(OpacityMask) * saturate(SampleOpacity(GetMaterialUV(uv)));
+        clip(coverage - AlphaCutoff);
+    }
+}
+#endif
+
 MaterialData BuildMaterialData(
     float2 UV, float2 uvGradientX = 0, float2 uvGradientY = 0)
 {

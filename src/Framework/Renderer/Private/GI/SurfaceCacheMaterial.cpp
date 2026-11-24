@@ -300,7 +300,6 @@ namespace Renderer
                 {
                     continue;
                 }
-                instance.Materials[slot]->ValidateSurfacePass();
                 const auto* normalParameter = instance.Materials[slot]->GetParameter("Normal", EMaterialParameterType::Texture);
                 const auto normalTexture = std::get<std::shared_ptr<TextureAsset>>(normalParameter->GetValueVariant());
                 Require(!normalTexture || (lod.VertexBuffers.TangentBuffer.NumComponents == 4 &&

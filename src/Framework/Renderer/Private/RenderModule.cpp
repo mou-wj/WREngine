@@ -94,7 +94,8 @@ namespace Renderer {
 		auto depthText = builder.RegisterExternalTexture("DepthTarget", poolDepthTarget.get());
         uint32_t maxMipLevel = std::max<uint32_t>(1, (uint32_t)std::log2(std::max<uint32_t>(1, depthDesc.Width)));
         depthDesc.MipLevels = maxMipLevel;
-        depthDesc.Usage |= RHI::ERHITextureCreateFlag::UAV;
+        depthDesc.Format = RHI::ERHIFormat::R32_Float;
+        depthDesc.Usage = RHI::ERHITextureCreateFlag::ShaderResource | RHI::ERHITextureCreateFlag::UAV;
         auto poolDepthPyramidTarget = GRenderTargetPool.GetFreeRenderTarget(depthDesc);
         poolDepthPyramidTarget->MarkUsed(true);
         auto preDepthText = builder.RegisterExternalTexture("DepthTargetPyramid", poolDepthPyramidTarget.get());
@@ -301,6 +302,7 @@ namespace Renderer {
         //计算lut预计算贴图
         RenderCore::Shader* shader = gShaderMap.GetShader(shaderType, 2);
         if (!shader) return;
+        cmdlist.Begin();
         RHI::RHIComputePipelineStateDesc computeDesc;
         computeDesc.ComputeShader = dynamic_cast<RHI::RHIComputeShader*>(shader->GetRHIShader());
         auto pipelineState = RHI::RHIPipelineStateCache::GetOrCreateComputePipelineState(computeDesc);

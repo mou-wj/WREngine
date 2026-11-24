@@ -1,0 +1,13 @@
+#include "/Generated/ShaderParameters/TransparencyCompositeParameters.sf"
+
+float4 MainPS(float4 pixel : SV_Position) : SV_Target0
+{
+    int3 coord = int3(int2(pixel.xy), 0);
+    float2 coverage = WeightedCoverage.Load(coord).xy;
+    if (coverage.x <= 0.0)
+    {
+        return 0.0;
+    }
+    float3 color = WeightedRadiance.Load(coord).rgb / coverage.x;
+    return float4(color, 1.0 - exp(-coverage.y));
+}

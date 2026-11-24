@@ -12,6 +12,33 @@ using namespace RenderCore;
 using namespace Engine;
 namespace Renderer {
     
+    namespace
+    {
+        void GetMaskedDepthShaders(const MeshBatch& batch, bool bInstanced, const Shader*& vertex, const Shader*& pixel)
+        {
+            auto* factory = VertexFactoryType::GetRegisterMap().at("LocalVertexFactory");
+            LocalVertexFactoryFeatureFlags flags;
+            flags.PackedFlags = batch.VertexFactory->GetVertexFactoryFlags();
+            flags.SupportsInstanceData = bInstanced;
+            MeshMaterialShaderKey key;
+            key.VF = factory;
+            key.VertexFactoryFlags = flags.PackedFlags;
+            key.ShaderType = static_cast<MeshMaterialShaderType*>(StaticMeshMaterialShaderVS::GetStaticType());
+            vertex = batch.MaterialProxy->GetResource()->GetMeshShader(key);
+            key.ShaderType = static_cast<MeshMaterialShaderType*>(MaskedDepthShaderPS::GetStaticType());
+            pixel = batch.MaterialProxy->GetResource()->GetMeshShader(key);
+        }
+
+        void SetMaskedDepthParameters(RenderGraphBuilder& builder, const MeshBatch& batch, const Core::Mat4& viewProjection,
+            StaticMeshMaterialShaderVSParameters& vertex, MaskedDepthShaderPSParameters& pixel)
+        {
+            vertex.vertexFactoryParameters.ViewProjection = viewProjection;
+            vertex.vertexFactoryParameters.LocalToWorld = batch.LocalToWorld;
+            vertex.vertexFactoryParameters.LocalVFInstanceInfo.InstanceData = batch.InstanceDataBufferSRV;
+            BuildShaderParameters(batch.MaterialProxy.get(), builder, pixel.Material);
+        }
+    }
+
     void SceneRenderer::AddClearRenderTargetsPass(RenderCore::RenderGraphBuilder& bulder, RenderCore::RenderTargetBindingSlots& renderTargetBindingSlots)
     {
         BEGIN_SHADER_PARAMETER_STRUCT(ClearTargetParameters)
@@ -492,7 +519,7 @@ namespace Renderer {
 
         //rendertarget info
         pipelineDesc.AttachmentDesc.ColorAttachmentCount = 0;
-        pipelineDesc.AttachmentDesc.DepthActions = ERenderTargetActions::Clear_Store;
+        auto depthAction = ERenderTargetActions::Clear_Store;
         pipelineDesc.AttachmentDesc.bEnableDepth = true;
         pipelineDesc.AttachmentDesc.DepthStencilFormat = RHI::ERHIFormat::D32_Float;
         auto vsShaderType = ShaderType::GetRegisterMap() [ShaderType::EShaderTypeFlag::Global]["PositionOnlyVS"];
@@ -507,7 +534,8 @@ namespace Renderer {
                 flags.SupportsInstanceData = true;
                 vfFlags = flags.PackedFlags;
             }
-            if (meshBatch.MaterialProxy->GetBlendMode() == EBlendMode::Opaque) {
+            if (!IsTransparentBlend(meshBatch.MaterialProxy->GetBlendMode())) {
+                const bool bMasked = meshBatch.MaterialProxy->GetBlendMode() == EBlendMode::Masked;
                 // 创建光栅化状态
                 RHI::RHIRasterizerStateDesc rasterizerDesc;
                 rasterizerDesc.PolygonMode = RHI::ERHIPolygonMode::Fill;
@@ -524,16 +552,23 @@ namespace Renderer {
                     vsPermutationId = 1;
                 }
                 //auto vfFlags = batch.VertexFactory->GetVertexFactoryFlags();
-                auto vertexShader = GShaderMap.GetShader(vsShaderType, vsPermutationId);
-                pipelineDesc.ShaderStages.VertexShader = dynamic_cast<RHI::RHIVertexShader*>(vertexShader->GetRHIShader());
-
-               
+                const Shader* vertexShader = GShaderMap.GetShader(vsShaderType, vsPermutationId);
+                const Shader* pixelShader = nullptr;
                 pipelineDesc.VertexDescState = GetVertexOnlyState(supportInstance);
+                if (bMasked)
+                {
+                    GetMaskedDepthShaders(meshBatch, supportInstance, vertexShader, pixelShader);
+                    auto* factory = static_cast<LocalVertexFactory*>(meshBatch.VertexFactory);
+                    pipelineDesc.VertexDescState = supportInstance ? factory->GetRHIInstancedVertexDescState() : factory->GetRHIVertexDescState();
+                }
+                pipelineDesc.ShaderStages.VertexShader = static_cast<RHI::RHIVertexShader*>(vertexShader->GetRHIShader());
+                pipelineDesc.ShaderStages.FragmentShader = pixelShader ? static_cast<RHI::RHIFragmentShader*>(pixelShader->GetRHIShader()) : nullptr;
                 RHI::RHIColorBlendStateDesc blendDesc;
                 // 创建颜色混合状态
                 blendDesc.Attachments = {};
                 auto colorBlendState = RHIPipelineStateCache::GetOrCreateColorBlendState(blendDesc);
                 pipelineDesc.ColorBlendState = colorBlendState;
+                pipelineDesc.AttachmentDesc.DepthActions = depthAction;
                 auto pipeline = RHIPipelineStateCache::GetOrCreateGraphicsPipelineState(pipelineDesc);
 
 
@@ -542,6 +577,8 @@ namespace Renderer {
 
                 BEGIN_SHADER_PARAMETER_STRUCT(PassParameters)
                     SHADER_PARAMETER_STRUCT_REFERENCE(PositionOnlyVSParameters, vertexParameters)
+                    SHADER_PARAMETER_STRUCT_REFERENCE(StaticMeshMaterialShaderVSParameters, MaskedVertex)
+                    SHADER_PARAMETER_STRUCT_REFERENCE(MaskedDepthShaderPSParameters, MaskedPixel)
                     SHADER_PARAMETER_RENDER_TARGET_BINDING_SLOTS(renderTargetSlots)
                 END_SHADER_PARAMETER_STRUCT(PassParameters)
 
@@ -551,8 +588,13 @@ namespace Renderer {
                 if (supportInstance) {
                     params->vertexParameters.LocalVFInstanceInfo.InstanceData = meshBatch.InstanceDataBufferSRV;
                 }
+                if (bMasked)
+                {
+                    SetMaskedDepthParameters(graphBuilder, meshBatch, viewProj, params->MaskedVertex, params->MaskedPixel);
+                }
                 params->renderTargetSlots.DepthStencil.Texture = depth;
-                params->renderTargetSlots.DepthStencil.DepthAction = ERenderTargetActions::Clear_Store;
+                params->renderTargetSlots.DepthStencil.DepthAction = depthAction;
+                depthAction = ERenderTargetActions::Load_Store;
                 auto width = depth->GetDesc().Width;
 				auto height = depth->GetDesc().Height;
                 graphBuilder.AddPass<PassParameters>(
@@ -567,12 +609,29 @@ namespace Renderer {
                         cmd.SetGraphicPipelineState(pipeline);
                         //绑定vertexfactory
                         meshBatch.VertexFactory->Bind(cmd);
-                        if (supportInstance) {
-                            cmd.SetStreamSource(1, meshBatch.InstanceDataBufferAccessor->GetInstanceIdBuffer()->GetRHI(), 0);
+                        if (supportInstance)
+                        {
+                            auto* instances = meshBatch.InstanceDataBufferAccessor->GetInstanceIdBuffer()->GetRHI();
+                            if (bMasked)
+                            {
+                                static_cast<LocalVertexFactory*>(meshBatch.VertexFactory)->BindInstanceBuffer(cmd, instances, 0);
+                            }
+                            else
+                            {
+                                cmd.SetStreamSource(1, instances, 0);
+                            }
                         }
                         // Bind Pipeline
                         //设置vertex参数
-                        SetShaderParameters(cmd, vertexShader, &params->vertexParameters);
+                        if (bMasked)
+                        {
+                            SetShaderParameters(cmd, vertexShader, &params->MaskedVertex);
+                            SetShaderParameters(cmd, pixelShader, &params->MaskedPixel);
+                        }
+                        else
+                        {
+                            SetShaderParameters(cmd, vertexShader, &params->vertexParameters);
+                        }
 
                         //设置pixel参数
                         auto boundRenderTarget = params->renderTargetSlots.GetBoundRenderTarget();
@@ -794,13 +853,18 @@ namespace Renderer {
                     vsPermutationId = 1;
                 }
                 //auto vfFlags = batch.VertexFactory->GetVertexFactoryFlags();
-                auto vertexShader = GShaderMap.GetShader(vsShaderType, vsPermutationId);
-                pipelineDesc.ShaderStages.VertexShader = dynamic_cast<RHI::RHIVertexShader*>(vertexShader->GetRHIShader());
-
-                auto pixelShader =
-                    GShaderMap.GetShader(psShaderType, psPermutationId);
-                pipelineDesc.ShaderStages.FragmentShader = dynamic_cast<RHI::RHIFragmentShader*>(pixelShader->GetRHIShader());
+                const Shader* vertexShader = GShaderMap.GetShader(vsShaderType, vsPermutationId);
+                const Shader* pixelShader = GShaderMap.GetShader(psShaderType, psPermutationId);
+                const bool bMasked = batch.MaterialProxy->GetBlendMode() == EBlendMode::Masked;
                 pipelineDesc.VertexDescState = GetVertexOnlyState(supportInstance);
+                if (bMasked)
+                {
+                    GetMaskedDepthShaders(batch, supportInstance, vertexShader, pixelShader);
+                    auto* factory = static_cast<LocalVertexFactory*>(batch.VertexFactory);
+                    pipelineDesc.VertexDescState = supportInstance ? factory->GetRHIInstancedVertexDescState() : factory->GetRHIVertexDescState();
+                }
+                pipelineDesc.ShaderStages.VertexShader = static_cast<RHI::RHIVertexShader*>(vertexShader->GetRHIShader());
+                pipelineDesc.ShaderStages.FragmentShader = static_cast<RHI::RHIFragmentShader*>(pixelShader->GetRHIShader());
                 RHI::RHIColorBlendStateDesc blendDesc;
                 // 创建颜色混合状态
                 RHI::RHIColorBlendAttachmentDesc blendAttachDesc;
@@ -818,12 +882,20 @@ namespace Renderer {
                 BEGIN_SHADER_PARAMETER_STRUCT(PassParameters)
                     SHADER_PARAMETER_STRUCT_REFERENCE(PositionOnlyVSParameters, vertexParameters)
                     SHADER_PARAMETER_STRUCT_REFERENCE(DepthShadowPassPSParameters, pixelParameters)
+                    SHADER_PARAMETER_STRUCT_REFERENCE(StaticMeshMaterialShaderVSParameters, MaskedVertex)
+                    SHADER_PARAMETER_STRUCT_REFERENCE(MaskedDepthShaderPSParameters, MaskedPixel)
                 END_SHADER_PARAMETER_STRUCT(PassParameters)
 
                 auto* params = graphBuilder.AllocateParameter<PassParameters>();
                 params->vertexParameters.ViewProjection = shadowView.ViewProjection;
                 params->vertexParameters.Model = batch.LocalToWorld;
                 params->pixelParameters.CameraWorldPosition = shadowView.CameraPos;
+                if (bMasked)
+                {
+                    SetMaskedDepthParameters(graphBuilder, batch, shadowView.ViewProjection, params->MaskedVertex, params->MaskedPixel);
+                    params->MaskedPixel.ShadowCameraPosition = shadowView.CameraPos;
+                    params->MaskedPixel.bStoreRadialDepth = shadowView.bWantRawDepth ? 1u : 0u;
+                }
                 params->pixelParameters.renderTargetSlots.NumColorRenderTargets = 1;
                 if (supportInstance) {
                     params->vertexParameters.LocalVFInstanceInfo.InstanceData = batch.InstanceDataBufferSRV;
@@ -856,15 +928,32 @@ namespace Renderer {
                         cmd.SetGraphicPipelineState(pipeline);
                         //绑定vertexfactory
                         batch.VertexFactory->Bind(cmd);
-                        if (supportInstance) {
-                            cmd.SetStreamSource(1, batch.InstanceDataBufferAccessor->GetInstanceIdBuffer()->GetRHI(),0);
+                        if (supportInstance)
+                        {
+                            auto* instances = batch.InstanceDataBufferAccessor->GetInstanceIdBuffer()->GetRHI();
+                            if (bMasked)
+                            {
+                                static_cast<LocalVertexFactory*>(batch.VertexFactory)->BindInstanceBuffer(cmd, instances, 0);
+                            }
+                            else
+                            {
+                                cmd.SetStreamSource(1, instances, 0);
+                            }
                         }
                         // Bind Pipeline
                         //设置vertex参数
-                        SetShaderParameters(cmd, vertexShader, &params->vertexParameters);
+                        if (bMasked)
+                        {
+                            SetShaderParameters(cmd, vertexShader, &params->MaskedVertex);
+                            SetShaderParameters(cmd, pixelShader, &params->MaskedPixel);
+                        }
+                        else
+                        {
+                            SetShaderParameters(cmd, vertexShader, &params->vertexParameters);
+                            SetShaderParameters(cmd, pixelShader, &params->pixelParameters);
+                        }
 
                         //设置pixel参数
-                        SetShaderParameters(cmd, pixelShader, &params->pixelParameters);
                         auto boundRenderTarget = params->pixelParameters.renderTargetSlots.GetBoundRenderTarget();
                         RHIRenderPassInfo passInfo;
                         passInfo.RenderTargets = boundRenderTarget;

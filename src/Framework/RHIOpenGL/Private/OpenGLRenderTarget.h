@@ -22,8 +22,8 @@ namespace RHIOpenGL
         void Destroy();
         void Bind() const;
         void Unbind() const;
-        void AttachColorTexture(GLuint texture, uint32_t index = 0, GLenum target = GL_TEXTURE_2D);
-        void AttachDepthTexture(GLuint texture, GLenum target = GL_TEXTURE_2D);
+        void AttachColorTexture(GLuint texture, uint32_t index = 0, GLenum target = GL_TEXTURE_2D, GLint mip = 0, GLint slice = 0);
+        void AttachDepthTexture(GLuint texture, GLenum target = GL_TEXTURE_2D, GLint mip = 0, GLint slice = 0);
         void AttachStencilTexture(GLuint texture, GLenum target = GL_TEXTURE_2D);
         GLenum CheckStatus() const;
         bool IsComplete() const;

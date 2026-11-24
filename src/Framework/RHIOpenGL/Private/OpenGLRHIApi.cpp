@@ -11,6 +11,24 @@
 
 namespace RHIOpenGL
 {
+    namespace
+    {
+        class OpenGLReadbackCommand final : public RHI::RHICommandBase
+        {
+        public:
+            explicit OpenGLReadbackCommand(std::function<void()> readback) : m_Readback(std::move(readback)) {}
+
+            void Execute(RHI::RHICommandListBase& list) override
+            {
+                auto* context = dynamic_cast<OpenGLCommandContext*>(list.GetContext());
+                context->EnqueueReadback(std::move(m_Readback));
+            }
+
+        private:
+            std::function<void()> m_Readback;
+        };
+    }
+
     OpenGLRHIApi::~OpenGLRHIApi() {
         Shutdown();
     }
@@ -128,9 +146,8 @@ namespace RHIOpenGL
 
     void* OpenGLRHIApi::MapReadTexture(RHI::RHICommandListBase& cmdList, RHI::RHITexture* texture, const RHI::RHIReadTextureInfo& info)
     {
-        (void)cmdList;
         auto* glTexture = dynamic_cast<OpenGLTexture*>(texture);
-        if (!glTexture)
+        if (!glTexture || !dynamic_cast<OpenGLCommandContext*>(cmdList.GetContext()))
         {
             return nullptr;
         }
@@ -157,20 +174,23 @@ namespace RHIOpenGL
         const GLuint handle=glTexture->GetHandle();
         const GLenum format=GetOpenGLTextureFormat(desc.Format), type=GetOpenGLTextureType(desc.Format);
         const uint32_t z=desc.Type==RHI::ERHITextureType::Texture3D ? 0 : info.ArraySlice;
-        EnqueueTaskAndWait([=]()
+        // The data becomes readable after the submitted command list's fence.
+        cmdList.AddCommand<OpenGLReadbackCommand>([=]()
         {
-            GLint alignment=4; glGetIntegerv(GL_PACK_ALIGNMENT,&alignment); glPixelStorei(GL_PACK_ALIGNMENT,1);
-            glGetTextureSubImage(handle,info.MipLevel,0,0,z,mipWidth,mipHeight,mipDepth,format,type,static_cast<GLsizei>(byteCount),mappedData);
-            glPixelStorei(GL_PACK_ALIGNMENT,alignment);
+            GLint alignment = 4;
+            glGetIntegerv(GL_PACK_ALIGNMENT, &alignment);
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glGetTextureSubImage(handle, info.MipLevel, 0, 0, z, mipWidth, mipHeight, mipDepth, format, type,
+                static_cast<GLsizei>(byteCount), mappedData);
+            glPixelStorei(GL_PACK_ALIGNMENT, alignment);
         });
         return mappedData;
     }
 
     void* OpenGLRHIApi::MapReadBuffer(RHI::RHICommandListBase& cmdList, RHI::RHIBuffer* buffer, const RHI::RHIReadBufferInfo& info)
     {
-        (void)cmdList;
         auto* glBuffer = dynamic_cast<OpenGLBuffer*>(buffer);
-        if (!glBuffer || info.Offset > glBuffer->GetDesc().Size)
+        if (!glBuffer || !dynamic_cast<OpenGLCommandContext*>(cmdList.GetContext()) || info.Offset > glBuffer->GetDesc().Size)
         {
             return nullptr;
         }
@@ -188,14 +208,10 @@ namespace RHIOpenGL
             return nullptr;
         }
 
-        // 同 MapReadTexture：等待读回完成后再返回指针。
         const GLuint bufferHandle = glBuffer->GetHandle();
-        EnqueueTaskAndWait([bufferHandle, &info, readSize, mappedData]()
+        cmdList.AddCommand<OpenGLReadbackCommand>([bufferHandle, offset = info.Offset, readSize, mappedData]()
         {
-            glBindBuffer(GL_ARRAY_BUFFER, bufferHandle);
-            glGetBufferSubData(GL_ARRAY_BUFFER, static_cast<GLintptr>(info.Offset),
-                static_cast<GLsizeiptr>(readSize), mappedData);
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glGetNamedBufferSubData(bufferHandle, static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(readSize), mappedData);
         });
         return mappedData;
     }

@@ -80,6 +80,12 @@ struct VertexFactoryVSToPS
     float4 ClipPosition : TEXCOORD5;
 };
 
+struct VSOutput
+{
+    float4 Position : SV_Position;
+    VertexFactoryVSToPS FactoryInterpolants;
+};
+
 #include "/core/ShadingContext.sf"
 
 
@@ -183,12 +189,6 @@ float4 VertexFactoryGetClipPosition(VertexFactoryIntermediates Intermediates)
 {
     return mul(ViewProjection, float4(Intermediates.WorldPosition, 1.0));
 }
-
-struct VSOutput
-{
-    float4 Position : SV_Position;            
-    VertexFactoryVSToPS FactoryInterpolants; 
-};
 
 VSOutput GetVertexShaderOutput(VertexFactoryInput Input)
 {

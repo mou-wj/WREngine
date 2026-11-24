@@ -52,7 +52,8 @@ namespace Engine
         auto resource = std::shared_ptr<EnvironmentLightResource>(new EnvironmentLightResource);
         resource->m_InputTexture = inputAsset;
         RHI::RHITextureDesc desc;
-        desc.Format = RHI::ERHIFormat::B8G8R8A8_UNorm;
+        // The generated maps are written by compute and need a typed UAV format on DirectX12.
+        desc.Format = RHI::ERHIFormat::R8G8B8A8_UNorm;
         desc.Width = 512; desc.Height = 512; desc.ArraySize = 6;
         desc.Type = RHI::ERHITextureType::TextureCube;
         desc.Usage = RHI::ERHITextureCreateFlag::ShaderResource | RHI::ERHITextureCreateFlag::UAV;

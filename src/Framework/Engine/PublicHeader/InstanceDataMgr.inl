@@ -110,7 +110,7 @@ namespace Engine
                 RenderCore::TransitionBufferImmediate(
                     RHI::GRHIApi,
                     m_InstanceDataBuffer.get(),
-                    RHI::ERHIResourceAccess::ShadingRateSource,
+                    RHI::ERHIResourceAccess::SRV,
                     RHI::EQueueType::Graphics);
             }
 

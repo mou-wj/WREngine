@@ -34,7 +34,8 @@ void BuildShaderParameters(const MaterialRenderProxy* proxy, RenderGraphBuilder&
     out.UniformData.NormalIntensity = scalar("NormalIntensity");
     out.UniformData.UVTiling = {tiling[0],tiling[1]};
     out.UniformData.UVOffset = {offset[0],offset[1]};
-    out.UniformData.AlphaCutoff = scalar("AlphaCutoff");
+    out.UniformData.AlphaCutoff = proxy->GetBlendMode() == EBlendMode::Masked ?
+        std::clamp(scalar("AlphaCutoff"), 0.0f, 1.0f) : 0.0f;
     const auto saturate = [](float value) { return std::clamp(value, 0.0f, 1.0f); };
     out.UniformData.ShadingModelData = {};
     if (proxy->GetShadingModel() == EShadingModel::Subsurface)

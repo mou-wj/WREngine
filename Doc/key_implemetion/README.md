@@ -80,7 +80,7 @@
 | [GI Voxel Lighting](algorithm/22-voxel-lighting.md) | 如何将世界探针重采样为六轴辐射，安全地进行远场查询并在必要时回退？ |
 | [Froxel 体积渲染](algorithm/23-volume-rendering.md) | 如何离散化视锥、按场景深度积分，并用空间重建和帧间历史稳定体积光？ |
 | [天空大气与水面](algorithm/24-atmosphere-and-water.md) | 如何积分大气散射，求出波面交点并合成反射与折射？ |
-| [半透明与屏幕空间折射](algorithm/25-transparency-rendering.md) | 如何按对象深度合成 Alpha 与 Additive，重建透射偏移并计算材质吸收？ |
+| [半透明与屏幕空间折射](algorithm/25-transparency-rendering.md) | 如何排序混合、加权处理相交透明面、采样已绘制的透射层并计算材质吸收？ |
 
 ## 如何阅读和核查
 

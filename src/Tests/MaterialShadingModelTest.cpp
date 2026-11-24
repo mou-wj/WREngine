@@ -474,17 +474,58 @@ namespace Test
             const auto baseline = render()[center];
             // The existing deferred IBL path effectively doubles an Unlit surface's color.
             check(baseline, {0.4f, 0.8f, 1.2f}, "Opaque background");
+
+            const auto cutoutMaterial = unlit({0.4f, 0.1f, 0.2f}, EBlendMode::Masked, 1);
+            RHITextureDesc maskDesc{};
+            maskDesc.Width = 2;
+            maskDesc.Height = 1;
+            maskDesc.Format = ERHIFormat::R8G8B8A8_UNorm;
+            maskDesc.Usage = ERHITextureCreateFlag::ShaderResource | ERHITextureCreateFlag::TransferDest;
+            auto maskTexture = std::make_shared<RenderTexture>(maskDesc);
+            maskTexture->InitRHIResource();
+            const std::array<uint8_t, 8> cutoutPixels{0, 0, 0, 255, 255, 255, 255, 255};
+            maskTexture->UploadData(cutoutPixels.data(), 0, 0);
+            cutoutMaterial->GetMaterial()->SetParameter("Opacity", TextureAsset::Create("TransparencyTestMask", maskTexture));
+            StaticMeshComponent cutout;
+            cutout.SetStaticMesh(plane->GetMesh());
+            cutout.SetWorldLocation({0, 0, 2});
+            cutout.SetWorldRotation({90.0f, 0, 0});
+            cutout.SetMaterial(0, cutoutMaterial->GetMaterial());
+            scene->AddPrimitive(&cutout);
+            const auto masked = render();
+            check(masked[center - 35], {baseline.X, baseline.Y, baseline.Z}, "Alpha-cut hole reveals the wall");
+            check(masked[center + 35], {0.8f, 0.2f, 0.4f}, "Alpha-cut solid section covers the wall");
+
             scene->AddPrimitive(&nearPlane);
             scene->AddPrimitive(&farPlane);
+            const auto throughCutout = render();
+            Require(throughCutout[center - 35].X > baseline.X, "Cutout hole wrote opaque depth");
+            check(throughCutout[center + 35], {0.8f, 0.2f, 0.4f}, "Opaque cutout surface rejects transparent draws behind it");
+            scene->RemovePrimitive(&cutout);
             const auto sorted = render()[center];
             check(sorted, {0.60f, 0.20f, 0.55f}, "Sort independently of registration order");
             Require(std::abs(sorted.W - baseline.W) < 0.001f, "Alpha blending modified scene alpha");
             nearPlane.SetWorldLocation({0, 0, -0.5f});
             check(render()[center], {0.35f, 0.20f, 0.80f}, "Moving mesh changes sort order");
 
+            auto& settings = scene->GetSceneSetting();
+            settings.TransparencyMethod = ETransparencyMethod::Weighted;
             nearPlane.SetWorldLocation({0, 0, 1});
+            farPlane.SetWorldLocation({0, 0, 1});
+            farPlane.SetWorldRotation({90.0f, 25.0f, 0.0f});
+            const auto weighted = render();
+            check(weighted[center], {0.475f, 0.20f, 0.675f}, "Weighted overlap accumulates color and coverage");
+            scene->RemovePrimitive(&nearPlane);
+            scene->RemovePrimitive(&farPlane);
+            scene->FlushPendingUpdates();
+            scene->AddPrimitive(&farPlane);
+            scene->AddPrimitive(&nearPlane);
+            Require(CenterDifference(weighted, render()) < 0.004f, "Intersecting weighted surfaces depend on draw order");
+            farPlane.SetWorldRotation({90.0f, 0, 0});
+            farPlane.SetWorldLocation({0, 0, 0});
             nearColor->GetMaterial()->SetBlendMode(EBlendMode::Additive);
-            check(render()[center], {0.70f, 0.40f, 1.10f}, "Additive retains destination color");
+            check(render()[center], {0.70f, 0.40f, 1.10f}, "Weighted fallback preserves additive blend");
+            settings.TransparencyMethod = ETransparencyMethod::Sorted;
             nearPlane.SetWorldLocation({0, 0, -2});
             farPlane.SetWorldLocation({0, 0, -3});
             check(render()[center], {baseline.X, baseline.Y, baseline.Z}, "Opaque depth blocks both blends");
@@ -502,7 +543,13 @@ namespace Test
 
             optics->SetParameter("IndexOfRefraction", 1.6f);
             nearPlane.SetWorldRotation({78.0f, 0.0f, 0.0f});
-            auto& settings = scene->GetSceneSetting();
+            farPlane.SetWorldLocation({0, 0, 0});
+            scene->AddPrimitive(&farPlane);
+            settings.TransparencyMethod = ETransparencyMethod::LayeredRefraction;
+            check(render()[center], {0.10f, 0.40f, 1.10f}, "Layered glass transmits the previously blended surface");
+            settings.TransparencyMethod = ETransparencyMethod::Sorted;
+            check(render()[center], {0.20f, 0.80f, 1.20f}, "Sorted glass uses the opaque background");
+            scene->RemovePrimitive(&farPlane);
             settings.TransparencyView = ETransparencyView::Refraction;
             const auto displaced = render()[center];
             optics->SetParameter("RefractionStrength", 0.0f);
@@ -642,14 +689,33 @@ namespace Test
             const auto caster = StaticMeshAsset::CreateShape(EBasicMeshShape::Cube);
             StaticMeshComponent occluder;
             occluder.SetStaticMesh(caster->GetMesh());
-            occluder.SetWorldLocation({-1.44f, 0.54f, 1.9f});
+            occluder.SetWorldLocation({1.1f, 0.55f, 2.1f});
             occluder.SetWorldScale({0.58f, 0.58f, 0.58f});
-            occluder.SetMaterial(0, background->GetMaterial());
-            scene->AddPrimitive(&occluder);
-            directional.SetEnabled(true);
+            const auto maskedCaster = unlit({0.2f, 0.4f, 0.6f}, EBlendMode::Masked, 1);
+            maskedCaster->GetMaterial()->SetParameter("OpacityMask", 0.0f);
+            occluder.SetMaterial(0, maskedCaster->GetMaterial());
+            spot.SetEnabled(true);
+            spot.SetCastShadow(true);
             const auto unshadowed = render();
-            directional.SetCastShadow(true);
-            Require(CenterDifference(unshadowed, render()) > 0.01f, "Transparent surface did not receive the opaque shadow");
+            scene->AddPrimitive(&occluder);
+            spot.SetCastShadow(true); // Refresh the shadow atlas for the new caster.
+            const float cutoutShadow = CenterDifference(unshadowed, render());
+            std::cout << "Alpha-cut hole shadow difference=" << cutoutShadow << std::endl;
+            Require(cutoutShadow < 0.01f, "Alpha-cut hole casts a shadow");
+            occluder.SetMaterial(0, background->GetMaterial());
+            spot.SetCastShadow(true);
+            const auto opaqueShadow = render();
+            const float opaqueDifference = CenterDifference(unshadowed, opaqueShadow);
+            std::cout << "Opaque control shadow difference=" << opaqueDifference << std::endl;
+            Require(opaqueDifference > 0.01f, "Opaque control did not shadow the transparent surface");
+            maskedCaster->GetMaterial()->SetParameter("OpacityMask", 1.0f);
+            occluder.SetMaterial(0, maskedCaster->GetMaterial());
+            spot.SetCastShadow(true);
+            const auto solid = render();
+            const float solidShadow = CenterDifference(unshadowed, solid);
+            std::cout << "Solid alpha-cut shadow difference=" << solidShadow << std::endl;
+            Require(solidShadow > 0.01f, "Solid alpha-cut caster did not shadow the transparent surface");
+            Require(CenterDifference(opaqueShadow, solid) < 0.015f, "Solid cutout and opaque caster have different shadows");
             scene->RemovePrimitive(&occluder);
             for (auto* light : lights)
             {

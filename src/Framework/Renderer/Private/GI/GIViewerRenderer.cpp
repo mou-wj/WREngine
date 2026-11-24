@@ -224,9 +224,9 @@ namespace Renderer
         const auto depth = CreateTexture(builder, "LumenViewer.Depth", outputDesc.Width, outputDesc.Height,
             RHI::ERHIFormat::D32_Float, depthUsage);
         const uint32_t maxMipLevel = std::max(1u, static_cast<uint32_t>(std::log2(std::max(outputDesc.Width, outputDesc.Height))));
-        const auto pyramidUsage = depthUsage | RHI::ERHITextureCreateFlag::UAV;
+        const auto pyramidUsage = RHI::ERHITextureCreateFlag::ShaderResource | RHI::ERHITextureCreateFlag::UAV;
         const auto depthPyramid = bReflections ? nullptr : CreateTexture(builder, "LumenViewer.DepthPyramid", outputDesc.Width,
-            outputDesc.Height, RHI::ERHIFormat::D32_Float, pyramidUsage, maxMipLevel);
+            outputDesc.Height, RHI::ERHIFormat::R32_Float, pyramidUsage, maxMipLevel);
 
         const auto gbufferInfo = CreateGBufferInfo({});
         std::vector<RenderCore::RenderGraphTextureRef> gbuffers;

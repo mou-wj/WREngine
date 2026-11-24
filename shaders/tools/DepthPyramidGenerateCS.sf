@@ -1,4 +1,8 @@
-#include "/core/ShadingCommon.sf"
+#ifdef __spirv__
+#define DEPTH_PYRAMID_STORAGE [[vk::image_format("r32f")]] RWTexture2D<float>
+#else
+#define DEPTH_PYRAMID_STORAGE RWTexture2D<float>
+#endif
 #include "/Generated/ShaderParameters/DepthPyramidGenerateParameters.sf"
 
 [numthreads(8, 8, 1)]
@@ -26,22 +30,19 @@ void MainCS(uint3 dispatchThreadID : SV_DispatchThreadID)
         return;
     }
 
-    // MipN (N>0): read from the previous mip in OutputDepthMipTexture, then write
-    // the downsampled result back into the current mip of the same UAV.
+    // Each view exposes one mip. RDG orders the previous dispatch before this read.
     uint2 srcBase = outCoord << 1;
     uint2 s00 = min(srcBase + uint2(0u, 0u), srcSize - 1u);
     uint2 s10 = min(srcBase + uint2(1u, 0u), srcSize - 1u);
     uint2 s01 = min(srcBase + uint2(0u, 1u), srcSize - 1u);
     uint2 s11 = min(srcBase + uint2(1u, 1u), srcSize - 1u);
 
-    // Use the same UAV as both input and output. The previous mip is read via InputMipLevel,
-    // and the current dispatch writes to the current mip of OutputDepthMipTexture.
     float d00 = SrcDepthMipTexture.Load(int2((int)s00.x, (int)s00.y)).r;
     float d10 = SrcDepthMipTexture.Load(int2((int)s10.x, (int)s10.y)).r;
     float d01 = SrcDepthMipTexture.Load(int2((int)s01.x, (int)s01.y)).r;
     float d11 = SrcDepthMipTexture.Load(int2((int)s11.x, (int)s11.y)).r;
 
-    // For reversed-Z depth, taking min keeps the furthest depth and makes conservative tracing.
+    // Keep the minimum source depth, consistent with the existing scene-depth convention.
     float mipDepth = min(min(d00, d10), min(d01, d11));
     OutDepthMipTexture[outCoord] = mipDepth;
 }
