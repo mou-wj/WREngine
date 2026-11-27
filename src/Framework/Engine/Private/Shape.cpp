@@ -252,13 +252,14 @@ static void BuildSphereData(
             const uint32_t first = static_cast<uint32_t>(lat * lonCount + lon);
             const uint32_t second = static_cast<uint32_t>((lat + 1) * lonCount + lon);
 
+            // Keep the front face on the exterior, where the vertex normals point.
             outIndices.push_back(first);
-            outIndices.push_back(second);
             outIndices.push_back(second + 1);
+            outIndices.push_back(second);
 
             outIndices.push_back(first);
-            outIndices.push_back(second + 1);
             outIndices.push_back(first + 1);
+            outIndices.push_back(second + 1);
         }
     }
 }

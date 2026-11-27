@@ -4,9 +4,11 @@
 #include <functional>
 #include <memory>
 
-namespace Engine { class StaticMeshComponent; class MaterialAsset; class TextureAsset; }
+namespace Engine { class StaticMeshComponent; class MaterialAsset; class MaterialInterface; class TextureAsset; }
 namespace Editor
 {
+    class MaterialPreview;
+
     // Queries run during Draw on the UI thread; the host owns the selected objects.
     struct MaterialEditorCallbacks
     {
@@ -21,6 +23,7 @@ namespace Editor
     public:
         explicit EditorMaterialPanel(MaterialEditorCallbacks callbacks);
         EditorMaterialPanel(MaterialEditorCallbacks callbacks, std::filesystem::path libraryRoot);
+        ~EditorMaterialPanel() override;
         void Draw() override;
         void ShowMaterial(std::shared_ptr<Engine::MaterialAsset> material);
         void SetContentRoot(const std::filesystem::path& root);
@@ -35,12 +38,13 @@ namespace Editor
     private:
         void NotifyChanged(bool bSharedAsset);
         void DrawLibrary();
-        void DrawProperties();
+        Engine::MaterialInterface* DrawProperties();
         void ProcessImport();
         void DuplicateMaterial(const std::filesystem::path& path);
         MaterialEditorCallbacks m_Callbacks;
         MaterialLibrary m_Library;
         ImGUISlate::ImGridWidget m_Grid;
+        std::unique_ptr<MaterialPreview> m_Preview;
         std::shared_ptr<Engine::MaterialAsset> m_SelectedMaterial;
         std::shared_ptr<Engine::TextureAsset> m_SelectedTexture;
         std::weak_ptr<Engine::MaterialAsset> m_LastExternalMaterial;

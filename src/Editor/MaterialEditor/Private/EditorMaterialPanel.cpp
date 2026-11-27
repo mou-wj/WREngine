@@ -4,10 +4,20 @@
 #include "MaterialAsset.h"
 #include "TextureAsset.h"
 #include "Material.h"
+#include "Camera.h"
+#include "EngineGlobal.h"
+#include "LightComponent.h"
 #include "PathInfo.h"
+#include "RHIApi.h"
+#include "SceneInterface.h"
+#include "SceneView.h"
+#include "Shape.h"
+#include "StaticMeshAsset.h"
+#include "Viewport.h"
 #include "imgui.h"
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <utility>
@@ -21,6 +31,160 @@ namespace Editor
         constexpr const char* ShadingModels[] = {"All models", "Unlit", "Default Lit", "Subsurface", "Clear Coat", "Anisotropic", "Cloth"};
         static_assert(IM_ARRAYSIZE(ShadingModels) == 1 + int(Engine::EShadingModel::COUNT_MAX));
     }
+
+    class MaterialPreview final : public Engine::RenderTarget
+    {
+    public:
+        ~MaterialPreview()
+        {
+            WaitForDraw();
+            m_Scene->RemovePrimitive(&m_Sphere);
+            m_Scene->RemoveLight(&m_Light);
+            m_Scene->FlushPendingUpdates();
+        }
+
+        explicit MaterialPreview(RenderCore::RenderInterface& renderer)
+            : m_Renderer(renderer), m_Scene(renderer.AllocateScene())
+        {
+            const auto sphere = Engine::StaticMeshAsset::CreateShape(Engine::EBasicMeshShape::Sphere);
+            m_Sphere.SetStaticMesh(sphere->GetMesh());
+            m_Scene->AddPrimitive(&m_Sphere);
+            m_Light.SetDirection(Core::Normalize(Core::Float3{-0.5f, -0.65f, -1.0f}));
+            m_Light.SetIntensity(3.0f);
+            m_Light.SetCastShadow(false);
+            m_Scene->AddLight(&m_Light);
+
+            RHI::RHITextureDesc desc{};
+            desc.Width = Resolution;
+            desc.Height = Resolution;
+            desc.Format = RHI::ERHIFormat::R32G32B32A32_Float;
+            desc.Usage = RHI::ERHITextureCreateFlag::RenderTarget | RHI::ERHITextureCreateFlag::ShaderResource |
+                RHI::ERHITextureCreateFlag::UAV | RHI::ERHITextureCreateFlag::TransferSrc;
+            m_Color = std::make_unique<RenderCore::RenderTexture>(desc);
+            m_Color->InitRHIResource();
+        }
+
+        RenderCore::RenderTexture* GetRenderTarget() override { return m_Color.get(); }
+
+        void Draw(const Engine::MaterialInterface& material, float extent)
+        {
+            const auto min = ImGui::GetCursorScreenPos();
+            ImGui::InvisibleButton("##Material preview", {extent, extent},
+                ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+            const auto& input = ImGui::GetIO();
+            bool bRedraw = UpdateMaterial(material);
+            // The last motion and button release can arrive in the same UI frame.
+            const bool bOrbiting = !ImGui::IsItemActivated() && (ImGui::IsItemActive() || ImGui::IsItemDeactivated());
+            if (bOrbiting && (input.MouseDelta.x != 0.0f || input.MouseDelta.y != 0.0f))
+            {
+                m_Yaw = std::remainder(m_Yaw - input.MouseDelta.x * 0.01f, Core::DegToRad(360.0f));
+                m_Pitch = std::clamp(m_Pitch + input.MouseDelta.y * 0.01f, -1.5f, 1.5f);
+                bRedraw = true;
+            }
+            if (ImGui::IsItemHovered() && input.MouseWheel != 0.0f)
+            {
+                const float distance = std::clamp(m_Distance * std::exp(-input.MouseWheel * 0.12f), 1.25f, 10.0f);
+                bRedraw |= distance != m_Distance;
+                m_Distance = distance;
+            }
+            if (bRedraw)
+            {
+                Render();
+            }
+            const auto textureId = static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(GetRenderTarget()));
+            ImGui::GetWindowDrawList()->AddImage(textureId, min, {min.x + extent, min.y + extent});
+        }
+
+    private:
+        void WaitForDraw() const
+        {
+            const auto fence = m_Color->GetTracker().GetLastAccessFence();
+            if (fence.Value)
+            {
+                RHI::GRHIApi->GetQueue(fence.QueueType)->WaitValue(fence.Value);
+            }
+        }
+
+        bool UpdateMaterial(const Engine::MaterialInterface& material)
+        {
+            auto proxy = material.GetRenderProxyShared();
+            if (proxy == m_MaterialProxy)
+            {
+                return false;
+            }
+
+            // Retire draws using the previous material before releasing its textures or rebuilding the scene proxy.
+            WaitForDraw();
+            const auto* sourceInstance = dynamic_cast<const Engine::MaterialInstance*>(&material);
+            if (m_Sphere.GetMaterial(0)->GetMaterial() != material.GetMaterial())
+            {
+                m_Sphere.SetMaterial(0, material.GetAsset()->GetMaterial());
+            }
+            if (sourceInstance)
+            {
+                auto* previewInstance = m_Sphere.GetOrCreateMaterialInstance(0);
+                for (const auto& parameter : material.GetParameterDefinitions())
+                {
+                    if (sourceInstance->HasOverride(parameter.Name, parameter.Type))
+                    {
+                        previewInstance->SetParameter(parameter.Name, proxy->GetParameter(parameter.Name, parameter.Type)->GetValueVariant());
+                    }
+                    else
+                    {
+                        previewInstance->ResetParameter(parameter.Name, parameter.Type);
+                    }
+                }
+            }
+            else if (m_Sphere.GetMaterialInstance(0))
+            {
+                m_Sphere.ResetMaterialInstance(0);
+            }
+            m_Scene->FlushPendingUpdates();
+            m_MaterialProxy = std::move(proxy);
+            return true;
+        }
+
+        void Render()
+        {
+            const Core::Float3 orbit{std::cos(m_Pitch) * std::sin(m_Yaw), std::sin(m_Pitch), std::cos(m_Pitch) * std::cos(m_Yaw)};
+            Engine::Camera camera;
+            camera.SetPosition(orbit * m_Distance);
+            camera.SetTarget({0, 0, 0});
+            camera.SetUp({0, 1, 0});
+            camera.SetPerspective(Core::DegToRad(45.0f), 1.0f, 0.05f, 20.0f);
+
+            Engine::SceneView view;
+            view.Viewport = {0, 0, Resolution, Resolution};
+            view.RenderTargetWidth = Resolution;
+            view.RenderTargetHeight = Resolution;
+            view.CameraWorldPos = camera.GetPosition();
+            view.CameraWorldDir = orbit * -1.0f;
+            view.NearClip = camera.GetNearPlane();
+            view.FarClip = camera.GetFarPlane();
+            view.ViewMatrix = camera.GetViewMatrix();
+            view.ProjectionMatrix = camera.GetProjectionMatrix();
+            view.ViewProjectionMatrix = camera.GetViewProjectionMatrix();
+            view.InvViewProjectionMatrix = camera.GetInverseViewProjectionMatrix();
+
+            Engine::SceneViewFamily family;
+            family.Scene = m_Scene.get();
+            family.RenderTarget = this;
+            family.AddView(std::move(view));
+            family.BuildAllViews();
+            m_Renderer.BeginRender(&family);
+        }
+
+        static constexpr int Resolution = 512;
+        RenderCore::RenderInterface& m_Renderer;
+        Engine::StaticMeshComponent m_Sphere;
+        Engine::DirectionalLightComponent m_Light;
+        std::unique_ptr<Engine::SceneInterface> m_Scene;
+        std::unique_ptr<RenderCore::RenderTexture> m_Color;
+        std::shared_ptr<const Engine::MaterialRenderProxy> m_MaterialProxy;
+        float m_Yaw = 0.35f;
+        float m_Pitch = 0.2f;
+        float m_Distance = 3.2f;
+    };
 
     EditorMaterialPanel::EditorMaterialPanel(MaterialEditorCallbacks callbacks)
         : EditorMaterialPanel(std::move(callbacks), std::filesystem::path(Core::GetProjectDir()) / "resources/material") {}
@@ -57,10 +221,20 @@ namespace Editor
         });
     }
 
+    EditorMaterialPanel::~EditorMaterialPanel() = default;
+
     void EditorMaterialPanel::Draw()
     {
-        if (!m_bPopupOpen) return;
+        if (!m_bPopupOpen)
+        {
+            m_Preview.reset();
+            return;
+        }
         ImGui::SetNextWindowSize({900,650},ImGuiCond_FirstUseEver);
+        if (m_bOpenProperties && !m_bExpanded)
+        {
+            ImGui::SetNextWindowFocus();
+        }
         if (ImGui::Begin("Material Editor",&m_bPopupOpen))
         {
             const auto position=ImGui::GetWindowPos(), size=ImGui::GetWindowSize();
@@ -112,7 +286,44 @@ namespace Editor
             if (ImGui::BeginTabItem("Library", nullptr, m_bOpenLibrary ? ImGuiTabItemFlags_SetSelected : 0))
             { m_bOpenLibrary = false; DrawLibrary(); ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Properties", nullptr, m_bOpenProperties ? ImGuiTabItemFlags_SetSelected : 0))
-            { m_bOpenProperties = false; DrawProperties(); ImGui::EndTabItem(); }
+            {
+                m_bOpenProperties = false;
+                const float propertiesWidth = ImGui::GetContentRegionAvail().x * 0.53f;
+                Engine::MaterialInterface* material = nullptr;
+                if (ImGui::BeginChild("Material properties", {propertiesWidth, 0}, ImGuiChildFlags_Borders))
+                {
+                    material = DrawProperties();
+                }
+                ImGui::EndChild();
+                ImGui::SameLine();
+                if (ImGui::BeginChild("Material preview pane", {0, 0}, ImGuiChildFlags_Borders,
+                    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+                {
+                    ImGui::SeparatorText("Preview");
+                    if (material)
+                    {
+                        ImGui::TextWrapped("Drag to orbit. Scroll to zoom.");
+                        const auto available = ImGui::GetContentRegionAvail();
+                        const float extent = std::min(available.x, available.y);
+                        if (extent > 0)
+                        {
+                            if (!m_Preview)
+                            {
+                                m_Preview = std::make_unique<MaterialPreview>(*Engine::GetRenderModuleInstance());
+                            }
+                            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (available.x - extent) * 0.5f);
+                            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (available.y - extent) * 0.5f);
+                            m_Preview->Draw(*material, extent);
+                        }
+                    }
+                    else
+                    {
+                        ImGui::TextDisabled("Select a material to preview.");
+                    }
+                }
+                ImGui::EndChild();
+                ImGui::EndTabItem();
+            }
             ImGui::EndTabBar();
         }
         m_bExpandedGeometryValid = false;
@@ -283,7 +494,7 @@ namespace Editor
         ImGui::EndChild();
     }
 
-    void EditorMaterialPanel::DrawProperties()
+    Engine::MaterialInterface* EditorMaterialPanel::DrawProperties()
     {
         auto* component = m_Callbacks.GetSelectedComponent ? m_Callbacks.GetSelectedComponent() : nullptr;
         Controls::Boolean("Edit shared material asset", m_bEditAsset);
@@ -298,7 +509,7 @@ namespace Editor
         auto asset = m_bEditAsset ? m_SelectedMaterial : nullptr;
         if (!asset && material) asset = material->GetAsset();
         if (m_bEditAsset) material = asset ? asset->GetMaterial() : nullptr;
-        if (!material) { ImGui::TextDisabled("Select a mesh or load a material asset."); return; }
+        if (!material) { ImGui::TextDisabled("Select a mesh or load a material asset."); return nullptr; }
 
         ImGui::TextWrapped("Asset: %s", asset ? asset->GetName().c_str() : "(none)");
         if (!m_bEditAsset && component->GetMaterialInstance(m_Slot))
@@ -440,6 +651,7 @@ namespace Editor
         const auto resource = material->GetMaterial()->GetResource();
         if (!resource->GetLastError().empty()) ImGui::TextWrapped("Shader error: %s", resource->GetLastError().c_str());
         ImGui::TextWrapped("Surface rendering currently supports Opaque Lit/Unlit. Mesh instances are not assets and are not saved as MaterialAsset files.");
+        return m_bEditAsset ? material : component->GetMaterial(m_Slot);
     }
     void EditorMaterialPanel::NotifyChanged(bool bSharedAsset)
     {
