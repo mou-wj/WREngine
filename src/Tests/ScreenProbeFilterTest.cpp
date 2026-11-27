@@ -69,6 +69,8 @@ namespace Test
             Pixels Depth = Filled({0.25f, 0, 0, 0});
             RenderTexture Output;
             ScreenProbeFilter Filter;
+            bool bUseVariance = false;
+            bool bComposite = false;
 
             explicit FilterFixture(const RHITextureDesc& desc) : Output(desc)
             {
@@ -106,12 +108,15 @@ namespace Test
                 ScreenProbeFilterInput input;
                 input.RawGI = upload->Raw;
                 input.Output = graph.RegisterExternalTexture("FilterTest.Output", &Output);
+                input.SceneColor = bComposite ? upload->Color : nullptr;
                 input.GBuffer.GBufferA = upload->Color;
                 input.GBuffer.GBufferB = upload->Normal;
                 input.GBuffer.GBufferC = upload->Material;
                 input.GBuffer.Depth = upload->Depth;
                 input.GBuffer.PointSampler = GlobalNearestSampler.get();
                 input.View = view;
+                input.bUseVariance = bUseVariance;
+                input.SpatialIterations = 3;
                 input.ViewProjection(0, 3) = -cameraX;
                 input.InverseViewProjection(0, 3) = cameraX;
                 input.CameraPosition = {cameraX, 0, 0};
@@ -255,6 +260,20 @@ namespace Test
             const uint32_t rightEdge = 5 * Width + Width / 2;
             Verify(std::abs(spatial[samplePixel].X - 0.30f) < std::abs(checker[samplePixel].X - 0.30f), "spatial filter reduces interior noise");
             Verify(std::abs(spatial[rightEdge].X - 0.6f) < 1e-4f, "spatial filter preserves a depth edge");
+            fixture.Filter.Invalidate();
+            fixture.bUseVariance = true;
+            const auto variance = fixture.Render(checker, EScreenProbeFilterView::Variance);
+            Verify(variance[samplePixel].X > 0.04f, "short history uses spatial luminance variance");
+            Verify(variance[rightEdge].X < 0.001f, "depth edge does not enter spatial variance");
+            const auto historyLength = fixture.Render(checker, EScreenProbeFilterView::HistoryLength);
+            Verify(historyLength[samplePixel].X > 1.0f / 12.0f, "valid history grows");
+            const auto multiscale = fixture.Render(checker, EScreenProbeFilterView::Spatial);
+            Verify(std::abs(multiscale[samplePixel].X - 0.30f) < std::abs(checker[samplePixel].X - 0.30f),
+                "variance-guided multi-scale passes reduce noise");
+            Verify(std::abs(multiscale[rightEdge].X - 0.6f) < 1e-4f, "multi-scale passes preserve the depth edge");
+            fixture.bComposite = true;
+            const auto composite = fixture.Render(checker, EScreenProbeFilterView::Spatial);
+            Verify(std::abs(composite[rightEdge].X - 1.6f) < 1e-4f, "final pass adds diffuse GI to scene lighting once");
             std::cout << "SCREEN_PROBE_FILTER_TEST_OK" << std::endl;
         }
     };

@@ -14,7 +14,7 @@ namespace Editor
         bool Render(const GIViewerSource& source, Core::Int2 size, Renderer::ELumenViewerMode mode,
             uint32_t selectedCardIndex, Renderer::ELumenViewerCardView cardView,
             const Renderer::LumenViewerRadiositySettings& radiosity, const Renderer::LumenViewerWorldCacheSettings& worldCache,
-            bool bUseHardwareTracing);
+            bool bUseHardwareTracing, const Renderer::LumenViewerDenoiserSettings& denoiser);
         void Reset();
         void ResetCache();
         RenderCore::RenderTexture* GetTexture() const { return m_Color.get(); }

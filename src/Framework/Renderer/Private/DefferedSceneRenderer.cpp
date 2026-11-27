@@ -25,7 +25,12 @@ namespace Renderer {
         return BuildPasses(builder, true);
     }
 
-    RenderGraphTextureRef DefferedSceneRenderer::BuildPasses(RenderGraphBuilder& builder, bool bDeferSpecular)
+    RenderGraphTextureRef DefferedSceneRenderer::BuildLightingOnly(RenderGraphBuilder& builder)
+    {
+        return BuildPasses(builder, false, true);
+    }
+
+    RenderGraphTextureRef DefferedSceneRenderer::BuildPasses(RenderGraphBuilder& builder, bool bDeferSpecular, bool bLightingOnly)
     {
         auto sceneColorTargetTexture = SceneTextures.SceneColor;
         RenderTargetBindingSlots renderTargetBindingSlots;
@@ -283,7 +288,7 @@ namespace Renderer {
                 BuildEvnIBLLightParameters(Scene, builder, ibl->EnvIBLParameters);
                 AddStaticMeshDefferedShadingPass(builder, ibl, true);
             }
-            if (bDeferSpecular)
+            if (bDeferSpecular || bLightingOnly)
             {
                 return defferedColor;
             }

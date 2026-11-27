@@ -130,6 +130,8 @@ Surface Cache 的 Base Color、World Normal、Card Coverage、Roughness、Metall
 
 `GI / Raw`、`GI / Temporal` 与 `GI / Spatial Filtered` 分别显示当前探针重建、时域累积和边缘感知空间滤波后的漫反射间接光。`GI / History Validity` 用绿色表示通过重投影检查，红色表示历史被拒绝或重置。`GI / History Weight` 用灰度表示最终历史权重。`GI / Reprojection Error` 的红绿通道显示归一化的几何残差，蓝色显示屏幕运动幅度。六种 GI 视图间切换保留历史，离开这些视图后重新进入会开始新一轮累积。使用宿主视口相机改变视角可观察历史重建。 [滤波与调试含义](../key_implemetion/algorithm/20-gi-temporal-spatial-filter.md)
 
+`Variance-guided filter` 控制亮度方差与多尺度滤波，可设置 1–4 轮。默认沿用原单轮空间滤波。`GI / History Length` 用灰度显示历史长度除以 12，`GI / Luminance Deviation` 显示线性亮度标准差，`GI / Composite` 在预览的延迟光照颜色上合成间接光。只选择亮度标准差视图时，该视图会计算自己的方差。打开开关可在各 GI 视图之间使用同一方差历史。 [滤波实现](../key_implemetion/algorithm/20-gi-temporal-spatial-filter.md#方差引导的多尺度滤波)
+
 ### 反射预览
 
 在 `Reflections / Composite` 查看延迟底色与混合反射的合成。`Ray Direction` 用 RGB 表示世界方向，`Screen Hit` 用 RG 表示屏幕 UV、B 表示置信度。`Geometry Hit` 显示硬件或 SDF 几何命中与距离，`Hit Instance` 按场景实例 ID 着色。`Source` 的青色、品红表示有着色数据和缺少着色数据的硬件命中，绿色为屏幕，黄和橙为 SDF，紫色为世界探针，蓝色为环境。另有 `Roughness`、`Radiance` 和 `Contribution` 查看接收面粗糙度、入射辐射与镜面项。

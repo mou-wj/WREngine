@@ -1,3 +1,8 @@
+int2 MapFilterPixel(int2 pixel, uint2 filterSize, uint2 geometrySize)
+{
+    return int2((float2(pixel) + 0.5) * float2(geometrySize) / float2(filterSize));
+}
+
 float3 ReconstructGIPosition(float2 pixel, float depth, uint2 size, float4x4 inverseViewProjection)
 {
     float2 uv = (pixel + 0.5) / float2(size);

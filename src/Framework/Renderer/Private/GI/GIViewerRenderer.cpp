@@ -96,7 +96,8 @@ namespace Renderer
         bool NeedsProbeFilter(ELumenViewerMode mode)
         {
             return mode == ELumenViewerMode::IndirectDiffuse ||
-                (mode >= ELumenViewerMode::ProbeRawDiffuse && mode <= ELumenViewerMode::ProbeReprojectionError);
+                (mode >= ELumenViewerMode::ProbeRawDiffuse && mode <= ELumenViewerMode::ProbeReprojectionError) ||
+                (mode >= ELumenViewerMode::ProbeHistoryLength && mode <= ELumenViewerMode::ProbeComposite);
         }
 
         EScreenProbeFilterView GetProbeFilterView(ELumenViewerMode mode)
@@ -108,6 +109,8 @@ namespace Renderer
             case ELumenViewerMode::ProbeHistoryValidity: return EScreenProbeFilterView::HistoryValidity;
             case ELumenViewerMode::ProbeHistoryWeight: return EScreenProbeFilterView::HistoryWeight;
             case ELumenViewerMode::ProbeReprojectionError: return EScreenProbeFilterView::ReprojectionError;
+            case ELumenViewerMode::ProbeHistoryLength: return EScreenProbeFilterView::HistoryLength;
+            case ELumenViewerMode::ProbeVariance: return EScreenProbeFilterView::Variance;
             default: return EScreenProbeFilterView::Spatial;
             }
         }
@@ -169,7 +172,8 @@ namespace Renderer
     bool GIViewerRenderer::AddPasses(RenderCore::RenderGraphBuilder& builder, Engine::SceneInterface* sceneInterface,
         const Engine::SceneView& sourceView, RenderCore::RenderTexture* output, ELumenViewerMode mode,
         uint32_t selectedCardIndex, ELumenViewerCardView cardView, const LumenViewerRadiositySettings& radiositySettings,
-        const LumenViewerWorldCacheSettings& worldCacheSettings, bool bUseHardwareTracing)
+        const LumenViewerWorldCacheSettings& worldCacheSettings, bool bUseHardwareTracing,
+        const LumenViewerDenoiserSettings& denoiser)
     {
         if (!sceneInterface || !output || !output->GetRHI())
         {
@@ -220,12 +224,14 @@ namespace Renderer
         const bool bReflectionView = mode >= ELumenViewerMode::ReflectionComposite && mode <= ELumenViewerMode::ReflectionHitInstance;
         auto instances = bReflectionView ? SurfaceCacheMaterial::GatherSceneInstances(*scene) : std::vector<SurfaceCacheMeshInstance>{};
         const bool bReflections = bReflectionView && !instances.empty();
+        const bool bProbeComposite = mode == ELumenViewerMode::ProbeComposite &&
+            scene->GetGPUResourceInfo().PrimitiveResourceInfo.PrimitiveCount != 0;
         const auto depthUsage = RHI::ERHITextureCreateFlag::DepthStencil | RHI::ERHITextureCreateFlag::ShaderResource;
         const auto depth = CreateTexture(builder, "LumenViewer.Depth", outputDesc.Width, outputDesc.Height,
             RHI::ERHIFormat::D32_Float, depthUsage);
         const uint32_t maxMipLevel = std::max(1u, static_cast<uint32_t>(std::log2(std::max(outputDesc.Width, outputDesc.Height))));
         const auto pyramidUsage = RHI::ERHITextureCreateFlag::ShaderResource | RHI::ERHITextureCreateFlag::UAV;
-        const auto depthPyramid = bReflections ? nullptr : CreateTexture(builder, "LumenViewer.DepthPyramid", outputDesc.Width,
+        const auto depthPyramid = bReflections || bProbeComposite ? nullptr : CreateTexture(builder, "LumenViewer.DepthPyramid", outputDesc.Width,
             outputDesc.Height, RHI::ERHIFormat::R32_Float, pyramidUsage, maxMipLevel);
 
         const auto gbufferInfo = CreateGBufferInfo({});
@@ -252,9 +258,14 @@ namespace Renderer
         sceneRenderer->BuildSceneLightShadowMap(scene, builder);
         sceneRenderer->UploadShadowMapInfo(scene, builder);
         RenderCore::RenderGraphTextureRef reflectionBase = nullptr;
+        RenderCore::RenderGraphTextureRef probeBase = nullptr;
         if (bReflections)
         {
             reflectionBase = sceneRenderer->BuildWithDeferredSpecular(builder);
+        }
+        else if (bProbeComposite)
+        {
+            probeBase = sceneRenderer->BuildLightingOnly(builder);
         }
         else
         {
@@ -537,6 +548,7 @@ namespace Renderer
             ScreenProbeFilterInput filter;
             filter.RawGI = probes.IndirectDiffuse;
             filter.Output = color;
+            filter.SceneColor = probeBase;
             filter.GBuffer.GBufferA = probeInput.GBufferA;
             filter.GBuffer.GBufferB = probeInput.GBufferB;
             filter.GBuffer.GBufferC = probeInput.GBufferC;
@@ -546,11 +558,18 @@ namespace Renderer
             filter.InverseViewProjection = previewView.InvViewProjectionMatrix;
             filter.CameraPosition = previewView.CameraWorldPos;
             filter.View = GetProbeFilterView(mode);
+            filter.bUseVariance = denoiser.bUseVariance || mode == ELumenViewerMode::ProbeVariance;
+            filter.SpatialIterations = static_cast<uint32_t>(std::clamp(denoiser.SpatialIterations, 1, 4));
             if (bRadiosityAdvances || (probeInput.WorldCache && m_State->WorldCache->GetUpdatedProbeCount() != 0))
             {
                 filter.HistoryWeightLimit = 0.72f;
             }
             m_State->ProbeFilter->AddPasses(builder, filter);
+            if (probeBase && environment)
+            {
+                auto skyView = previewView;
+                AddDrawSkyBoxPass(builder, environment, color, depth, skyView);
+            }
             return true;
         }
         else

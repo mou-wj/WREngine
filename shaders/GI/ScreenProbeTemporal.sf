@@ -5,6 +5,7 @@
 
 float4 ReadCurrentGeometry(int2 pixel)
 {
+    pixel = MapFilterPixel(pixel, FilterSize, GeometrySize);
     float depth = Depth.Load(int3(pixel, 0)).r;
     uint model = uint(GBufferC.Load(int3(pixel, 0)).b * 255.0 + 0.5);
     if (depth >= 0.999999 || !IsLitShadingModel(model))
@@ -14,10 +15,11 @@ float4 ReadCurrentGeometry(int2 pixel)
     return float4(normalize(GBufferB.Load(int3(pixel, 0)).rgb * 2.0 - 1.0), depth);
 }
 
-float4 ReprojectHistory(float3 position, float3 normal, uint2 pixel, out float error, out float motion)
+float4 ReprojectHistory(float3 position, float3 normal, uint2 pixel, out float error, out float motion, out float2 moments)
 {
     error = 1.0;
     motion = 0.0;
+    moments = 0.0;
     float4 clip = mul(PreviousViewProjection, float4(position, 1.0));
     if (clip.w <= 1e-5)
     {
@@ -69,15 +71,28 @@ float4 ReprojectHistory(float3 position, float3 normal, uint2 pixel, out float e
             continue;
         }
         history += lighting * weight;
+        if (bUseVariance != 0u)
+        {
+            moments += PreviousMoments.Load(int3(coord, 0)).xy * weight;
+        }
         totalWeight += weight;
     }
-    return totalWeight >= 0.25 ? history / totalWeight : 0.0;
+    if (totalWeight < 0.25)
+    {
+        moments = 0.0;
+        return 0.0;
+    }
+    moments /= totalWeight;
+    return history / totalWeight;
 }
 
 void GetCurrentRange(int2 pixel, float4 geometry, float3 position, float footprint, float3 center,
-    out float3 lower, out float3 upper)
+    out float3 lower, out float3 upper, out float2 neighborhoodMoments)
 {
     lower = upper = center;
+    float luma = GILuminance(center);
+    neighborhoodMoments = float2(luma, luma * luma);
+    float sampleCount = 1.0;
     [unroll]
     for (int y = -1; y <= 1; ++y)
     {
@@ -104,9 +119,13 @@ void GetCurrentRange(int2 pixel, float4 geometry, float3 position, float footpri
             {
                 lower = min(lower, sample.rgb);
                 upper = max(upper, sample.rgb);
+                float neighborLuma = GILuminance(max(sample.rgb, 0.0));
+                neighborhoodMoments += float2(neighborLuma, neighborLuma * neighborLuma);
+                sampleCount += 1.0;
             }
         }
     }
+    neighborhoodMoments /= sampleCount;
 }
 
 [numthreads(8, 8, 1)]
@@ -125,17 +144,27 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
     float motion = 0.0;
     float historyWeight = 0.0;
     bool bAccepted = false;
-    if (bHistoryValid != 0u && lighting.w > 0.0)
+    float currentLuma = GILuminance(lighting.rgb);
+    float2 moments = float2(currentLuma, currentLuma * currentLuma);
+    float2 neighborhoodMoments = moments;
+    if (lighting.w > 0.0 && (bHistoryValid != 0u || bUseVariance != 0u))
     {
         float3 position = ReconstructGIPosition(pixel, geometry.w, FilterSize, CurrentInverseViewProjection);
-        float4 history = ReprojectHistory(position, geometry.xyz, pixel, error, motion);
+        float2 historyMoments = 0.0;
+        float4 history = 0.0;
+        if (bHistoryValid != 0u)
+        {
+            history = ReprojectHistory(position, geometry.xyz, pixel, error, motion, historyMoments);
+        }
+        float3 lower = lighting.rgb, upper = lighting.rgb;
+        if (history.w >= 1.0 || bUseVariance != 0u)
+        {
+            float footprint = GIPixelFootprint(pixel, geometry.w, FilterSize, CurrentInverseViewProjection, position);
+            GetCurrentRange(pixel, geometry, position, footprint, lighting.rgb, lower, upper, neighborhoodMoments);
+        }
         if (history.w >= 1.0)
         {
             bAccepted = true;
-            float footprint = GIPixelFootprint(pixel, geometry.w, FilterSize, CurrentInverseViewProjection, position);
-            float3 lower, upper;
-            GetCurrentRange(pixel, geometry, position, footprint, lighting.rgb, lower, upper);
-            float currentLuma = GILuminance(lighting.rgb);
             float localVariation = GILuminance(upper - lower);
             float slack = max(0.015, max(currentLuma * 0.20, localVariation * 0.25));
             float difference = abs(GILuminance(history.rgb) - currentLuma);
@@ -144,12 +173,22 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
             historyWeight = min(history.w / (history.w + 1.0), HistoryWeightLimit) * response;
             historyWeight *= lerp(0.65, 1.0, saturate(raw.w));
             float3 boundedHistory = clamp(history.rgb, max(0.0, lower - slack), upper + slack);
+            if (bUseVariance != 0u)
+            {
+                float boundedLuma = GILuminance(boundedHistory);
+                float historyVariance = max(0.0, historyMoments.y - historyMoments.x * historyMoments.x);
+                moments = lerp(moments, float2(boundedLuma, boundedLuma * boundedLuma + historyVariance), historyWeight);
+            }
             lighting.rgb = lerp(lighting.rgb, boundedHistory, historyWeight);
             lighting.w = min(12.0, 1.0 + history.w * response);
         }
     }
+    float variance = max(0.0, moments.y - moments.x * moments.x);
+    float spatialVariance = max(0.0, neighborhoodMoments.y - neighborhoodMoments.x * neighborhoodMoments.x);
+    variance = lerp(spatialVariance, variance, saturate((lighting.w - 1.0) / 3.0));
     CurrentLighting[pixel] = lighting;
     CurrentGeometry[pixel] = geometry;
+    CurrentMoments[pixel] = bUseVariance != 0u ? float4(moments, variance, 0.0) : 0.0;
 
     if (FilterView != 0u)
     {
@@ -165,6 +204,14 @@ void MainCS(uint3 thread : SV_DispatchThreadID)
         else if (FilterView == 5u)
         {
             color = float3(saturate(error), 1.0 - saturate(error), saturate(motion * 4.0));
+        }
+        else if (FilterView == 6u)
+        {
+            color = lighting.w / 12.0;
+        }
+        else if (FilterView == 7u)
+        {
+            color = saturate(sqrt(variance));
         }
         FilterOutput[pixel] = float4(geometry.w >= 0.0 ? color : 0.0, 1.0);
     }

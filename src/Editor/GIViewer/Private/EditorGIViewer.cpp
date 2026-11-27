@@ -39,6 +39,9 @@ namespace Editor
             {"GI / History Validity", Renderer::ELumenViewerMode::ProbeHistoryValidity},
             {"GI / History Weight", Renderer::ELumenViewerMode::ProbeHistoryWeight},
             {"GI / Reprojection Error", Renderer::ELumenViewerMode::ProbeReprojectionError},
+            {"GI / History Length", Renderer::ELumenViewerMode::ProbeHistoryLength},
+            {"GI / Luminance Deviation", Renderer::ELumenViewerMode::ProbeVariance},
+            {"GI / Composite", Renderer::ELumenViewerMode::ProbeComposite},
             {"Reflections / Composite", Renderer::ELumenViewerMode::ReflectionComposite},
             {"Reflections / Ray Direction", Renderer::ELumenViewerMode::ReflectionRayDirection},
             {"Reflections / Screen Hit", Renderer::ELumenViewerMode::ReflectionScreenHit},
@@ -365,10 +368,23 @@ namespace Editor
             ImGui::TextWrapped("%s", GetModeDescription(m_Mode));
             const bool bReflections = m_Mode >= Renderer::ELumenViewerMode::ReflectionComposite &&
                 m_Mode <= Renderer::ELumenViewerMode::ReflectionHitInstance;
-            const bool bScreenProbe = (m_Mode >= Renderer::ELumenViewerMode::ProbePlacement &&
+            const bool bDenoiserView = m_Mode >= Renderer::ELumenViewerMode::ProbeHistoryLength &&
+                m_Mode <= Renderer::ELumenViewerMode::ProbeComposite;
+            const bool bScreenProbe = bDenoiserView || (m_Mode >= Renderer::ELumenViewerMode::ProbePlacement &&
                 m_Mode <= Renderer::ELumenViewerMode::IndirectDiffuse) ||
                 (m_Mode >= Renderer::ELumenViewerMode::ProbeWorldCacheHits && m_Mode <= Renderer::ELumenViewerMode::ProbeReprojectionError) ||
                 m_Mode == Renderer::ELumenViewerMode::ProbeTraceSource;
+            if (bDenoiserView || m_Mode == Renderer::ELumenViewerMode::IndirectDiffuse ||
+                (m_Mode >= Renderer::ELumenViewerMode::ProbeRawDiffuse && m_Mode <= Renderer::ELumenViewerMode::ProbeReprojectionError))
+            {
+                ImGui::Checkbox("Variance-guided filter", &m_Denoiser.bUseVariance);
+                if (m_Denoiser.bUseVariance)
+                {
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(120.0f);
+                    ImGui::SliderInt("Spatial passes", &m_Denoiser.SpatialIterations, 1, 4);
+                }
+            }
             if (bReflections || bScreenProbe)
             {
                 const auto tracing = m_Preview->GetRayTracingInfo();
@@ -453,7 +469,7 @@ namespace Editor
             m_PreviewSize = {std::max(1, static_cast<int>(imageWidth * previewScale)),
                 std::max(1, static_cast<int>(imageHeight * previewScale))};
             m_bHasScene = source.Scene && source.View && m_Preview->Render(source, m_PreviewSize, m_Mode,
-                m_SelectedCardIndex, m_CardView, m_Radiosity, m_WorldCache, m_bUseHardwareTracing);
+                m_SelectedCardIndex, m_CardView, m_Radiosity, m_WorldCache, m_bUseHardwareTracing, m_Denoiser);
             m_Radiosity.bStep = false;
             m_Radiosity.bRestart = false;
             if (auto* texture = m_Preview->GetTexture())

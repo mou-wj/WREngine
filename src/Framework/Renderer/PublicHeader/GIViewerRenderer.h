@@ -44,7 +44,10 @@ namespace Renderer
         ReflectionContribution,
         ReflectionHitInstance,
         ProbeTraceSource,
-        VoxelLightingSlice
+        VoxelLightingSlice,
+        ProbeHistoryLength,
+        ProbeVariance,
+        ProbeComposite
     };
 
     enum class ELumenViewerCardView : uint32_t
@@ -98,6 +101,12 @@ namespace Renderer
         bool bActive = false;
     };
 
+    struct LumenViewerDenoiserSettings
+    {
+        bool bUseVariance = false;
+        int SpatialIterations = 3;
+    };
+
     // Builds the Lumen stages into a caller-owned preview target and cache lifetime.
     class RENDERER_API GIViewerRenderer
     {
@@ -111,7 +120,7 @@ namespace Renderer
             const Engine::SceneView& view, RenderCore::RenderTexture* output, ELumenViewerMode mode,
             uint32_t selectedCardIndex = UINT32_MAX, ELumenViewerCardView cardView = ELumenViewerCardView::BaseColor,
             const LumenViewerRadiositySettings& radiosity = {}, const LumenViewerWorldCacheSettings& worldCache = {},
-            bool bUseHardwareTracing = false);
+            bool bUseHardwareTracing = false, const LumenViewerDenoiserSettings& denoiser = {});
         const std::vector<LumenViewerCardInfo>& GetSurfaceCards() const;
         uint32_t GetRadiosityIteration() const;
         LumenViewerRayTracingInfo GetRayTracingInfo() const;

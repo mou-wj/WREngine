@@ -55,7 +55,9 @@ Editor 的 View ribbon 按钮打开 `EditorGIViewer`。Viewer 每次绘制时从
 
 ## 屏幕历史与失效
 
-[ScreenProbeFilter](../../../src/Framework/Renderer/Private/GI/ScreenProbeFilter.cpp) 由预览 Renderer 按需持有，每个 Viewer 独立。两组 Ping-Pong 槽各有 `Lighting` 和 `Geometry` 两张 RGBA32F `RenderTexture`。`Lighting` 保存线性漫反射间接光 RGB 和历史长度，`Geometry` 保存世界法线 RGB 和设备深度，负深度表示无效。CPU 保留前一帧的 VP、逆 VP、相机位置及读写槽状态。图在预览控制线程串行构建并提交；历史通过 `RegisterExternalTexture` 让 RDG 接续上次访问 Fence 和资源状态。同一帧读上一槽，写当前槽，空间 Pass 等待当前槽 UAV 并以 SRV 读取。预览输出的完成点覆盖这一依赖链。
+[ScreenProbeFilter](../../../src/Framework/Renderer/Private/GI/ScreenProbeFilter.cpp) 由预览 Renderer 按需持有，每个 Viewer 独立。两组 Ping-Pong 槽各有 `Lighting`、`Geometry` 和 `Moments` 三张 RGBA32F `RenderTexture`，共占每信号像素 96 字节。`Lighting` 保存线性漫反射间接光 RGB 和历史长度，`Geometry` 保存世界法线 RGB 和设备深度，负深度表示无效。`Moments` 的前三个分量存亮度的一阶矩、二阶矩和方差。CPU 保留前一帧的 VP、逆 VP、相机位置及读写槽状态。图在预览控制线程串行构建并提交，历史通过 `RegisterExternalTexture` 让 RDG 接续上次访问 Fence 和资源状态。同一帧读上一槽，写当前槽，空间 Pass 等待当前槽 UAV 并以 SRV 读取。预览输出的完成点覆盖这一依赖链。
+
+多轮空间滤波的中间颜色是 RDG 瞬时纹理，每轮分别声明当前输入 SRV 和下一输出 UAV。切换方差路径或变化信号、GBuffer 尺寸会使旧历史失效。信号尺寸变化时重建历史槽，GIViewer 在覆盖预览纹理前等待旧颜色关联的提交 Fence。关闭 Viewer 复用既有的预览资源退休流程。
 
 分辨率变化时，Preview 沿用上一输出的完成点替换颜色目标，下一次滤波按新尺寸重新分配历史。关闭 Viewer、工程或替换缓存实例时，`GIViewerRenderer::Reset` 沿用预览输出 Fence 退休历史。失效只标记旧历史不可读，首帧绑定已有白纹理作为未访问占位，并完整覆盖当前槽。未完成滤波构图时不提交新槽状态。
 
