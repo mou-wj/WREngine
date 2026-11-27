@@ -2,6 +2,7 @@
 #define NOMINMAX
 #endif
 #include "Scene.h"
+#include "PostProcess/AntiAliasingPostProcess.h"
 #include "SceneView.h"
 #include "PrimitiveSceneProxy.h"
 #include "PrimitiveComponent.h"
@@ -468,6 +469,10 @@ namespace Renderer {
             commands.swap(
                 m_PendingCommands);
         }
+        if (!commands.empty() && m_SuperResolution)
+        {
+            m_SuperResolution->Invalidate();
+        }
         Engine::LightSceneProxy* lightProxy = nullptr;
         auto markLightDiry = [this](Engine::LightSceneProxy* lightProxy) {
             // Adding/removing a light changes the flattened shadow-table indices
@@ -576,6 +581,10 @@ namespace Renderer {
     void Scene::NotifyComponentChanged(SceneComponent* component)
     {
         if (!component) return;
+        if (m_SuperResolution)
+        {
+            m_SuperResolution->Invalidate();
+        }
         if (auto* light = dynamic_cast<Engine::LightComponent*>(component))
         {
             if (auto it = m_LightInfos.find(light); it != m_LightInfos.end())

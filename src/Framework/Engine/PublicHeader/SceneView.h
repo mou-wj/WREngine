@@ -31,6 +31,8 @@ namespace Engine {
             RenderCore::RenderGraphTextureRef sceneDepth)>;
 
         DrawCallback Callback;
+        // This overlay uses only color and stays at native resolution during upsampling.
+        bool bColorOnlyAtOutputResolution = false;
     };
 
     // 结构体对齐定义

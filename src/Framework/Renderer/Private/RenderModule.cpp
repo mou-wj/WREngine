@@ -21,6 +21,7 @@
 #include "Common.h"
 #include "HintRender.h"
 #include "TransparencyRender.h"
+#include "PostProcess/AntiAliasingPostProcess.h"
 
 #include <algorithm>
 #include <vector>
@@ -83,11 +84,59 @@ namespace Renderer {
         const auto sceneSetting = views->Scene->GetSceneSetting();
         RenderCore::RenderGraphBuilder builder;
         auto colorTex = views->RenderTarget->GetRenderTarget();
-        auto sceneColorTexture = builder.RegisterExternalTexture("RenderTarget", colorTex);
+        auto output = builder.RegisterExternalTexture("RenderTarget", colorTex);
+        auto sceneColorTexture = output;
+        const auto sourceViews = views;
+        const auto& outputDesc = output->GetDesc();
+        const Core::UInt2 outputSize{outputDesc.Width, outputDesc.Height};
+        auto renderSize = outputSize;
+        const auto& superResolution = sceneSetting.SuperResolution;
+        auto* scene = static_cast<Scene*>(views->Scene);
+        const bool bUpsample = superResolution.bEnabled && views->Size() == 1 &&
+            outputDesc.Format == RHI::ERHIFormat::R8G8B8A8_UNorm &&
+            views->GetViews().front().Viewport.X == 0 && views->GetViews().front().Viewport.Y == 0 &&
+            views->GetViews().front().Viewport.Width == static_cast<int>(outputSize.X) &&
+            views->GetViews().front().Viewport.Height == static_cast<int>(outputSize.Y);
+        Engine::SceneViewFamily scaledViews;
+        Core::Float2 jitter{};
+        if (bUpsample)
+        {
+            if (!scene->m_SuperResolution)
+            {
+                scene->m_SuperResolution = std::make_unique<TemporalUpsampling>();
+            }
+            if (scene->m_SuperResolutionTarget != views->RenderTarget)
+            {
+                scene->m_SuperResolution->Invalidate();
+                scene->m_SuperResolutionTarget = views->RenderTarget;
+            }
+            renderSize = TemporalUpsampling::GetRenderSize(outputSize, superResolution);
+            SceneView scaled = views->GetViews().front();
+            scaled.Viewport.Width = static_cast<int>(renderSize.X);
+            scaled.Viewport.Height = static_cast<int>(renderSize.Y);
+            scaled.RenderTargetWidth = static_cast<float>(renderSize.X);
+            scaled.RenderTargetHeight = static_cast<float>(renderSize.Y);
+            jitter = scene->m_SuperResolution->JitterView(scaled, superResolution.bTemporal);
+            scaledViews.Scene = views->Scene;
+            scaledViews.RenderTarget = views->RenderTarget;
+            scaledViews.AddView(std::move(scaled));
+            scaledViews.BuildAllViews();
+            views = &scaledViews;
+
+            auto desc = outputDesc;
+            desc.Width = renderSize.X;
+            desc.Height = renderSize.Y;
+            desc.Format = RHI::ERHIFormat::R32G32B32A32_Float;
+            sceneColorTexture = builder.CreateTexture("SuperResolution.SceneColor", desc);
+        }
+        else if (scene->m_SuperResolution)
+        {
+            scene->m_SuperResolution->Invalidate();
+        }
         PoolRenderTargetDesc depthDesc;
         depthDesc.Format = RHI::ERHIFormat::D32_Float;
-        depthDesc.Width = colorTex->GetRHI()->GetDesc().Width;
-		depthDesc.Height = colorTex->GetRHI()->GetDesc().Height;
+        depthDesc.Width = renderSize.X;
+        depthDesc.Height = renderSize.Y;
         depthDesc.Usage = RHI::ERHITextureCreateFlag::DepthStencil | RHI::ERHITextureCreateFlag::ShaderResource;
         auto poolDepthTarget = GRenderTargetPool.GetFreeRenderTarget(depthDesc);
 		poolDepthTarget->MarkUsed(true);
@@ -106,8 +155,8 @@ namespace Renderer {
         for (int i = 0; i < gbufferInfo.NumTargets; i++) {
             PoolRenderTargetDesc gbufferDesc;
             gbufferDesc.Format = gbufferInfo.Targets[i].TargetFormat;
-            gbufferDesc.Width = colorTex->GetRHI()->GetDesc().Width;
-            gbufferDesc.Height = colorTex->GetRHI()->GetDesc().Height;
+            gbufferDesc.Width = renderSize.X;
+            gbufferDesc.Height = renderSize.Y;
             gbufferDesc.Usage = RHI::ERHITextureCreateFlag::RenderTarget | RHI::ERHITextureCreateFlag::ShaderResource;
             auto poolGbufferTarget = GRenderTargetPool.GetFreeRenderTarget(gbufferDesc);
             poolGbufferTarget->MarkUsed(true);
@@ -129,11 +178,13 @@ namespace Renderer {
 		sceneRenderer->BuildSceneLightShadowMap(sceneRenderer->Scene,builder);
         sceneRenderer->UploadShadowMapInfo(sceneRenderer->Scene,builder);
         sceneRenderer->Build(builder);
+        RenderGraphTextureRef opaqueReference = nullptr;
         for (const auto& view : views->GetViews())
         {
             if ((view.Flags & VF_ExternalTransparencyPass) == 0)
             {
-                AddTransparencyPasses(builder, *views->Scene, view, sceneColorTexture, depthText);
+                AddTransparencyPasses(builder, *views->Scene, view, sceneColorTexture, depthText, nullptr,
+                    bUpsample ? &opaqueReference : nullptr);
             }
         }
         // Append view-local overlays to the same graph after all scene passes.
@@ -145,7 +196,7 @@ namespace Renderer {
                     sceneRenderer->SceneTextures.SceneDepth, *sceneSetting.LightHintTarget);
             }
             for (const auto& extension : view.DrawExtensions) {
-                if (extension.Callback) {
+                if (extension.Callback && (!bUpsample || !extension.bColorOnlyAtOutputResolution)) {
                     extension.Callback(builder, view,
                         sceneRenderer->SceneTextures.SceneColor,
                         sceneRenderer->SceneTextures.SceneDepth);
@@ -159,6 +210,19 @@ namespace Renderer {
                 HintRender::AddGridPass(builder,view,
                     sceneRenderer->SceneTextures.SceneColor,
                     sceneRenderer->SceneTextures.SceneDepth);
+        if (bUpsample)
+        {
+            scene->m_SuperResolution->AddPass(builder, views->GetViews().front(), sourceViews->GetViews().front(),
+                jitter, superResolution, sceneColorTexture, depthText, output, opaqueReference);
+            const auto& nativeView = sourceViews->GetViews().front();
+            for (const auto& extension : nativeView.DrawExtensions)
+            {
+                if (extension.Callback && extension.bColorOnlyAtOutputResolution)
+                {
+                    extension.Callback(builder, nativeView, output, nullptr);
+                }
+            }
+        }
         LocalVertexFactoryInstanceManager::Get().UpdateGPUResources();
         sceneRenderer->Scene->UpdateGlobalDistanceFieldIfNeeded();
         builder.Execute();

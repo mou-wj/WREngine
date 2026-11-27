@@ -1,28 +1,157 @@
+#if TAA_GL_STORAGE
+#define TAA_DISPLAY_STORAGE [[vk::image_format("rgba8")]] RWTexture2D<float4>
+#else
+#define TAA_DISPLAY_STORAGE RWTexture2D<float4>
+#endif
 #include "/Generated/ShaderParameters/TAAParameters.sf"
 
-[numthreads(8, 8, 1)]
-void MainCS(uint3 DispatchThreadID : SV_DispatchThreadID)
+float3 ReconstructColor(float2 coord, out float3 minimum, out float3 maximum, out float3 mean, out int2 closestPixel)
 {
-    uint2 pix = DispatchThreadID.xy;
-    uint2 dim = uint2((uint)Resolution.x, (uint)Resolution.y);
+    int2 center = clamp(int2(round(coord)), 0, int2(RenderSize) - 1);
+    float centerDepth = CurrentDepth.Load(int3(center, 0));
+    minimum = maximum = CurrentColor.Load(int3(center, 0)).rgb;
+    mean = 0.0;
+    float3 color = 0.0;
+    float count = 0.0;
+    float sumWeight = 0.0;
+    closestPixel = center;
+    float closestDepth = centerDepth;
+    [unroll]
+    for (int y = -1; y <= 1; ++y)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; ++x)
+        {
+            int2 pixel = clamp(center + int2(x, y), 0, int2(RenderSize) - 1);
+            float depth = CurrentDepth.Load(int3(pixel, 0));
+            float2 distance = abs(float2(pixel) - coord);
+            if (all(distance < 0.75) && depth < closestDepth)
+            {
+                closestPixel = pixel;
+                closestDepth = depth;
+            }
+            if (abs(depth - centerDepth) > 0.0015)
+            {
+                continue;
+            }
+            float3 tap = CurrentColor.Load(int3(pixel, 0)).rgb;
+            float2 filter = max(0.0, 1.0 - distance);
+            float weight = filter.x * filter.y;
+            color += tap * weight;
+            sumWeight += weight;
+            minimum = min(minimum, tap);
+            maximum = max(maximum, tap);
+            mean += tap;
+            count += 1.0;
+        }
+    }
+    mean /= max(count, 1.0);
+    return sumWeight > 1e-5 ? color / sumWeight : minimum;
+}
 
-    if (pix.x >= dim.x || pix.y >= dim.y)
+float3 Reproject(float2 previousUV, float previousDepth, out float validWeight)
+{
+    float2 coord = previousUV * float2(OutputSize) - 0.5;
+    int2 start = int2(floor(coord));
+    float2 fraction = frac(coord);
+    float3 color = 0.0;
+    validWeight = 0.0;
+    [unroll]
+    for (uint i = 0; i < 4; ++i)
+    {
+        int2 offset = int2(i & 1u, i >> 1u);
+        int2 tap = start + offset;
+        if (any(tap < 0) || any(tap >= int2(OutputSize)))
+        {
+            continue;
+        }
+        float4 value = HistoryColor.Load(int3(tap, 0));
+        if (abs(value.a - previousDepth) > 0.0015)
+        {
+            continue;
+        }
+        float2 weight = lerp(1.0 - fraction, fraction, float2(offset));
+        color += value.rgb * (weight.x * weight.y);
+        validWeight += weight.x * weight.y;
+    }
+    return validWeight > 0.0 ? color / validWeight : 0.0;
+}
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= OutputSize))
     {
         return;
     }
 
-    float4 currentColor = CurrentColor.Load(int3(int2(pix), 0));
-    float2 velocity = Velocity.Load(int3(int2(pix), 0)).xy;
+    float2 uv = (float2(pixel) + 0.5) / float2(OutputSize);
+    float2 sourceUV = saturate(uv + JitterUV);
+    float3 lower, upper, mean;
+    int2 closestPixel;
+    float3 current = ReconstructColor(sourceUV * float2(RenderSize) - 0.5, lower, upper, mean, closestPixel);
+    float depth = CurrentDepth.Load(int3(closestPixel, 0));
+    float2 geometryUV = (float2(closestPixel) + 0.5) / float2(RenderSize);
+    float3 history = current;
+    float valid = 0.0;
+    float motion = 0.0;
+    float reactive = 0.0;
+    if (bHasReactiveReference != 0u)
+    {
+        float3 source = CurrentColor.Load(int3(closestPixel, 0)).rgb;
+        float3 opaque = ReactiveReference.Load(int3(closestPixel, 0)).rgb;
+        reactive = saturate(length(source - opaque) / max(0.1, length(source)));
+    }
+    if (BlendFactor > 0.0 && depth < 0.999999)
+    {
+        float2 ndc = geometryUV * float2(2.0, -2.0) + float2(-1.0, 1.0);
+        float4 position = mul(InverseViewProjection, float4(ndc, depth, 1.0));
+        float4 previous = mul(PreviousViewProjection, position);
+        if (position.w > 1e-6 && previous.w > 1e-6)
+        {
+            float3 previousNDC = previous.xyz / previous.w;
+            float2 previousUV = previousNDC.xy * float2(0.5, -0.5) + 0.5;
+            float2 velocity = geometryUV - JitterUV - previousUV;
+            previousUV = uv - velocity;
+            motion = length(velocity);
+            if (all(previousUV >= 0.0) && all(previousUV < 1.0) && previousNDC.z >= 0.0 && previousNDC.z < 1.0)
+            {
+                history = Reproject(previousUV, previousNDC.z, valid);
+            }
+        }
+    }
 
-    float2 historyUV = (float2(pix) + 0.5f) / float2(dim) - velocity;
-    historyUV = saturate(historyUV);
-    int2 historyPix = int2(historyUV * float2(dim));
-    historyPix = clamp(historyPix, int2(0, 0), int2(dim) - int2(1, 1));
+    float difference = length(current - history);
+    float response = 1.0 - smoothstep(0.05, 0.35, difference / max(0.1, length(current)));
+    float weight = BlendFactor * valid * response * exp(-12.0 * motion) * (1.0 - reactive);
+    float3 resolved = lerp(current, clamp(history, lower, upper), weight);
+    NextHistory[pixel] = float4(resolved, depth);
 
-    float4 historyColor = HistoryColor.Load(int3(historyPix, 0));
-
-    float blend = saturate(BlendFactor);
-    float4 outColor = lerp(currentColor, historyColor, blend);
-
-    OutputColor[pix] = outColor;
+    float3 display = clamp(resolved + Sharpening * (current - mean), lower, upper);
+    if (DebugView == 1u)
+    {
+        display = CurrentColor.Load(int3(min(uint2(uv * float2(RenderSize)), RenderSize - 1u), 0)).rgb;
+    }
+    else if (DebugView == 2u)
+    {
+        display = current;
+    }
+    else if (DebugView == 3u)
+    {
+        display = valid > 0.0 ? history : 0.0;
+    }
+    else if (DebugView == 4u)
+    {
+        display = weight;
+    }
+    else if (DebugView == 5u)
+    {
+        display = depth < 0.999999 ? 1.0 - valid : 0.0;
+    }
+    else if (DebugView == 6u)
+    {
+        display = reactive;
+    }
+    OutputColor[pixel] = float4(display, 1.0);
 }

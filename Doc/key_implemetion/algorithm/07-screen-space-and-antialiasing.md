@@ -6,7 +6,7 @@
 
 当前 DefferedSceneRenderer 的尾部构建直接光、IBL、深度金字塔和 SSGI，最后按条件绘制天空。独立 SSR、GPU HZB 和 AA 类存在，不等于都在默认渲染链启用。
 
-HZBOcclusionTestCS 引用 `/tools/HZBOcclusionTestCS.sf`，独立 SSR 的深度分支引用 `/tools/ScreenSpaceReflectionDepthPyramidCS.sf`；本次文件盘点未找到这两个 Shader。它们属于缺失实现/依赖，不能写成可用完整路径。taaTAA/FxaaCS 当前有注册及参数、Shader，未见默认主链中的完整历史帧 AA 调度。
+HZBOcclusionTestCS 引用 `/tools/HZBOcclusionTestCS.sf`，独立 SSR 的深度分支引用 `/tools/ScreenSpaceReflectionDepthPyramidCS.sf`；本次文件盘点未找到这两个 Shader。它们属于缺失实现/依赖。taaTAA 在打开时域超分时由主链调度，FxaaCS 保留独立 Shader。
 
 ## 深度金字塔的降采样
 
@@ -42,11 +42,17 @@ specular 分支计算了 roughness/Fresnel 权重，但当前返回的是原始 
 
 它没有标准完整 FXAA 的长边搜索/端点判定等步骤，应描述为当前以 FXAA 命名的简化边缘滤波。邻居在图边 clamp，输出透明度固定 1，是否允许丢弃 alpha 由使用者决定。
 
-## TAA：重投影最小原型
+## 时域超分辨率
 
-[taaTAA.sf](../../../shaders/tools/taaTAA.sf) 计算 `historyUV=(pixel+0.5)/resolution-velocity`，clamp 后取历史像素，`out=lerp(current,history,saturate(BlendFactor))`。因此 velocity 必须是同 UV 单位且方向与减法一致，不能传世界速度或像素位移而不换算。
+对输出像素中心计算归一化坐标 `uv=(p+0.5)/outputSize`。渲染投影的 NDC 偏移来自八相位 Halton(2,3) 序列，在采集源颜色时把相同偏移加回 UV。内部像素坐标为 `(uv+jitter)*renderSize-0.5`。以该坐标周围深度一致的纹素做双线性重建，并统计同表面 3×3 邻域的颜色上下界与均值。
 
-当前没有完整的抖动序列、运动向量生成与历史纹理轮转入口，也没有反遮挡、深度验证、邻域 clipping、相机切换失效。它是 Shader 原型，不是已完成的稳定 TAA。历史 UV clamp 只防越界，不判断历史是否有效。
+选择内部像素邻域中贴近重建位置的最近深度，将其通过当帧抖动的逆 VP 恢复到世界空间，再经上帧无抖动 VP 投影。当前去抖动 UV 减去旧 UV 得到 UV 速度。历史以 `uv-velocity` 在输出尺度定位，四个颜色候选分别拒绝越界和设备深度差大于 0.0015 的样本。通过的权重乘以场景亮度响应、运动速度衰减和透明反应项。通过这一权重将历史颜色限制到当帧邻域范围后执行累积。
+
+反应因子用透明绘制前后的颜色差除以当前颜色幅度，在没有透明绘制时取零。最终输出按设置对当前信号与邻域均值之差适量放大，再限制到邻域范围。历史保存锐化前的 HDR RGB，alpha 保存当前深度。以上步骤均在 [taaTAA.sf](../../../shaders/tools/taaTAA.sf) 完成，每个输出像素至多读 9 个本帧邻居和 4 个上帧候选。
+
+[TemporalUpsampling](../../../src/Framework/Renderer/Private/PostProcess/AntiAliasingPostProcess.cpp) 由 Renderer Scene 持有。输出尺度两张 RGBA32F 历史共占每像素 32 字节，每图注册历史读槽和写槽，由 RDG 根据访问声明和上一提交 Fence 建立顺序。换场景、窗口尺寸变化、显示目标替换、内部尺寸变化、关停功能、相机突变或场景对象修改会使历史失效。逐帧构图没有额外 CPU 等待。释放或重新分配历史时等待相应纹理的最后队列 Fence。
+
+主视口以内部尺寸绘制 GBuffer、SSGI、场景深度、HDR 颜色和透明表面。超分输出到原有 RGBA8 视口，彩色交互叠加与 ImGui 保持原尺寸。GI 和 Virtual Geometry Viewer 使用各自的独立图。设备深度阈值在远处的世界距离意义会变宽，透明面没有单独运动向量。 [开关与验证](../../specification/renderer_spec.md#场景视口超分辨率)
 
 ## 如何复查
 

@@ -32,6 +32,12 @@ Masked 比较 `OpacityMask` 与 Opacity 纹理采样的乘积和 `AlphaCutoff`�
 
 `MaterialTransparencyTest` 读回线性场景颜色，分别检查排序、相交 Alpha 区段的累积、分层透射、遮罩孔洞与深度、Alpha 保留、吸收与水面遮挡，以及三类直接光源和 IBL。 [验证入口](../../src/Tests/MaterialShadingModelTest.cpp)
 
+## 场景视口超分辨率
+
+编辑器 View 工具栏的 Super resolution 弹窗控制主视口超分。默认关闭，启用后可在 Native 100%、Quality 67%、Balanced 59%、Performance 50% 和 Custom 25%–100% 间切换。比例作用于宽和高，50% 对应四分之一场景像素。可单独关闭时域历史来查看单帧重建，或检查低分辨率源、重建颜色、重投影颜色、历史权重、反遮挡和反应因子。
+
+超分当前支持全尺寸单视图 RGBA8 输出。各独立 Viewer 沿用自己的目标。三后端的 `SuperResolutionTest` 验证了深度边缘、历史积累、反遮挡和透明反应因子。Vulkan Launcher 在球体工程中检查了关闭、Native 和 Performance 输出，视口控件与界面仍按原尺寸绘制。 [重建与资源](../key_implemetion/algorithm/07-screen-space-and-antialiasing.md#时域超分辨率)
+
 ## Virtual Geometry 场景绘制入口
 
 ### 入口与职责

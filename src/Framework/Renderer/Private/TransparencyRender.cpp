@@ -291,7 +291,8 @@ namespace Renderer
     }
 
     void AddTransparencyPasses(RenderGraphBuilder& builder, SceneInterface& sceneInterface, const SceneView& view,
-        RenderGraphTextureRef sceneColor, RenderGraphTextureRef sceneDepth, RenderGraphTextureRef effectiveDepth)
+        RenderGraphTextureRef sceneColor, RenderGraphTextureRef sceneDepth, RenderGraphTextureRef effectiveDepth,
+        RenderGraphTextureRef* opaqueReference)
     {
         auto& scene = static_cast<Scene&>(sceneInterface);
         auto draws = GatherTransparentDraws(scene, view);
@@ -319,9 +320,13 @@ namespace Renderer
         const auto refractionDepth = bUseEffectiveDepth ? effectiveDepth : sceneDepth;
         const std::string resourceName = "Transparency." + std::to_string(view.Viewport.X) + "." + std::to_string(view.Viewport.Y) +
             "." + std::to_string(view.Viewport.Width) + "." + std::to_string(view.Viewport.Height);
-        const auto background = bUseEffectiveDepth || (!bLayered && bHasTransmission) ?
+        const auto background = opaqueReference || bUseEffectiveDepth || (!bLayered && bHasTransmission) ?
             SnapshotBackground(builder, sceneColor, refractionDepth, resourceName + ".Background") :
             builder.RegisterExternalTexture("Transparency.EmptyBackground", GlobalWhiteTexture.get());
+        if (opaqueReference)
+        {
+            *opaqueReference = background;
+        }
 
         const uint32_t targetCount = bWeighted ? 2u : 1u;
         std::array<RenderGraphTextureRef, 2> colorTargets{sceneColor, nullptr};

@@ -29,9 +29,27 @@ namespace Engine {
 
     enum class ETransparencyMethod : uint8_t { Sorted, Weighted, LayeredRefraction };
 
+    enum class ESuperResolutionPreset : uint8_t { Native, Quality, Balanced, Performance, Custom };
+
+    enum class ESuperResolutionView : uint32_t
+    {
+        Final, LowResolution, Reconstructed, ReprojectedHistory, HistoryWeight, Disocclusion, Reactive
+    };
+
+    struct SuperResolutionSettings {
+        ESuperResolutionPreset Preset = ESuperResolutionPreset::Native;
+        ESuperResolutionView View = ESuperResolutionView::Final;
+        float RenderScale = 0.67f;
+        float HistoryWeight = 0.88f;
+        float Sharpening = 0.1f;
+        bool bEnabled = false;
+        bool bTemporal = true;
+    };
+
     struct SceneSetting {
         ETransparencyView TransparencyView = ETransparencyView::Composite;
         ETransparencyMethod TransparencyMethod = ETransparencyMethod::Sorted;
+        SuperResolutionSettings SuperResolution;
         bool bDrawGrid = false;
         bool bDrawLightHints = false;
         // Borrowed light to visualize; nullptr draws no light hint. Remove the

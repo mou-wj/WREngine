@@ -141,7 +141,7 @@ SceneRenderer
 
 这是当前场景主体结束后的固定扩展点。Forward Transparency 默认位于不透明光照和天空之后、视图叠加之前。VolumeViewer 按视图标记跳过默认调用，再用现有场景扩展选择水面与大气之后的透明顺序。扩展与场景使用同一个 Builder，并在统一的 `builder.Execute()` 前完成构图。扩展可通过公开的 RenderCore 接口声明参数、申请图内资源和添加 Pass。叠加颜色通常使用 Load_Store，深度是否测试、写入须与具体绘制及访问声明一致；回调本身不会自动声明附件访问。不增加额外队列提交、Present 或等待。 [半透明数据流](../../specification/renderer_spec.md#半透明绘制)
 
-接口与列表定义在 Engine 的 [SceneView.h](../../../src/Framework/Engine/PublicHeader/SceneView.h)，具体工具的回调由上层填入。当前没有多个渲染阶段的 hook，也没有颜色替换返回值；将来添加后处理时需明确叠加点与颜色处理的先后。生命周期与注册示例见 [RDG 核心实现](../../key_implemetion/performance/03-rdg-execution-and-state.md)。
+接口与列表定义在 Engine 的 [SceneView.h](../../../src/Framework/Engine/PublicHeader/SceneView.h)，具体工具的回调由上层填入。主视口启用超分时，通常的场景扩展在内部尺寸构图，标记为 `bColorOnlyAtOutputResolution` 的扩展在超分后以原视图和输出颜色构图，深度实参为空。Editor 的变换轴和视角轴使用此标记。扩展仍属于同一张图，生命周期与注册示例见 [RDG 核心实现](../../key_implemetion/performance/03-rdg-execution-and-state.md)。 [超分流程](../../key_implemetion/algorithm/07-screen-space-and-antialiasing.md#时域超分辨率)
 
 ## 6. 渲染管线中的角色分工
 

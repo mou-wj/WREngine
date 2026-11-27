@@ -16,6 +16,7 @@
 #include <cstdint>
 namespace Engine
 {
+    class RenderTarget;
     class PrimitiveComponent;
     class PrimitiveSceneProxy;
     class StaticMeshProxy;
@@ -26,6 +27,7 @@ namespace Engine
     class SceneView;
 }
 namespace Renderer {
+    class TemporalUpsampling;
     static constexpr float SceneDistanceFieldBlockWorldSize = 10.0f;
     static constexpr uint32_t SceneStaticDistanceFieldTextureSize = 128;
     static constexpr uint32_t SceneDynamicDistanceFieldTextureSize = 128;
@@ -282,6 +284,7 @@ namespace Renderer {
         std::vector<Engine::PrimitiveSceneProxy*> GatherVisiblePrimitivesCPU(const Engine::SceneView& view) const;
         std::vector<Engine::PrimitiveSceneProxy*> GatherVisiblePrimitivesGPU(const Engine::SceneView& view) const;
         friend class SceneRenderer;
+        friend class RenderModule;
         void UpdateGPUResourceIfNeeded();
         void UpdatePrimitiveGPUResource();
         void EnsureDistanceFieldResources();
@@ -326,6 +329,8 @@ namespace Renderer {
         SceneGPUResourceInfo m_GPUResourceInfo;
         ShadowMapAllocator m_ShadowMapAllocator;
         Core::BoxSphereBounds m_SceneBounds;
+        std::unique_ptr<TemporalUpsampling> m_SuperResolution;
+        const Engine::RenderTarget* m_SuperResolutionTarget = nullptr;
 
 
     };

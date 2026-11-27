@@ -173,6 +173,42 @@ namespace Editor
                     ImGui::TextUnformatted("Left click: select / clear | Light diamond: select light\n"
                         "Right drag: orbit | Middle drag: pan\nWheel: zoom");
                     ImGui::EndGroup();
+                    ImGui::SameLine(0, 24);
+                    if (auto* scene = m_Scene.GetSceneInterface())
+                    {
+                        if (ImGui::Button("Super\nresolution", {92, 44}))
+                        {
+                            ImGui::OpenPopup("Super resolution settings");
+                        }
+                        if (ImGui::BeginPopup("Super resolution settings"))
+                        {
+                            auto& settings = scene->GetSceneSetting().SuperResolution;
+                            ImGui::Checkbox("Enable", &settings.bEnabled);
+                            ImGui::BeginDisabled(!settings.bEnabled);
+                            const char* presets[]{"Native", "Quality", "Balanced", "Performance", "Custom"};
+                            int preset = static_cast<int>(settings.Preset);
+                            if (ImGui::Combo("Preset", &preset, presets, IM_ARRAYSIZE(presets)))
+                            {
+                                settings.Preset = static_cast<Engine::ESuperResolutionPreset>(preset);
+                            }
+                            if (settings.Preset == Engine::ESuperResolutionPreset::Custom)
+                            {
+                                ImGui::SliderFloat("Render scale", &settings.RenderScale, 0.25f, 1.0f);
+                            }
+                            ImGui::Checkbox("Use temporal history", &settings.bTemporal);
+                            ImGui::SliderFloat("History weight", &settings.HistoryWeight, 0.0f, 0.98f);
+                            ImGui::SliderFloat("Sharpening", &settings.Sharpening, 0.0f, 1.0f);
+                            const char* views[]{"Final", "Low resolution", "Reconstructed", "Reprojected history",
+                                "History weight", "Disocclusion", "Reactive"};
+                            int selected = static_cast<int>(settings.View);
+                            if (ImGui::Combo("Debug view", &selected, views, IM_ARRAYSIZE(views)))
+                            {
+                                settings.View = static_cast<Engine::ESuperResolutionView>(selected);
+                            }
+                            ImGui::EndDisabled();
+                            ImGui::EndPopup();
+                        }
+                    }
                     ImGui::EndTabItem();
                 }
                 ImGui::EndTabBar();

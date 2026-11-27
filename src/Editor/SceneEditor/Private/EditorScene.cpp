@@ -489,11 +489,11 @@ namespace Editor
             m_TranslationGizmo.AddPass(builder,sceneView,color);
             m_RotationGizmo.AddPass(builder,sceneView,color);
             m_ScaleGizmo.AddPass(builder,sceneView,color);
-        }});
+        }, true});
         view.DrawExtensions.push_back({[this](auto& builder, const auto& sceneView, auto color, auto depth) {
             const int hovered=ViewAxes::HitTest(sceneView.ViewMatrix,sceneView.Viewport.Width,sceneView.Viewport.Height,m_ViewportPointer);
             ViewAxes::AddPass(builder,sceneView,color,m_PressedAxis>=0 ? m_PressedAxis : hovered);
-        }});
+        }, true});
         m_ViewFamily.Scene = m_Scene.get();
         m_ViewFamily.RenderTarget = viewport;
         m_ViewFamily.ClearViews();
