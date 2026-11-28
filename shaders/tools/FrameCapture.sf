@@ -1,0 +1,17 @@
+#include "/Generated/ShaderParameters/FrameCaptureParameters.sf"
+
+[numthreads(8, 8, 1)]
+void CaptureCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= FrameSize))
+    {
+        return;
+    }
+    uint2 depthSize;
+    InputDepth.GetDimensions(depthSize.x, depthSize.y);
+    float2 depthUV = saturate((float2(pixel) + 0.5) / float2(FrameSize) + DepthJitter);
+    uint2 depthPixel = min(uint2(depthUV * float2(depthSize)), depthSize - 1);
+    CapturedFrame[pixel] = float4(InputColor.Load(int3(pixel, 0)).rgb,
+        InputDepth.Load(int3(depthPixel, 0)));
+}

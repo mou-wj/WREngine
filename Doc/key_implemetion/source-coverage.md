@@ -59,7 +59,7 @@
 | [config/3rds/tinygltf.json](../../config/3rds/tinygltf.json) | 41 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [config/3rds/vulkan.json](../../config/3rds/vulkan.json) | 39 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## shaders（119 个条目）
+## shaders（123 个条目）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -182,6 +182,10 @@
 | [shaders/material/TransparencyMaterialPS.sf](../../shaders/material/TransparencyMaterialPS.sf) | 153 | Rendering | [25-transparency-rendering](algorithm/25-transparency-rendering.md) |
 | [shaders/material/MaskedDepthShaderPS.sf](../../shaders/material/MaskedDepthShaderPS.sf) | 14 | Rendering | [25-transparency-rendering](algorithm/25-transparency-rendering.md#alpha-mask) |
 | [shaders/material/TransparencyCompositePS.sf](../../shaders/material/TransparencyCompositePS.sf) | 13 | Rendering | [25-transparency-rendering](algorithm/25-transparency-rendering.md) |
+| [shaders/tools/FrameCapture.sf](../../shaders/tools/FrameCapture.sf) | 17 | Frame interpolation | [Flow](algorithm/26-frame-interpolation.md) |
+| [shaders/tools/FrameFlow.sf](../../shaders/tools/FrameFlow.sf) | 76 | Frame interpolation | [Flow](algorithm/26-frame-interpolation.md) |
+| [shaders/tools/FrameInterpolate.sf](../../shaders/tools/FrameInterpolate.sf) | 135 | Frame interpolation | [Flow](algorithm/26-frame-interpolation.md) |
+| [shaders/tools/FrameLuminance.sf](../../shaders/tools/FrameLuminance.sf) | 34 | Frame interpolation | [Flow](algorithm/26-frame-interpolation.md) |
 
 ## src/Application（13 个文件）
 
@@ -246,7 +250,7 @@
 | [src/Editor/SceneEditor/Private/EditorRotationGizmo.cpp](../../src/Editor/SceneEditor/Private/EditorRotationGizmo.cpp) | 287 | 算法 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/EditorScaleGizmo.cpp](../../src/Editor/SceneEditor/Private/EditorScaleGizmo.cpp) | 188 | 算法 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/EditorScene.cpp](../../src/Editor/SceneEditor/Private/EditorScene.cpp) | 720 | 并发、算法 | [架构：editor](../architecture/app/editor.md) / [01-ray-triangle-and-distance](algorithm/01-ray-triangle-and-distance.md) / [03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [10-project-snapshots](performance/10-project-snapshots.md) |
-| [src/Editor/SceneEditor/Private/EditorScenePanel.cpp](../../src/Editor/SceneEditor/Private/EditorScenePanel.cpp) | 276 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
+| [src/Editor/SceneEditor/Private/EditorScenePanel.cpp](../../src/Editor/SceneEditor/Private/EditorScenePanel.cpp) | 296 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Editor/SceneEditor/Private/EditorTranslationGizmo.cpp](../../src/Editor/SceneEditor/Private/EditorTranslationGizmo.cpp) | 441 | 渲染 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/EditorViewAxes.cpp](../../src/Editor/SceneEditor/Private/EditorViewAxes.cpp) | 174 | 渲染 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Editor/SceneEditor/Private/EditorViewAxes.h](../../src/Editor/SceneEditor/Private/EditorViewAxes.h) | 11 | 接口/配置/基础辅助 | [架构：editor](../architecture/app/editor.md)；[03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
@@ -374,7 +378,7 @@
 | [src/Framework/Engine/PublicHeader/ProjectArchive.h](../../src/Framework/Engine/PublicHeader/ProjectArchive.h) | 38 | 内存 | [10-project-snapshots](performance/10-project-snapshots.md) |
 | [src/Framework/Engine/PublicHeader/PrimitiveSceneProxy.h](../../src/Framework/Engine/PublicHeader/PrimitiveSceneProxy.h) | 61 | 接口/配置/基础辅助 | [架构：engine](../architecture/engine.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Engine/PublicHeader/SceneComponent.h](../../src/Framework/Engine/PublicHeader/SceneComponent.h) | 117 | 接口/配置/基础辅助 | [03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/Engine/PublicHeader/SceneInterface.h](../../src/Framework/Engine/PublicHeader/SceneInterface.h) | 109 | 接口/配置/基础辅助 | [架构：engine](../architecture/engine.md) / [01-ray-triangle-and-distance](algorithm/01-ray-triangle-and-distance.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
+| [src/Framework/Engine/PublicHeader/SceneInterface.h](../../src/Framework/Engine/PublicHeader/SceneInterface.h) | 116 | 接口/配置/基础辅助 | [架构：engine](../architecture/engine.md) / [01-ray-triangle-and-distance](algorithm/01-ray-triangle-and-distance.md) / [08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) / [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [11-virtual-geometry-visibility](algorithm/11-virtual-geometry-visibility.md) / [12-virtual-geometry-material-resolve](algorithm/12-virtual-geometry-material-resolve.md) |
 | [src/Framework/Engine/PublicHeader/SceneObject.h](../../src/Framework/Engine/PublicHeader/SceneObject.h) | 63 | 接口/配置/基础辅助 | [架构：engine](../architecture/engine.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md) |
 | [src/Framework/Engine/PublicHeader/SceneView.h](../../src/Framework/Engine/PublicHeader/SceneView.h) | 164 | 算法 | [03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[01-ray-triangle-and-distance](algorithm/01-ray-triangle-and-distance.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md)；[03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) |
 | [src/Framework/Engine/PublicHeader/SceneViewport.h](../../src/Framework/Engine/PublicHeader/SceneViewport.h) | 71 | 接口/配置/基础辅助 | [03-transforms-frustum-and-depth](algorithm/03-transforms-frustum-and-depth.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
@@ -446,7 +450,7 @@
 | [src/Framework/RenderCore/PublicHeader/ToolShaders.h](../../src/Framework/RenderCore/PublicHeader/ToolShaders.h) | 58 | 渲染 | [06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Framework/RenderCore/PublicHeader/VertexFactory.h](../../src/Framework/RenderCore/PublicHeader/VertexFactory.h) | 195 | 渲染 | [08-mesh-import-and-geometry](algorithm/08-mesh-import-and-geometry.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 
-## src/Framework/Renderer（94 个文件）
+## src/Framework/Renderer（96 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -478,9 +482,9 @@
 | [src/Framework/Renderer/Private/MeshMaterialShader.cpp](../../src/Framework/Renderer/Private/MeshMaterialShader.cpp) | 13 | 渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
 | [src/Framework/Renderer/Private/PostProcess/AntiAliasingPostProcess.cpp](../../src/Framework/Renderer/Private/PostProcess/AntiAliasingPostProcess.cpp) | 194 | 渲染 | [07-screen-space-and-antialiasing](algorithm/07-screen-space-and-antialiasing.md) |
 | [src/Framework/Renderer/Private/PostProcess/AntiAliasingPostProcess.h](../../src/Framework/Renderer/Private/PostProcess/AntiAliasingPostProcess.h) | 106 | 渲染 | [07-screen-space-and-antialiasing](algorithm/07-screen-space-and-antialiasing.md) |
-| [src/Framework/Renderer/Private/RenderModule.cpp](../../src/Framework/Renderer/Private/RenderModule.cpp) | 397 | 内存、算法、渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [架构：renderer](../architecture/render/renderer.md) |
-| [src/Framework/Renderer/Private/Scene.cpp](../../src/Framework/Renderer/Private/Scene.cpp) | 1221 | 内存、算法、渲染 | [02-bvh-octree-and-scene-query](algorithm/02-bvh-octree-and-scene-query.md)；[01-ray-triangle-and-distance](algorithm/01-ray-triangle-and-distance.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
-| [src/Framework/Renderer/Private/Scene.h](../../src/Framework/Renderer/Private/Scene.h) | 337 | 并发、内存 | [02-bvh-octree-and-scene-query](algorithm/02-bvh-octree-and-scene-query.md)；[01-ray-triangle-and-distance](algorithm/01-ray-triangle-and-distance.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/Renderer/Private/RenderModule.cpp](../../src/Framework/Renderer/Private/RenderModule.cpp) | 425 | 内存、算法、渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md) / [架构：renderer](../architecture/render/renderer.md) |
+| [src/Framework/Renderer/Private/Scene.cpp](../../src/Framework/Renderer/Private/Scene.cpp) | 1222 | 内存、算法、渲染 | [02-bvh-octree-and-scene-query](algorithm/02-bvh-octree-and-scene-query.md)；[01-ray-triangle-and-distance](algorithm/01-ray-triangle-and-distance.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
+| [src/Framework/Renderer/Private/Scene.h](../../src/Framework/Renderer/Private/Scene.h) | 340 | 并发、内存 | [02-bvh-octree-and-scene-query](algorithm/02-bvh-octree-and-scene-query.md)；[01-ray-triangle-and-distance](algorithm/01-ray-triangle-and-distance.md)；[05-assets-materials-and-instance-data](performance/05-assets-materials-and-instance-data.md)；[08-ui-rendering-and-window-lifetime](performance/08-ui-rendering-and-window-lifetime.md) |
 | [src/Framework/Renderer/Private/SceneRenderer.cpp](../../src/Framework/Renderer/Private/SceneRenderer.cpp) | 994 | 内存、算法、渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
 | [src/Framework/Renderer/Private/SceneRenderer.h](../../src/Framework/Renderer/Private/SceneRenderer.h) | 82 | 内存、渲染 | [03-rdg-execution-and-state](performance/03-rdg-execution-and-state.md)；[架构：renderer](../architecture/render/renderer.md) |
 | [src/Framework/Renderer/Private/SceneShaderParameters.cpp](../../src/Framework/Renderer/Private/SceneShaderParameters.cpp) | 143 | 内存、渲染 | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md)；[06-shader-compilation-and-binding](performance/06-shader-compilation-and-binding.md) |
@@ -544,6 +548,8 @@
 | [src/Framework/Renderer/Private/Volume/WaterRender.h](../../src/Framework/Renderer/Private/Volume/WaterRender.h) | 34 | 渲染、缓存 | [Volume](algorithm/24-atmosphere-and-water.md) |
 | [src/Framework/Renderer/Private/TransparencyRender.cpp](../../src/Framework/Renderer/Private/TransparencyRender.cpp) | 476 | Rendering | [25-transparency-rendering](algorithm/25-transparency-rendering.md) |
 | [src/Framework/Renderer/PublicHeader/TransparencyRender.h](../../src/Framework/Renderer/PublicHeader/TransparencyRender.h) | 15 | Rendering | [25-transparency-rendering](algorithm/25-transparency-rendering.md) |
+| [src/Framework/Renderer/Private/PostProcess/FrameInterpolation.cpp](../../src/Framework/Renderer/Private/PostProcess/FrameInterpolation.cpp) | 251 | Frame interpolation | [Flow](algorithm/26-frame-interpolation.md) |
+| [src/Framework/Renderer/Private/PostProcess/FrameInterpolation.h](../../src/Framework/Renderer/Private/PostProcess/FrameInterpolation.h) | 34 | Frame interpolation | [Flow](algorithm/26-frame-interpolation.md) |
 
 ## src/Framework/RHI（24 个文件）
 
@@ -709,7 +715,7 @@
 | [src/Lancher/Loop.h](../../src/Lancher/Loop.h) | 8 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 | [src/Lancher/main.cpp](../../src/Lancher/main.cpp) | 16 | 接口/配置/基础辅助 | [09-module-build-and-startup](performance/09-module-build-and-startup.md) |
 
-## src/Tests（28 个文件）
+## src/Tests（29 个文件）
 
 | 源码/配置 | 行数 | 检索标记 | 阅读入口 |
 | --- | ---: | --- | --- |
@@ -742,6 +748,7 @@
 | [src/Tests/VolumeRenderTest.cpp](../../src/Tests/VolumeRenderTest.cpp) | 1191 | 测试、GPU 读回 | [Volume](algorithm/23-volume-rendering.md) / [天空大气与水面](algorithm/24-atmosphere-and-water.md) |
 | [src/Tests/MaterialShadingModelTest.cpp](../../src/Tests/MaterialShadingModelTest.cpp) | 734 | Rendering | [05-pbr-ibl-and-sampling](algorithm/05-pbr-ibl-and-sampling.md) |
 | [src/Tests/SuperResolutionTest.cpp](../../src/Tests/SuperResolutionTest.cpp) | 191 | GPU readback | [TAAU](algorithm/07-screen-space-and-antialiasing.md) |
+| [src/Tests/FrameInterpolationTest.cpp](../../src/Tests/FrameInterpolationTest.cpp) | 185 | Frame interpolation | [Flow](algorithm/26-frame-interpolation.md) |
 
 ## 后续维护
 

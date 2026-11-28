@@ -3,6 +3,7 @@
 #endif
 #include "Scene.h"
 #include "PostProcess/AntiAliasingPostProcess.h"
+#include "PostProcess/FrameInterpolation.h"
 #include "SceneView.h"
 #include "PrimitiveSceneProxy.h"
 #include "PrimitiveComponent.h"

@@ -81,6 +81,7 @@
 | [Froxel 体积渲染](algorithm/23-volume-rendering.md) | 如何离散化视锥、按场景深度积分，并用空间重建和帧间历史稳定体积光？ |
 | [天空大气与水面](algorithm/24-atmosphere-and-water.md) | 如何积分大气散射，求出波面交点并合成反射与折射？ |
 | [半透明与屏幕空间折射](algorithm/25-transparency-rendering.md) | 如何排序混合、加权处理相交透明面、采样已绘制的透射层并计算材质吸收？ |
+| [双向光流与中间帧预览](algorithm/26-frame-interpolation.md) | 如何用亮度金字塔、前后向一致性与深度约束重建中间帧？ |
 
 ## 如何阅读和核查
 

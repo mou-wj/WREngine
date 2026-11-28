@@ -28,6 +28,7 @@ namespace Engine
 }
 namespace Renderer {
     class TemporalUpsampling;
+    class FrameInterpolation;
     static constexpr float SceneDistanceFieldBlockWorldSize = 10.0f;
     static constexpr uint32_t SceneStaticDistanceFieldTextureSize = 128;
     static constexpr uint32_t SceneDynamicDistanceFieldTextureSize = 128;
@@ -331,6 +332,8 @@ namespace Renderer {
         Core::BoxSphereBounds m_SceneBounds;
         std::unique_ptr<TemporalUpsampling> m_SuperResolution;
         const Engine::RenderTarget* m_SuperResolutionTarget = nullptr;
+        std::unique_ptr<FrameInterpolation> m_FrameInterpolation;
+        const Engine::RenderTarget* m_InterpolationTarget = nullptr;
 
 
     };

@@ -1,0 +1,76 @@
+#include "/Generated/ShaderParameters/FrameFlowParameters.sf"
+
+float MatchError(int2 pixel, int2 delta, bool bForward)
+{
+    float error = 0.0;
+    [unroll]
+    for (int y = -1; y <= 1; ++y)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; ++x)
+        {
+            int2 source = clamp(pixel + int2(x, y), 0, int2(FlowSize) - 1);
+            int2 target = clamp(source + delta, 0, int2(FlowSize) - 1);
+            float2 a = FrameLuma.Load(int3(source, 0)).xy;
+            float2 b = FrameLuma.Load(int3(target, 0)).xy;
+            error += bForward ? abs(a.x - b.y) : abs(a.y - b.x);
+        }
+    }
+    return error / 9.0;
+}
+
+float4 FindFlow(int2 pixel, bool bForward)
+{
+    int2 initial = 0;
+    if (bHasCoarse != 0u)
+    {
+        float4 flow = bForward ? CoarseForward.Load(int3(pixel / 2, 0)) : CoarseBackward.Load(int3(pixel / 2, 0));
+        if (flow.z >= 0.05)
+        {
+            initial = int2(flow.xy * 2.0);
+        }
+    }
+    int2 bestFlow = 0;
+    float best = MatchError(pixel, 0, bForward);
+    float second = 1e6;
+    [loop]
+    for (int y = -2; y <= 2; ++y)
+    {
+        [loop]
+        for (int x = -2; x <= 2; ++x)
+        {
+            int2 delta = initial + int2(x, y);
+            int2 target = pixel + delta;
+            if (all(delta == 0) || any(target < 0) || any(target >= int2(FlowSize)))
+            {
+                continue;
+            }
+            float error = MatchError(pixel, delta, bForward) + 0.0005 * length(float2(delta));
+            if (error < best)
+            {
+                second = best;
+                best = error;
+                bestFlow = delta;
+            }
+            else
+            {
+                second = min(second, error);
+            }
+        }
+    }
+    float uniqueness = 1.0 - exp(-35.0 * max(0.0, second - best));
+    float confidence = uniqueness * exp(-12.0 * best);
+    return float4(float2(bestFlow), confidence, best);
+}
+
+[numthreads(8, 8, 1)]
+void FlowCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= FlowSize))
+    {
+        return;
+    }
+    ForwardOutput[pixel] = FindFlow(pixel, true);
+    BackwardOutput[pixel] = FindFlow(pixel, false);
+}

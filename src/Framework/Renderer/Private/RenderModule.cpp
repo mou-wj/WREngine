@@ -22,8 +22,10 @@
 #include "HintRender.h"
 #include "TransparencyRender.h"
 #include "PostProcess/AntiAliasingPostProcess.h"
+#include "PostProcess/FrameInterpolation.h"
 
 #include <algorithm>
+#include <chrono>
 #include <vector>
 
 using namespace RenderCore;
@@ -92,11 +94,15 @@ namespace Renderer {
         auto renderSize = outputSize;
         const auto& superResolution = sceneSetting.SuperResolution;
         auto* scene = static_cast<Scene*>(views->Scene);
-        const bool bUpsample = superResolution.bEnabled && views->Size() == 1 &&
+        const bool bFullView = views->Size() == 1 &&
             outputDesc.Format == RHI::ERHIFormat::R8G8B8A8_UNorm &&
             views->GetViews().front().Viewport.X == 0 && views->GetViews().front().Viewport.Y == 0 &&
             views->GetViews().front().Viewport.Width == static_cast<int>(outputSize.X) &&
             views->GetViews().front().Viewport.Height == static_cast<int>(outputSize.Y);
+        const bool bUpsample = superResolution.bEnabled && bFullView;
+        const bool bPreviewInterpolation = sceneSetting.bPreviewFrameInterpolation && bFullView &&
+            (!bUpsample || superResolution.View == ESuperResolutionView::Final);
+        const bool bNativeOverlays = bUpsample || bPreviewInterpolation;
         Engine::SceneViewFamily scaledViews;
         Core::Float2 jitter{};
         if (bUpsample)
@@ -196,7 +202,7 @@ namespace Renderer {
                     sceneRenderer->SceneTextures.SceneDepth, *sceneSetting.LightHintTarget);
             }
             for (const auto& extension : view.DrawExtensions) {
-                if (extension.Callback && (!bUpsample || !extension.bColorOnlyAtOutputResolution)) {
+                if (extension.Callback && (!bNativeOverlays || !extension.bColorOnlyAtOutputResolution)) {
                     extension.Callback(builder, view,
                         sceneRenderer->SceneTextures.SceneColor,
                         sceneRenderer->SceneTextures.SceneDepth);
@@ -214,6 +220,28 @@ namespace Renderer {
         {
             scene->m_SuperResolution->AddPass(builder, views->GetViews().front(), sourceViews->GetViews().front(),
                 jitter, superResolution, sceneColorTexture, depthText, output, opaqueReference);
+        }
+        if (bPreviewInterpolation)
+        {
+            if (!scene->m_FrameInterpolation)
+            {
+                scene->m_FrameInterpolation = std::make_unique<FrameInterpolation>();
+            }
+            if (scene->m_InterpolationTarget != sourceViews->RenderTarget)
+            {
+                scene->m_FrameInterpolation->Invalidate();
+                scene->m_InterpolationTarget = sourceViews->RenderTarget;
+            }
+            const auto now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            scene->m_FrameInterpolation->AddPasses(builder, output, depthText, output, sourceViews->GetViews().front(),
+                jitter, now, sceneSetting.FrameInterpolationView);
+        }
+        else if (scene->m_FrameInterpolation)
+        {
+            scene->m_FrameInterpolation->Invalidate();
+        }
+        if (bNativeOverlays)
+        {
             const auto& nativeView = sourceViews->GetViews().front();
             for (const auto& extension : nativeView.DrawExtensions)
             {

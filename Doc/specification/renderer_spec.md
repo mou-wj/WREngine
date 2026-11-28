@@ -38,6 +38,10 @@ Masked 比较 `OpacityMask` 与 Opacity 纹理采样的乘积和 `AlphaCutoff`�
 
 超分当前支持全尺寸单视图 RGBA8 输出。各独立 Viewer 沿用自己的目标。三后端的 `SuperResolutionTest` 验证了深度边缘、历史积累、反遮挡和透明反应因子。Vulkan Launcher 在球体工程中检查了关闭、Native 和 Performance 输出，视口控件与界面仍按原尺寸绘制。 [重建与资源](../key_implemetion/algorithm/07-screen-space-and-antialiasing.md#时域超分辨率)
 
+## 帧插值预览
+
+编辑器 View 工具栏的 Frame interpolation 默认关闭。勾选 Preview 后可查看生成帧、前帧、当前帧、相机运动、双向光流、置信度、遮挡或 Warp 对照。预览在场景颜色生成后、UI 合成前执行，可与时域超分最终视图同时使用。它在原有窗口帧率下显示预览结果。 [算法与验证](../key_implemetion/algorithm/26-frame-interpolation.md)
+
 ## Virtual Geometry 场景绘制入口
 
 ### 入口与职责

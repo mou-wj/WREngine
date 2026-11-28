@@ -1,0 +1,34 @@
+#include "/Generated/ShaderParameters/FrameLuminanceParameters.sf"
+
+float FrameLuma(float3 color)
+{
+    return log2(1.0 + max(0.0, dot(color, float3(0.2126, 0.7152, 0.0722))));
+}
+
+[numthreads(8, 8, 1)]
+void LuminanceCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= LumaSize))
+    {
+        return;
+    }
+    uint2 sourceSize;
+    LumaSource.GetDimensions(sourceSize.x, sourceSize.y);
+    float2 sum = 0.0;
+    [unroll]
+    for (uint i = 0; i < 4; ++i)
+    {
+        uint2 offset = uint2(i & 1u, i >> 1u);
+        int3 tap = int3(min(pixel * 2u + offset, sourceSize - 1u), 0);
+        if (bReduction != 0u)
+        {
+            sum += LumaSource.Load(tap).xy;
+        }
+        else
+        {
+            sum += float2(FrameLuma(PreviousFrame.Load(tap).rgb), FrameLuma(CurrentFrame.Load(tap).rgb));
+        }
+    }
+    LumaOutput[pixel] = float4(sum * 0.25, 0, 0);
+}

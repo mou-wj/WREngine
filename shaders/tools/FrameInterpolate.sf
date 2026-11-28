@@ -1,0 +1,135 @@
+#if FRAME_GL_STORAGE
+#define FRAME_DISPLAY_STORAGE [[vk::image_format("rgba8")]] RWTexture2D<float4>
+#else
+#define FRAME_DISPLAY_STORAGE RWTexture2D<float4>
+#endif
+#include "/Generated/ShaderParameters/FrameInterpolateParameters.sf"
+
+bool InBounds(float2 uv)
+{
+    return all(uv >= 0.0) && all(uv < 1.0);
+}
+
+float2 GetCameraFlow(float2 uv, float depth, float4x4 sourceInverseVP, float4x4 targetVP, out float confidence)
+{
+    confidence = 0.0;
+    if (depth >= 0.999999)
+    {
+        return 0.0;
+    }
+    float4 clip = float4(uv * float2(2.0, -2.0) + float2(-1.0, 1.0), depth, 1.0);
+    float4 other = mul(targetVP, mul(sourceInverseVP, clip));
+    if (other.w <= 1e-6)
+    {
+        return 0.0;
+    }
+    float2 otherUV = other.xy / other.w * float2(0.5, -0.5) + 0.5;
+    confidence = InBounds(otherUV) ? 0.45 : 0.0;
+    return otherUV - uv;
+}
+
+float3 GetFlow(float2 uv, bool bForward)
+{
+    uint2 size;
+    ForwardFlow.GetDimensions(size.x, size.y);
+    float4 sample = bForward ? ForwardFlow.SampleLevel(FrameSampler, saturate(uv), 0) :
+        BackwardFlow.SampleLevel(FrameSampler, saturate(uv), 0);
+    return float3(sample.xy / float2(size), sample.z);
+}
+
+float DepthAt(float2 uv, bool bForward)
+{
+    int2 pixel = min(int2(saturate(uv) * float2(FrameSize)), int2(FrameSize) - 1);
+    return bForward ? PreviousFrame.Load(int3(pixel, 0)).w : CurrentFrame.Load(int3(pixel, 0)).w;
+}
+
+float3 GetMotion(float2 uv, bool bForward)
+{
+    float confidence = 0.0;
+    float depth = DepthAt(uv, bForward);
+    float2 geometry = bForward ? GetCameraFlow(uv, depth, PreviousInverseVP, CurrentVP, confidence) :
+        GetCameraFlow(uv, depth, CurrentInverseVP, PreviousVP, confidence);
+    float3 flow = GetFlow(uv, bForward);
+    float2 target = uv + flow.xy;
+    float3 reverse = GetFlow(target, !bForward);
+    float consistency = length((flow.xy + reverse.xy) * float2(FrameSize));
+    float imageConfidence = InBounds(target) ? min(flow.z, reverse.z) * exp(-consistency * 0.4) : 0.0;
+    // Use image motion to override camera motion only when the reverse search agrees.
+    return imageConfidence > confidence * 0.65 ? float3(flow.xy, imageConfidence) : float3(geometry, confidence);
+}
+
+float4 Warp(float2 uv, bool bForward, out float confidence)
+{
+    float2 source = uv - 0.5 * GetMotion(uv, bForward).xy;
+    float3 refinement = GetMotion(source, bForward);
+    source = uv - 0.5 * refinement.xy;
+    confidence = InBounds(source) ? refinement.z : 0.0;
+    float3 color = bForward ? PreviousFrame.SampleLevel(FrameSampler, saturate(source), 0).rgb :
+        CurrentFrame.SampleLevel(FrameSampler, saturate(source), 0).rgb;
+    return float4(color, DepthAt(source, bForward));
+}
+
+[numthreads(8, 8, 1)]
+void MainCS(uint3 thread : SV_DispatchThreadID)
+{
+    uint2 pixel = thread.xy;
+    if (any(pixel >= FrameSize))
+    {
+        return;
+    }
+    float2 uv = (float2(pixel) + 0.5) / float2(FrameSize);
+    float4 previous = PreviousFrame.Load(int3(pixel, 0));
+    float4 current = CurrentFrame.Load(int3(pixel, 0));
+    float previousWeight, currentWeight;
+    float4 warpedPrevious = Warp(uv, true, previousWeight);
+    float4 warpedCurrent = Warp(uv, false, currentWeight);
+    bool bDepthMismatch = abs(warpedPrevious.w - warpedCurrent.w) > 0.002;
+    if (bDepthMismatch)
+    {
+        // Only suppress the farther warp if the foreground warp has support.
+        if (warpedPrevious.w < warpedCurrent.w && previousWeight > 0.08)
+        {
+            currentWeight = 0.0;
+        }
+        else if (warpedCurrent.w < warpedPrevious.w && currentWeight > 0.08)
+        {
+            previousWeight = 0.0;
+        }
+    }
+    float denominator = previousWeight + currentWeight;
+    float3 result = denominator > 0.08 ?
+        (warpedPrevious.rgb * previousWeight + warpedCurrent.rgb * currentWeight) / denominator : current.rgb;
+
+    if (DebugView == 1u)
+    {
+        result = previous.rgb;
+    }
+    else if (DebugView == 2u)
+    {
+        result = current.rgb;
+    }
+    else if (DebugView == 3u)
+    {
+        float confidence;
+        float2 motion = GetCameraFlow(uv, current.w, CurrentInverseVP, PreviousVP, confidence);
+        result = float3(saturate(0.5 + motion * 8.0), confidence);
+    }
+    else if (DebugView == 4u || DebugView == 5u)
+    {
+        float3 optical = GetFlow(uv, DebugView == 4u);
+        result = float3(saturate(0.5 + optical.xy * 8.0), optical.z);
+    }
+    else if (DebugView == 6u)
+    {
+        result = float3(previousWeight, currentWeight, 0.0);
+    }
+    else if (DebugView == 7u)
+    {
+        result = float3(bDepthMismatch ? 1.0 : 0.0, denominator > 0.08 ? 1.0 : 0.0, 0.0);
+    }
+    else if (DebugView == 8u)
+    {
+        result = uv.x < 0.5 ? warpedPrevious.rgb : warpedCurrent.rgb;
+    }
+    FrameOutput[pixel] = float4(result, 1.0);
+}

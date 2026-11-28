@@ -46,10 +46,17 @@ namespace Engine {
         bool bTemporal = true;
     };
 
+    enum class EFrameInterpolationView : uint32_t
+    {
+        Generated, Previous, Current, CameraMotion, ForwardFlow, BackwardFlow, Confidence, Occlusion, Warped
+    };
+
     struct SceneSetting {
         ETransparencyView TransparencyView = ETransparencyView::Composite;
         ETransparencyMethod TransparencyMethod = ETransparencyMethod::Sorted;
         SuperResolutionSettings SuperResolution;
+        EFrameInterpolationView FrameInterpolationView = EFrameInterpolationView::Generated;
+        bool bPreviewFrameInterpolation = false;
         bool bDrawGrid = false;
         bool bDrawLightHints = false;
         // Borrowed light to visualize; nullptr draws no light hint. Remove the

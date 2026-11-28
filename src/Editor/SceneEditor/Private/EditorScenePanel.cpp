@@ -208,6 +208,26 @@ namespace Editor
                             ImGui::EndDisabled();
                             ImGui::EndPopup();
                         }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Frame\ninterpolation", {112, 44}))
+                        {
+                            ImGui::OpenPopup("Frame interpolation preview");
+                        }
+                        if (ImGui::BeginPopup("Frame interpolation preview"))
+                        {
+                            auto& settings = scene->GetSceneSetting();
+                            ImGui::Checkbox("Preview", &settings.bPreviewFrameInterpolation);
+                            ImGui::BeginDisabled(!settings.bPreviewFrameInterpolation);
+                            const char* views[]{"Generated", "Previous", "Current", "Camera motion", "Forward flow",
+                                "Backward flow", "Confidence", "Occlusion", "Warped"};
+                            int selected = static_cast<int>(settings.FrameInterpolationView);
+                            if (ImGui::Combo("View", &selected, views, IM_ARRAYSIZE(views)))
+                            {
+                                settings.FrameInterpolationView = static_cast<Engine::EFrameInterpolationView>(selected);
+                            }
+                            ImGui::EndDisabled();
+                            ImGui::EndPopup();
+                        }
                     }
                     ImGui::EndTabItem();
                 }
